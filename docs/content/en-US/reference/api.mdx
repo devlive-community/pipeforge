@@ -1,0 +1,28 @@
+---
+title: REST API
+description: Every endpoint of the PipeForge server with its parameters, request and response schemas, generated from the OpenAPI document.
+order: 80
+data: api
+---
+
+## Conventions
+
+- All endpoints live under `/api/v1`. Within `v1` endpoints and fields are only added, never
+  changed or removed.
+- Requests and responses are JSON. Messages follow `Accept-Language` (`en-US` or `zh-CN`).
+- Every error response is an `ErrorInfo` object with a registered [error code](./errors). The
+  HTTP status depends on the code:
+
+| Status | Errors |
+|---|---|
+| 400 | `PF-CONF-0007`: the request itself is invalid (missing field, malformed JSON) |
+| 404 | `PF-PLUG-0001`: the component is not installed; `PF-CONF-0007` for an unknown endpoint |
+| 422 | The job, expression or plugin options are invalid (`CONF`, `PLAN`, `PLUG`, `DATA` codes) |
+| 500 | `PF-SYS-0001`: an internal error |
+
+- The OpenAPI document is served at `/api/v1/openapi.json`. The TypeScript client
+  `@pipeforge/client`, which the Web UI uses, is generated from it.
+
+## Endpoints
+
+<ApiList />

@@ -1,0 +1,64 @@
+---
+title: Server
+description: Starting the PipeForge server, its configuration, and what its API offers in this version.
+order: 10
+---
+
+The server provides the REST API and hosts the Web UI. In this version it is **stateless**: it
+validates and explains jobs, describes the installed plugins, lists functions and error codes and
+evaluates expressions. Saving jobs, running them and keeping their history arrive with the
+metadata database in a later version; the endpoints that exist now keep their paths and fields.
+
+## Starting the server
+
+Build it and start the executable jar:
+
+```bash
+./mvnw -B -pl pipeforge-server -am package -DskipTests
+java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar
+```
+
+It listens on `http://127.0.0.1:8080`. Check that it answers:
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/version
+```
+
+## Configuration
+
+Settings are Spring Boot properties: put them in an `application.yaml` next to the jar, pass them
+as `--name=value`, or set them as environment variables (`PIPEFORGE_JOB_TIMEZONE`).
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `server.address` | `127.0.0.1` | Interface to listen on |
+| `server.port` | `8080` | Port |
+| `pipeforge.plugin.paths` | `plugins` | Directories with plugin packages (zip files or extracted directories) |
+| `pipeforge.plugin.cache` | `work/plugin-cache` | Where zipped plugins are extracted |
+| `pipeforge.job.timezone` | `UTC` | Time zone of jobs that do not set `env.timezone` |
+| `pipeforge.job.defaults.*` | none | Cluster defaults for node options, in the env form, e.g. `pipeforge.job.defaults.source.fetch-size` |
+
+```yaml
+pipeforge:
+  plugin:
+    paths: [/opt/pipeforge/plugins]
+  job:
+    timezone: Asia/Shanghai
+    defaults:
+      source.fetch-size: "5000"
+```
+
+Plugins are loaded when the server starts; packages that cannot be used are listed by
+`GET /api/v1/plugins` under `unavailable`, with the reason.
+
+## Security
+
+The server has no authentication yet, so it only listens on the loopback interface. Do not set
+`server.address` to a public interface; put a reverse proxy with authentication in front of it if
+others must reach it. Variables such as `${env:NAME}` read the environment of the server process.
+
+## Logs and errors
+
+The server logs to the console. Requests that fail because of the client get an error object with
+a code (see the [REST API](../reference/api#conventions)); only internal errors (`PF-SYS-0001`)
+are logged with their stack trace.

@@ -44,3 +44,25 @@ export interface FunctionEntry {
 export function functionEntries(): FunctionEntry[] {
   return read<FunctionEntry[]>("functions.json", []);
 }
+
+export interface ApiOperation {
+  id: string;
+  method: string;
+  path: string;
+  tag: string;
+  summary: Record<string, string>;
+  description: Record<string, string>;
+  parameters: { name: string; in: string; required: boolean; type: string; description: string }[];
+  requestBody: string | null;
+  responses: { status: string; description: string; type: string | null }[];
+}
+
+export interface ApiSchema {
+  name: string;
+  fields: { name: string; type: string; required: boolean }[];
+}
+
+/** The REST API from the server's OpenAPI document, exported by `pnpm generate`. */
+export function apiReference(): { operations: ApiOperation[]; schemas: ApiSchema[] } {
+  return read("api.json", { operations: [], schemas: [] });
+}

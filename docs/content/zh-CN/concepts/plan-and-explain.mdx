@@ -113,7 +113,7 @@ sink:
 ## 可观测性
 
 `explain` 是作业的计划视图。JSON 输出的结构与引擎使用的计划一致：`job`、`variables`、`nodes`（含 `options`、`inputTables`、
-`outputTables`）和 `warnings`。在计划上叠加行数、速率和瓶颈的运行分析（`explain --analyze`）随引擎指标一起提供。
+`outputTables`）和 `warnings`。服务的 `POST /api/v1/explain`（[REST API](../reference/api#explainjob)）返回同一份文档以及文本形式。在计划上叠加行数、速率和瓶颈的运行分析（`explain --analyze`）随引擎指标一起提供。
 
 ## 排障
 

@@ -1,0 +1,57 @@
+---
+title: 服务
+description: 启动 PipeForge 服务、配置服务，以及本版本的 API 提供哪些能力。
+order: 10
+---
+
+服务提供 REST API 并托管 Web UI。本版本中它是**无状态**的：校验和解释作业、描述已安装的插件、列出函数和错误码、对表达式求值。
+保存作业、运行作业和保留运行历史随后续版本的元数据库一起提供；现有接口的路径和字段保持不变。
+
+## 启动服务
+
+构建后启动可执行 jar：
+
+```bash
+./mvnw -B -pl pipeforge-server -am package -DskipTests
+java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar
+```
+
+服务监听 `http://127.0.0.1:8080`。检查它是否可用：
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/version
+```
+
+## 配置
+
+配置项是 Spring Boot 属性：写在 jar 旁边的 `application.yaml` 中、以 `--名称=取值` 传入，或者设置为环境变量（`PIPEFORGE_JOB_TIMEZONE`）。
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `server.address` | `127.0.0.1` | 监听的网络接口 |
+| `server.port` | `8080` | 端口 |
+| `pipeforge.plugin.paths` | `plugins` | 存放插件包（zip 文件或解压后的目录）的目录 |
+| `pipeforge.plugin.cache` | `work/plugin-cache` | zip 插件解压到的位置 |
+| `pipeforge.job.timezone` | `UTC` | 没有设置 `env.timezone` 的作业使用的时区 |
+| `pipeforge.job.defaults.*` | 无 | 节点选项的集群默认值，采用 env 写法，例如 `pipeforge.job.defaults.source.fetch-size` |
+
+```yaml
+pipeforge:
+  plugin:
+    paths: [/opt/pipeforge/plugins]
+  job:
+    timezone: Asia/Shanghai
+    defaults:
+      source.fetch-size: "5000"
+```
+
+插件在服务启动时加载；无法使用的插件包会出现在 `GET /api/v1/plugins` 的 `unavailable` 中，并附带原因。
+
+## 安全
+
+服务目前还没有认证，因此只监听回环接口。不要把 `server.address` 设置为公网接口；如果其他人需要访问，请在前面放一个带认证的反向代理。
+`${env:NAME}` 这类变量读取的是服务进程的环境变量。
+
+## 日志与错误
+
+服务把日志输出到控制台。由客户端原因导致失败的请求会收到带错误码的错误对象（见 [REST API](../reference/api#约定)）；只有内部错误（`PF-SYS-0001`）会连同堆栈一起记录日志。

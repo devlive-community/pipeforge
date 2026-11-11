@@ -12,10 +12,8 @@ import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import org.devlive.pipeforge.api.table.CatalogTable;
 import org.devlive.pipeforge.api.table.Column;
@@ -248,83 +246,55 @@ public final class PlanExplainer {
     /** The complete plan as JSON, ending with a line break. */
     public static String json(JobPlan plan) {
         try {
-            return JSON.writeValueAsString(toMap(plan)) + "\n";
+            return JSON.writeValueAsString(document(plan)) + "\n";
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cannot write the plan as JSON", e);
         }
     }
 
-    /** The plan as maps and lists, the structure of the JSON output. */
-    public static Map<String, Object> toMap(JobPlan plan) {
-        Map<String, Object> job = new LinkedHashMap<>();
-        job.put("name", plan.name());
-        job.put("description", plan.description());
-        job.put("engine", plan.engine().name().toLowerCase(Locale.ROOT));
-        job.put("mode", plan.mode().id());
-        job.put("modeDerived", plan.modeDerived());
-        job.put("delivery", plan.delivery().id());
-        job.put("parallelism", plan.parallelism());
-        job.put("timezone", plan.timeZone().getId());
-
-        List<Object> nodes = new ArrayList<>();
+    /** The plan as a structured document, the content of the JSON output. */
+    public static ExplainDocument document(JobPlan plan) {
+        ExplainDocument.Job job = new ExplainDocument.Job(
+                plan.name(),
+                plan.description(),
+                plan.engine().name().toLowerCase(Locale.ROOT),
+                plan.mode().id(),
+                plan.modeDerived(),
+                plan.delivery().id(),
+                plan.parallelism(),
+                plan.timeZone().getId());
+        List<ExplainDocument.Node> nodes = new ArrayList<>();
         for (PlannedNode node : plan.nodes()) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", node.id());
-            map.put("kind", node.kind().id());
-            map.put("type", node.type());
-            map.put("plugin", node.plugin());
-            map.put("inputs", node.inputs());
-            map.put("inputsImplied", node.inputsImplied());
-            map.put("parallelism", node.parallelism());
-            map.put(
-                    "boundedness",
+            nodes.add(new ExplainDocument.Node(
+                    node.id(),
+                    node.kind().id(),
+                    node.type(),
+                    node.plugin(),
+                    node.inputs(),
+                    node.inputsImplied(),
+                    node.parallelism(),
                     node.boundedness() == null
                             ? null
-                            : node.boundedness().name().toLowerCase(Locale.ROOT));
-            List<Object> options = new ArrayList<>();
-            for (PlannedOption option : node.options()) {
-                Map<String, Object> o = new LinkedHashMap<>();
-                o.put("key", option.key());
-                o.put("value", option.value());
-                o.put("origin", option.origin().id());
-                o.put("sensitive", option.sensitive());
-                options.add(o);
-            }
-            map.put("options", options);
-            map.put(
-                    "inputTables",
-                    node.inputTables().stream().map(PlanExplainer::table).toList());
-            map.put(
-                    "outputTables",
-                    node.outputTables().stream().map(PlanExplainer::table).toList());
-            nodes.add(map);
+                            : node.boundedness().name().toLowerCase(Locale.ROOT),
+                    node.options().stream()
+                            .map(o -> new ExplainDocument.Option(
+                                    o.key(), o.value(), o.origin().id(), o.sensitive()))
+                            .toList(),
+                    node.inputTables().stream().map(PlanExplainer::table).toList(),
+                    node.outputTables().stream().map(PlanExplainer::table).toList()));
         }
-
-        Map<String, Object> root = new LinkedHashMap<>();
-        root.put("job", job);
-        root.put("variables", plan.variables());
-        root.put("nodes", nodes);
-        root.put("warnings", plan.warnings());
-        return root;
+        return new ExplainDocument(job, plan.variables(), nodes, plan.warnings());
     }
 
-    private static Map<String, Object> table(CatalogTable table) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", table.id().toString());
-        List<Object> columns = new ArrayList<>();
+    private static ExplainDocument.Table table(CatalogTable table) {
+        List<ExplainDocument.Column> columns = new ArrayList<>();
         for (Column column : table.columns()) {
-            Map<String, Object> c = new LinkedHashMap<>();
-            c.put("name", column.name());
-            c.put("type", column.type().nullable().toString());
-            c.put("nullable", column.type().isNullable());
-            if (column.comment() != null) {
-                c.put("comment", column.comment());
-            }
-            columns.add(c);
+            columns.add(new ExplainDocument.Column(
+                    column.name(),
+                    column.type().nullable().toString(),
+                    column.type().isNullable(),
+                    column.comment()));
         }
-        map.put("columns", columns);
-        map.put("primaryKey", table.primaryKey());
-        map.put("partitionKeys", table.partitionKeys());
-        return map;
+        return new ExplainDocument.Table(table.id().toString(), columns, table.primaryKey(), table.partitionKeys());
     }
 }

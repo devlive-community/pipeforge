@@ -1,0 +1,39 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Defaults of the PipeForge server. The server only listens on the loopback interface until
+# authentication is available; change server.address deliberately.
+
+server:
+  address: 127.0.0.1
+  port: 8080
+
+spring:
+  application:
+    name: pipeforge-server
+  main:
+    banner-mode: off
+  mvc:
+    problemdetails:
+      enabled: false
+  web:
+    resources:
+      add-mappings: false
+
+springdoc:
+  # The OpenAPI document is part of the public API: clients are generated from it.
+  api-docs:
+    enabled: true
+    path: /api/v1/openapi.json
+  default-produces-media-type: application/json
+  writer-with-order-by-keys: true
+
+pipeforge:
+  plugin:
+    paths: plugins
+    cache: work/plugin-cache
+  job:
+    timezone: UTC

@@ -36,6 +36,7 @@ public final class ErrorCode {
     public static final ErrorCode VARIABLE_UNDEFINED = define("PF-CONF-0004", "VARIABLE_UNDEFINED", "variable");
     public static final ErrorCode SECRET_NOT_FOUND = define("PF-CONF-0005", "SECRET_NOT_FOUND", "secret");
     public static final ErrorCode JOB_INVALID = define("PF-CONF-0006", "JOB_INVALID", "location", "reason");
+    public static final ErrorCode REQUEST_INVALID = define("PF-CONF-0007", "REQUEST_INVALID", "reason");
 
     // Planning
     public static final ErrorCode DAG_CYCLE = define("PF-PLAN-0001", "DAG_CYCLE", "path");

@@ -131,7 +131,8 @@ job is streaming, because `live` never ends.
 
 `explain` is the plan view of a job. The JSON output has the same structure as the plan used by the
 engine: `job`, `variables`, `nodes` (with `options`, `inputTables` and `outputTables`) and
-`warnings`. The run analysis that adds rows, rates and bottlenecks to the plan (`explain --analyze`)
+`warnings`. The server returns the same document from `POST /api/v1/explain`
+([REST API](../reference/api#explainjob)), together with the text form. The run analysis that adds rows, rates and bottlenecks to the plan (`explain --analyze`)
 arrives with the metrics of the engine.
 
 ## Troubleshooting

@@ -49,7 +49,7 @@ transform:
 | `null` | 表达式结果为 NULL，行继续处理，并记录失败次数 |
 | `fail` | 本次运行失败（`PF-DATA-0006`） |
 
-完整语法见[表达式语法参考](../reference/expression-syntax)。
+完整语法见[表达式语法参考](../reference/expression-syntax)。不写作业也可以试验表达式：把表达式和示例列发送到 `POST /api/v1/expressions/evaluate`（[REST API](../reference/api#evaluateexpression)），结果会连同类型一起返回。
 
 ## 示例
 

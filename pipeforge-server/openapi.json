@@ -1,0 +1,1138 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "description" : "REST API of the PipeForge server. Every error response is an ErrorInfo object with a registered error code; texts follow Accept-Language (en-US, zh-CN).",
+    "license" : {
+      "name" : "MIT"
+    },
+    "title" : "PipeForge API",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "/"
+  } ],
+  "tags" : [ {
+    "description" : "Error code registry",
+    "name" : "errors"
+  }, {
+    "description" : "Expression language and functions",
+    "name" : "expressions"
+  }, {
+    "description" : "Job validation and plans",
+    "name" : "jobs"
+  }, {
+    "description" : "Installed plugins and their components",
+    "name" : "plugins"
+  }, {
+    "description" : "Server information",
+    "name" : "system"
+  } ],
+  "paths" : {
+    "/api/v1/components/{type}/{identifier}" : {
+      "get" : {
+        "description" : "The options of a source, transform or sink: types, defaults, requirements and the rules between them.",
+        "operationId" : "getComponent",
+        "parameters" : [ {
+          "description" : "source, transform or sink",
+          "in" : "path",
+          "name" : "type",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The component identifier, e.g. jdbc",
+          "in" : "path",
+          "name" : "identifier",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Plugin id or id@version; required when several plugins provide it",
+          "in" : "query",
+          "name" : "plugin",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ComponentInfo"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Describe a component",
+        "tags" : [ "plugins" ],
+        "x-zh-CN" : {
+          "description" : "Source、Transform 或 Sink 的选项：类型、默认值、是否必填以及选项之间的规则。",
+          "summary" : "查看组件"
+        }
+      }
+    },
+    "/api/v1/errors" : {
+      "get" : {
+        "description" : "Every registered error code with its message and hint templates.",
+        "operationId" : "listErrorCodes",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Accept-Language",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ErrorCodeInfo"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List error codes",
+        "tags" : [ "errors" ],
+        "x-zh-CN" : {
+          "description" : "每个已登记的错误码及其消息和提示模板。",
+          "summary" : "列出错误码"
+        }
+      }
+    },
+    "/api/v1/explain" : {
+      "post" : {
+        "description" : "The logical plan of the job: settings, variables, nodes, options with their origin, schemas and warnings. An invalid job is an error response.",
+        "operationId" : "explainJob",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExplainResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Explain a job",
+        "tags" : [ "jobs" ],
+        "x-zh-CN" : {
+          "description" : "作业的逻辑计划：设置、变量、节点、选项及其来源、Schema 和警告。作业不合法时返回错误响应。",
+          "summary" : "查看作业计划"
+        }
+      }
+    },
+    "/api/v1/expressions/evaluate" : {
+      "post" : {
+        "description" : "Type-checks the expression against the given columns and evaluates it on their values. Mistakes are PF-PLAN-0007, failures while evaluating PF-DATA-0006.",
+        "operationId" : "evaluateExpression",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EvaluationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EvaluationResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Evaluate an expression",
+        "tags" : [ "expressions" ],
+        "x-zh-CN" : {
+          "description" : "按给定的列检查表达式的类型，并用这些列的取值求值。表达式有误时返回 PF-PLAN-0007，求值失败时返回 PF-DATA-0006。",
+          "summary" : "表达式求值"
+        }
+      }
+    },
+    "/api/v1/functions" : {
+      "get" : {
+        "description" : "Every built-in function with its signatures, NULL behavior and examples.",
+        "operationId" : "listFunctions",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Accept-Language",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/FunctionInfo"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List built-in functions",
+        "tags" : [ "expressions" ],
+        "x-zh-CN" : {
+          "description" : "每个内置函数的签名、NULL 行为和示例。",
+          "summary" : "列出内置函数"
+        }
+      }
+    },
+    "/api/v1/jobs/validate" : {
+      "post" : {
+        "description" : "Parses the definition, resolves its variables, checks the plugins, options, graph and schemas. Problems are part of the result, not an error response.",
+        "operationId" : "validateJob",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Accept-Language",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JobRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ValidationResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Validate a job",
+        "tags" : [ "jobs" ],
+        "x-zh-CN" : {
+          "description" : "解析定义、解析变量，并检查插件、选项、图和 Schema。问题作为结果的一部分返回，而不是错误响应。",
+          "summary" : "校验作业"
+        }
+      }
+    },
+    "/api/v1/plugins" : {
+      "get" : {
+        "description" : "Every usable plugin with its components, and the packages that were rejected.",
+        "operationId" : "listPlugins",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PluginList"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List installed plugins",
+        "tags" : [ "plugins" ],
+        "x-zh-CN" : {
+          "description" : "每个可用插件及其组件，以及被拒绝加载的插件包。",
+          "summary" : "列出已安装的插件"
+        }
+      }
+    },
+    "/api/v1/version" : {
+      "get" : {
+        "description" : "The PipeForge version, the connector API version and the Java runtime.",
+        "operationId" : "getVersion",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VersionInfo"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get the server version",
+        "tags" : [ "system" ],
+        "x-zh-CN" : {
+          "description" : "PipeForge 版本、连接器 API 版本和 Java 运行时。",
+          "summary" : "获取服务版本"
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "Column" : {
+        "type" : "object",
+        "properties" : {
+          "comment" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "nullable" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ColumnValue" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ComponentInfo" : {
+        "type" : "object",
+        "properties" : {
+          "conditions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ConditionInfo"
+            }
+          },
+          "exclusive" : {
+            "type" : "array",
+            "items" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            }
+          },
+          "identifier" : {
+            "type" : "string"
+          },
+          "nativeNamespaces" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "options" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/OptionInfo"
+            }
+          },
+          "plugin" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ComponentRef" : {
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ConditionInfo" : {
+        "type" : "object",
+        "properties" : {
+          "option" : {
+            "type" : "string"
+          },
+          "required" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "value" : { }
+        }
+      },
+      "DatasourceInfo" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "versions" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ErrorCodeInfo" : {
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "deprecated" : {
+            "type" : "boolean"
+          },
+          "hint" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ErrorInfo" : {
+        "type" : "object",
+        "properties" : {
+          "causeChain" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "hint" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "TRANSIENT", "DATA", "FATAL" ]
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "params" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          },
+          "scope" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          }
+        }
+      },
+      "EvaluationRequest" : {
+        "type" : "object",
+        "properties" : {
+          "columns" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ColumnValue"
+            }
+          },
+          "expression" : {
+            "type" : "string"
+          },
+          "timezone" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "expression" ]
+      },
+      "EvaluationResult" : {
+        "type" : "object",
+        "properties" : {
+          "deterministic" : {
+            "type" : "boolean"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ExampleInfo" : {
+        "type" : "object",
+        "properties" : {
+          "expression" : {
+            "type" : "string"
+          },
+          "result" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ExplainDocument" : {
+        "type" : "object",
+        "properties" : {
+          "job" : {
+            "$ref" : "#/components/schemas/Job"
+          },
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Node"
+            }
+          },
+          "variables" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ExplainResult" : {
+        "type" : "object",
+        "properties" : {
+          "plan" : {
+            "$ref" : "#/components/schemas/ExplainDocument"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "FunctionInfo" : {
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "deterministic" : {
+            "type" : "boolean"
+          },
+          "examples" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExampleInfo"
+            }
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "nulls" : {
+            "type" : "string"
+          },
+          "signatures" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "syntax" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Job" : {
+        "type" : "object",
+        "properties" : {
+          "delivery" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "engine" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "modeDerived" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "parallelism" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "timezone" : {
+            "type" : "string"
+          }
+        }
+      },
+      "JobRequest" : {
+        "type" : "object",
+        "properties" : {
+          "definition" : {
+            "type" : "string"
+          },
+          "scheduledTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "variables" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "definition" ]
+      },
+      "Node" : {
+        "type" : "object",
+        "properties" : {
+          "boundedness" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "inputTables" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Table"
+            }
+          },
+          "inputs" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "inputsImplied" : {
+            "type" : "boolean"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "options" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Option"
+            }
+          },
+          "outputTables" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Table"
+            }
+          },
+          "parallelism" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "plugin" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Option" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "origin" : {
+            "type" : "string"
+          },
+          "sensitive" : {
+            "type" : "boolean"
+          },
+          "value" : { }
+        }
+      },
+      "OptionInfo" : {
+        "type" : "object",
+        "properties" : {
+          "defaultValue" : { },
+          "deprecatedKeys" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "group" : {
+            "type" : "string"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "max" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "min" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "requirement" : {
+            "type" : "string"
+          },
+          "sensitive" : {
+            "type" : "boolean"
+          },
+          "since" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "values" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "PluginInfo" : {
+        "type" : "object",
+        "properties" : {
+          "apiVersion" : {
+            "type" : "string"
+          },
+          "components" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ComponentRef"
+            }
+          },
+          "datasource" : {
+            "$ref" : "#/components/schemas/DatasourceInfo"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "drivers" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "license" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "vendor" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PluginList" : {
+        "type" : "object",
+        "properties" : {
+          "plugins" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PluginInfo"
+            }
+          },
+          "unavailable" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UnavailablePlugin"
+            }
+          }
+        }
+      },
+      "Table" : {
+        "type" : "object",
+        "properties" : {
+          "columns" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Column"
+            }
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "partitionKeys" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "primaryKey" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "UnavailablePlugin" : {
+        "type" : "object",
+        "properties" : {
+          "location" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ValidationResult" : {
+        "type" : "object",
+        "properties" : {
+          "errors" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorInfo"
+            }
+          },
+          "valid" : {
+            "type" : "boolean"
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "VersionInfo" : {
+        "type" : "object",
+        "properties" : {
+          "connectorApi" : {
+            "type" : "string"
+          },
+          "java" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      }
+    }
+  }
+}

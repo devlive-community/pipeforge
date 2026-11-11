@@ -104,6 +104,11 @@ or `TIMESTAMP_LTZ`; arrays as `BIGINT ARRAY`.
 | Anything | `STRING(n)` | Longer text is cut to `n` characters |
 | `TIMESTAMP` | `DATE`, `TIME` | Keeps the date or the time of day |
 
+Tools that take values as text or show results as text, such as the expression endpoint of the
+server, convert them the same way: text to a column type like `CAST(text AS type)`, results like
+`CAST(value AS STRING)`, except that booleans are written `TRUE` / `FALSE`, decimals without an
+exponent and arrays as `[a, b]`.
+
 ## Types and implicit conversion
 
 Operands of different types are converted to a common type only when no information is lost:

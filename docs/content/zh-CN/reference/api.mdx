@@ -1,0 +1,25 @@
+---
+title: REST API
+description: PipeForge 服务的全部接口及其参数、请求与响应结构，由 OpenAPI 文档生成。
+order: 80
+data: api
+---
+
+## 约定
+
+- 所有接口都在 `/api/v1` 下。在 `v1` 内接口和字段只增不改、不删除。
+- 请求和响应都是 JSON。消息语言按 `Accept-Language`（`en-US` 或 `zh-CN`）。
+- 每个错误响应都是带有已登记[错误码](./errors)的 `ErrorInfo` 对象。HTTP 状态码取决于错误码：
+
+| 状态码 | 错误 |
+|---|---|
+| 400 | `PF-CONF-0007`：请求本身不合法（缺少字段、JSON 格式错误） |
+| 404 | `PF-PLUG-0001`：组件未安装；接口不存在时为 `PF-CONF-0007` |
+| 422 | 作业、表达式或插件选项不合法（`CONF`、`PLAN`、`PLUG`、`DATA` 类错误码） |
+| 500 | `PF-SYS-0001`：内部错误 |
+
+- OpenAPI 文档位于 `/api/v1/openapi.json`。Web UI 使用的 TypeScript 客户端 `@pipeforge/client` 由它生成。
+
+## 接口
+
+<ApiList />

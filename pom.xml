@@ -40,6 +40,7 @@
         <module>pipeforge-plugin</module>
         <module>pipeforge-expressions</module>
         <module>pipeforge-core</module>
+        <module>pipeforge-server</module>
     </modules>
 
     <properties>

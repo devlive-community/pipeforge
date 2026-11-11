@@ -7,4 +7,5 @@
 
 packages:
   - pipeforge-design-tokens
+  - pipeforge-client-ts
   - docs

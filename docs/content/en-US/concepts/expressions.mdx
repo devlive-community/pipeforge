@@ -55,7 +55,9 @@ transform:
 | `null` | The expression yields NULL and the row continues; the failure is counted |
 | `fail` | The run fails (`PF-DATA-0006`) |
 
-The full syntax is in the [expression syntax reference](../reference/expression-syntax).
+The full syntax is in the [expression syntax reference](../reference/expression-syntax). To try an
+expression without a job, send it with sample columns to `POST /api/v1/expressions/evaluate`
+([REST API](../reference/api#evaluateexpression)); the result comes back with its type.
 
 ## Examples
 

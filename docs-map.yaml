@@ -51,3 +51,7 @@
   docs: ["reference/variables"]
 - paths: ["pipeforge-core/src/main/java/org/devlive/pipeforge/core/plan/**", "pipeforge-core/src/main/java/org/devlive/pipeforge/core/explain/**"]
   docs: ["concepts/plan-and-explain"]
+- paths: ["pipeforge-server/**"]
+  docs: ["reference/api", "operations/server"]
+- paths: ["pipeforge-client-ts/**"]
+  docs: ["reference/api"]

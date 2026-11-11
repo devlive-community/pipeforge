@@ -23,11 +23,14 @@ const pages = loadPages(join(root, "content"));
 // Anchors of pages that render generated data (run `pnpm generate` first).
 const errorsFile = join(root, "generated", "errors.json");
 const functionsFile = join(root, "generated", "functions.json");
+const apiFile = join(root, "generated", "api.json");
+const api = existsSync(apiFile) ? JSON.parse(readFileSync(apiFile, "utf8")) : { operations: [], schemas: [] };
 const generatedAnchors = {
   errors: existsSync(errorsFile) ? JSON.parse(readFileSync(errorsFile, "utf8")).map((e) => e.code.toLowerCase()) : [],
   functions: existsSync(functionsFile)
     ? JSON.parse(readFileSync(functionsFile, "utf8")).map((f) => f.name.toLowerCase())
     : [],
+  api: [...api.operations.map((o) => o.id.toLowerCase()), ...api.schemas.map((s) => `schema-${s.name.toLowerCase()}`)],
 };
 
 const checks = {

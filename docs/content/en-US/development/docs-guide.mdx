@@ -26,7 +26,7 @@ directory must be one of `getting-started`, `concepts`, `guides`, `reference`, `
 title: Local development environment   # page title, shown as the heading
 description: One sentence for search results and link previews.
 order: 20                              # position in the section navigation
-data: errors                           # optional: generated data the page renders, errors or functions (adds its anchors)
+data: errors                           # optional: generated data the page renders, errors, functions or api (adds its anchors)
 template: feature                      # guide (default), feature or plugin
 omit:                                  # template sections that do not apply, with a reason
   performance: The environment is meant for development, not for benchmarks.
@@ -96,6 +96,7 @@ marked as generated render data exported from the plugin's code and are never wr
 | `<Steps>` with `<Step title="...">` | Step-by-step procedures |
 | `<ErrorList />` | Every registered error code with search and category filters, generated from the error registry; the page declares `data: errors` in its frontmatter so that links to `#pf-conf-0001` anchors are checked |
 | `<FunctionList />` | Every built-in function with its signatures, NULL behavior and examples, with search and category filters, generated from the function catalog; the page declares `data: functions` so that links to `#substring` anchors are checked |
+| `<ApiList />` | Every endpoint of the REST API with parameters, request and response schemas, generated from `pipeforge-server/openapi.json`; the page declares `data: api` so that links to `#validatejob` and `#schema-errorinfo` anchors are checked |
 
 ```mdx title="example.mdx"
 <Tabs>
