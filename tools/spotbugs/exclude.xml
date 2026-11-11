@@ -18,6 +18,13 @@
     <Match>
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
+    <!--
+      The security manager is deprecated for removal (JEP 411) and doPrivileged no longer has any
+      effect; class loaders are created directly.
+    -->
+    <Match>
+        <Bug pattern="DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED,DP_DO_INSIDE_DO_PRIVILEGED"/>
+    </Match>
     <!-- Constructor exceptions are part of normal validation; finalizer attacks are not in scope. -->
     <Match>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>

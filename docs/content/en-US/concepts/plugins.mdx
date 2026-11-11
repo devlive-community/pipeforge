@@ -1,0 +1,137 @@
+---
+title: Plugins and isolation
+description: How PipeForge finds plugins, isolates them in their own class loaders, runs their code and unloads them.
+order: 30
+template: feature
+omit:
+  observability: Load and unload events are logged; plugin metrics arrive with the metrics registry.
+  performance: Loading happens once per plugin version and job and has no tuning parameters.
+---
+
+## Overview
+
+Every source, sink, transform and catalog is a plugin. Plugins are installed as packages, loaded on
+demand and isolated from each other: each plugin version has its own class loader, so two plugins
+can use different versions of the same library — for example two JDBC drivers — in one process.
+
+## How it works
+
+### Discovery
+
+At start-up PipeForge scans the plugin directories. A plugin is either a zip package or an extracted
+directory with `plugin.yaml` and `lib/`. Zips are extracted into a cache keyed by their content
+hash. A plugin built for another major version of the connector API is listed as unavailable with
+the reason.
+
+### Class loader isolation
+
+```text
+JDK
+ └── engine class loader: engine, pipeforge-api, error codes, SLF4J
+       ├── plugin class loader: mysql@1.0.0   (child-first)
+       ├── plugin class loader: kafka@1.2.0   (child-first)
+       └── plugin class loader: doris@1.0.0   (child-first)
+```
+
+A plugin class loader looks in the plugin's own jars first and only then asks the engine. The
+exceptions are loaded parent-first so that engine and plugins share the same types: `java.*`,
+`javax.*`, `jdk.*`, `org.devlive.pipeforge.api.*`, `org.devlive.pipeforge.common.*`,
+`org.slf4j.*` and `org.jspecify.*`.
+
+### Leases and unloading
+
+All users of a plugin version share one class loader. A job acquires a **lease** for every plugin it
+uses and releases it when it ends; when the last lease is released the class loader is closed and
+can be garbage collected, so long-running workers do not leak memory.
+
+### The invocation boundary
+
+Calls into plugin code go through the plugin's invoker. It sets the plugin class loader as the
+thread context class loader, turns failures into errors that name the plugin and the operation
+(`PF-PLUG-0007`), and interrupts control operations that exceed their timeout (`PF-PLUG-0006`).
+
+### Forbidden calls
+
+Before a plugin is loaded its jars are checked for calls that would affect every job in the
+process: `System.exit`, `Runtime.halt`, changing system properties, the default time zone or
+locale, security providers, the standard streams or JVM-wide handlers. Such a plugin is refused
+with `PF-PLUG-0005`.
+
+## Quick start
+
+Copy a plugin package into the plugin directory and refer to its component by identifier in a job:
+
+```bash
+cp greeting-plugin-1.0.0.zip $PIPEFORGE_HOME/plugins/
+```
+
+```yaml
+source:
+  - name: hello
+    type: greeting          # the identifier declared in plugin.yaml
+```
+
+## Configuration
+
+| Field | Where | Meaning |
+|---|---|---|
+| `plugin` | job node | Pins a plugin: `greeting` or `greeting@1.0.0`; without it the highest installed version is used |
+| `plugin.paths` | engine configuration | Additional plugin directories |
+
+## Examples
+
+### Two versions side by side
+
+With `greeting-plugin-1.0.0.zip` and `greeting-plugin-1.1.0.zip` installed, jobs use 1.1.0 by
+default; a job that has not been tested with it yet keeps the old version:
+
+```yaml
+source:
+  - name: hello
+    type: greeting
+    plugin: greeting@1.0.0
+```
+
+### Two plugins with conflicting libraries
+
+A MySQL plugin bundling one version of a JSON library and a Kafka plugin bundling another run in
+the same job without conflicts, because each library is loaded by its own plugin's class loader.
+
+```yaml
+source:
+  - name: orders
+    type: mysql-cdc
+sink:
+  - name: events
+    type: kafka
+    inputs: [orders]
+```
+
+## Behavior
+
+- The highest semantic version wins when no version is pinned; a pre-release ranks below its
+  release.
+- When several plugins provide the same identifier, the job must choose one with `plugin`
+  (`PF-PLUG-0008`).
+- A running job keeps the plugin version it started with, even when a newer one is installed.
+
+## Troubleshooting
+
+| Error | Cause and solution |
+|---|---|
+| `PF-PLUG-0001` | No installed plugin provides the component; install it or check the identifier. |
+| `PF-PLUG-0002` | The plugin was built for another API major version; install a matching build. |
+| `PF-PLUG-0004` | The package is incomplete, for example `lib/` is empty. |
+| `PF-PLUG-0005` | The plugin calls a JVM-wide operation; it must pass settings through options instead. |
+| `PF-PLUG-0006` | A plugin call did not finish in time; check the external system. |
+| `PF-PLUG-0008` | Several plugins provide the identifier; set `plugin` on the node. |
+
+## Limitations
+
+- Plugins are distributed to workers with the distributed runtime (milestone M1); local runs load
+  them from the local plugin directories.
+- Leak reports for class loaders that are not collected arrive with the isolation features of M2.
+
+## Version history
+
+Available since 0.1.0.

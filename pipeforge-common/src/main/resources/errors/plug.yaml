@@ -32,3 +32,48 @@
   hint:
     en-US: "Upload the driver; drivers with restrictive licenses are not shipped with PipeForge."
     zh-CN: "上传该驱动；许可证受限的驱动不随 PipeForge 分发。"
+
+- code: PF-PLUG-0004
+  name: PLUGIN_LOAD_FAILED
+  message:
+    en-US: "Plugin '{plugin}' cannot be loaded: {reason}"
+    zh-CN: "插件 '{plugin}' 无法加载：{reason}"
+  hint:
+    en-US: "Check that the plugin package is complete and was built for this engine version."
+    zh-CN: "检查插件包是否完整，以及是否为当前引擎版本构建。"
+
+- code: PF-PLUG-0005
+  name: PLUGIN_FORBIDDEN_CALL
+  message:
+    en-US: "Plugin '{plugin}' calls {call} in {location}, which changes the whole JVM"
+    zh-CN: "插件 '{plugin}' 在 {location} 中调用了 {call}，这会影响整个 JVM"
+  hint:
+    en-US: "Plugins must not exit the JVM or change global settings; pass configuration through options instead."
+    zh-CN: "插件不能退出 JVM 或修改全局设置，请改为通过选项传递配置。"
+
+- code: PF-PLUG-0006
+  name: PLUGIN_TIMEOUT
+  message:
+    en-US: "Plugin '{plugin}' did not finish {operation} within {timeoutMs} ms"
+    zh-CN: "插件 '{plugin}' 未在 {timeoutMs} 毫秒内完成 {operation}"
+  hint:
+    en-US: "Check whether the external system responds; raise the timeout only if the operation is legitimately slow."
+    zh-CN: "检查外部系统是否有响应；只有在操作确实较慢时才调大超时时间。"
+
+- code: PF-PLUG-0007
+  name: PLUGIN_CALL_FAILED
+  message:
+    en-US: "Plugin '{plugin}' failed in {operation}: {reason}"
+    zh-CN: "插件 '{plugin}' 在执行 {operation} 时失败：{reason}"
+  hint:
+    en-US: "See the cause in the error details; report it to the plugin vendor if it looks like a defect."
+    zh-CN: "查看错误详情中的原因；如果看起来是缺陷，请反馈给插件提供方。"
+
+- code: PF-PLUG-0008
+  name: COMPONENT_AMBIGUOUS
+  message:
+    en-US: "The {type} '{identifier}' is provided by several plugins: {plugins}"
+    zh-CN: "{type} '{identifier}' 由多个插件提供：{plugins}"
+  hint:
+    en-US: "Choose one with the plugin field of the node, for example plugin: {identifier}@1.0.0."
+    zh-CN: "在节点的 plugin 字段中指定使用哪一个，例如 plugin: {identifier}@1.0.0。"

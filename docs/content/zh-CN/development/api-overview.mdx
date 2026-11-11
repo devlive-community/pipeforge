@@ -100,4 +100,6 @@ public OptionRule optionRule() {
 | `@Evolving` | 可能在次版本中调整 |
 | `@Internal` | 不做承诺，插件不应使用 |
 
+运行时可以通过 `ApiVersion.current()` 获取 API 版本；插件声明自己构建时的主版本（`ApiVersion.descriptorForm()`，例如 `0.x`），引擎拒绝加载为其他主版本构建的插件。
+
 接口新增的方法一律提供默认实现。构建时用 japicmp 与上一个发布版本比较，出现不兼容改动即失败；另有测试检查每个公开类型都带有其中一个注解。
