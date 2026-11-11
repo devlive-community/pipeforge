@@ -1,0 +1,122 @@
+---
+title: 编写文档
+description: 如何编写功能页和插件页、可以使用哪些组件，以及文档站会执行哪些检查。
+order: 30
+---
+
+## 什么时候必须写文档
+
+每一个用户可见的改动都要**在同一个提交中**更新文档站，英文（`docs/content/en-US/`）和中文
+（`docs/content/zh-CN/`）各一份。插件写插件页，其他功能写功能页，不兼容改动写迁移说明。纯内部重构、
+测试和构建脚本不需要文档，在提交信息中写 `Docs-Not-Needed: <原因>`。
+
+哪些代码路径对应哪些页面，登记在仓库根目录的 `docs-map.yaml` 中。每个新模块都要在其中登记。
+
+## 页面文件与 frontmatter
+
+一个页面就是一个 MDX 文件。它在语言目录下的路径就是页面 id 和 URL：`development/docs-guide.mdx`
+的地址是 `/<语言>/next/development/docs-guide/`。第一层目录必须是 `getting-started`、`concepts`、
+`guides`、`reference`、`plugins`、`operations` 或 `development` 之一。
+
+```yaml title="frontmatter"
+---
+title: 本地开发环境                    # 页面标题，显示为页面主标题
+description: 一句话，用于搜索结果和链接预览。
+order: 20                              # 在所属分组导航中的位置
+template: feature                      # guide（默认）、feature 或 plugin
+omit:                                  # 不适用的模板章节及原因
+  performance: 环境用于开发，不用于性能基准。
+---
+```
+
+不要写一级标题，页面标题来自 frontmatter。
+
+## 功能页模板
+
+`template: feature` 的页面按以下顺序使用二级章节。不适用的章节不写，并在 `omit` 中写明原因。
+
+| 章节 | 内容 |
+|---|---|
+| 概述 | 功能解决什么问题，适用和不适用的场景 |
+| 原理 | 工作机制，核心机制配图示或动画 |
+| 快速上手 | 一个可以直接复制运行的最小示例 |
+| 配置 | 选项、DSL 字段和配置项，引用生成的参考数据 |
+| 示例 | 至少两个真实场景的完整示例 |
+| 行为与语义 | 一致性、故障时的行为、与其他功能的交互 |
+| 可观测性 | 指标、`explain` 中的对应内容、告警 |
+| 性能与调优 | 影响性能的参数和推荐值 |
+| 排障 | 错误码、常见问题和处理方法 |
+| 限制 | 不支持的情况 |
+| 版本 | 自哪个版本起提供，以及之后的变化 |
+
+英文页面的章节标题依次是 Overview、How it works、Quick start、Configuration、Examples、Behavior、
+Observability、Performance and tuning、Troubleshooting、Limitations 和 Version history。
+
+## 插件页模板
+
+插件页位于 `plugins/<类型>/<插件 ID>.mdx`，使用 `template: plugin`。标为“生成”的章节渲染从插件代码导出的数据，
+不允许手写。
+
+| 章节 | 来源 |
+|---|---|
+| 简介 | 人工 |
+| 能力 | 生成 |
+| 已验证版本 | 生成 |
+| 快速开始 | 人工 |
+| 前置条件 | 人工 |
+| 数据源配置 | 人工 + 生成 |
+| 节点选项 | 生成 |
+| 原生配置项目录 | 生成 |
+| 类型映射 | 生成 |
+| 分片与并行 | 人工 |
+| 一致性语义 | 人工 |
+| 示例 | 人工，至少三个场景 |
+| 指标 | 生成 + 人工 |
+| 性能与调优 | 人工 |
+| 错误码与排障 | 生成 + 人工 |
+| 已知限制 | 人工 |
+| 变更记录 | 生成 |
+
+## 组件
+
+<Callout type="tip">
+  所有组件在每个页面中都可以直接使用，不需要 import。
+</Callout>
+
+| 组件 | 用途 |
+|---|---|
+| `<Callout type="note">` | 提示框；`type` 为 `note`、`tip`、`warning` 或 `danger` |
+| 代码块 | 带复制按钮的高亮代码；可以加 `title="file.yaml"`、用 `{2-4}` 高亮行，或加 `showLineNumbers` |
+| `<Tabs>` 与 `<Tab label="...">` | 多种写法切换，例如 YAML、SQL 和 CLI |
+| `<Steps>` 与 `<Step title="...">` | 分步骤的操作说明 |
+
+```mdx title="example.mdx"
+<Tabs>
+  <Tab label="YAML">用 YAML 编写的作业。</Tab>
+  <Tab label="CLI">从命令行启动同一个作业。</Tab>
+</Tabs>
+```
+
+## 链接
+
+用相对当前页面的路径链接其他页面，不写语言和版本：`[本地环境](./local-environment)` 或
+`[插件](../concepts/plugins#isolation)`。这样同一段文字在所有语言和版本中都有效，构建时也会校验目标页面和锚点。
+锚点是标题文字转为小写、空格替换为连字符后的结果。
+
+## 检查
+
+```bash
+cd docs
+pnpm generate    # 搜索索引和从代码导出的数据
+pnpm check       # 结构、中英文一致、链接和 UI 违规扫描
+pnpm build       # 静态导出到 docs/out
+pnpm dev         # 本地预览，修改后实时刷新
+```
+
+| 检查 | 失败条件 |
+|---|---|
+| structure | frontmatter 不完整、缺少模板章节或章节为空、页面包含 `TODO` |
+| i18n | 某种语言缺少页面，或两种语言的模板、顺序、省略的章节、标题结构、代码块数量不一致 |
+| links | 链接指向不存在的页面或锚点，或使用了站点绝对路径 |
+| ui | 站点代码使用了原始色板、`dark:` 变体、行内颜色、`components/ui` 以外的原生控件、title 提示或浏览器对话框 |
+| Lighthouse | 性能、可访问性、最佳实践或 SEO 任一得分低于 95 |

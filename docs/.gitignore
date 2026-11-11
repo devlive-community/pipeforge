@@ -1,0 +1,8 @@
+# Build output and data generated from the code and the content
+.next/
+out/
+generated/
+public/search/
+next-env.d.ts
+.lighthouseci/
+*.tsbuildinfo

@@ -1,0 +1,8 @@
+.next/
+out/
+generated/
+public/
+content/
+node_modules/
+.lighthouseci/
+next-env.d.ts

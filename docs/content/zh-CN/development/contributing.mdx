@@ -1,0 +1,61 @@
+---
+title: 参与贡献
+description: 如何提出改动、搭建开发环境，以及让 Pull Request 被合并。
+order: 10
+---
+
+## 开始之前
+
+小的修复可以直接提 Pull Request。新功能、新插件，以及涉及 `pipeforge-api`、协议或 checkpoint 格式的改动，
+先开一个功能提议 Issue。提问请到 GitHub Discussions。
+
+## 开发环境
+
+需要 JDK 21、Docker，以及 Node.js 22 和 pnpm。
+
+```bash
+./mvnw verify                  # 完整构建，执行全部质量门槛
+./mvnw -Pquick install         # 快速构建，跳过格式化、静态检查和覆盖率
+./dev/up.sh                    # 拉起本地依赖服务
+pnpm install && pnpm --filter @pipeforge/docs dev   # 启动文档站，修改后实时刷新
+```
+
+服务和端口见[本地开发环境](./local-environment)。
+
+## 每个提交的规则
+
+<Steps>
+  <Step title="一个提交只做一件事">
+    每个提交只做一件事，单独检出后能构建并通过测试。每个插件恰好一个提交，包含测试和文档。
+  </Step>
+  <Step title="英文 Conventional Commits">
+    例如 `feat(connector-fake): add fake source`。范围是模块名，正文列出已验证的版本和测试情况。
+  </Step>
+  <Step title="文档放在同一个提交中">
+    每个用户可见的改动都要按[编写文档](./docs-guide)的要求同时更新中英文文档，否则在提交信息中写明
+    `Docs-Not-Needed: <原因>`。
+  </Step>
+  <Step title="签署">
+    使用 `git commit -s`；DCO 检查会拒绝没有对应 `Signed-off-by` 的提交。
+  </Step>
+</Steps>
+
+## 代码规范
+
+<Tabs>
+  <Tab label="Java">
+    `./mvnw verify` 会运行 Spotless（palantir-java-format）、Error Prone 和 SpotBugs。
+    用 `./mvnw spotless:apply` 格式化。
+  </Tab>
+  <Tab label="前端">
+    ESLint、Prettier 和严格模式的 TypeScript。用 `pnpm lint:fix` 格式化；`pnpm lint:ui` 必须没有任何输出。
+  </Tab>
+  <Tab label="许可证头">
+    所有源文件开头都带 MIT 许可证头。`tools/license-header/check.sh --fix` 可以给任意类型的文件补上。
+  </Tab>
+</Tabs>
+
+## 评审与合并
+
+至少一位维护者批准；涉及 `pipeforge-api`、协议或状态格式的改动需要两位。CI 必须通过（`ci-ok`）。
+Pull Request 采用 rebase 合并，保留每一个提交。

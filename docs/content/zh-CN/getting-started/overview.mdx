@@ -1,0 +1,40 @@
+---
+title: 项目介绍
+description: PipeForge 是什么、如何构建，以及项目的路线图。
+order: 10
+---
+
+## PipeForge 是什么
+
+PipeForge 是插件化的分布式数据集成平台。作业是由 **Source**、**Transform** 和 **Sink** 组成的图；
+一套连接器 API 覆盖批处理、流处理和变更数据捕获（CDC），作业运行在 PipeForge 自研的分布式引擎上。
+
+- **连接器都是插件。** 每个插件单独打包，在隔离的类加载器中加载，两个插件可以依赖同一个库的不同版本。
+- **从一开始就是分布式。** Master 负责协调作业，Worker 负责运行。本地模式在一个进程中运行同样的 Master 和 Worker 代码。
+- **一套类型系统。** 所有连接器共用逻辑类型，由方言插件映射到各个系统的原生类型。
+- **可观测。** 作业、节点、Task、分片、表各层的指标，以及用于分析计划和瓶颈的 `explain`。
+
+## 架构
+
+| 层 | 模块 | 职责 |
+|---|---|---|
+| 接入 | `pipeforge-cli`、`pipeforge-ui`、REST API | 提交、操作和观察作业 |
+| 控制面 | `pipeforge-server` | 作业、数据源、调度、运行历史 |
+| 计划 | `pipeforge-core`、`pipeforge-expressions` | 作业 DSL、校验、逻辑计划、Schema 推导 |
+| 引擎 | `pipeforge-engine` | Master、Worker、Task、数据交换、checkpoint |
+| 连接器 API | `pipeforge-api` | 行、类型、Source、Transform、Sink、Catalog、选项 |
+| 插件 | `pipeforge-plugin`、连接器、转换 | 插件发现、隔离以及插件本身 |
+
+依赖只能向下：连接器依赖 `pipeforge-api`，从不依赖引擎。
+
+## 路线图
+
+| 里程碑 | 重点 |
+|---|---|
+| M0 | 工程骨架：构建、CI、文档站、连接器 API、插件加载、表达式、通过 CLI 本地运行 |
+| M1 | 分布式运行时与并行批处理：Master 与 Worker、分片分配、MySQL 和 PostgreSQL 的 JDBC 连接器 |
+| M2 | Checkpoint 与故障恢复：批处理精确续传、savepoint、Master 高可用 |
+| M3 | 数据交换、多表作业与统一 Schema |
+
+项目目前处于 M0 里程碑。可以参考[本地开发环境](../development/local-environment)拉起示例和测试使用的服务，
+或阅读[参与贡献](../development/contributing)加入开发。
