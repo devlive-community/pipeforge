@@ -67,7 +67,7 @@
         <logback.version>1.5.38</logback.version>
         <jackson.version>2.21.7</jackson.version>
         <snakeyaml.version>2.6</snakeyaml.version>
-        <spotbugs.version>4.8.6</spotbugs.version>
+        <spotbugs.version>4.10.5</spotbugs.version>
         <errorprone.version>2.36.0</errorprone.version>
         <calcite.version>1.40.0</calcite.version>
         <janino.version>3.1.12</janino.version>
