@@ -1,0 +1,30 @@
+Job orders-daily  mode=batch (derived)  delivery=at-least-once  engine=native  parallelism=4  timezone=Asia/Shanghai
+Description  Daily copy of the orders table
+Variables  biz_date=2026-11-06
+
+Nodes (3, in topological order)
+  [src]  source     fake     builtin  parallelism=4  bounded
+  [map]  transform  rename   builtin  parallelism=4  inputs=src (implied)
+  [out]  sink       console  builtin  parallelism=1  inputs=map (implied)
+
+Options (defaults omitted)
+  [src]  rows=1000        node
+         password=******  node
+         fetch-size=500   env
+  [map]  from=name        node
+         to=customer      node
+  [out]  limit=50         cluster
+
+Schema
+  [src] -> demo.orders  primary key (id)
+      id          INT64 NOT NULL
+      name        STRING(20)      -- customer name
+      amount      DECIMAL(10, 2)
+      created_at  TIMESTAMP(3)
+  [map] -> demo.orders  primary key (id)  (+customer, -name)
+      id          INT64 NOT NULL
+      customer    STRING(20)      -- customer name
+      amount      DECIMAL(10, 2)
+      created_at  TIMESTAMP(3)
+
+Warnings  none

@@ -1,0 +1,238 @@
+{
+  "job" : {
+    "name" : "orders-merge",
+    "description" : null,
+    "engine" : "native",
+    "mode" : "streaming",
+    "modeDerived" : true,
+    "delivery" : "at-least-once",
+    "parallelism" : 1,
+    "timezone" : "UTC"
+  },
+  "variables" : { },
+  "nodes" : [
+    {
+      "id" : "history",
+      "kind" : "source",
+      "type" : "fake",
+      "plugin" : "builtin",
+      "inputs" : [ ],
+      "inputsImplied" : false,
+      "parallelism" : 1,
+      "boundedness" : "bounded",
+      "options" : [
+        {
+          "key" : "rows",
+          "value" : 10,
+          "origin" : "default",
+          "sensitive" : false
+        },
+        {
+          "key" : "table",
+          "value" : "demo.orders",
+          "origin" : "default",
+          "sensitive" : false
+        },
+        {
+          "key" : "fetch-size",
+          "value" : 100,
+          "origin" : "default",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [ ],
+      "outputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT64",
+              "nullable" : false
+            },
+            {
+              "name" : "name",
+              "type" : "STRING(20)",
+              "nullable" : true,
+              "comment" : "customer name"
+            },
+            {
+              "name" : "amount",
+              "type" : "DECIMAL(10, 2)",
+              "nullable" : true
+            },
+            {
+              "name" : "created_at",
+              "type" : "TIMESTAMP(3)",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [
+            "id"
+          ],
+          "partitionKeys" : [ ]
+        }
+      ]
+    },
+    {
+      "id" : "live",
+      "kind" : "source",
+      "type" : "events",
+      "plugin" : "builtin",
+      "inputs" : [ ],
+      "inputsImplied" : false,
+      "parallelism" : 1,
+      "boundedness" : "unbounded",
+      "options" : [
+        {
+          "key" : "rows",
+          "value" : 10,
+          "origin" : "default",
+          "sensitive" : false
+        },
+        {
+          "key" : "table",
+          "value" : "demo.orders",
+          "origin" : "default",
+          "sensitive" : false
+        },
+        {
+          "key" : "fetch-size",
+          "value" : 100,
+          "origin" : "default",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [ ],
+      "outputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT32",
+              "nullable" : false
+            },
+            {
+              "name" : "name",
+              "type" : "STRING(40)",
+              "nullable" : true
+            },
+            {
+              "name" : "channel",
+              "type" : "STRING",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [ ],
+          "partitionKeys" : [ ]
+        }
+      ]
+    },
+    {
+      "id" : "out",
+      "kind" : "sink",
+      "type" : "console",
+      "plugin" : "builtin",
+      "inputs" : [
+        "history",
+        "live"
+      ],
+      "inputsImplied" : false,
+      "parallelism" : 1,
+      "boundedness" : null,
+      "options" : [
+        {
+          "key" : "limit",
+          "value" : 5,
+          "origin" : "node",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT64",
+              "nullable" : false
+            },
+            {
+              "name" : "name",
+              "type" : "STRING(40)",
+              "nullable" : true,
+              "comment" : "customer name"
+            },
+            {
+              "name" : "amount",
+              "type" : "DECIMAL(10, 2)",
+              "nullable" : true
+            },
+            {
+              "name" : "created_at",
+              "type" : "TIMESTAMP(3)",
+              "nullable" : true
+            },
+            {
+              "name" : "channel",
+              "type" : "STRING",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [ ],
+          "partitionKeys" : [ ]
+        }
+      ],
+      "outputTables" : [ ]
+    },
+    {
+      "id" : "audit",
+      "kind" : "sink",
+      "type" : "console",
+      "plugin" : "builtin",
+      "inputs" : [
+        "live"
+      ],
+      "inputsImplied" : false,
+      "parallelism" : 1,
+      "boundedness" : null,
+      "options" : [
+        {
+          "key" : "limit",
+          "value" : 50,
+          "origin" : "cluster",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT32",
+              "nullable" : false
+            },
+            {
+              "name" : "name",
+              "type" : "STRING(40)",
+              "nullable" : true
+            },
+            {
+              "name" : "channel",
+              "type" : "STRING",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [ ],
+          "partitionKeys" : [ ]
+        }
+      ],
+      "outputTables" : [ ]
+    }
+  ],
+  "warnings" : [
+    "env.sink.batch-size is not an option of any sink in the job"
+  ]
+}

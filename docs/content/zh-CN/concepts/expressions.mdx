@@ -28,7 +28,7 @@ omit:
 
 ```yaml
 transform:
-  - name: enrich
+  - id: enrich
     type: field-mapper
     fields:
       - { expr: "amount * qty", to: total }

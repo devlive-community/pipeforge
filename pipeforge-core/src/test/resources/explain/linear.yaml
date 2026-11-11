@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+version: 1
+name: orders-daily
+description: Daily copy of the orders table
+env:
+  parallelism: 4
+  variables:
+    biz_date: "${date:yyyy-MM-dd,-1d}"
+  source:
+    fetch-size: 500
+source:
+  - id: src
+    type: fake
+    rows: 1000
+    password: s3cret
+transform:
+  - id: map
+    type: rename
+    from: name
+    to: customer
+sink:
+  - id: out
+    type: console
+    parallelism: 1

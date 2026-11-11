@@ -35,6 +35,7 @@ public final class ErrorCode {
             define("PF-CONF-0003", "NATIVE_KEY_CONTROLLED", "key", "node", "reason");
     public static final ErrorCode VARIABLE_UNDEFINED = define("PF-CONF-0004", "VARIABLE_UNDEFINED", "variable");
     public static final ErrorCode SECRET_NOT_FOUND = define("PF-CONF-0005", "SECRET_NOT_FOUND", "secret");
+    public static final ErrorCode JOB_INVALID = define("PF-CONF-0006", "JOB_INVALID", "location", "reason");
 
     // Planning
     public static final ErrorCode DAG_CYCLE = define("PF-PLAN-0001", "DAG_CYCLE", "path");
@@ -49,6 +50,9 @@ public final class ErrorCode {
     public static final ErrorCode EXPRESSION_INVALID =
             define("PF-PLAN-0007", "EXPRESSION_INVALID", "expression", "line", "column", "reason");
     public static final ErrorCode ROLLBACK_UNSUPPORTED = define("PF-PLAN-0008", "ROLLBACK_UNSUPPORTED", "node", "mode");
+    public static final ErrorCode INPUT_INVALID = define("PF-PLAN-0009", "INPUT_INVALID", "node", "input", "reason");
+    public static final ErrorCode NODE_DISCONNECTED = define("PF-PLAN-0010", "NODE_DISCONNECTED", "node");
+    public static final ErrorCode BOUNDEDNESS_MISMATCH = define("PF-PLAN-0011", "BOUNDEDNESS_MISMATCH", "node");
 
     // Plugins
     public static final ErrorCode PLUGIN_NOT_FOUND = define("PF-PLUG-0001", "PLUGIN_NOT_FOUND", "plugin", "type");

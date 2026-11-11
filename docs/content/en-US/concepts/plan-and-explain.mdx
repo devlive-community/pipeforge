@@ -1,0 +1,161 @@
+---
+title: Plan and explain
+description: How a job definition becomes a checked logical plan before any data is read, and how explain shows the nodes, options, schemas and warnings.
+order: 50
+template: feature
+omit:
+  performance: Planning reads no data; it creates each plugin component once to ask for its schema, which takes milliseconds per node.
+---
+
+## Overview
+
+Before a job reads a single row, PipeForge turns the definition into a **plan** and checks
+everything that can be checked without data: the structure, the variables, every plugin option,
+the connections between nodes and the schema on every edge. Mistakes are reported with an error
+code and the node or line they concern, so a job that plans successfully only fails at run time
+for reasons that depend on the data or the systems it talks to.
+
+`explain` prints the plan: use it to review a job before running it, to see where an option value
+comes from, or to find out which columns reach a sink.
+
+## How it works
+
+1. **Parse** — the YAML or JSON is read and its structure checked (`PF-CONF-0006`).
+2. **Variables** — `${var:...}`, `${date:...}` and the other [variables](../reference/variables)
+   are replaced once.
+3. **Graph** — every `inputs` entry must name a source or transform; the graph must have no cycle
+   and every node must lead to a sink.
+4. **Components and options** — the component of each node is found in the installed plugins, and
+   its options are merged (node, then `env`, then cluster configuration, then plugin defaults) and
+   checked against the plugin's option rules.
+5. **Schemas** — in topological order, each source reports the tables it produces, each transform
+   derives its output from its merged inputs, and each sink checks what it receives.
+6. **Mode and delivery** — the job is batch when every source is bounded, otherwise streaming; with
+   `delivery: exactly-once` every sink must commit in two phases or write idempotently.
+
+The result is the logical plan. The engine turns it into running tasks; later milestones add
+optimization rules and the execution graph to the same plan.
+
+## Quick start
+
+```bash
+pipeforge explain orders.yaml
+```
+
+```text
+Job orders-daily  mode=batch (derived)  delivery=at-least-once  engine=native  parallelism=4  timezone=Asia/Shanghai
+Variables  biz_date=2026-11-06
+
+Nodes (3, in topological order)
+  [src]  source     fake          fake@0.1.0          parallelism=4  bounded
+  [map]  transform  field-mapper  field-mapper@0.1.0  parallelism=4  inputs=src (implied)
+  [out]  sink       console       console@0.1.0       parallelism=1  inputs=map (implied)
+
+Options (defaults omitted)
+  [src]  rows=1000        node
+         fetch-size=500   env
+  [map]  fields=[...]     node
+  [out]  limit=50         cluster
+
+Schema
+  [src] -> demo.orders  primary key (id)
+      id          INT64 NOT NULL
+      name        STRING(20)
+      amount      DECIMAL(10, 2)
+  [map] -> demo.orders  primary key (id)  (+customer, -name)
+      id          INT64 NOT NULL
+      customer    STRING(20)
+      amount      DECIMAL(10, 2)
+
+Warnings  none
+```
+
+## Configuration
+
+| Setting | Effect on the plan |
+|---|---|
+| `--format text` / `--format json` | Aligned text for reading, or the complete plan as JSON for tools |
+| `env.mode`, `env.delivery`, `env.parallelism`, `env.timezone` | The job settings in the first line ([job DSL](../reference/job-dsl#env)) |
+| `env.source.*`, `env.transform.*`, `env.sink.*` | Option defaults; shown with origin `env` |
+| Cluster configuration | Option defaults with origin `cluster` |
+
+## Examples
+
+### Where does an option come from?
+
+```yaml
+version: 1
+name: orders-daily
+env:
+  parallelism: 4
+  source:
+    fetch-size: 500
+source:
+  - { id: src, type: fake, rows: 1000 }
+sink:
+  - { id: out, type: console, parallelism: 1 }
+```
+
+`explain` shows `rows=1000 node` and `fetch-size=500 env` for `src`. The JSON output also lists the
+options left at their default, with origin `default`. Sensitive options such as passwords are
+always shown as `******`.
+
+### Two sources into one sink
+
+```yaml
+version: 1
+name: orders-merge
+source:
+  - { id: history, type: jdbc, table: demo.orders }
+  - { id: live, type: mysql-cdc, table: demo.orders }
+sink:
+  - { id: out, type: console, inputs: [history, live] }
+```
+
+Both sources produce `demo.orders`; the sink receives one merged table. `explain` prints it as
+`[out] <- demo.orders (merged from history, live)`: columns only one source has become nullable,
+`INT32` and `INT64` become `INT64`, and the primary key is kept only when both sources agree. The
+job is streaming, because `live` never ends.
+
+## Behavior
+
+- Planning never reads data and never writes to a target; it creates each component once to ask
+  for its schema and discards it.
+- The first problem stops planning and is reported with its error code; the node is named in the
+  error's scope.
+- The output is deterministic: the same job and the same variable values always give the same
+  plan, so plans can be compared between versions of a job.
+- Variables are resolved once per run; the values printed are the ones the run uses.
+
+## Observability
+
+`explain` is the plan view of a job. The JSON output has the same structure as the plan used by the
+engine: `job`, `variables`, `nodes` (with `options`, `inputTables` and `outputTables`) and
+`warnings`. The run analysis that adds rows, rates and bottlenecks to the plan (`explain --analyze`)
+arrives with the metrics of the engine.
+
+## Troubleshooting
+
+| Error | Meaning |
+|---|---|
+| `PF-CONF-0006` … `line 12, column 5 (sink[0].inputs)` | The definition does not match the [job DSL](../reference/job-dsl); the location points at the problem |
+| `PF-CONF-0004` … `Variable '${var:biz_date}' is not defined` | Define it in `env.variables`, pass a value, or add a default |
+| `PF-PLAN-0009` … `the job has no node with this id; did you mean 'src'?` | A typo in `inputs` |
+| `PF-PLAN-0001` … `a -> b -> a` | The inputs form a cycle |
+| `PF-PLAN-0010` | A node's output reaches no sink; connect it or remove it |
+| `PF-PLAN-0002` … `column 'id' … is INT64 in 'a' and STRING in 'b'` | Two inputs disagree on a column; convert one of them first |
+| `PF-PLAN-0011` | `mode: batch` with a source that never ends |
+| Warning `env.source.x is not an option of any source in the job` | The default is unused, often a misspelt option |
+
+## Limitations
+
+- The plan is the logical plan: optimization rules (projection and filter push-down, merging
+  transforms), the execution graph and resource estimates come with the distributed engine.
+- Data sources stored in the control plane (`datasource:`) and `${secret:...}` / `${file:...}`
+  variables need the PipeForge server.
+- The `pipeforge explain` command is part of the command line delivered in this milestone; the
+  planner itself is available to Java code as `JobParser` and `Planner` in `pipeforge-core`.
+
+## Version history
+
+Available since 0.1.0.

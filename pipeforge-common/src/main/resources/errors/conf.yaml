@@ -36,11 +36,11 @@
 - code: PF-CONF-0004
   name: VARIABLE_UNDEFINED
   message:
-    en-US: "Variable '{variable}' is not defined"
-    zh-CN: "变量 '{variable}' 未定义"
+    en-US: "Variable '${{variable}}' is not defined"
+    zh-CN: "变量 '${{variable}}' 未定义"
   hint:
-    en-US: "Define it with --var {variable}=..., in the job's variables, or give a default: ${{variable}:-default}."
-    zh-CN: "用 --var {variable}=... 或作业的 variables 定义它，或者写上默认值：${{variable}:-默认值}。"
+    en-US: "Define it in env.variables or pass a value when running the job, or give a default: ${{variable}:-default}."
+    zh-CN: "在 env.variables 中定义它或在运行作业时传入取值，或者写上默认值：${{variable}:-默认值}。"
 
 - code: PF-CONF-0005
   name: SECRET_NOT_FOUND
@@ -50,3 +50,12 @@
   hint:
     en-US: "Create the secret first, or check its name and the project it belongs to."
     zh-CN: "先创建该密钥，或者检查密钥名称及其所属项目。"
+
+- code: PF-CONF-0006
+  name: JOB_INVALID
+  message:
+    en-US: "The job definition is invalid at {location}: {reason}"
+    zh-CN: "作业定义在 {location} 处有误：{reason}"
+  hint:
+    en-US: "Compare the job with the job DSL reference; the location gives the line, column and path of the problem."
+    zh-CN: "对照作业 DSL 参考检查作业；位置中给出了问题所在的行、列和路径。"

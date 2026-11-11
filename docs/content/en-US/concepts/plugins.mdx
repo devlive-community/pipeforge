@@ -67,7 +67,7 @@ cp greeting-plugin-1.0.0.zip $PIPEFORGE_HOME/plugins/
 
 ```yaml
 source:
-  - name: hello
+  - id: hello
     type: greeting          # the identifier declared in plugin.yaml
 ```
 
@@ -87,7 +87,7 @@ default; a job that has not been tested with it yet keeps the old version:
 
 ```yaml
 source:
-  - name: hello
+  - id: hello
     type: greeting
     plugin: greeting@1.0.0
 ```
@@ -99,10 +99,10 @@ the same job without conflicts, because each library is loaded by its own plugin
 
 ```yaml
 source:
-  - name: orders
+  - id: orders
     type: mysql-cdc
 sink:
-  - name: events
+  - id: events
     type: kafka
     inputs: [orders]
 ```

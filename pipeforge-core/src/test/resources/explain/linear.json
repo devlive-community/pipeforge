@@ -1,0 +1,230 @@
+{
+  "job" : {
+    "name" : "orders-daily",
+    "description" : "Daily copy of the orders table",
+    "engine" : "native",
+    "mode" : "batch",
+    "modeDerived" : true,
+    "delivery" : "at-least-once",
+    "parallelism" : 4,
+    "timezone" : "Asia/Shanghai"
+  },
+  "variables" : {
+    "biz_date" : "2026-11-06"
+  },
+  "nodes" : [
+    {
+      "id" : "src",
+      "kind" : "source",
+      "type" : "fake",
+      "plugin" : "builtin",
+      "inputs" : [ ],
+      "inputsImplied" : false,
+      "parallelism" : 4,
+      "boundedness" : "bounded",
+      "options" : [
+        {
+          "key" : "rows",
+          "value" : 1000,
+          "origin" : "node",
+          "sensitive" : false
+        },
+        {
+          "key" : "password",
+          "value" : "******",
+          "origin" : "node",
+          "sensitive" : true
+        },
+        {
+          "key" : "fetch-size",
+          "value" : 500,
+          "origin" : "env",
+          "sensitive" : false
+        },
+        {
+          "key" : "table",
+          "value" : "demo.orders",
+          "origin" : "default",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [ ],
+      "outputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT64",
+              "nullable" : false
+            },
+            {
+              "name" : "name",
+              "type" : "STRING(20)",
+              "nullable" : true,
+              "comment" : "customer name"
+            },
+            {
+              "name" : "amount",
+              "type" : "DECIMAL(10, 2)",
+              "nullable" : true
+            },
+            {
+              "name" : "created_at",
+              "type" : "TIMESTAMP(3)",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [
+            "id"
+          ],
+          "partitionKeys" : [ ]
+        }
+      ]
+    },
+    {
+      "id" : "map",
+      "kind" : "transform",
+      "type" : "rename",
+      "plugin" : "builtin",
+      "inputs" : [
+        "src"
+      ],
+      "inputsImplied" : true,
+      "parallelism" : 4,
+      "boundedness" : null,
+      "options" : [
+        {
+          "key" : "from",
+          "value" : "name",
+          "origin" : "node",
+          "sensitive" : false
+        },
+        {
+          "key" : "to",
+          "value" : "customer",
+          "origin" : "node",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT64",
+              "nullable" : false
+            },
+            {
+              "name" : "name",
+              "type" : "STRING(20)",
+              "nullable" : true,
+              "comment" : "customer name"
+            },
+            {
+              "name" : "amount",
+              "type" : "DECIMAL(10, 2)",
+              "nullable" : true
+            },
+            {
+              "name" : "created_at",
+              "type" : "TIMESTAMP(3)",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [
+            "id"
+          ],
+          "partitionKeys" : [ ]
+        }
+      ],
+      "outputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT64",
+              "nullable" : false
+            },
+            {
+              "name" : "customer",
+              "type" : "STRING(20)",
+              "nullable" : true,
+              "comment" : "customer name"
+            },
+            {
+              "name" : "amount",
+              "type" : "DECIMAL(10, 2)",
+              "nullable" : true
+            },
+            {
+              "name" : "created_at",
+              "type" : "TIMESTAMP(3)",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [
+            "id"
+          ],
+          "partitionKeys" : [ ]
+        }
+      ]
+    },
+    {
+      "id" : "out",
+      "kind" : "sink",
+      "type" : "console",
+      "plugin" : "builtin",
+      "inputs" : [
+        "map"
+      ],
+      "inputsImplied" : true,
+      "parallelism" : 1,
+      "boundedness" : null,
+      "options" : [
+        {
+          "key" : "limit",
+          "value" : 50,
+          "origin" : "cluster",
+          "sensitive" : false
+        }
+      ],
+      "inputTables" : [
+        {
+          "id" : "demo.orders",
+          "columns" : [
+            {
+              "name" : "id",
+              "type" : "INT64",
+              "nullable" : false
+            },
+            {
+              "name" : "customer",
+              "type" : "STRING(20)",
+              "nullable" : true,
+              "comment" : "customer name"
+            },
+            {
+              "name" : "amount",
+              "type" : "DECIMAL(10, 2)",
+              "nullable" : true
+            },
+            {
+              "name" : "created_at",
+              "type" : "TIMESTAMP(3)",
+              "nullable" : true
+            }
+          ],
+          "primaryKey" : [
+            "id"
+          ],
+          "partitionKeys" : [ ]
+        }
+      ],
+      "outputTables" : [ ]
+    }
+  ],
+  "warnings" : [ ]
+}
