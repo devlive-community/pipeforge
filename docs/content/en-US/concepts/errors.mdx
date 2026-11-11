@@ -98,6 +98,12 @@ The server, the UI and the CLI with `-o json` receive the error as a structured 
 }
 ```
 
+The scope says where the error happened: `job`, `run`, `node`, `subtask`, `table` and `split`, and for a mistake in a job definition the `line`, `column` and `path` of the value, which editors use to mark it:
+
+```json
+"scope": { "line": 17, "column": 13, "path": "source[0].inputs" }
+```
+
 ### Unexpected exceptions
 
 An exception without a code is reported as `PF-SYS-0001` with the original exception kept in the

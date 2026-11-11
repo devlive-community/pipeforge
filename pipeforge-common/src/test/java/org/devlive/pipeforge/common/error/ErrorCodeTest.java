@@ -71,6 +71,20 @@ class ErrorCodeTest {
     }
 
     @Test
+    void scopesPointIntoTheJobDefinition() {
+        assertThat(ErrorScope.definition(12, 5, "sink[0].inputs")
+                        .withNode("out")
+                        .toMap())
+                .containsExactly(
+                        Map.entry("node", "out"),
+                        Map.entry("line", 12),
+                        Map.entry("column", 5),
+                        Map.entry("path", "sink[0].inputs"));
+        assertThat(ErrorScope.definition(0, 0, "env").toMap()).containsExactly(Map.entry("path", "env"));
+        assertThat(ErrorScope.definition(0, 0, "").toMap()).isEmpty();
+    }
+
+    @Test
     void templatesFindAndReplacePlaceholders() {
         assertThat(MessageTemplate.placeholders("{a} and {b}, again {a}, not {1} or { c }"))
                 .containsExactly("a", "b");

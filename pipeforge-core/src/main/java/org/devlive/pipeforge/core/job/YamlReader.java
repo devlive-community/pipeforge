@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.devlive.pipeforge.common.error.ErrorCode;
+import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -138,6 +139,7 @@ final class YamlReader {
         return PipeForgeException.of(ErrorCode.JOB_INVALID)
                 .param("location", location.toString())
                 .param("reason", reason)
+                .scope(ErrorScope.definition(location.line(), location.column(), location.path()))
                 .build();
     }
 }

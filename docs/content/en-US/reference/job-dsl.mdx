@@ -150,4 +150,6 @@ The same job in JSON:
 | Inputs, cycles, disconnected nodes | `PF-PLAN-0009`, `PF-PLAN-0001`, `PF-PLAN-0010` |
 | Schemas, mode, delivery | `PF-PLAN-0002`, `PF-PLAN-0011`, `PF-PLAN-0003` |
 
-All checks run before any data is read; see [plan and explain](../concepts/plan-and-explain).
+All checks run before any data is read; see [plan and explain](../concepts/plan-and-explain). A
+`PF-CONF-0006` error also carries the location as `line`, `column` and `path` in its
+[scope](../concepts/errors), so editors can mark the exact value.
