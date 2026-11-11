@@ -58,7 +58,7 @@ cp greeting-plugin-1.0.0.zip $PIPEFORGE_HOME/plugins/
 
 ```yaml
 source:
-  - name: hello
+  - id: hello
     type: greeting          # plugin.yaml 中声明的标识
 ```
 
@@ -77,7 +77,7 @@ source:
 
 ```yaml
 source:
-  - name: hello
+  - id: hello
     type: greeting
     plugin: greeting@1.0.0
 ```
@@ -88,10 +88,10 @@ MySQL 插件自带某个版本的 JSON 库，Kafka 插件自带另一个版本�
 
 ```yaml
 source:
-  - name: orders
+  - id: orders
     type: mysql-cdc
 sink:
-  - name: events
+  - id: events
     type: kafka
     inputs: [orders]
 ```

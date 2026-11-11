@@ -1,0 +1,144 @@
+---
+title: 作业 DSL
+description: 作业定义（YAML 或 JSON）的全部字段——env、节点、输入、选项作用域——以及计划器如何校验它们。
+order: 10
+---
+
+一个作业就是一份 YAML 或 JSON 文档。两种格式描述的是同一个模型，UI 设计器读写的也是它。任何文本取值中都可以使用
+`${date:yyyy-MM-dd}` 这样的变量，见[变量](./variables)。
+
+## 完整示例
+
+```yaml
+version: 1
+name: orders-daily
+description: 把昨天的订单复制到数仓
+
+env:
+  parallelism: 4
+  delivery: at-least-once
+  timezone: Asia/Shanghai
+  variables:
+    biz_date: "${date:yyyy-MM-dd,-1d}"
+  source:
+    fetch-size: 5000            # 对所有声明了该选项的 Source 生效的默认值
+
+source:
+  - id: orders
+    type: jdbc
+    url: jdbc:mysql://db:3306/shop
+    query: SELECT * FROM orders WHERE dt = '${var:biz_date}'
+
+transform:
+  - id: map
+    type: field-mapper
+    inputs: [orders]
+    fields:
+      - { from: id, to: order_id }
+
+sink:
+  - id: warehouse
+    type: console
+    inputs: [map]
+    parallelism: 1
+```
+
+## 顶层字段
+
+| 字段 | 必填 | 含义 |
+|---|---|---|
+| `version` | 是 | DSL 版本，固定为 `1` |
+| `name` | 是 | 最多 128 个字母、数字、`_`、`.`、`-`，以字母或数字开头 |
+| `description` | 否 | 说明文字 |
+| `env` | 否 | 作业设置和节点默认值，见 [env](#env) |
+| `source` | 是 | Source 节点列表（只有一个节点时可以不写成列表） |
+| `transform` | 否 | Transform 节点列表 |
+| `sink` | 是 | Sink 节点列表 |
+
+未知字段会报错；名称与已知字段接近时会给出建议。
+
+## env
+
+| 选项 | 取值 | 默认值 |
+|---|---|---|
+| `mode` | `batch` 或 `streaming` | 推导：所有 Source 都有界时为 `batch`，否则为 `streaming` |
+| `parallelism` | 1 到 32768 | `1` |
+| `delivery` | `at-least-once` 或 `exactly-once` | `at-least-once` |
+| `timezone` | IANA 时区，例如 `Asia/Shanghai` | `UTC` |
+| `variables` | 名称到取值的映射，见[变量](./variables#作业变量) | 无 |
+| `source.*`、`transform.*`、`sink.*` | 同类所有节点的选项默认值 | 无 |
+
+- `mode: batch` 而存在无界 Source 时报错（`PF-PLAN-0011`）。
+- `delivery: exactly-once` 要求每个 Sink 都支持两阶段提交或幂等写入，否则计划失败并指出是哪个 Sink（`PF-PLAN-0003`）。
+- 集群配置（`worker.*`、`master.*`、`server.*`、`cluster.*`）不能写在作业中。
+
+## 节点
+
+`source`、`transform`、`sink` 中的每一项都是一个节点：
+
+| 字段 | 必填 | 含义 |
+|---|---|---|
+| `id` | 是 | 最多 64 个字母、数字、`_`、`-`，以字母或 `_` 开头，作业内唯一。checkpoint 状态按它匹配，请保持稳定 |
+| `type` | 是 | 组件，例如 `jdbc`、`field-mapper` |
+| `plugin` | 否 | 指定插件：`jdbc` 或 `jdbc@1.2.0`；不写时使用唯一提供该组件的插件的最高版本 |
+| `inputs` | Transform 和 Sink | 上游节点的 id：一个 id 或一个列表 |
+| `parallelism` | 否 | 覆盖该节点的 `env.parallelism` |
+
+其他字段都是插件选项，按插件声明的选项校验。嵌套写法与点号写法等价：`split: { strategy: range }` 等同于 `split.strategy: range`。
+
+### 输入与图的形状
+
+- 有多个输入的节点会合并它们：同名的表按列合并（只有部分输入才有的列变为可空，数值类型取更宽的）。
+- 多个节点可以读取同一个节点：数据会写到每一个下游。
+- 省略 `inputs` 时，节点读取在它之前写下的最后一个 Source 或 Transform。因此一条直线形的流水线完全不需要写 `inputs`：
+
+```yaml
+version: 1
+name: straight
+source:
+  - { id: generate, type: fake }
+transform:
+  - { id: rename, type: field-mapper }
+sink:
+  - { id: print, type: console }
+```
+
+计划器会拒绝以下情况：输入不存在、输入是 Sink 或节点自身、输入重复（`PF-PLAN-0009`），存在环（`PF-PLAN-0001`），以及输出到达不了任何 Sink 的节点（`PF-PLAN-0010`）。
+
+## 选项作用域
+
+节点的选项取自第一个设置了它的位置：
+
+1. 节点本身：`fetch-size: 1000`；
+2. 作业的 `env`，带节点类别前缀：`env.source.fetch-size`；
+3. 集群配置，同样带前缀；
+4. 插件的默认值。
+
+`env` 中的默认值只对声明了该选项的插件生效。没有任何同类节点声明的默认值会在 `explain` 中给出警告；`explain` 还会显示每个取值的来源。
+
+## JSON
+
+同一个作业的 JSON 写法：
+
+```json
+{
+  "version": 1,
+  "name": "straight",
+  "env": { "parallelism": 2, "source.fetch-size": 1000 },
+  "source": [{ "id": "generate", "type": "fake" }],
+  "sink": [{ "id": "print", "type": "console", "inputs": ["generate"] }]
+}
+```
+
+## 校验
+
+| 步骤 | 错误码 |
+|---|---|
+| YAML / JSON 语法、未知字段、字段类型、重复的键或节点 id | `PF-CONF-0006`，带行、列和路径 |
+| 变量 | `PF-CONF-0004`；变量写法有误时为 `PF-CONF-0006` |
+| `env` 选项 | `PF-CONF-0001`、`PF-CONF-0002` |
+| 插件及其选项 | `PF-PLUG-0001`、`PF-CONF-0001`、`PF-CONF-0002` |
+| 输入、环、未连接的节点 | `PF-PLAN-0009`、`PF-PLAN-0001`、`PF-PLAN-0010` |
+| Schema、模式、投递语义 | `PF-PLAN-0002`、`PF-PLAN-0011`、`PF-PLAN-0003` |
+
+所有检查都在读取任何数据之前完成，见[计划与 explain](../concepts/plan-and-explain)。

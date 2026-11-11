@@ -1,0 +1,153 @@
+---
+title: Job DSL
+description: Every field of a job definition in YAML or JSON — env, nodes, inputs, option scopes — and how the planner checks it.
+order: 10
+---
+
+A job is one YAML or JSON document. Both formats describe the same model; the UI designer reads
+and writes it too. Variables such as `${date:yyyy-MM-dd}` can appear in any text value and are
+described in [variables](./variables).
+
+## A complete job
+
+```yaml
+version: 1
+name: orders-daily
+description: Copies yesterday's orders into the warehouse
+
+env:
+  parallelism: 4
+  delivery: at-least-once
+  timezone: Asia/Shanghai
+  variables:
+    biz_date: "${date:yyyy-MM-dd,-1d}"
+  source:
+    fetch-size: 5000            # default for every source that has this option
+
+source:
+  - id: orders
+    type: jdbc
+    url: jdbc:mysql://db:3306/shop
+    query: SELECT * FROM orders WHERE dt = '${var:biz_date}'
+
+transform:
+  - id: map
+    type: field-mapper
+    inputs: [orders]
+    fields:
+      - { from: id, to: order_id }
+
+sink:
+  - id: warehouse
+    type: console
+    inputs: [map]
+    parallelism: 1
+```
+
+## Top-level fields
+
+| Field | Required | Meaning |
+|---|---|---|
+| `version` | yes | The DSL version; always `1` |
+| `name` | yes | Up to 128 letters, digits, `_`, `.` and `-`, starting with a letter or digit |
+| `description` | no | Free text |
+| `env` | no | Job settings and defaults for nodes, see [env](#env) |
+| `source` | yes | A list of source nodes (a single node may be written without the list) |
+| `transform` | no | A list of transform nodes |
+| `sink` | yes | A list of sink nodes |
+
+Unknown fields are errors, with a suggestion when the name is close to a known one.
+
+## env
+
+| Option | Values | Default |
+|---|---|---|
+| `mode` | `batch` or `streaming` | Derived: `batch` when every source is bounded, otherwise `streaming` |
+| `parallelism` | 1 to 32768 | `1` |
+| `delivery` | `at-least-once` or `exactly-once` | `at-least-once` |
+| `timezone` | An IANA time zone such as `Asia/Shanghai` | `UTC` |
+| `variables` | A mapping of names to values, see [variables](./variables#job-variables) | none |
+| `source.*`, `transform.*`, `sink.*` | Defaults for the options of every node of that kind | none |
+
+- `mode: batch` with an unbounded source is an error (`PF-PLAN-0011`).
+- `delivery: exactly-once` requires every sink to commit in two phases or to write idempotently;
+  otherwise planning fails and names the sink (`PF-PLAN-0003`).
+- Cluster configuration (`worker.*`, `master.*`, `server.*`, `cluster.*`) cannot be set in a job.
+
+## Nodes
+
+Every entry of `source`, `transform` and `sink` is a node:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `id` | yes | Up to 64 letters, digits, `_` and `-`, starting with a letter or `_`; unique in the job. Checkpoint state is matched by it, so keep it stable |
+| `type` | yes | The component, e.g. `jdbc`, `field-mapper` |
+| `plugin` | no | Pins the plugin: `jdbc` or `jdbc@1.2.0`; without it the only plugin that provides the type is used, at its highest version |
+| `inputs` | transforms and sinks | Ids of the upstream nodes: one id or a list |
+| `parallelism` | no | Overrides `env.parallelism` for this node |
+
+Every other field is an option of the plugin and is checked against the plugin's options. Nested
+mappings and dotted keys are the same: `split: { strategy: range }` equals `split.strategy: range`.
+
+### Inputs and the shape of the graph
+
+- A node with several inputs merges them: tables with the same name are merged column by column
+  (columns that only some inputs have become nullable, numbers widen).
+- Several nodes may read the same node: the data is written to every one of them.
+- When `inputs` is omitted, the node reads the last source or transform written before it. A
+  straight pipeline therefore needs no `inputs` at all:
+
+```yaml
+version: 1
+name: straight
+source:
+  - { id: generate, type: fake }
+transform:
+  - { id: rename, type: field-mapper }
+sink:
+  - { id: print, type: console }
+```
+
+The planner rejects inputs that do not exist, that name a sink or the node itself, or that are
+listed twice (`PF-PLAN-0009`), cycles (`PF-PLAN-0001`), and nodes whose output reaches no sink
+(`PF-PLAN-0010`).
+
+## Option scopes
+
+An option of a node is taken from the first place that sets it:
+
+1. the node itself: `fetch-size: 1000`;
+2. the job's `env`, prefixed with the node kind: `env.source.fetch-size`;
+3. the cluster configuration, with the same prefix;
+4. the plugin's default.
+
+A default in `env` only applies to nodes whose plugin declares that option. A default that no node
+of the kind declares is reported as a warning by `explain`, which also shows where every value
+comes from.
+
+## JSON
+
+The same job in JSON:
+
+```json
+{
+  "version": 1,
+  "name": "straight",
+  "env": { "parallelism": 2, "source.fetch-size": 1000 },
+  "source": [{ "id": "generate", "type": "fake" }],
+  "sink": [{ "id": "print", "type": "console", "inputs": ["generate"] }]
+}
+```
+
+## Validation
+
+| Step | Error codes |
+|---|---|
+| YAML or JSON syntax, unknown fields, field types, duplicate keys or node ids | `PF-CONF-0006`, with line, column and path |
+| Variables | `PF-CONF-0004`, or `PF-CONF-0006` for a malformed variable |
+| `env` options | `PF-CONF-0001`, `PF-CONF-0002` |
+| Plugins and their options | `PF-PLUG-0001`, `PF-CONF-0001`, `PF-CONF-0002` |
+| Inputs, cycles, disconnected nodes | `PF-PLAN-0009`, `PF-PLAN-0001`, `PF-PLAN-0010` |
+| Schemas, mode, delivery | `PF-PLAN-0002`, `PF-PLAN-0011`, `PF-PLAN-0003` |
+
+All checks run before any data is read; see [plan and explain](../concepts/plan-and-explain).

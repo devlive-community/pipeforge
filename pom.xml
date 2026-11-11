@@ -39,6 +39,7 @@
         <module>pipeforge-maven-plugin</module>
         <module>pipeforge-plugin</module>
         <module>pipeforge-expressions</module>
+        <module>pipeforge-core</module>
     </modules>
 
     <properties>

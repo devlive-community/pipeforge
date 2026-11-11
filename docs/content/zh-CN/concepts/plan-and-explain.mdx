@@ -1,0 +1,139 @@
+---
+title: 计划与 explain
+description: 作业定义如何在读取任何数据之前变成经过校验的逻辑计划，以及 explain 如何展示节点、选项、Schema 和警告。
+order: 50
+template: feature
+omit:
+  performance: 计划阶段不读取数据，只为每个插件组件创建一次实例以获取 Schema，每个节点耗时在毫秒级。
+---
+
+## 概述
+
+在读取第一行数据之前，PipeForge 先把作业定义变成一个**计划**，并检查所有不需要数据就能检查的内容：结构、变量、每个插件选项、
+节点之间的连接以及每条边上的 Schema。问题会带上错误码以及相关的节点或行号一起报告，因此计划成功的作业在运行时只会因为数据本身或外部系统的原因而失败。
+
+`explain` 输出这个计划：运行前用它检查作业、查看某个选项的取值来自哪里，或者确认哪些列会到达 Sink。
+
+## 原理
+
+1. **解析**——读取 YAML 或 JSON 并检查结构（`PF-CONF-0006`）。
+2. **变量**——替换 `${var:...}`、`${date:...}` 等[变量](../reference/variables)，只替换一次。
+3. **图**——`inputs` 中的每一项都必须是 Source 或 Transform；图中不能有环，每个节点都必须通向某个 Sink。
+4. **组件与选项**——在已安装的插件中找到每个节点的组件，按节点、`env`、集群配置、插件默认值的顺序合并选项，并用插件的选项规则校验。
+5. **Schema**——按拓扑顺序，每个 Source 报告它输出的表，每个 Transform 根据合并后的输入推导输出，每个 Sink 检查它收到的内容。
+6. **模式与投递语义**——所有 Source 都有界时作业为批处理，否则为流处理；`delivery: exactly-once` 时每个 Sink 都必须支持两阶段提交或幂等写入。
+
+结果就是逻辑计划。引擎把它变成运行中的 Task；后续里程碑会在同一个计划上加入优化规则和执行图。
+
+## 快速上手
+
+```bash
+pipeforge explain orders.yaml
+```
+
+```text
+Job orders-daily  mode=batch (derived)  delivery=at-least-once  engine=native  parallelism=4  timezone=Asia/Shanghai
+Variables  biz_date=2026-11-06
+
+Nodes (3, in topological order)
+  [src]  source     fake          fake@0.1.0          parallelism=4  bounded
+  [map]  transform  field-mapper  field-mapper@0.1.0  parallelism=4  inputs=src (implied)
+  [out]  sink       console       console@0.1.0       parallelism=1  inputs=map (implied)
+
+Options (defaults omitted)
+  [src]  rows=1000        node
+         fetch-size=500   env
+  [map]  fields=[...]     node
+  [out]  limit=50         cluster
+
+Schema
+  [src] -> demo.orders  primary key (id)
+      id          INT64 NOT NULL
+      name        STRING(20)
+      amount      DECIMAL(10, 2)
+  [map] -> demo.orders  primary key (id)  (+customer, -name)
+      id          INT64 NOT NULL
+      customer    STRING(20)
+      amount      DECIMAL(10, 2)
+
+Warnings  none
+```
+
+## 配置
+
+| 设置 | 对计划的影响 |
+|---|---|
+| `--format text` / `--format json` | 便于阅读的对齐文本，或供工具使用的完整 JSON 计划 |
+| `env.mode`、`env.delivery`、`env.parallelism`、`env.timezone` | 第一行中的作业设置（[作业 DSL](../reference/job-dsl#env)） |
+| `env.source.*`、`env.transform.*`、`env.sink.*` | 选项默认值，来源显示为 `env` |
+| 集群配置 | 选项默认值，来源显示为 `cluster` |
+
+## 示例
+
+### 选项的取值来自哪里？
+
+```yaml
+version: 1
+name: orders-daily
+env:
+  parallelism: 4
+  source:
+    fetch-size: 500
+source:
+  - { id: src, type: fake, rows: 1000 }
+sink:
+  - { id: out, type: console, parallelism: 1 }
+```
+
+`explain` 中 `src` 显示 `rows=1000 node` 和 `fetch-size=500 env`。JSON 输出还会列出保持默认值的选项，来源为 `default`。
+密码等敏感选项始终显示为 `******`。
+
+### 两个 Source 写入一个 Sink
+
+```yaml
+version: 1
+name: orders-merge
+source:
+  - { id: history, type: jdbc, table: demo.orders }
+  - { id: live, type: mysql-cdc, table: demo.orders }
+sink:
+  - { id: out, type: console, inputs: [history, live] }
+```
+
+两个 Source 都输出 `demo.orders`，Sink 收到的是合并后的一张表。`explain` 显示为 `[out] <- demo.orders (merged from history, live)`：
+只有一个 Source 才有的列变为可空，`INT32` 与 `INT64` 合并为 `INT64`，只有两个 Source 的主键一致时才保留主键。由于 `live` 不会结束，作业是流处理。
+
+## 行为与语义
+
+- 计划阶段不读取数据，也不写入目标；它为每个组件创建一次实例以获取 Schema，然后丢弃。
+- 遇到第一个问题就停止并带错误码报告；错误的作用范围中会指出节点。
+- 输出是确定的：同一个作业、同样的变量取值总是得到同样的计划，因此可以比较作业不同版本的计划。
+- 变量每次运行解析一次；输出的取值就是本次运行使用的取值。
+
+## 可观测性
+
+`explain` 是作业的计划视图。JSON 输出的结构与引擎使用的计划一致：`job`、`variables`、`nodes`（含 `options`、`inputTables`、
+`outputTables`）和 `warnings`。在计划上叠加行数、速率和瓶颈的运行分析（`explain --analyze`）随引擎指标一起提供。
+
+## 排障
+
+| 错误 | 含义 |
+|---|---|
+| `PF-CONF-0006` … `line 12, column 5 (sink[0].inputs)` | 定义不符合[作业 DSL](../reference/job-dsl)；位置指向问题所在 |
+| `PF-CONF-0004` … `Variable '${var:biz_date}' is not defined` | 在 `env.variables` 中定义它、传入取值或加上默认值 |
+| `PF-PLAN-0009` … `the job has no node with this id; did you mean 'src'?` | `inputs` 中有拼写错误 |
+| `PF-PLAN-0001` … `a -> b -> a` | 输入构成了环 |
+| `PF-PLAN-0010` | 节点的输出到达不了任何 Sink；连接它或删除它 |
+| `PF-PLAN-0002` … `column 'id' … is INT64 in 'a' and STRING in 'b'` | 两个输入的同一列类型不一致；先转换其中一个 |
+| `PF-PLAN-0011` | `mode: batch` 但有不会结束的 Source |
+| 警告 `env.source.x is not an option of any source in the job` | 该默认值没有被使用，常见原因是选项名拼错 |
+
+## 限制
+
+- 这里的计划是逻辑计划：优化规则（投影与过滤下推、Transform 合并）、执行图和资源估算随分布式引擎提供。
+- 保存在控制面中的数据源（`datasource:`）以及 `${secret:...}`、`${file:...}` 变量需要 PipeForge 服务。
+- `pipeforge explain` 命令属于本里程碑交付的命令行；计划器本身已经可以在 Java 代码中通过 `pipeforge-core` 的 `JobParser` 和 `Planner` 使用。
+
+## 版本
+
+自 0.1.0 起提供。

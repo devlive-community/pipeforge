@@ -1,0 +1,34 @@
+Job orders-merge  mode=streaming (derived)  delivery=at-least-once  engine=native  parallelism=1  timezone=UTC
+Variables  none
+
+Nodes (4, in topological order)
+  [history]  source  fake     builtin  parallelism=1  bounded
+  [live]     source  events   builtin  parallelism=1  unbounded
+  [out]      sink    console  builtin  parallelism=1  inputs=history,live
+  [audit]    sink    console  builtin  parallelism=1  inputs=live
+
+Options (defaults omitted)
+  [history]  none
+  [live]     none
+  [out]      limit=5   node
+  [audit]    limit=50  cluster
+
+Schema
+  [history] -> demo.orders  primary key (id)
+      id          INT64 NOT NULL
+      name        STRING(20)      -- customer name
+      amount      DECIMAL(10, 2)
+      created_at  TIMESTAMP(3)
+  [live] -> demo.orders
+      id       INT32 NOT NULL
+      name     STRING(40)
+      channel  STRING
+  [out] <- demo.orders  (merged from history, live)
+      id          INT64 NOT NULL
+      name        STRING(40)      -- customer name
+      amount      DECIMAL(10, 2)
+      created_at  TIMESTAMP(3)
+      channel     STRING
+
+Warnings
+  - env.sink.batch-size is not an option of any sink in the job

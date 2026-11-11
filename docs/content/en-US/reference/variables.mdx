@@ -1,0 +1,109 @@
+---
+title: Variables
+description: Job variables, dates with offsets and period boundaries, environment variables and run information in job definitions.
+order: 20
+---
+
+Any text value of a job can contain variables. They are replaced once, when the job is planned,
+and the values are recorded with the run: a retry or a restore from a checkpoint uses the same
+values, even after midnight has passed.
+
+## Forms
+
+| Form | Value |
+|---|---|
+| `${var:name}` | A job variable from `env.variables`, or a value passed when the job is run |
+| `${date:format}` | The planned time of the run, formatted in the job time zone |
+| `${date:format,offset}` | The planned time moved by an offset first |
+| `${date:format,offset,boundary}` | The start or end of the day, week or month around it |
+| `${env:NAME}` | An environment variable of the process that plans the job |
+| `${run:id}`, `${run:attempt}`, `${run:start-time}` | The run id, the attempt number (from 1) and the start time |
+| `${job:name}` | The job name |
+
+`${var:...}`, `${env:...}`, `${run:...}` and `${job:...}` accept a default after `:-`, for
+example `${var:region:-cn}` or `${env:REGION:-}` (empty). A variable without a value and without a
+default stops the job before it runs (`PF-CONF-0004`).
+
+## Job variables
+
+```yaml
+version: 1
+name: daily-${var:region}
+env:
+  variables:
+    biz_date: "${date:yyyy-MM-dd,-1d}"
+    region: cn
+    path: /data/${var:region}/${var:biz_date}
+source:
+  - { id: files, type: fake, path: "${var:path}" }
+sink:
+  - { id: print, type: console }
+```
+
+- Variables may use other variables; a variable that refers back to itself is an error.
+- A value passed when the job is run replaces the definition, so the same job can be run for
+  another day or region. Values passed for names that are not defined become variables too.
+- `explain` lists every job variable with its value.
+
+## Dates
+
+`${date:...}` starts from the **planned time** of the run: the trigger time of a scheduled run, the
+day being backfilled, or the current time for a run started by hand. It does not change when the
+run starts late or is retried. The format uses Java date patterns (`yyyy`, `MM`, `dd`, `HH`, `mm`,
+`ss`, `EEE`, …) and the job time zone (`env.timezone`, default `UTC`).
+
+**Offsets** are a sign, a number and a unit, and can be combined: `-1d`, `+2h`, `-1M+3d`.
+
+| Unit | Meaning |
+|---|---|
+| `s`, `min`, `h` | Seconds, minutes, hours |
+| `d`, `w` | Days, weeks |
+| `M`, `y` | Months, years (the day is kept, or the last day of a shorter month) |
+
+**Boundaries** are applied after the offset: `start-of-day`, `end-of-day`, `start-of-week`
+(Monday), `start-of-month` and `end-of-month`. The offset may be left empty:
+`${date:yyyy-MM-dd,,start-of-month}`.
+
+With the planned time 2026-11-07 08:30 in `Asia/Shanghai`:
+
+| Variable | Value |
+|---|---|
+| `${date:yyyy-MM-dd}` | `2026-11-07` |
+| `${date:yyyyMMdd,-1d}` | `20261106` |
+| `${date:yyyy-MM-dd HH:00:00,-1h}` | `2026-11-07 07:00:00` |
+| `${date:yyyyMM,-1M}` | `202610` |
+| `${date:yyyy-MM-dd,-1M,end-of-month}` | `2026-10-31` |
+| `${date:yyyy-MM-dd,,start-of-week}` | `2026-11-02` |
+| `${date:yyyy-MM-dd HH:mm:ss,,end-of-day}` | `2026-11-07 23:59:59` |
+
+## Run and environment
+
+- `${run:start-time}` is written as ISO 8601 with the offset of the job time zone, to the
+  millisecond, e.g. `2026-11-07T08:31:15.123+08:00`.
+- `${env:NAME}` reads the environment of the process that plans the job.
+- `${job:name}` cannot be used in the job name, and `${date:...}` cannot be used in
+  `env.timezone`, because those values are needed to resolve them.
+
+## Escaping and other placeholders
+
+Write `$${` for a literal `${`: `$${var:x}` becomes `${var:x}`. Texts in `${...}` with any other
+prefix are left unchanged for the plugin, such as the `${1}` of a routing rule:
+
+```yaml
+version: 1
+name: route
+source:
+  - { id: src, type: fake }
+transform:
+  - { id: route, type: router, target: "ods_${1}", note: "costs $${var:price}" }
+sink:
+  - { id: print, type: console }
+```
+
+## Errors
+
+| Problem | Error |
+|---|---|
+| A variable without a value and without a default | `PF-CONF-0004` names the variable, e.g. `${var:biz_date}` |
+| A malformed date format, offset or boundary, an unknown `${run:...}`, a cycle between variables | `PF-CONF-0006` with the line, column and path of the text |
+| `${secret:...}`, `${file:...}` and `${incr:...}` | Resolved by the PipeForge server when a job is deployed; a job planned locally cannot use them (`PF-CONF-0006`) |

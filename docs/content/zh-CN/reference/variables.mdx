@@ -1,0 +1,100 @@
+---
+title: 变量
+description: 作业定义中的作业变量、带偏移和周期起止的日期、环境变量以及运行信息。
+order: 20
+---
+
+作业中的任何文本取值都可以包含变量。变量在计划作业时替换一次，取值随运行记录下来：失败重试和从 checkpoint
+恢复都使用同一组取值，即使已经跨过了零点。
+
+## 写法
+
+| 写法 | 取值 |
+|---|---|
+| `${var:name}` | `env.variables` 中的作业变量，或运行作业时传入的值 |
+| `${date:格式}` | 本次运行的计划时间，按作业时区格式化 |
+| `${date:格式,偏移}` | 先把计划时间偏移再格式化 |
+| `${date:格式,偏移,起止}` | 所在日、周或月的开始或结束 |
+| `${env:NAME}` | 计划作业的进程的环境变量 |
+| `${run:id}`、`${run:attempt}`、`${run:start-time}` | 运行 id、尝试次数（从 1 开始）和开始时间 |
+| `${job:name}` | 作业名称 |
+
+`${var:...}`、`${env:...}`、`${run:...}` 和 `${job:...}` 可以在 `:-` 后写默认值，例如 `${var:region:-cn}`
+或 `${env:REGION:-}`（空字符串）。既没有取值也没有默认值的变量会让作业在运行前就失败（`PF-CONF-0004`）。
+
+## 作业变量
+
+```yaml
+version: 1
+name: daily-${var:region}
+env:
+  variables:
+    biz_date: "${date:yyyy-MM-dd,-1d}"
+    region: cn
+    path: /data/${var:region}/${var:biz_date}
+source:
+  - { id: files, type: fake, path: "${var:path}" }
+sink:
+  - { id: print, type: console }
+```
+
+- 变量可以引用其他变量；引用回自身的变量会报错。
+- 运行作业时传入的值会替换定义中的值，因此同一个作业可以针对另一天或另一个地区运行。为未定义的名称传入的值同样成为变量。
+- `explain` 会列出每个作业变量及其取值。
+
+## 日期
+
+`${date:...}` 以运行的**计划时间**为基准：定时调度时是触发时间，补数时是补数的那一天，手动运行时是当前时间。运行推迟开始或重试时它不会变化。
+格式使用 Java 的日期模式（`yyyy`、`MM`、`dd`、`HH`、`mm`、`ss`、`EEE` 等），时区为作业时区（`env.timezone`，默认 `UTC`）。
+
+**偏移**由符号、数字和单位组成，可以组合：`-1d`、`+2h`、`-1M+3d`。
+
+| 单位 | 含义 |
+|---|---|
+| `s`、`min`、`h` | 秒、分钟、小时 |
+| `d`、`w` | 天、周 |
+| `M`、`y` | 月、年（保留日期，较短的月份取最后一天） |
+
+**起止**在偏移之后计算：`start-of-day`、`end-of-day`、`start-of-week`（周一）、`start-of-month` 和 `end-of-month`。
+偏移可以留空：`${date:yyyy-MM-dd,,start-of-month}`。
+
+计划时间为 `Asia/Shanghai` 的 2026-11-07 08:30 时：
+
+| 变量 | 取值 |
+|---|---|
+| `${date:yyyy-MM-dd}` | `2026-11-07` |
+| `${date:yyyyMMdd,-1d}` | `20261106` |
+| `${date:yyyy-MM-dd HH:00:00,-1h}` | `2026-11-07 07:00:00` |
+| `${date:yyyyMM,-1M}` | `202610` |
+| `${date:yyyy-MM-dd,-1M,end-of-month}` | `2026-10-31` |
+| `${date:yyyy-MM-dd,,start-of-week}` | `2026-11-02` |
+| `${date:yyyy-MM-dd HH:mm:ss,,end-of-day}` | `2026-11-07 23:59:59` |
+
+## 运行信息与环境变量
+
+- `${run:start-time}` 以 ISO 8601 格式输出，带作业时区的偏移，精确到毫秒，例如 `2026-11-07T08:31:15.123+08:00`。
+- `${env:NAME}` 读取计划作业的进程的环境变量。
+- 作业名称中不能使用 `${job:name}`，`env.timezone` 中不能使用 `${date:...}`，因为解析它们需要这两个值。
+
+## 转义与其他占位符
+
+用 `$${` 表示字面的 `${`：`$${var:x}` 会变成 `${var:x}`。其他前缀的 `${...}` 原样保留给插件处理，例如路由规则中的 `${1}`：
+
+```yaml
+version: 1
+name: route
+source:
+  - { id: src, type: fake }
+transform:
+  - { id: route, type: router, target: "ods_${1}", note: "costs $${var:price}" }
+sink:
+  - { id: print, type: console }
+```
+
+## 错误
+
+| 问题 | 错误 |
+|---|---|
+| 变量既没有取值也没有默认值 | `PF-CONF-0004`，指出变量，例如 `${var:biz_date}` |
+| 日期格式、偏移或起止写法有误，未知的 `${run:...}`，变量之间循环引用 | `PF-CONF-0006`，带文本所在的行、列和路径 |
+| `${secret:...}`、`${file:...}` 和 `${incr:...}` | 由 PipeForge 服务在部署作业时解析；在本地计划的作业不能使用（`PF-CONF-0006`） |

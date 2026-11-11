@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+version: 1
+name: orders-merge
+env:
+  timezone: UTC
+  sink.batch-size: 100
+source:
+  - { id: history, type: fake }
+  - { id: live, type: events }
+sink:
+  - { id: out, type: console, inputs: [history, live], limit: 5 }
+  - { id: audit, type: console, inputs: live }
