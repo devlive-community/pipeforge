@@ -66,6 +66,23 @@ From highest to lowest precedence:
 
 The results of a conditional expression are converted to their common type.
 
+## Function calls
+
+Functions are called as `NAME(arguments)`; names are case-insensitive. The
+[function reference](./functions) lists every built-in function. A few calls use SQL keywords:
+
+| Form | Same as |
+|---|---|
+| `SUBSTRING(s FROM 2 FOR 3)` | `SUBSTRING(s, 2, 3)` |
+| `TRIM([BOTH \| LEADING \| TRAILING] [chars] FROM s)` | `TRIM(s, chars)`, `LTRIM(s, chars)`, `RTRIM(s, chars)` |
+| `POSITION(part IN s)` | `INSTR(s, part)` |
+| `EXTRACT(unit FROM t)` | `YEAR(t)`, `MONTH(t)`, `DAYOFMONTH(t)`, … |
+| `TIMESTAMPDIFF(unit, start, end)` | — (the unit is a keyword such as `MONTH`) |
+| `CURRENT_DATE`, `CURRENT_TIMESTAMP` | `NOW()` for the timestamp; written without parentheses |
+
+Arguments are converted implicitly to the parameter types under the same rules as operators. When a
+function is overloaded, the narrowest matching overload is used: `ABS(i)` on an `INT32` stays `INT32`.
+
 ## Casts
 
 ```sql

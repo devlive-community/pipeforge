@@ -9,6 +9,7 @@ package org.devlive.pipeforge.expressions.eval;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import org.devlive.pipeforge.expressions.EvaluationContext;
 import org.devlive.pipeforge.expressions.function.FunctionCall;
 import org.devlive.pipeforge.expressions.runtime.ExprError;
 
@@ -17,7 +18,12 @@ final class Invocations {
 
     private Invocations() {}
 
-    static Object invoke(FunctionCall call, Object[] args) {
+    /** Whether a function implementation takes the evaluation context as first parameter. */
+    static boolean takesContext(Method method) {
+        return method.getParameterCount() > 0 && method.getParameterTypes()[0] == EvaluationContext.class;
+    }
+
+    static Object invoke(FunctionCall call, Object[] args, EvaluationContext context) {
         if (call.definition().nullOnNull()) {
             for (Object arg : args) {
                 if (arg == null) {
@@ -26,7 +32,7 @@ final class Invocations {
             }
         }
         Method method = call.signature().method();
-        Object[] actual = pack(method, args);
+        Object[] actual = pack(method, args, takesContext(method) ? context : null);
         try {
             return method.invoke(null, actual);
         } catch (InvocationTargetException e) {
@@ -41,20 +47,25 @@ final class Invocations {
     }
 
     /** Packs trailing arguments into the array parameter of a varargs method. */
-    static Object[] pack(Method method, Object[] args) {
+    static Object[] pack(Method method, Object[] args, EvaluationContext context) {
         Class<?>[] types = method.getParameterTypes();
-        if (!method.isVarArgs()) {
-            return args;
-        }
-        int fixed = types.length - 1;
+        int offset = context == null ? 0 : 1;
         Object[] actual = new Object[types.length];
-        System.arraycopy(args, 0, actual, 0, fixed);
-        Class<?> component = types[fixed].getComponentType();
+        if (offset == 1) {
+            actual[0] = context;
+        }
+        if (!method.isVarArgs()) {
+            System.arraycopy(args, 0, actual, offset, args.length);
+            return actual;
+        }
+        int fixed = types.length - 1 - offset;
+        System.arraycopy(args, 0, actual, offset, fixed);
+        Class<?> component = types[types.length - 1].getComponentType();
         Object rest = Array.newInstance(component, args.length - fixed);
         for (int i = fixed; i < args.length; i++) {
             Array.set(rest, i - fixed, args[i]);
         }
-        actual[fixed] = rest;
+        actual[types.length - 1] = rest;
         return actual;
     }
 }

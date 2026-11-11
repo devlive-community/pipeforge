@@ -78,7 +78,12 @@ CAST(created AS TIMESTAMP(3))             -- 文本不是时间戳时报错
 - **三值逻辑**：`NULL AND FALSE` 为 FALSE，`NULL AND TRUE` 为 NULL，`NULL OR TRUE` 为 TRUE。与 NULL 比较的结果为 NULL；
   `IS [NOT] DISTINCT FROM` 把 NULL 当作普通值。条件结果为 NULL 时视为不成立。
 - **按需求值**：`CASE`、`IF`、`COALESCE`、`AND`、`OR` 只计算需要的部分，因此条件中的保护可以保住分支。
-- **时区**：`TIMESTAMP` 与 `TIMESTAMP_LTZ` 之间的转换，以及把 `TIMESTAMP_LTZ` 转为文本，都按作业时区进行。
+- **时区**：`TIMESTAMP` 与 `TIMESTAMP_LTZ` 之间的转换、把 `TIMESTAMP_LTZ` 转为文本，以及日期时间函数（`CURRENT_DATE`、`NOW()`、
+  `TO_TIMESTAMP_LTZ`、`HOUR` 等）都按作业时区进行。
+- **运行时间**：`RUN_START_TIME()` 是本次运行开始的时刻，对每一行和每次重试都相同，因此是确定的；`NOW()` 和 `CURRENT_TIMESTAMP`
+  每次调用都读取时钟。
+- **函数**：[函数参考](../reference/functions)列出了全部内置函数及其签名和 NULL 行为。除非另有说明，任一参数为 NULL 时函数返回 NULL。
+  非法参数（例如 `SUBSTRING(s, 0)` 或不存在的日期）是运行时错误，按 `on-error` 处理。
 - **确定性**：每个函数都标注是否确定。不确定的调用不会在表达式之间共享，也不会下推到 Source。
 - **安全**：表达式不能访问文件、网络、反射和系统属性；正则表达式使用线性时间的 RE2。
 
@@ -99,7 +104,8 @@ CAST(created AS TIMESTAMP(3))             -- 文本不是时间戳时报错
 
 ## 限制
 
-- `INTERVAL` 值以及使用它的日期运算随日期时间函数一起提供。
+- 不支持 `INTERVAL` 值；日期运算请使用 `DATE_ADD`、`DATE_SUB` 和 `TIMESTAMPDIFF`。
+- 暂不支持自定义函数。
 - 子查询不是表达式，`IN` 只接受值列表。
 - 不支持 `BETWEEN SYMMETRIC`。
 

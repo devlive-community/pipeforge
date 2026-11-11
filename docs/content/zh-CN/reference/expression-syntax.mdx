@@ -63,6 +63,21 @@ order: 30
 
 条件表达式的各个结果会转换为它们的公共类型。
 
+## 函数调用
+
+函数以 `NAME(参数)` 的形式调用，函数名不区分大小写。[函数参考](./functions)列出了全部内置函数。少数调用使用 SQL 关键字：
+
+| 写法 | 等同于 |
+|---|---|
+| `SUBSTRING(s FROM 2 FOR 3)` | `SUBSTRING(s, 2, 3)` |
+| `TRIM([BOTH \| LEADING \| TRAILING] [chars] FROM s)` | `TRIM(s, chars)`、`LTRIM(s, chars)`、`RTRIM(s, chars)` |
+| `POSITION(part IN s)` | `INSTR(s, part)` |
+| `EXTRACT(unit FROM t)` | `YEAR(t)`、`MONTH(t)`、`DAYOFMONTH(t)` 等 |
+| `TIMESTAMPDIFF(unit, start, end)` | —（单位是 `MONTH` 这类关键字） |
+| `CURRENT_DATE`、`CURRENT_TIMESTAMP` | 时间戳等同于 `NOW()`；不写括号 |
+
+参数按与运算符相同的规则隐式转换为参数类型。函数有多个重载时使用最窄的匹配重载：`INT32` 列的 `ABS(i)` 结果仍为 `INT32`。
+
 ## 类型转换
 
 ```sql

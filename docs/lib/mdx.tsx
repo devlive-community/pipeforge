@@ -13,6 +13,7 @@ import remarkGfm from "remark-gfm";
 import { Callout } from "@/components/mdx/Callout";
 import { CodeBlock } from "@/components/mdx/CodeBlock";
 import { ErrorList } from "@/components/mdx/ErrorList";
+import { FunctionList } from "@/components/mdx/FunctionList";
 import { Step, Steps } from "@/components/mdx/Steps";
 import { Tab, Tabs } from "@/components/mdx/Tabs";
 import { CURRENT_VERSION, pageUrl, resolveLink } from "./content-core.mjs";
@@ -78,6 +79,7 @@ function components(context: Context) {
     ),
     Callout: (props: ComponentProps<typeof Callout>) => <Callout {...props} lang={context.lang} />,
     ErrorList: () => <ErrorList lang={context.lang} />,
+    FunctionList: () => <FunctionList lang={context.lang} />,
     Tabs,
     Tab,
     Steps,

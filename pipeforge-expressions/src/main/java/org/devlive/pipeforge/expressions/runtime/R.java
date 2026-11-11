@@ -270,6 +270,11 @@ public final class R {
         return scaled;
     }
 
+    /** A function result: DECIMAL values are fitted to the declared type, others pass through. */
+    public static @Nullable Object result(@Nullable Object value, DataType type) {
+        return value instanceof BigDecimal decimal && type.root() == TypeRoot.DECIMAL ? fit(decimal, type) : value;
+    }
+
     private static ExprError overflow(DataType type) {
         return new ExprError("numeric overflow: the result does not fit into " + type.nullable());
     }

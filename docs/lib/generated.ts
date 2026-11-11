@@ -28,3 +28,19 @@ function read<T>(file: string, fallback: T): T {
 export function errorEntries(): ErrorEntry[] {
   return read<ErrorEntry[]>("errors.json", []);
 }
+
+export interface FunctionEntry {
+  name: string;
+  category: string;
+  syntax: string | null;
+  deterministic: boolean;
+  signatures: string[];
+  description: Record<string, string>;
+  nulls: Record<string, string> | null;
+  examples: { expression: string; result: string }[];
+}
+
+/** The built-in function catalog, exported by `pnpm generate`. */
+export function functionEntries(): FunctionEntry[] {
+  return read<FunctionEntry[]>("functions.json", []);
+}

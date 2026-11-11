@@ -155,6 +155,19 @@ public final class Analyzer {
             case ITEM -> item(call);
             case ARRAY_VALUE_CONSTRUCTOR -> array(call);
             case MAP_VALUE_CONSTRUCTOR -> map(call);
+            case TRIM -> trim(call);
+            case POSITION -> {
+                if (call.operandCount() > 2) {
+                    throw error(call, "POSITION ... FROM is not supported");
+                }
+                yield registered("POSITION", List.of(node(call.operand(0)), node(call.operand(1))), call);
+            }
+            case EXTRACT -> extract(call);
+            case TIMESTAMP_DIFF -> {
+                Node unit = Node.literal(
+                        call.operand(0).toString(), DataTypes.STRING().notNull(), line(call), column(call));
+                yield registered("TIMESTAMPDIFF", List.of(unit, node(call.operand(1)), node(call.operand(2))), call);
+            }
             default -> {
                 String name = call.getOperator().getName();
                 if (name.equals("||")) {
@@ -688,11 +701,32 @@ public final class Analyzer {
     // ------------------------------------------------------------------ functions
 
     private Node function(SqlCall call) {
-        String name = call.getOperator().getNameAsId().names.stream()
+        String rawName = call.getOperator().getNameAsId().names.stream()
                 .map(s -> s.toUpperCase(Locale.ROOT))
                 .collect(Collectors.joining("."));
+        String name = rawName.equals("TRANSLATE3") ? "TRANSLATE" : rawName;
         List<SqlNode> operands = call.getOperandList();
         switch (name) {
+            case "MOD" -> {
+                if (operands.size() != 2) {
+                    throw error(call, "MOD needs 2 arguments");
+                }
+                return arithmetic(Kind.MOD, "%", call);
+            }
+            case "GREATEST", "LEAST" -> {
+                return extremum(name, call);
+            }
+            case "TYPEOF" -> {
+                if (operands.size() != 1) {
+                    throw error(call, "TYPEOF needs 1 argument");
+                }
+                Node operand = node(operands.get(0));
+                return Node.literal(
+                        operand.type().nullable().toString(), DataTypes.STRING().notNull(), line(call), column(call));
+            }
+            case "FORMAT" -> {
+                return format(call);
+            }
             case "IF" -> {
                 if (operands.size() != 3) {
                     throw error(call, "IF needs 3 arguments: condition, value if true, value if false");
@@ -756,10 +790,117 @@ public final class Analyzer {
                 // registered functions below
             }
         }
-        FunctionDefinition definition = functions.find(name).orElseThrow(() -> error(call, "unknown function " + name));
         List<Node> args = new ArrayList<>();
+        FunctionDefinition definition = functions.find(name).orElseThrow(() -> error(call, "unknown function " + name));
         operands.forEach(o -> args.add(node(o)));
         return resolveFunction(definition, args, call);
+    }
+
+    private Node registered(String name, List<Node> args, SqlNode at) {
+        FunctionDefinition definition = functions.find(name).orElseThrow(() -> error(at, "unknown function " + name));
+        return resolveFunction(definition, args, at);
+    }
+
+    /** {@code TRIM([BOTH | LEADING | TRAILING] [chars] FROM value)}. */
+    private Node trim(SqlCall call) {
+        String flag = call.operand(0).toString().toUpperCase(Locale.ROOT);
+        String function =
+                switch (flag) {
+                    case "LEADING" -> "LTRIM";
+                    case "TRAILING" -> "RTRIM";
+                    default -> "TRIM";
+                };
+        return registered(function, List.of(node(call.operand(2)), node(call.operand(1))), call);
+    }
+
+    /** {@code EXTRACT(unit FROM value)}. */
+    private Node extract(SqlCall call) {
+        String unit = call.operand(0).toString().toUpperCase(Locale.ROOT);
+        String function =
+                switch (unit) {
+                    case "YEAR",
+                            "QUARTER",
+                            "MONTH",
+                            "WEEK",
+                            "HOUR",
+                            "MINUTE",
+                            "SECOND",
+                            "DAYOFWEEK",
+                            "DAYOFYEAR" -> unit;
+                    case "DAY" -> "DAYOFMONTH";
+                    case "DOW" -> "DAYOFWEEK";
+                    case "DOY" -> "DAYOFYEAR";
+                    default -> throw error(
+                            call,
+                            "EXTRACT does not support " + unit
+                                    + "; use YEAR, QUARTER, MONTH, WEEK, DAY, DOW, DOY, HOUR, MINUTE or SECOND");
+                };
+        return registered(function, List.of(node(call.operand(1))), call);
+    }
+
+    /** {@code GREATEST} and {@code LEAST}: arguments of any comparable type, converted to their common type. */
+    private Node extremum(String name, SqlCall call) {
+        List<SqlNode> operands = call.getOperandList();
+        if (operands.isEmpty()) {
+            throw error(call, name + " needs at least one argument");
+        }
+        List<Node> args = new ArrayList<>();
+        operands.forEach(o -> args.add(node(o)));
+        DataType common = TypeRules.common(args.stream().map(Node::type).toList())
+                .orElseThrow(() -> error(call, "the arguments of " + name + " have no common type"));
+        TypeRoot root = common.root();
+        if (root == TypeRoot.MAP || root == TypeRoot.ROW || root == TypeRoot.ARRAY || root == TypeRoot.JSON) {
+            throw error(call, name + " cannot order " + common.nullable() + " values");
+        }
+        if (root == TypeRoot.NULL) {
+            common = DataTypes.STRING();
+        }
+        List<Node> cast = new ArrayList<>();
+        for (int i = 0; i < args.size(); i++) {
+            cast.add(castTo(args.get(i), common, operands.get(i)));
+        }
+        String method = name.equals("GREATEST") ? "greatest" : "least";
+        return special(
+                name,
+                method,
+                cast,
+                common.withNullability(args.stream().anyMatch(a -> a.type().isNullable())),
+                true,
+                call);
+    }
+
+    /** {@code FORMAT(pattern, values...)} with values of any type. */
+    private Node format(SqlCall call) {
+        List<SqlNode> operands = call.getOperandList();
+        if (operands.isEmpty()) {
+            throw error(call, "FORMAT needs a pattern");
+        }
+        List<Node> args = new ArrayList<>();
+        args.add(coerce(node(operands.get(0)), DataTypes.STRING(), operands.get(0), "FORMAT pattern"));
+        for (int i = 1; i < operands.size(); i++) {
+            args.add(node(operands.get(i)));
+        }
+        return special("FORMAT", "format", args, DataTypes.STRING(), false, call);
+    }
+
+    /** A call of a syntax-level function implemented by a variadic {@code Object...} method. */
+    private Node special(String name, String method, List<Node> args, DataType result, boolean nullOnNull, SqlNode at) {
+        java.lang.reflect.Method implementation;
+        try {
+            Class<?> owner = name.equals("FORMAT")
+                    ? org.devlive.pipeforge.expressions.function.builtin.StringFunctions.class
+                    : org.devlive.pipeforge.expressions.function.builtin.ComparisonFunctions.class;
+            implementation = name.equals("FORMAT")
+                    ? owner.getMethod(method, String.class, Object[].class)
+                    : owner.getMethod(method, Object[].class);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException(e);
+        }
+        List<DataType> parameters = args.stream().map(Node::type).toList();
+        FunctionDefinition.Signature signature = new FunctionDefinition.Signature(
+                parameters, false, FunctionDefinition.ReturnType.fixed(result), implementation);
+        FunctionDefinition definition = new FunctionDefinition(name, List.of(signature), true, nullOnNull);
+        return make(Kind.FUNCTION, result, args, new FunctionCall(definition, signature), at);
     }
 
     private Node resolveFunction(FunctionDefinition definition, List<Node> args, SqlNode at) {
