@@ -1,0 +1,109 @@
+---
+title: Expression syntax
+description: Literals, identifiers, operators, conditional expressions, casts and types of the expression language.
+order: 30
+---
+
+## Literals
+
+| Type | Written as |
+|---|---|
+| String | `'abc'`; a quote inside is doubled: `'it''s'` |
+| Integer | `42`, `-7` — `INT32`, or `INT64` when it does not fit |
+| Decimal | `3.14` — `DECIMAL(3, 2)` |
+| Floating point | `1e6` — `FLOAT64` |
+| Boolean | `TRUE`, `FALSE` |
+| NULL | `NULL` |
+| Date and time | `DATE '2026-11-07'`, `TIME '12:30:00'`, `TIMESTAMP '2026-11-07 12:30:00.123'` |
+| Instant | `TIMESTAMP_LTZ '2026-11-07 12:30:00+08:00'` (the offset is required) |
+| Binary | `X'6869'` |
+| Array, map | `ARRAY[1, 2, 3]`, `MAP['k1', 1, 'k2', 2]` |
+
+## Identifiers
+
+- Columns are written as they are and match case-insensitively. Quote a name with backticks when it
+  contains special characters, is a keyword, or must match case exactly: `` `order-id` ``, `` `Name` ``.
+- Nested values: `address.city` (ROW field), `tags[1]` (array element, 1-based), `attrs['color']`
+  (map value). A missing element or key gives NULL.
+- Pseudo-columns describe the row itself:
+
+| Pseudo-column | Value |
+|---|---|
+| `$table` / `$db` / `$schema` | Table, database and schema of the row |
+| `$rowkind` | `'INSERT'`, `'UPDATE_BEFORE'`, `'UPDATE_AFTER'` or `'DELETE'` |
+
+## Operators
+
+From highest to lowest precedence:
+
+| Precedence | Operators |
+|---|---|
+| 1 | `.` (field), `[]` (element) |
+| 2 | unary `+`, `-` |
+| 3 | `*`, `/`, `%` |
+| 4 | `+`, `-`, `\|\|` (string concatenation) |
+| 5 | `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`, `IS [NOT] DISTINCT FROM` |
+| 6 | `IS [NOT] NULL`, `IS [NOT] TRUE`, `IS [NOT] FALSE`, `[NOT] BETWEEN`, `[NOT] IN`, `[NOT] LIKE`, `[NOT] RLIKE` |
+| 7 | `NOT` |
+| 8 | `AND` |
+| 9 | `OR` |
+
+- `LIKE` matches the whole string: `%` is any sequence, `_` one character; `ESCAPE '!'` makes the
+  next character literal.
+- `RLIKE` is true when an RE2 regular expression matches part of the string; anchor with `^` and `$`.
+- `/` on integers gives an exact DECIMAL; `%` keeps the integer type.
+
+## Conditional expressions
+
+| Expression | Result |
+|---|---|
+| `CASE WHEN c1 THEN r1 [WHEN …] [ELSE e] END` | The first result whose condition is TRUE, else `e` or NULL |
+| `CASE x WHEN v1 THEN r1 … END` | Same as `CASE WHEN x = v1 THEN r1 … END` |
+| `IF(c, a, b)` | `a` when `c` is TRUE, otherwise `b` |
+| `COALESCE(a, b, …)` | The first non-NULL argument |
+| `IFNULL(a, b)` | `COALESCE(a, b)` |
+| `NULLIF(a, b)` | NULL when `a = b`, otherwise `a` |
+
+The results of a conditional expression are converted to their common type.
+
+## Casts
+
+```sql
+CAST(value AS type)       -- fails when the value cannot be converted
+TRY_CAST(value AS type)   -- NULL when the value cannot be converted
+```
+
+Types can be written as logical types (`INT64`, `STRING(20)`, `DECIMAL(10, 2)`) or with SQL names
+(`BIGINT`, `VARCHAR(20)`, `NUMERIC(10, 2)`). Instants are written `TIMESTAMP(3) WITH LOCAL TIME ZONE`
+or `TIMESTAMP_LTZ`; arrays as `BIGINT ARRAY`.
+
+| From | To | Rule |
+|---|---|---|
+| String | number, boolean | Leading and trailing spaces are ignored; booleans accept `true/false`, `t/f`, `yes/no`, `1/0` |
+| String | date and time | ISO 8601: `2026-11-07`, `12:30:00`, `2026-11-07 12:30:00.123` (space or `T`) |
+| String | `TIMESTAMP_LTZ` | With an offset (`+08:00`, `Z`) it is exact; without one, local time in the job time zone |
+| Number | integer | Rounded half up; out of range is an error |
+| Number | `DECIMAL(p, s)` | Rounded half up to `s` digits; more than `p` digits is an error |
+| Anything | `STRING(n)` | Longer text is cut to `n` characters |
+| `TIMESTAMP` | `DATE`, `TIME` | Keeps the date or the time of day |
+
+## Types and implicit conversion
+
+Operands of different types are converted to a common type only when no information is lost:
+
+| From | Converted implicitly to |
+|---|---|
+| `INT8` → `INT16` → `INT32` → `INT64` | a wider integer, `DECIMAL`, `FLOAT64` |
+| `DECIMAL(p, s)` | a wider `DECIMAL`, `FLOAT64` |
+| `FLOAT32` | `FLOAT64` |
+| `DATE` | `TIMESTAMP` (midnight) |
+| `STRING(n)` | `STRING(m)` with m ≥ n |
+
+Strings are never converted to numbers or dates implicitly. Results of DECIMAL arithmetic follow the
+SQL rules for precision and scale, capped at 38 digits:
+
+| Operation | Precision | Scale |
+|---|---|---|
+| `a + b`, `a - b` | max(p1 − s1, p2 − s2) + s + 1 | s = max(s1, s2) |
+| `a * b` | p1 + p2 + 1 | s1 + s2 |
+| `a / b` | p1 − s1 + s2 + s | s = max(6, s1 + p2 + 1) |
