@@ -1,0 +1,129 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Quick-check stage: format, static analysis, compile, unit tests, dependency and license
+# checks. Only the components touched by a change are built; Java builds only the affected
+# reactor modules plus their upstream and downstream modules. "ci-ok" is the only required
+# status check.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'release-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      java: ${{ steps.detect.outputs.java }}
+      build-checks: ${{ steps.detect.outputs.build-checks }}
+      maven_modules: ${{ steps.modules.outputs.maven_modules }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: bash .ci/changed-components.sh --github-output -v
+      - id: modules
+        env:
+          FULL_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # Fail safe toward running everything when the base is unknown.
+          if [ "$FULL_RUN" = true ] || [ -z "$BASE_SHA" ] \
+            || [ "$BASE_SHA" = 0000000000000000000000000000000000000000 ] \
+            || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "maven_modules=:all" | tee -a "$GITHUB_OUTPUT"
+          elif git diff --name-only --no-renames "$BASE_SHA" HEAD | grep -qE '^(\.ci/|\.github/workflows/ci\.yml$)'; then
+            echo "maven_modules=:all" | tee -a "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --no-renames "$BASE_SHA" HEAD \
+              | bash .ci/maven-modules.sh --github-output
+          fi
+
+  # Cheap repository-wide checks that need no build: license headers, shell scripts, CI script tests.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: tools/license-header/check.sh
+      - run: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning
+      - run: .ci/tests/run.sh
+
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .ci/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
+
+  java:
+    needs: changes
+    if: needs.changes.outputs.java == 'true' && needs.changes.outputs.maven_modules != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+          cache: maven
+      - env:
+          MODULES: ${{ needs.changes.outputs.maven_modules }}
+        run: |
+          if [ "$MODULES" = ":all" ]; then
+            ./mvnw -B -ntp verify
+          else
+            echo "building affected modules: $MODULES"
+            ./mvnw -B -ntp verify -pl "$MODULES" -am -amd
+          fi
+
+  build-checks:
+    needs: changes
+    if: needs.changes.outputs.build-checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+          cache: maven
+      - run: tools/build-checks/selftest.sh
+
+  ci-ok:
+    if: always()
+    needs: [changes, lint, dco, java, build-checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          case " $RESULTS " in
+            *" failure "*|*" cancelled "*) exit 1 ;;
+          esac
