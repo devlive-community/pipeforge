@@ -1,0 +1,111 @@
+---
+title: 插件打包
+description: 用 pipeforge-maven-plugin 构建、校验插件包并导出文档数据。
+order: 50
+---
+
+## 插件包
+
+插件以 zip 包的形式安装。`pipeforge-maven-plugin` 从普通的 Maven 工程构建出插件包：
+
+```text
+greeting-plugin-1.0.0.zip
+├── plugin.yaml          描述文件：ID、版本、API 版本、提供的组件
+├── lib/                 插件 jar 及其运行时依赖
+├── docs/greeting.json   供文档站使用的选项、规则和能力
+├── native-options/      官方客户端原生配置项目录（可选）
+└── icon.svg             （可选）
+```
+
+`lib/` 中不包含 API 和引擎：引擎为每个插件提供 `pipeforge-api`，每个插件有自己的类加载器，因此同一个库的不同版本互不冲突。
+
+## 工程配置
+
+<Steps>
+  <Step title="以 provided 范围依赖 API">
+    ```xml title="pom.xml"
+    <dependency>
+      <groupId>org.devlive.pipeforge</groupId>
+      <artifactId>pipeforge-api</artifactId>
+      <version>0.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+    ```
+  </Step>
+  <Step title="编写插件描述">
+    描述文件放在 `src/main/plugin/plugin.yaml`。其中的版本号与工程版本一致，`api-version` 写 `pipeforge-api`
+    的主版本（0.1.0 对应 `0.x`）。
+
+    ```yaml title="src/main/plugin/plugin.yaml"
+    id: greeting
+    name: Greeting
+    version: 1.0.0
+    api-version: "0.x"
+    vendor: Example
+    license: MIT
+    description: Emits greetings.
+    provides:
+      - { type: source, identifier: greeting, class: org.example.greeting.GreetingSourceFactory }
+    datasource: { type: greeting, versions: ["1.0"] }
+    ```
+  </Step>
+  <Step title="加入 Maven 插件">
+    ```xml title="pom.xml"
+    <plugin>
+      <groupId>org.devlive.pipeforge</groupId>
+      <artifactId>pipeforge-maven-plugin</artifactId>
+      <version>0.1.0</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>package</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+    ```
+  </Step>
+</Steps>
+
+此后 `mvn package` 会生成 `target/greeting-plugin-1.0.0.zip` 并附加到构建结果上，`mvn install` 和 `mvn deploy` 会把它和 jar 一起发布。
+
+## 目标
+
+| 目标 | 默认阶段 | 作用 |
+|---|---|---|
+| `pipeforge:validate` | `verify` | 校验描述文件、依赖和每个组件 |
+| `pipeforge:package` | `package` | 执行同样的校验，然后构建并附加 zip 包 |
+| `pipeforge:docs` | — | 把文档数据写入 `docs/generated/plugins/<id>.json` |
+
+| 属性 | 默认值 | 含义 |
+|---|---|---|
+| `pipeforge.descriptor` | `src/main/plugin/plugin.yaml` | 描述文件的位置 |
+| `pipeforge.docs.outputDirectory` | 仓库的 `docs/generated/plugins` | `docs` 目标输出 JSON 的目录 |
+| `pipeforge.skip` | `false` | 跳过该目标 |
+
+## 校验内容
+
+| 检查 | 失败条件 |
+|---|---|
+| 描述文件 | `plugin.yaml` 格式不对：缺少字段，ID、版本或 `api-version` 不合法，组件类型未知，标识重复 |
+| 版本 | 描述文件中的版本与工程版本不一致，或者 `api-version` 与 `pipeforge-api` 依赖不匹配 |
+| 依赖隔离 | `pipeforge-api` 或 `pipeforge-common` 不是 `provided` 范围，依赖了其他 PipeForge 模块（引擎、core），或者某个 jar 中包含 PipeForge 的类 |
+| 重复类 | 同一个类在插件自身的类和 `lib/` 中的 jar 里出现了两次 |
+| 组件 | 类不存在、没有实现对应类型的工厂接口、没有公开的无参构造方法，或者 `identifier()` 与描述文件不一致 |
+
+所有问题会一次性列出：
+
+```text
+[ERROR] Plugin greeting@1.0.0 has 1 problem(s):
+  - source 'greeting': org.example.greeting.GreetingSourceFactory.identifier() returns 'hello' but plugin.yaml declares 'greeting'
+```
+
+## 文档数据
+
+`pipeforge:docs` 导出插件文档页中由代码生成、不允许手写的部分：每个选项的类型、默认值、要求（`required`、`optional`、
+`one-of`、`conditional`）、取值范围、可选值和说明；互斥组；条件规则；原生配置命名空间；以及每个组件的能力（从工厂方法返回的类型中读取）。
+敏感选项的默认值永远不会被导出。
+
+```bash
+./mvnw -pl pipeforge-connectors/connector-fake pipeforge:docs
+```

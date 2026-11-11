@@ -1,0 +1,116 @@
+---
+title: Packaging plugins
+description: Build, validate and document a plugin package with pipeforge-maven-plugin.
+order: 50
+---
+
+## The plugin package
+
+A plugin is installed as a zip file. `pipeforge-maven-plugin` builds it from a normal Maven
+project:
+
+```text
+greeting-plugin-1.0.0.zip
+├── plugin.yaml          descriptor: id, version, API version, components
+├── lib/                 the plugin jar and its runtime dependencies
+├── docs/greeting.json   options, rules and capabilities for the documentation site
+├── native-options/      catalog of native client options (optional)
+└── icon.svg             (optional)
+```
+
+The API and the engine are not in `lib/`: the engine provides `pipeforge-api` to every plugin,
+and each plugin gets its own class loader, so libraries in different versions never clash.
+
+## Project setup
+
+<Steps>
+  <Step title="Depend on the API with provided scope">
+    ```xml title="pom.xml"
+    <dependency>
+      <groupId>org.devlive.pipeforge</groupId>
+      <artifactId>pipeforge-api</artifactId>
+      <version>0.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+    ```
+  </Step>
+  <Step title="Describe the plugin">
+    Put the descriptor at `src/main/plugin/plugin.yaml`. The version equals the project version and
+    `api-version` names the major version of `pipeforge-api` (`0.x` for 0.1.0).
+
+    ```yaml title="src/main/plugin/plugin.yaml"
+    id: greeting
+    name: Greeting
+    version: 1.0.0
+    api-version: "0.x"
+    vendor: Example
+    license: MIT
+    description: Emits greetings.
+    provides:
+      - { type: source, identifier: greeting, class: org.example.greeting.GreetingSourceFactory }
+    datasource: { type: greeting, versions: ["1.0"] }
+    ```
+  </Step>
+  <Step title="Add the Maven plugin">
+    ```xml title="pom.xml"
+    <plugin>
+      <groupId>org.devlive.pipeforge</groupId>
+      <artifactId>pipeforge-maven-plugin</artifactId>
+      <version>0.1.0</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>package</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+    ```
+  </Step>
+</Steps>
+
+`mvn package` now produces `target/greeting-plugin-1.0.0.zip` and attaches it to the build, so
+`mvn install` and `mvn deploy` publish it next to the jar.
+
+## Goals
+
+| Goal | Default phase | What it does |
+|---|---|---|
+| `pipeforge:validate` | `verify` | Checks the descriptor, the dependencies and every component |
+| `pipeforge:package` | `package` | Runs the same checks, then builds and attaches the zip |
+| `pipeforge:docs` | — | Writes the documentation data to `docs/generated/plugins/<id>.json` |
+
+| Property | Default | Meaning |
+|---|---|---|
+| `pipeforge.descriptor` | `src/main/plugin/plugin.yaml` | Location of the descriptor |
+| `pipeforge.docs.outputDirectory` | `docs/generated/plugins` of the repository | Where `docs` writes the JSON |
+| `pipeforge.skip` | `false` | Skips the goal |
+
+## What validation checks
+
+| Check | Fails when |
+|---|---|
+| Descriptor | `plugin.yaml` is malformed: missing fields, invalid id, version or `api-version`, unknown component types, repeated identifiers |
+| Versions | The descriptor version differs from the project version, or `api-version` does not match the `pipeforge-api` dependency |
+| Isolation | `pipeforge-api` or `pipeforge-common` is not `provided`, another PipeForge module (engine, core) is a dependency, or a jar contains PipeForge classes |
+| Duplicate classes | The same class exists twice among the plugin classes and the jars in `lib/` |
+| Components | A class is missing, does not implement the factory interface of its type, has no public no-argument constructor, or its `identifier()` differs from the descriptor |
+
+All problems are reported at once:
+
+```text
+[ERROR] Plugin greeting@1.0.0 has 1 problem(s):
+  - source 'greeting': org.example.greeting.GreetingSourceFactory.identifier() returns 'hello' but plugin.yaml declares 'greeting'
+```
+
+## Documentation data
+
+`pipeforge:docs` exports what the plugin page generates instead of hand-writing: every option with
+type, default value, requirement (`required`, `optional`, `one-of`, `conditional`), range, allowed
+values and description; exclusive groups; conditional rules; native namespaces; and the
+capabilities of each component, read from the type its factory method returns. Sensitive defaults
+are never exported.
+
+```bash
+./mvnw -pl pipeforge-connectors/connector-fake pipeforge:docs
+```
