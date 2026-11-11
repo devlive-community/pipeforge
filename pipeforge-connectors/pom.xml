@@ -77,6 +77,13 @@
                         </goals>
                     </execution>
                     <execution>
+                        <!-- target/pipeforge-plugin/classpath.txt for servers in development mode -->
+                        <id>plugin-dev-classpath</id>
+                        <goals>
+                            <goal>dev-classpath</goal>
+                        </goals>
+                    </execution>
+                    <execution>
                         <id>plugin-docs-check</id>
                         <phase>verify</phase>
                         <goals>

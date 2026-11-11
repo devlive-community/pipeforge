@@ -11,16 +11,18 @@ import java.util.List;
 import org.devlive.pipeforge.common.plugin.PluginDescriptor;
 
 /**
- * A plugin found in a plugin directory: its descriptor, its root directory and the jars in lib/.
+ * A plugin found in a plugin directory or, in development mode, in a source tree: its descriptor,
+ * its root directory and its class path.
  *
  * @param descriptor the parsed plugin.yaml
- * @param root the extracted plugin directory
- * @param jars the jars of lib/, sorted by name
+ * @param root the extracted plugin directory, or the source module of a development plugin
+ * @param classpath the jars of lib/ sorted by name; for a development plugin, its classes
+ *     directory followed by the jars of its dependencies
  */
-public record InstalledPlugin(PluginDescriptor descriptor, Path root, List<Path> jars) {
+public record InstalledPlugin(PluginDescriptor descriptor, Path root, List<Path> classpath) {
 
     public InstalledPlugin {
-        jars = List.copyOf(jars);
+        classpath = List.copyOf(classpath);
     }
 
     public String id() {

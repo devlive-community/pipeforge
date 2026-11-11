@@ -55,9 +55,79 @@ final class TestPlugins {
      * @param extraBody additional members of the factory class (e.g. a forbidden call)
      */
     Path plugin(String id, String version, String identifier, Path library, String extraBody) {
-        String pkg = "org.example." + id.replace('-', '_') + ".v" + version.replace('.', '_');
-        String factory =
+        String pkg = pkg(id, version);
+        Path pluginJar = jar(
+                id + "-" + version,
+                Map.of(pkg.replace('.', '/') + "/Factory.java", factory(pkg, identifier, extraBody)),
+                List.of(library));
+        Path dir = root.resolve("plugins").resolve(id + "-" + version);
+        try {
+            Files.createDirectories(dir.resolve("lib"));
+            Files.copy(pluginJar, dir.resolve("lib").resolve(pluginJar.getFileName()));
+            Files.copy(library, dir.resolve("lib").resolve(library.getFileName()));
+            Files.writeString(dir.resolve("plugin.yaml"), descriptor(id, version, identifier));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return dir;
+    }
+
+    /**
+     * A plugin module of a source tree below {@code tree}, as a Maven build leaves it: the
+     * descriptor in src/main/plugin, the compiled factory in target/classes and the dependency list
+     * with the library.
+     */
+    Path module(Path tree, String group, String id, String version, String identifier, Path library, String extraBody) {
+        String pkg = pkg(id, version);
+        Path classes = compile(
+                "module-" + id + "-" + version,
+                Map.of(pkg.replace('.', '/') + "/Factory.java", factory(pkg, identifier, extraBody)),
+                List.of(library));
+        Path module = tree.resolve(group).resolve(id);
+        try {
+            Files.createDirectories(module.resolve("src/main/plugin"));
+            Files.writeString(module.resolve("pom.xml"), "<project/>");
+            Files.writeString(module.resolve(DevPlugins.DESCRIPTOR), descriptor(id, version, identifier));
+            Path target = Files.createDirectories(module.resolve(DevPlugins.CLASSES));
+            try (Stream<Path> files = Files.walk(classes)) {
+                for (Path file : files.filter(Files::isRegularFile).toList()) {
+                    Path copy = target.resolve(classes.relativize(file));
+                    Files.createDirectories(copy.getParent());
+                    Files.copy(file, copy);
+                }
+            }
+            Path list = module.resolve(DevPlugins.CLASSPATH_FILE);
+            Files.createDirectories(list.getParent());
+            Files.writeString(list, "# dependencies\n\n" + library.toAbsolutePath() + "\n");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return module;
+    }
+
+    private static String pkg(String id, String version) {
+        return "org.example." + id.replace('-', '_') + ".v" + version.replace('.', '_');
+    }
+
+    private static String descriptor(String id, String version, String identifier) {
+        return """
+                id: %s
+                name: Test
+                version: %s
+                api-version: "%s"
+                provides:
+                  - { type: source, identifier: %s, class: %s.Factory }
                 """
+                .formatted(
+                        id,
+                        version,
+                        org.devlive.pipeforge.api.ApiVersion.descriptorForm(),
+                        identifier,
+                        pkg(id, version));
+    }
+
+    private static String factory(String pkg, String identifier, String extraBody) {
+        return """
                 package %1$s;
                 import org.devlive.pipeforge.api.factory.FactoryContext;
                 import org.devlive.pipeforge.api.factory.SourceFactory;
@@ -73,37 +143,10 @@ final class TestPlugins {
                     %3$s
                 }
                 """
-                        .formatted(pkg, identifier, extraBody);
-        Path pluginJar =
-                jar(id + "-" + version, Map.of(pkg.replace('.', '/') + "/Factory.java", factory), List.of(library));
-        Path dir = root.resolve("plugins").resolve(id + "-" + version);
-        try {
-            Files.createDirectories(dir.resolve("lib"));
-            Files.copy(pluginJar, dir.resolve("lib").resolve(pluginJar.getFileName()));
-            Files.copy(library, dir.resolve("lib").resolve(library.getFileName()));
-            Files.writeString(
-                    dir.resolve("plugin.yaml"),
-                    """
-                    id: %s
-                    name: Test
-                    version: %s
-                    api-version: "%s"
-                    provides:
-                      - { type: source, identifier: %s, class: %s.Factory }
-                    """
-                            .formatted(
-                                    id,
-                                    version,
-                                    org.devlive.pipeforge.api.ApiVersion.descriptorForm(),
-                                    identifier,
-                                    pkg));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-        return dir;
+                .formatted(pkg, identifier, extraBody);
     }
 
-    private Path jar(String name, Map<String, String> sources, List<Path> classpath) {
+    private Path compile(String name, Map<String, String> sources, List<Path> classpath) {
         try {
             Path src = Files.createDirectories(root.resolve("src").resolve(name));
             Path out = Files.createDirectories(root.resolve("classes").resolve(name));
@@ -129,6 +172,15 @@ final class TestPlugins {
             if (compiler.run(null, null, null, args.toArray(String[]::new)) != 0) {
                 throw new IllegalStateException("Compilation of " + name + " failed");
             }
+            return out;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private Path jar(String name, Map<String, String> sources, List<Path> classpath) {
+        Path out = compile(name, sources, classpath);
+        try {
             Path jar = root.resolve("jars").resolve(name + ".jar");
             Files.createDirectories(jar.getParent());
             try (OutputStream os = Files.newOutputStream(jar);

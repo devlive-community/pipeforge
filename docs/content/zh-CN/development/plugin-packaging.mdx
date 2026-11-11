@@ -72,8 +72,8 @@ greeting-plugin-1.0.0.zip
 ### 本仓库中的插件
 
 PipeForge 的 Source 和 Sink 插件是 `pipeforge-connectors` 的子模块，由它统一设置约定：`pipeforge-api` 为 provided 范围，
-[testkit](./testkit) 为 test 范围，`pipeforge-maven-plugin` 放在 `pluginManagement` 中，带两个执行：`package`，以及 `verify`
-阶段的文档数据检查。插件模块只需要列出该 Maven 插件即可获得这些执行：
+[testkit](./testkit) 为 test 范围，`pipeforge-maven-plugin` 放在 `pluginManagement` 中，带三个执行：`dev-classpath`（让[开发模式的服务端](../operations/server)
+在 `./mvnw compile` 之后就能加载该模块）、`package`，以及 `verify` 阶段的文档数据检查。插件模块只需要列出该 Maven 插件即可获得这些执行：
 
 ```xml
 <build>
@@ -92,6 +92,7 @@ PipeForge 的 Source 和 Sink 插件是 `pipeforge-connectors` 的子模块，�
 |---|---|---|
 | `pipeforge:validate` | `verify` | 校验描述文件、依赖和每个组件 |
 | `pipeforge:package` | `package` | 执行同样的校验，然后构建并附加 zip 包 |
+| `pipeforge:dev-classpath` | `generate-resources` | 把插件包 `lib/` 中会包含的 jar 的绝对路径写入 `target/pipeforge-plugin/classpath.txt`，供开发模式使用；内容不变时不重写 |
 | `pipeforge:docs` | — | 把文档数据写入 `<outputDirectory>/<id>.json`；设置 `pipeforge.docs.check` 时改为与该文件比较 |
 
 | 属性 | 默认值 | 含义 |

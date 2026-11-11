@@ -94,7 +94,26 @@ public final class PluginManager implements AutoCloseable {
 
     /** Scans plugin directories and creates a manager; rejected entries are logged and listed as unavailable. */
     public static PluginManager load(List<Path> directories, Path cacheDir, Options options) {
-        PluginRepository.Scan scan = new PluginRepository(cacheDir).scan(directories);
+        return load(new PluginRepository(cacheDir).scan(directories), options);
+    }
+
+    /**
+     * Creates a manager from scanned plugins. The searched directories are logged with what was
+     * found in them; rejected entries are logged and listed as unavailable.
+     */
+    public static PluginManager load(PluginRepository.Scan scan, Options options) {
+        for (PluginRepository.Directory directory : scan.directories()) {
+            if (directory.exists()) {
+                LOG.info("Found {} plugin(s) in {}", directory.plugins(), directory.path());
+            } else {
+                LOG.info("Plugin directory {} does not exist", directory.path());
+            }
+        }
+        if (scan.plugins().isEmpty()) {
+            LOG.warn(
+                    "No plugins found; searched {}",
+                    scan.directories().stream().map(d -> d.path().toString()).toList());
+        }
         PluginManager manager = new PluginManager(scan.plugins(), options);
         for (PluginRepository.Rejected rejected : scan.rejected()) {
             LOG.warn("Ignoring plugin {}: {}", rejected.location(), rejected.reason());
@@ -195,10 +214,10 @@ public final class PluginManager implements AutoCloseable {
     }
 
     private void checkForbiddenCalls(InstalledPlugin plugin) {
-        for (Path jar : plugin.jars()) {
+        for (Path jar : plugin.classpath()) {
             List<ForbiddenCalls.Violation> violations;
             try {
-                violations = ForbiddenCalls.scanJar(jar, options.allowedCallerPackages());
+                violations = ForbiddenCalls.scan(jar, options.allowedCallerPackages());
             } catch (IOException e) {
                 throw loadFailed(plugin, "cannot read " + jar.getFileName() + ": " + e.getMessage(), e);
             }
@@ -215,7 +234,7 @@ public final class PluginManager implements AutoCloseable {
 
     private static URL[] urls(InstalledPlugin plugin) {
         List<URL> urls = new ArrayList<>();
-        for (Path jar : plugin.jars()) {
+        for (Path jar : plugin.classpath()) {
             try {
                 urls.add(jar.toUri().toURL());
             } catch (MalformedURLException e) {

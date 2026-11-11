@@ -76,8 +76,10 @@ and each plugin gets its own class loader, so libraries in different versions ne
 
 Source and sink plugins of PipeForge are modules of `pipeforge-connectors`, which sets the
 conventions once: `pipeforge-api` with provided scope, the [testkit](./testkit) with test scope, and
-`pipeforge-maven-plugin` under `pluginManagement` with two executions, `package` and the docs check
-in the `verify` phase. A plugin module only lists the Maven plugin to get them:
+`pipeforge-maven-plugin` under `pluginManagement` with three executions: `dev-classpath`, which lets
+a [server in development mode](../operations/server) load the module
+after `./mvnw compile`, `package`, and the docs check in the `verify` phase. A plugin module only
+lists the Maven plugin to get them:
 
 ```xml
 <build>
@@ -96,6 +98,7 @@ in the `verify` phase. A plugin module only lists the Maven plugin to get them:
 |---|---|---|
 | `pipeforge:validate` | `verify` | Checks the descriptor, the dependencies and every component |
 | `pipeforge:package` | `package` | Runs the same checks, then builds and attaches the zip |
+| `pipeforge:dev-classpath` | `generate-resources` | Writes the absolute paths of the jars the package would ship in `lib/` to `target/pipeforge-plugin/classpath.txt`, for development mode; an unchanged list is not rewritten |
 | `pipeforge:docs` | — | Writes the documentation data to `<outputDirectory>/<id>.json`, or with `pipeforge.docs.check` compares it with the file there |
 
 | Property | Default | Meaning |

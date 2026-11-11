@@ -10,14 +10,17 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Finds calls that change the whole JVM by reading the constant pools of class files: exiting
@@ -54,6 +57,36 @@ public final class ForbiddenCalls {
     private ForbiddenCalls() {}
 
     /**
+     * Scans every class of a jar or of a classes directory.
+     *
+     * @param allowedPackages class name prefixes (dotted) whose classes are not checked
+     */
+    public static List<Violation> scan(Path entry, List<String> allowedPackages) throws IOException {
+        return Files.isDirectory(entry) ? scanDirectory(entry, allowedPackages) : scanJar(entry, allowedPackages);
+    }
+
+    /**
+     * Scans every class below a classes directory, such as target/classes.
+     *
+     * @param allowedPackages class name prefixes (dotted) whose classes are not checked
+     */
+    public static List<Violation> scanDirectory(Path directory, List<String> allowedPackages) throws IOException {
+        List<Violation> violations = new ArrayList<>();
+        List<Path> files;
+        try (Stream<Path> walk = Files.walk(directory)) {
+            files = walk.filter(Files::isRegularFile).sorted().toList();
+        }
+        for (Path file : files) {
+            String name = directory.relativize(file).toString().replace('\\', '/');
+            String className = className(name, allowedPackages);
+            if (className != null) {
+                check(Files.readAllBytes(file), className, violations);
+            }
+        }
+        return violations;
+    }
+
+    /**
      * Scans every class of a jar.
      *
      * @param allowedPackages class name prefixes (dotted) whose classes are not checked
@@ -64,25 +97,33 @@ public final class ForbiddenCalls {
             Enumeration<? extends ZipEntry> entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                String name = entry.getName();
-                if (!name.endsWith(".class") || name.startsWith("META-INF/") || name.endsWith("module-info.class")) {
-                    continue;
-                }
-                String className =
-                        name.substring(0, name.length() - ".class".length()).replace('/', '.');
-                if (allowedPackages.stream().anyMatch(className::startsWith)) {
+                String className = className(entry.getName(), allowedPackages);
+                if (className == null) {
                     continue;
                 }
                 try (InputStream in = zip.getInputStream(entry)) {
-                    for (String call : referencedMethods(in.readAllBytes())) {
-                        if (FORBIDDEN.contains(call)) {
-                            violations.add(new Violation(call.replace('/', '.'), className));
-                        }
-                    }
+                    check(in.readAllBytes(), className, violations);
                 }
             }
         }
         return violations;
+    }
+
+    /** The class name of a class file entry to check, or null for other entries and allowed classes. */
+    private static @Nullable String className(String name, List<String> allowedPackages) {
+        if (!name.endsWith(".class") || name.startsWith("META-INF/") || name.endsWith("module-info.class")) {
+            return null;
+        }
+        String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+        return allowedPackages.stream().anyMatch(className::startsWith) ? null : className;
+    }
+
+    private static void check(byte[] classFile, String className, List<Violation> violations) throws IOException {
+        for (String call : referencedMethods(classFile)) {
+            if (FORBIDDEN.contains(call)) {
+                violations.add(new Violation(call.replace('/', '.'), className));
+            }
+        }
     }
 
     /** Every {@code owner.method} a class file references in its constant pool. */

@@ -21,7 +21,15 @@ can use different versions of the same library — for example two JDBC drivers 
 At start-up PipeForge scans the plugin directories. A plugin is either a zip package or an extracted
 directory with `plugin.yaml` and `lib/`. Zips are extracted into a cache keyed by their content
 hash. A plugin built for another major version of the connector API is listed as unavailable with
-the reason.
+the reason. The log names every directory with its absolute path and the number of plugins found
+in it, or says that it does not exist.
+
+In development mode the server also loads the plugin modules of a source checkout, without
+packages: every module two levels below the root with `src/main/plugin/plugin.yaml`, from its
+`target/classes` and the jars listed in `target/pipeforge-plugin/classpath.txt`, which Maven writes
+when it compiles the module. Each such plugin still gets its own class loader, and it replaces an
+installed package with the same id and version. See [running the server from a
+checkout](../operations/server).
 
 ### Class loader isolation
 
@@ -52,7 +60,7 @@ thread context class loader, turns failures into errors that name the plugin and
 
 ### Forbidden calls
 
-Before a plugin is loaded its jars are checked for calls that would affect every job in the
+Before a plugin is loaded its jars, or the classes directory of a development plugin, are checked for calls that would affect every job in the
 process: `System.exit`, `Runtime.halt`, changing system properties, the default time zone or
 locale, security providers, the standard streams or JVM-wide handlers. Such a plugin is refused
 with `PF-PLUG-0005`.

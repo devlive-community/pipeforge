@@ -30,6 +30,7 @@
                 <executions>
                     <execution>
                         <goals>
+                            <goal>dev-classpath</goal>
                             <goal>package</goal>
                         </goals>
                     </execution>
