@@ -73,6 +73,8 @@ public final class ErrorCode {
             define("PF-PLUG-0008", "COMPONENT_AMBIGUOUS", "type", "identifier", "plugins");
 
     // Data
+    public static final ErrorCode CONSTRAINT_VIOLATION =
+            define("PF-DATA-0004", "CONSTRAINT_VIOLATION", "table", "column", "reason");
     public static final ErrorCode EXPRESSION_ERROR = define("PF-DATA-0006", "EXPRESSION_ERROR", "expression", "reason");
 
     // Sources

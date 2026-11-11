@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+id: field-mapper
+name: Field mapper
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Renames, computes, adds, drops and retypes the columns of every table that passes, with the expression language for computed columns.
+provides:
+  - { type: transform, identifier: field-mapper, class: org.devlive.pipeforge.transform.fieldmapper.FieldMapperFactory }

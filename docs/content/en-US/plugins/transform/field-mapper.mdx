@@ -1,0 +1,225 @@
+---
+title: Field mapper
+description: Rename, compute, add, drop and retype columns, set defaults and NOT NULL, and write names in one style — for every table that passes.
+order: 20
+template: plugin
+---
+
+## Introduction
+
+The field mapper (`type: field-mapper`) reshapes the columns between a source and a sink: it renames
+columns, computes new ones with the [expression language](../../concepts/expressions), adds
+constants, drops columns, changes types, sets defaults and NOT NULL, and writes names in one style
+such as `snake_case`. The output schema is derived while planning, so `explain` and the
+[job editor](../../guides/job-editor) show the columns that reach the sink before any data is read.
+
+Use it to fit rows to a target table, to add audit columns such as the source or a batch date, to
+hide sensitive columns, and to clean up names. It works row by row and keeps no state: it does not
+filter rows, join tables, aggregate, or split one column into several. The exact rules are in the
+[column mapping reference](../../reference/mapping).
+
+## Capabilities
+
+<PluginCapabilities plugin="field-mapper" component="transform" />
+
+## Verified versions
+
+<PluginVersions plugin="field-mapper" />
+
+## Quick start
+
+Rename `id`, compute an amount in cents and add the batch date to the default table of the fake
+source:
+
+```yaml
+version: 1
+name: field-mapper-demo
+source:
+  - { id: src, type: fake }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: id, to: order_id }
+      - { from: amount, to: amount_cents, expr: "amount * 100", type: "DECIMAL(14, 2)" }
+      - { value: "${date:yyyy-MM-dd}", to: batch_date, type: DATE }
+sink:
+  - { id: out, type: console }
+```
+
+`explain` shows the result: `order_id` keeps the primary key, `amount` is replaced by `amount_cents`
+at its place, and `batch_date` is added at the end.
+
+## Prerequisites
+
+None: the plugin is part of the distribution and needs no external system.
+
+## Data source configuration
+
+The field mapper connects to nothing, so it has no data source, native configuration or
+configuration files.
+
+## Node options
+
+<PluginOptions plugin="field-mapper" component="transform" />
+
+## Native options
+
+<PluginNativeOptions plugin="field-mapper" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="field-mapper" />
+
+## Splits and parallelism
+
+The field mapper runs in the same task as the node before it, at its parallelism, one row at a time
+and without state. Every parallel instance compiles the expressions once when it starts.
+
+## Consistency
+
+The output of a row depends only on the row and the options, unless an expression uses a function
+that is not deterministic such as `NOW()`; `RUN_START_TIME()` is the same in every task of a run. A
+retried run therefore produces the same rows. The field mapper adds no duplicates and loses no rows:
+every row in gives one row out, or a bad row reported with its error.
+
+## Examples
+
+### Fit orders to a warehouse table
+
+```yaml
+version: 1
+name: orders-to-warehouse
+source:
+  - id: orders
+    type: fake
+    table: shop.orders
+    columns:
+      - id INT64 NOT NULL
+      - customerName STRING(40)
+      - amount DECIMAL(10, 2)
+      - createdAt TIMESTAMP(3)
+      - password STRING
+    primary-key: [id]
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: id, to: order_id }
+      - { expr: "UPPER(customerName)", to: customer_key }
+      - { value: "shop", to: source_system }
+    drop: [password]
+    name-case: snake
+sink:
+  - { id: out, type: console }
+```
+
+The output columns are `order_id`, `customer_name`, `amount`, `created_at`, `customer_key` and
+`source_system`: names given in `to` stay as written, the other names become snake case.
+
+### Only the columns you list, in your order
+
+```yaml
+version: 1
+name: export-columns
+source:
+  - { id: src, type: fake, table: crm.users, columns: [id INT64 NOT NULL, name STRING(32), email STRING, age INT32] }
+transform:
+  - id: pick
+    type: field-mapper
+    mapping:
+      - { from: email, comment: "lower-cased", expr: "LOWER(email)" }
+      - { from: id, to: user_id }
+      - { from: age, type: INT16 }
+    others: drop
+    order: mapping
+sink:
+  - { id: out, type: console }
+```
+
+With `others: drop` only the listed columns remain, and `order: mapping` keeps the order of the
+entries: `email`, `user_id`, `age`.
+
+### Defaults and NOT NULL
+
+```yaml
+version: 1
+name: complete-rows
+source:
+  - { id: src, type: fake, table: shop.items, columns: [id INT64 NOT NULL, status STRING(10), price STRING], null-ratio: 0.2 }
+transform:
+  - id: fill
+    type: field-mapper
+    mapping:
+      - { from: status, nullable: false, default: "UNKNOWN" }
+      - { from: price, type: "DECIMAL(10, 2)", default: "0" }
+    on-error: "null"
+sink:
+  - { id: out, type: console }
+```
+
+NULL statuses become `UNKNOWN` and the column is NOT NULL. Prices are converted from text; with
+`on-error: "null"` a price that is not a number becomes NULL and then the default `0`. Quote
+`"null"`: unquoted, YAML reads it as no value at all.
+
+### Many tables with different columns
+
+```yaml
+version: 1
+name: shards
+source:
+  - { id: src, type: fake, tables: [shop.orders_0, shop.orders_1], columns: [id INT64 NOT NULL, code STRING(8), note STRING] }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: code, to: order_code }
+      - { from: legacy_flag, to: flag }
+    drop: [note, tmp]
+    unmapped: drop
+sink:
+  - { id: out, type: console }
+```
+
+The same mapping applies to every table. With `unmapped: drop`, entries and drops that name a column
+a table does not have (`legacy_flag`, `tmp`) are left out for that table instead of failing.
+
+## Metrics
+
+The field mapper reports the standard transform metrics: rows in and out of the node, which are
+equal, and its share of the task's time (`selfTimeRatio`). A high share points at expensive
+expressions, for example many regular expressions per row.
+
+## Performance and tuning
+
+- Columns that are only renamed or kept are copied; they cost almost nothing.
+- Expressions are compiled to bytecode once per parallel instance, and subexpressions shared by
+  several entries are computed once per row.
+- Constants and defaults are converted once while planning, not per row.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-CONF-0002` … `mapping: entry 2 (to: total): shop.orders has no column amout; did you mean 'amount'?` | A misspelt `from`; or set `unmapped: drop` when some tables really lack the column |
+| `PF-CONF-0002` … `entry 1: unknown key 'form'; did you mean 'from'?` | An entry accepts `from`, `to`, `expr`, `value`, `type`, `nullable`, `default` and `comment` |
+| `PF-CONF-0002` … `value 'abc' does not convert` | A constant or default that is not a value of its `type` |
+| `PF-CONF-0002` … `two output columns of shop.orders are named id` | Two entries, or a renamed and a kept column, end with the same name |
+| `PF-PLAN-0007` | An expression does not parse or does not type-check; the message gives the line and column |
+| `PF-DATA-0006` | An expression failed on a row; guard it (`NULLIF`, `TRY_CAST`) or set `on-error` |
+| `PF-DATA-0004` … `the column is NOT NULL, but the value is NULL` | A `nullable: false` column without a `default` received NULL |
+| `PF-PLAN-0002` … `the schema change drops column x, which the mapping reads` | The source changed a column an entry reads; update the mapping and restart |
+
+## Known limitations
+
+- The same mapping applies to every table; rules per table and patterns over column names and types
+  come with the multi-table rules of field mapping.
+- A column the source adds while the job runs is kept only when it is added at the end of its table.
+- `type` cannot yet be a sized `BYTES(n)`, a `MAP` or a `ROW`; compute such columns with `expr`.
+- Expression failures turned into NULL by `on-error: null` are not yet counted in the metrics.
+- `order: target`, the order of the target table, needs the sink's table and is not available in a
+  transform.
+
+## Changelog
+
+<PluginChangelog plugin="field-mapper" />

@@ -1,0 +1,208 @@
+---
+title: 字段映射
+description: 对经过的每张表重命名、计算、新增、删除列，修改类型，设置默认值和非空，并统一列名风格。
+order: 20
+template: plugin
+---
+
+## 简介
+
+字段映射（`type: field-mapper`）在 Source 和 Sink 之间调整列：重命名列，用[表达式语言](../../concepts/expressions)计算新列，
+添加常量，删除列，修改类型，设置默认值和非空，并把列名统一成某种风格（例如 `snake_case`）。输出 Schema 在计划阶段推导，
+因此在读取任何数据之前，`explain` 和[作业编辑器](../../guides/job-editor)就能显示到达 Sink 的列。
+
+适用于让数据行符合目标表、添加来源或批次日期等审计列、隐藏敏感列以及整理列名。它逐行处理、不保存状态：不过滤行、不关联表、
+不聚合，也不把一列拆成多列。详细规则见[列映射参考](../../reference/mapping)。
+
+## 能力
+
+<PluginCapabilities plugin="field-mapper" component="transform" />
+
+## 已验证版本
+
+<PluginVersions plugin="field-mapper" />
+
+## 快速开始
+
+对 fake Source 的默认表重命名 `id`、计算以分为单位的金额，并添加批次日期：
+
+```yaml
+version: 1
+name: field-mapper-demo
+source:
+  - { id: src, type: fake }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: id, to: order_id }
+      - { from: amount, to: amount_cents, expr: "amount * 100", type: "DECIMAL(14, 2)" }
+      - { value: "${date:yyyy-MM-dd}", to: batch_date, type: DATE }
+sink:
+  - { id: out, type: console }
+```
+
+`explain` 会显示结果：`order_id` 保留主键，`amount_cents` 在原来 `amount` 的位置上取代它，`batch_date` 添加在最后。
+
+## 前置条件
+
+无：插件随发行包提供，不需要任何外部系统。
+
+## 数据源配置
+
+字段映射不连接任何系统，因此没有数据源、原生配置或配置文件。
+
+## 节点选项
+
+<PluginOptions plugin="field-mapper" component="transform" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="field-mapper" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="field-mapper" />
+
+## 分片与并行
+
+字段映射与上游节点在同一个 Task 中运行，并行度与上游相同，逐行处理且不保存状态。每个并行实例在启动时把表达式编译一次。
+
+## 一致性语义
+
+一行的输出只取决于这一行和选项，除非表达式使用了 `NOW()` 这类不确定的函数；`RUN_START_TIME()` 在一次运行的所有 Task 中都相同。
+因此重试的运行产生相同的行。字段映射不会产生重复，也不会丢行：每输入一行就输出一行，或者以坏行的形式带错误报告。
+
+## 示例
+
+### 让订单符合数仓表
+
+```yaml
+version: 1
+name: orders-to-warehouse
+source:
+  - id: orders
+    type: fake
+    table: shop.orders
+    columns:
+      - id INT64 NOT NULL
+      - customerName STRING(40)
+      - amount DECIMAL(10, 2)
+      - createdAt TIMESTAMP(3)
+      - password STRING
+    primary-key: [id]
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: id, to: order_id }
+      - { expr: "UPPER(customerName)", to: customer_key }
+      - { value: "shop", to: source_system }
+    drop: [password]
+    name-case: snake
+sink:
+  - { id: out, type: console }
+```
+
+输出列为 `order_id`、`customer_name`、`amount`、`created_at`、`customer_key` 和 `source_system`：`to` 中给出的名称原样使用，
+其他名称转为 snake 风格。
+
+### 只保留列出的列，并按列出的顺序
+
+```yaml
+version: 1
+name: export-columns
+source:
+  - { id: src, type: fake, table: crm.users, columns: [id INT64 NOT NULL, name STRING(32), email STRING, age INT32] }
+transform:
+  - id: pick
+    type: field-mapper
+    mapping:
+      - { from: email, comment: "lower-cased", expr: "LOWER(email)" }
+      - { from: id, to: user_id }
+      - { from: age, type: INT16 }
+    others: drop
+    order: mapping
+sink:
+  - { id: out, type: console }
+```
+
+`others: drop` 只保留列出的列，`order: mapping` 按条目的顺序输出：`email`、`user_id`、`age`。
+
+### 默认值与非空
+
+```yaml
+version: 1
+name: complete-rows
+source:
+  - { id: src, type: fake, table: shop.items, columns: [id INT64 NOT NULL, status STRING(10), price STRING], null-ratio: 0.2 }
+transform:
+  - id: fill
+    type: field-mapper
+    mapping:
+      - { from: status, nullable: false, default: "UNKNOWN" }
+      - { from: price, type: "DECIMAL(10, 2)", default: "0" }
+    on-error: "null"
+sink:
+  - { id: out, type: console }
+```
+
+为 NULL 的状态变为 `UNKNOWN`，该列为非空。价格从文本转换而来；设置 `on-error: "null"` 后，不是数字的价格先变为 NULL，再取默认值 `0`。
+`"null"` 需要加引号：不加引号时 YAML 把它读作空值。
+
+### 列不完全相同的多张表
+
+```yaml
+version: 1
+name: shards
+source:
+  - { id: src, type: fake, tables: [shop.orders_0, shop.orders_1], columns: [id INT64 NOT NULL, code STRING(8), note STRING] }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: code, to: order_code }
+      - { from: legacy_flag, to: flag }
+    drop: [note, tmp]
+    unmapped: drop
+sink:
+  - { id: out, type: console }
+```
+
+同一个映射作用于每张表。设置 `unmapped: drop` 后，引用了某张表中不存在的列（`legacy_flag`、`tmp`）的条目和删除项对这张表不生效，而不是报错。
+
+## 指标
+
+字段映射报告标准的 Transform 指标：节点的输入行数和输出行数（两者相等），以及它在 Task 耗时中的占比（`selfTimeRatio`）。
+占比高说明表达式开销大，例如每行执行很多正则表达式。
+
+## 性能与调优
+
+- 只重命名或保留的列直接复制，几乎没有开销。
+- 表达式在每个并行实例中编译成字节码一次，多个条目共用的子表达式每行只计算一次。
+- 常量和默认值在计划阶段转换一次，而不是每行转换。
+
+## 错误码与排障
+
+| 错误 | 原因与处理 |
+|---|---|
+| `PF-CONF-0002` … `mapping: entry 2 (to: total): shop.orders has no column amout; did you mean 'amount'?` | `from` 拼写错误；如果确实有些表没有这一列，设置 `unmapped: drop` |
+| `PF-CONF-0002` … `entry 1: unknown key 'form'; did you mean 'from'?` | 条目只接受 `from`、`to`、`expr`、`value`、`type`、`nullable`、`default` 和 `comment` |
+| `PF-CONF-0002` … `value 'abc' does not convert` | 常量或默认值不是其 `type` 的合法取值 |
+| `PF-CONF-0002` … `two output columns of shop.orders are named id` | 两个条目，或者一个重命名的列与一个保留的列，最终名称相同 |
+| `PF-PLAN-0007` | 表达式无法解析或类型检查不通过；错误信息给出行号和列号 |
+| `PF-DATA-0006` | 表达式在某一行上计算失败；为它加上保护（`NULLIF`、`TRY_CAST`）或设置 `on-error` |
+| `PF-DATA-0004` … `the column is NOT NULL, but the value is NULL` | 设置了 `nullable: false` 且没有 `default` 的列收到了 NULL |
+| `PF-PLAN-0002` … `the schema change drops column x, which the mapping reads` | Source 修改了某个条目读取的列；更新映射后重新启动 |
+
+## 已知限制
+
+- 同一个映射作用于每张表；按表的规则以及按列名、类型匹配的批量规则随字段映射的多表规则一起提供。
+- 作业运行中 Source 新增的列，只有添加在表的末尾时才会保留。
+- `type` 暂不支持带长度的 `BYTES(n)`、`MAP` 和 `ROW`；这类列请用 `expr` 计算。
+- `on-error: null` 转为 NULL 的表达式失败还没有计入指标。
+- `order: target`（按目标表的列顺序）需要 Sink 的表结构，在 Transform 中不可用。
+
+## 变更记录
+
+<PluginChangelog plugin="field-mapper" />

@@ -63,6 +63,8 @@
   docs: ["development/plugin-packaging"]
 - paths: ["pipeforge-connectors/connector-fake/**"]
   docs: ["plugins/source/fake"]
+- paths: ["pipeforge-connectors/transform-field-mapper/**"]
+  docs: ["plugins/transform/field-mapper", "reference/mapping"]
 - paths: ["pipeforge-server/**"]
   docs: ["operations/server"]
 - paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]

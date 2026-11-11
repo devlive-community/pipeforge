@@ -1,0 +1,117 @@
+---
+title: Column mapping
+description: How the field mapper turns the columns of a table into output columns — entries, names, order, types, NULL and defaults, keys and schema changes.
+order: 30
+---
+
+The [field mapper](../plugins/transform/field-mapper) applies these rules to every table that passes.
+They are evaluated while planning, so the output schema is known — and mistakes are reported —
+before any data is read.
+
+## Entries
+
+Every entry of `mapping` produces one output column:
+
+| Key | Meaning |
+|---|---|
+| `from` | The input column the entry replaces. The output column takes its place, and the input column is not kept on its own. Names match exactly, or else ignoring case when only one column matches |
+| `to` | The output name, used as written. Without it, the name of `from` in the style of `name-case`. Required when there is no `from` |
+| `expr` | An [expression](../concepts/expressions) over the input row, which may read any column. Without `expr`, the value of `from` |
+| `value` | A constant, written as text and converted to `type` (default `STRING`) once while planning. [Variables](./variables) are resolved before |
+| `type` | The output type, a [logical type](../concepts/data-model) such as `DECIMAL(14, 2)`; the value is converted as `CAST(… AS type)`. Without it, the type of `from` or of the expression |
+| `nullable` | `false` makes the column NOT NULL; `true` makes it nullable |
+| `default` | Replaces NULL; written as text and converted to the column type. A column with a default is NOT NULL |
+| `comment` | The column comment; without it, the comment of `from` when the column is passed through unchanged |
+
+An entry needs `from`, `expr` or `value`; `value` cannot be combined with the other two. Other keys
+are rejected with a suggestion.
+
+```yaml
+mapping:
+  - { from: id, to: order_id }                                                   # rename
+  - { from: amount, to: amount_yuan, expr: "amount / 100", type: "DECIMAL(14, 2)" }  # compute in place
+  - { from: created_at, type: "TIMESTAMP_LTZ(3)" }                               # change the type only
+  - { expr: "first_name || ' ' || last_name", to: full_name }                    # new computed column
+  - { value: "shop", to: _source }                                               # new constant column
+  - { from: status, nullable: false, default: "UNKNOWN" }                        # NOT NULL with a default
+```
+
+## Other columns
+
+| Option | Values | Default |
+|---|---|---|
+| `drop` | Input columns to remove; a column cannot be both dropped and mapped | none |
+| `others` | `keep` or `drop`: input columns that no entry and no `drop` names | `keep` |
+| `unmapped` | `fail` or `drop`: a `from` or `drop` that names a column the table does not have fails planning, or is left out for that table | `fail` |
+
+Columns read only by an expression are not consumed: `{ expr: "UPPER(name)", to: loud }` adds `loud`
+and keeps `name`.
+
+## Names
+
+`name-case` writes the names taken from input columns — kept columns and entries without `to` — in
+one style; names given in `to` are used as written.
+
+| `name-case` | `createdAt` | `HTTPServer` | `order_id` |
+|---|---|---|---|
+| `keep` | `createdAt` | `HTTPServer` | `order_id` |
+| `lower` | `createdat` | `httpserver` | `order_id` |
+| `upper` | `CREATEDAT` | `HTTPSERVER` | `ORDER_ID` |
+| `snake` | `created_at` | `http_server` | `order_id` |
+| `camel` | `createdAt` | `httpServer` | `orderId` |
+
+Words are separated by `_`, `-`, spaces, dots and changes of case. Two output columns with the same
+name are an error.
+
+## Order
+
+| `order` | Output columns |
+|---|---|
+| `source` | In the order of the input: kept columns stay where they are, an entry with `from` takes the place of its column, and entries without `from` follow at the end in their order |
+| `mapping` | The entries first, in their order, then the kept columns in input order |
+
+## Types, NULL and defaults
+
+- The type of a passed-through column is the input type; of an expression, the type the expression
+  language derives; of a constant, `type` or `STRING`.
+- A constant that is not NULL makes a NOT NULL column. `default` replaces NULL and makes the column
+  NOT NULL; `nullable` overrides both.
+- When a NOT NULL column without a default would be NULL, the row is a bad row with `PF-DATA-0004`.
+- A failure while evaluating an expression follows `on-error`: `dirty` (default, a bad row with
+  `PF-DATA-0006`), `null` (the value becomes NULL, then the default if any) or `fail` (the job fails).
+- Constants and defaults that do not convert to their type fail planning with `PF-CONF-0002`.
+
+## Keys
+
+The primary key is kept, under the output names, when every key column is passed through unchanged
+(kept or only renamed). A key column that is dropped, computed or converted removes the key; the
+same applies to partition keys. The table name never changes.
+
+## Schema changes
+
+When the source changes a table while the job runs, the field mapper follows:
+
+| Change | Result |
+|---|---|
+| A column added at the end | Kept like the other columns (named in the `name-case` style, placed where `order` puts it), or left out when `others: drop` or it is in `drop` |
+| A column added elsewhere | The job fails (`PF-PLAN-0002`) |
+| Drop, rename, type or comment change of a passed-through column | Passed on under the output name |
+| The same changes of a dropped or unused column | Not passed on |
+| Drop, rename or type change of a column an entry reads | The job fails (`PF-PLAN-0002`): the entry could no longer be computed |
+| A new table | Mapped with the same rules |
+| Rename, truncate or drop of a table | Passed on |
+
+## Many tables
+
+The same entries and options apply to every input table, each with its own columns; use
+`unmapped: drop` when not every table has every column. Rules by table and by column name or type
+patterns are part of the multi-table rules of the field mapper, which are not available yet.
+
+## Validation
+
+| Problem | Error |
+|---|---|
+| An unknown key in an entry, an entry without `from`, `expr` or `value`, a type that cannot be read | `PF-CONF-0002` on `mapping` |
+| `from` or `drop` naming a missing column, with `unmapped: fail` | `PF-CONF-0002`, with a suggestion |
+| Two output columns with the same name, no column left | `PF-CONF-0002` |
+| An expression that does not parse or type-check | `PF-PLAN-0007` with line and column |

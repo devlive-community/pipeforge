@@ -6,6 +6,15 @@
 #
 # Data errors: one row or record is bad; handled by the dirty data policy.
 
+- code: PF-DATA-0004
+  name: CONSTRAINT_VIOLATION
+  message:
+    en-US: "Column '{column}' of '{table}' violates a constraint: {reason}"
+    zh-CN: "'{table}' 的列 '{column}' 违反约束：{reason}"
+  hint:
+    en-US: "Fix the value at the source or relax the constraint, for example give a NOT NULL column a default."
+    zh-CN: "在源头修正取值，或者放宽约束，例如为非空列设置默认值。"
+
 - code: PF-DATA-0006
   name: EXPRESSION_ERROR
   message:

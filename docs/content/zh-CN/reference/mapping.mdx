@@ -1,0 +1,105 @@
+---
+title: 列映射
+description: 字段映射如何把表的列变成输出列——条目、名称、顺序、类型、NULL 与默认值、主键以及 Schema 变更。
+order: 30
+---
+
+[字段映射](../plugins/transform/field-mapper)对经过的每张表应用下面的规则。规则在计划阶段计算，因此在读取任何数据之前就知道输出 Schema，
+错误也在这时报告。
+
+## 条目
+
+`mapping` 中的每个条目产生一个输出列：
+
+| 键 | 含义 |
+|---|---|
+| `from` | 条目取代的输入列。输出列占据它的位置，该输入列不再单独保留。名称精确匹配；没有精确匹配时，若只有一列忽略大小写后匹配，则使用该列 |
+| `to` | 输出列名，原样使用。不写时取 `from` 的名称并按 `name-case` 转换风格。没有 `from` 时必填 |
+| `expr` | 基于输入行的[表达式](../concepts/expressions)，可以读取任意列。不写时取 `from` 的值 |
+| `value` | 常量，以文本书写，在计划阶段转换为 `type`（默认 `STRING`）一次。其中的[变量](./variables)会先被替换 |
+| `type` | 输出类型，即[逻辑类型](../concepts/data-model)，例如 `DECIMAL(14, 2)`；取值按 `CAST(… AS type)` 转换。不写时取 `from` 或表达式的类型 |
+| `nullable` | `false` 使该列非空；`true` 使其可空 |
+| `default` | 替换 NULL；以文本书写，转换为列的类型。有默认值的列为非空 |
+| `comment` | 列注释；不写时，原样传递的列沿用 `from` 的注释 |
+
+条目必须有 `from`、`expr` 或 `value` 之一；`value` 不能与另外两个同时使用。其他键会被拒绝，并给出拼写建议。
+
+```yaml
+mapping:
+  - { from: id, to: order_id }                                                   # 重命名
+  - { from: amount, to: amount_yuan, expr: "amount / 100", type: "DECIMAL(14, 2)" }  # 原位计算
+  - { from: created_at, type: "TIMESTAMP_LTZ(3)" }                               # 只改类型
+  - { expr: "first_name || ' ' || last_name", to: full_name }                    # 新增计算列
+  - { value: "shop", to: _source }                                               # 新增常量列
+  - { from: status, nullable: false, default: "UNKNOWN" }                        # 非空并带默认值
+```
+
+## 其他列
+
+| 选项 | 取值 | 默认值 |
+|---|---|---|
+| `drop` | 要删除的输入列；同一列不能既被删除又被映射 | 无 |
+| `others` | `keep` 或 `drop`：没有被任何条目或 `drop` 提到的输入列 | `keep` |
+| `unmapped` | `fail` 或 `drop`：`from` 或 `drop` 提到了表中不存在的列时，计划失败，或者该项对这张表不生效 | `fail` |
+
+只被表达式读取的列不算被取代：`{ expr: "UPPER(name)", to: loud }` 新增 `loud`，同时保留 `name`。
+
+## 名称
+
+`name-case` 把取自输入列的名称（保留的列，以及没有 `to` 的条目）统一成一种风格；`to` 中给出的名称原样使用。
+
+| `name-case` | `createdAt` | `HTTPServer` | `order_id` |
+|---|---|---|---|
+| `keep` | `createdAt` | `HTTPServer` | `order_id` |
+| `lower` | `createdat` | `httpserver` | `order_id` |
+| `upper` | `CREATEDAT` | `HTTPSERVER` | `ORDER_ID` |
+| `snake` | `created_at` | `http_server` | `order_id` |
+| `camel` | `createdAt` | `httpServer` | `orderId` |
+
+单词以 `_`、`-`、空格、点号以及大小写变化分隔。两个输出列同名会报错。
+
+## 顺序
+
+| `order` | 输出列 |
+|---|---|
+| `source` | 按输入的顺序：保留的列留在原位，带 `from` 的条目占据其列的位置，没有 `from` 的条目按顺序排在最后 |
+| `mapping` | 先按顺序输出各条目，再按输入顺序输出保留的列 |
+
+## 类型、NULL 与默认值
+
+- 原样传递的列沿用输入类型；表达式列的类型由表达式语言推导；常量列的类型为 `type`，默认 `STRING`。
+- 不为 NULL 的常量产生非空列。`default` 替换 NULL 并使该列非空；`nullable` 优先于这两者。
+- 没有默认值的非空列将要为 NULL 时，该行作为坏行报告，错误码 `PF-DATA-0004`。
+- 表达式求值失败时按 `on-error` 处理：`dirty`（默认，作为坏行，错误码 `PF-DATA-0006`）、`null`（取值为 NULL，有默认值时再取默认值）或 `fail`（作业失败）。
+- 无法转换为对应类型的常量和默认值会让计划失败，错误码 `PF-CONF-0002`。
+
+## 主键
+
+当每个主键列都原样传递（保留或只重命名）时，主键以输出列名保留。主键列被删除、计算或转换类型时，主键被移除；分区键同理。表名始终不变。
+
+## Schema 变更
+
+作业运行中 Source 修改表结构时，字段映射按下表处理：
+
+| 变更 | 结果 |
+|---|---|
+| 在末尾新增列 | 与其他列一样保留（按 `name-case` 命名，放在 `order` 规定的位置）；`others: drop` 或在 `drop` 中时不输出 |
+| 在其他位置新增列 | 作业失败（`PF-PLAN-0002`） |
+| 原样传递的列被删除、重命名、修改类型或注释 | 以输出列名传递下去 |
+| 已删除或未使用的列发生同样的变更 | 不传递 |
+| 条目读取的列被删除、重命名或修改类型 | 作业失败（`PF-PLAN-0002`）：该条目无法再计算 |
+| 新建表 | 按同样的规则映射 |
+| 表重命名、清空或删除 | 原样传递 |
+
+## 多张表
+
+同一组条目和选项作用于每张输入表，各表使用自己的列；不是每张表都有所有列时，使用 `unmapped: drop`。按表的规则以及按列名或类型模式匹配的批量规则属于字段映射的多表规则，目前还不可用。
+
+## 校验
+
+| 问题 | 错误 |
+|---|---|
+| 条目中有未知的键、条目没有 `from`、`expr` 或 `value`、类型无法解析 | `mapping` 上的 `PF-CONF-0002` |
+| `unmapped: fail` 时 `from` 或 `drop` 提到不存在的列 | `PF-CONF-0002`，带拼写建议 |
+| 两个输出列同名、没有剩下任何列 | `PF-CONF-0002` |
+| 表达式无法解析或类型检查不通过 | `PF-PLAN-0007`，带行号和列号 |
