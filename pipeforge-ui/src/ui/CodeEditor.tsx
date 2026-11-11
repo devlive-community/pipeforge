@@ -7,6 +7,7 @@
 
 import { autocompletion, completionKeymap, type CompletionContext } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { sql } from "@codemirror/lang-sql";
 import { yaml } from "@codemirror/lang-yaml";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lintGutter, lintKeymap, setDiagnostics, type Diagnostic } from "@codemirror/lint";
@@ -81,6 +82,8 @@ const highlight = HighlightStyle.define([
   { tag: [tags.number, tags.bool, tags.null], color: "var(--pf-syntax-number)" },
   { tag: tags.comment, color: "var(--pf-syntax-comment)" },
   { tag: [tags.keyword, tags.typeName], color: "var(--pf-syntax-type)" },
+  { tag: [tags.function(tags.variableName), tags.standard(tags.name)], color: "var(--pf-syntax-function)" },
+  { tag: [tags.operator, tags.punctuation], color: "var(--pf-fg-muted)" },
 ]);
 
 /** Converts diagnostics with lines and columns to document ranges: the rest of the line from the column. */
@@ -97,7 +100,7 @@ export function toRanges(text: string, diagnostics: EditorDiagnostic[]): Diagnos
 }
 
 /**
- * A YAML code editor (CodeMirror 6, the only place it is used): line numbers, history,
+ * A code editor for YAML or SQL expressions (CodeMirror 6, the only place it is used): line numbers, history,
  * completion from `completion`, and problems shown inline and in the gutter. Tab is left to move
  * the focus on; the editor's own commands use the usual shortcuts.
  */
@@ -107,6 +110,7 @@ export function CodeEditor({
   label,
   diagnostics = [],
   completion,
+  language = "yaml",
   className,
   ref,
 }: {
@@ -115,6 +119,8 @@ export function CodeEditor({
   label: string;
   diagnostics?: EditorDiagnostic[];
   completion?: EditorCompletion;
+  /** YAML for job definitions, SQL for expressions. */
+  language?: "yaml" | "sql";
   className?: string;
   ref?: Ref<CodeEditorHandle>;
 }) {
@@ -135,7 +141,7 @@ export function CodeEditor({
           highlightActiveLineGutter(),
           highlightActiveLine(),
           history(),
-          yaml(),
+          language === "sql" ? sql() : yaml(),
           syntaxHighlighting(highlight),
           autocompletion({
             override: [

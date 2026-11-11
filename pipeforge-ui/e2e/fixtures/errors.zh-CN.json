@@ -1,0 +1,282 @@
+[
+  {
+    "code": "PF-CONF-0001",
+    "name": "OPTION_REQUIRED",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "option"],
+    "message": "节点 '{node}' 缺少必填选项 '{option}'",
+    "hint": "在节点中添加 '{option}'，或者在 env 或集群默认配置中设置它。"
+  },
+  {
+    "code": "PF-CONF-0002",
+    "name": "OPTION_INVALID",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "option", "reason", "value"],
+    "message": "节点 '{node}' 的选项 '{option}' 取值 '{value}' 不合法：{reason}",
+    "hint": "在插件文档页中查看 '{option}' 的类型和取值范围。"
+  },
+  {
+    "code": "PF-CONF-0003",
+    "name": "NATIVE_KEY_CONTROLLED",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["key", "node", "reason"],
+    "message": "节点 '{node}' 的原生配置 '{key}' 由 PipeForge 控制，不能设置：{reason}",
+    "hint": "从原生配置中删除 '{key}'，改用对应的 PipeForge 选项。"
+  },
+  {
+    "code": "PF-CONF-0004",
+    "name": "VARIABLE_UNDEFINED",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["variable"],
+    "message": "变量 '${{variable}}' 未定义",
+    "hint": "在 env.variables 中定义它或在运行作业时传入取值，或者写上默认值：${{variable}:-默认值}。"
+  },
+  {
+    "code": "PF-CONF-0005",
+    "name": "SECRET_NOT_FOUND",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["secret"],
+    "message": "密钥 '{secret}' 不存在",
+    "hint": "先创建该密钥，或者检查密钥名称及其所属项目。"
+  },
+  {
+    "code": "PF-CONF-0006",
+    "name": "JOB_INVALID",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["location", "reason"],
+    "message": "作业定义在 {location} 处有误：{reason}",
+    "hint": "对照作业 DSL 参考检查作业；位置中给出了问题所在的行、列和路径。"
+  },
+  {
+    "code": "PF-CONF-0007",
+    "name": "REQUEST_INVALID",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["reason"],
+    "message": "请求不合法：{reason}",
+    "hint": "对照 API 参考检查请求；原因中指出了有问题的字段或接口。"
+  },
+  {
+    "code": "PF-DATA-0006",
+    "name": "EXPRESSION_ERROR",
+    "category": "DATA",
+    "kind": "DATA",
+    "deprecated": false,
+    "params": ["expression", "reason"],
+    "message": "表达式 '{expression}' 计算失败：{reason}",
+    "hint": "为表达式加上保护（例如 NULLIF(qty, 0) 或 TRY_CAST），或者在节点上把 on-error 设置为 null 或 fail。"
+  },
+  {
+    "code": "PF-PLAN-0001",
+    "name": "DAG_CYCLE",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["path"],
+    "message": "作业中存在环：{path}",
+    "hint": "调整该路径上节点的输入，使数据只朝一个方向流动。"
+  },
+  {
+    "code": "PF-PLAN-0002",
+    "name": "SCHEMA_INCOMPATIBLE",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "reason", "upstream"],
+    "message": "节点 '{node}' 无法接受 '{upstream}' 输出的 Schema：{reason}",
+    "hint": "用 field-mapper 转换映射或转换列类型，或者调整目标表。"
+  },
+  {
+    "code": "PF-PLAN-0003",
+    "name": "DELIVERY_UNSUPPORTED",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["guarantee", "node"],
+    "message": "作业要求 exactly-once，但 Sink '{node}' 只支持 {guarantee}",
+    "hint": "改用支持两阶段提交或幂等写入的 Sink，或者降低投递语义要求。"
+  },
+  {
+    "code": "PF-PLAN-0004",
+    "name": "ROUTE_CONFLICT",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["routes", "table"],
+    "message": "路由 {routes} 写入同一张表 '{table}'，但它们的 Schema 无法合并",
+    "hint": "用类型提示让列类型兼容，或者把这些表路由到不同的目标表。"
+  },
+  {
+    "code": "PF-PLAN-0005",
+    "name": "UPSERT_REQUIRES_PK",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "table"],
+    "message": "Sink '{node}' 接收表 '{table}' 的变更数据，但该表没有主键",
+    "hint": "用 Sink 的 primary-key 选项声明主键列，或者只写入仅追加的数据。"
+  },
+  {
+    "code": "PF-PLAN-0006",
+    "name": "CHANGELOG_INCOMPATIBLE",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["accepted", "node", "produced", "upstream"],
+    "message": "节点 '{node}' 只接受{accepted}流，但 '{upstream}' 输出的是{produced}流",
+    "hint": "改用可以接受更新的 Sink，或者在该节点之前转换流类型。"
+  },
+  {
+    "code": "PF-PLAN-0007",
+    "name": "EXPRESSION_INVALID",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["column", "expression", "line", "reason"],
+    "message": "表达式 '{expression}' 在第 {line} 行第 {column} 列有误：{reason}",
+    "hint": "检查语法、列名以及函数的参数类型。"
+  },
+  {
+    "code": "PF-PLAN-0008",
+    "name": "ROLLBACK_UNSUPPORTED",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["mode", "node"],
+    "message": "Sink '{node}' 不支持回滚方式 '{mode}'",
+    "hint": "选择该 Sink 支持的回滚方式，或者关闭作业的回滚。"
+  },
+  {
+    "code": "PF-PLAN-0009",
+    "name": "INPUT_INVALID",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["input", "node", "reason"],
+    "message": "节点 '{node}' 不能读取 '{input}'：{reason}",
+    "hint": "inputs 中只能写 Source 或 Transform 节点的 id；Sink 不输出数据。"
+  },
+  {
+    "code": "PF-PLAN-0010",
+    "name": "NODE_DISCONNECTED",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node"],
+    "message": "节点 '{node}' 的输出没有到达任何 Sink",
+    "hint": "把 '{node}' 加入某个下游节点的 inputs，或者从作业中删除它。"
+  },
+  {
+    "code": "PF-PLAN-0011",
+    "name": "BOUNDEDNESS_MISMATCH",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node"],
+    "message": "作业以批处理模式运行，但 Source '{node}' 是无界的",
+    "hint": "删除 env.mode 让模式由 Source 推导，改为 streaming，或者把该 Source 配置为有界读取。"
+  },
+  {
+    "code": "PF-PLUG-0001",
+    "name": "PLUGIN_NOT_FOUND",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["plugin", "type"],
+    "message": "{type} 插件 '{plugin}' 未安装",
+    "hint": "把插件安装到 plugins 目录，或者检查插件名称的拼写。"
+  },
+  {
+    "code": "PF-PLUG-0002",
+    "name": "PLUGIN_API_INCOMPATIBLE",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["plugin", "provided", "required"],
+    "message": "插件 '{plugin}' 需要连接器 API {required}，但当前引擎提供的是 {provided}",
+    "hint": "安装为当前引擎版本构建的插件版本。"
+  },
+  {
+    "code": "PF-PLUG-0003",
+    "name": "DRIVER_MISSING",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["driver", "plugin"],
+    "message": "插件 '{plugin}' 需要驱动 '{driver}'，但该驱动未安装",
+    "hint": "上传该驱动；许可证受限的驱动不随 PipeForge 分发。"
+  },
+  {
+    "code": "PF-PLUG-0004",
+    "name": "PLUGIN_LOAD_FAILED",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["plugin", "reason"],
+    "message": "插件 '{plugin}' 无法加载：{reason}",
+    "hint": "检查插件包是否完整，以及是否为当前引擎版本构建。"
+  },
+  {
+    "code": "PF-PLUG-0005",
+    "name": "PLUGIN_FORBIDDEN_CALL",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["call", "location", "plugin"],
+    "message": "插件 '{plugin}' 在 {location} 中调用了 {call}，这会影响整个 JVM",
+    "hint": "插件不能退出 JVM 或修改全局设置，请改为通过选项传递配置。"
+  },
+  {
+    "code": "PF-PLUG-0006",
+    "name": "PLUGIN_TIMEOUT",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["operation", "plugin", "timeoutMs"],
+    "message": "插件 '{plugin}' 未在 {timeoutMs} 毫秒内完成 {operation}",
+    "hint": "检查外部系统是否有响应；只有在操作确实较慢时才调大超时时间。"
+  },
+  {
+    "code": "PF-PLUG-0007",
+    "name": "PLUGIN_CALL_FAILED",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["operation", "plugin", "reason"],
+    "message": "插件 '{plugin}' 在执行 {operation} 时失败：{reason}",
+    "hint": "查看错误详情中的原因；如果看起来是缺陷，请反馈给插件提供方。"
+  },
+  {
+    "code": "PF-PLUG-0008",
+    "name": "COMPONENT_AMBIGUOUS",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["identifier", "plugins", "type"],
+    "message": "{type} '{identifier}' 由多个插件提供：{plugins}",
+    "hint": "在节点的 plugin 字段中指定使用哪一个，例如 plugin: {identifier}@1.0.0。"
+  },
+  {
+    "code": "PF-SYS-0001",
+    "name": "INTERNAL",
+    "category": "SYS",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["detail"],
+    "message": "内部错误：{detail}",
+    "hint": "这是一个缺陷。请附上错误详情和本次运行的日志提交问题。"
+  }
+]

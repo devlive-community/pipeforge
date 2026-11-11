@@ -6,8 +6,10 @@
  */
 
 import type { RouteObject } from "react-router";
+import { ErrorCodesPage } from "@/features/errors/ErrorCodesPage";
 import { NotFoundPage } from "@/features/not-found/NotFoundPage";
 import { OverviewPage } from "@/features/overview/OverviewPage";
+import { PluginsPage } from "@/features/plugins/PluginsPage";
 import { Shell } from "./Shell";
 
 /** The pages of the Web UI; every page renders inside the shell. */
@@ -22,6 +24,13 @@ export const ROUTES: RouteObject[] = [
         // The editor brings CodeMirror; load it only when the page is opened.
         lazy: async () => ({ Component: (await import("@/features/job-editor/JobEditorPage")).JobEditorPage }),
       },
+      { path: "plugins", element: <PluginsPage /> },
+      {
+        path: "functions",
+        // The playground brings CodeMirror too.
+        lazy: async () => ({ Component: (await import("@/features/functions/FunctionsPage")).FunctionsPage }),
+      },
+      { path: "errors", element: <ErrorCodesPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

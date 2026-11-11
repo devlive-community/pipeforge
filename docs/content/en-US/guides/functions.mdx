@@ -1,0 +1,49 @@
+---
+title: Functions and playground
+description: Looking up the built-in functions in the Web UI and trying expressions on sample values in the playground.
+order: 40
+---
+
+The **Functions** page lists every built-in function of the [expression language](../concepts/expressions)
+and has a playground to try expressions on sample values, without writing a job. The list is the
+same as the [function reference](../reference/functions), in the language of the UI.
+
+<Screenshot name="functions" alt="The functions page with the playground and an evaluated expression" />
+
+## Finding a function
+
+Type into the search field to filter by name, description or signature, and choose a category to
+narrow the list: comparison, numeric, string, date and time, or conversion. Every function shows
+its call forms and typed signatures, what it returns for NULL arguments, and examples with their
+results. Functions whose result changes between calls, such as `NOW()`, are marked **not
+deterministic**.
+
+Every function has its own address, for example `/functions#coalesce`, which opens the page at that
+function.
+
+## The playground
+
+1. Write an expression in the editor. Completion offers the columns, the functions (with their
+   signature) and the keywords; it opens while you type or with **Ctrl+Space**.
+2. Describe the row: each column has a name, a [type](../concepts/data-model) such as `STRING`,
+   `INT64` or `DECIMAL(10, 2)`, and a value written as text. An empty value is NULL. Add and remove
+   columns as needed.
+3. Optionally set a time zone such as `Asia/Shanghai`; without one the server's default is used.
+4. Choose **Evaluate**.
+
+The result shows the type of the expression, its value or **NULL**, and whether it is
+deterministic. **Try** next to an example copies it into the editor.
+
+The playground sends the expression to [`POST /api/v1/expressions/evaluate`](../reference/api#evaluateexpression),
+which type-checks and evaluates it exactly as a job would. Nothing is stored.
+
+## Errors
+
+When the expression is invalid, the result shows the error code, the message and a hint, and the
+position is underlined in the editor:
+
+| Error | Meaning |
+|---|---|
+| `PF-PLAN-0007` | The expression does not parse or does not type-check, for example an unknown function or column |
+| `PF-CONF-0007` | A column's type or value is invalid, for example `abc` for an `INT64` column |
+| `PF-DATA-0006` | Evaluation failed on these values, for example a division by zero |

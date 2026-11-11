@@ -25,6 +25,8 @@ interface Shot {
   draft?: string;
   /** A tab to open before the screenshot, per language. */
   tab?: Record<"en-US" | "zh-CN", string>;
+  /** A button to press before the screenshot, per language. */
+  click?: Record<"en-US" | "zh-CN", string>;
 }
 
 const PAGES: Shot[] = [
@@ -36,6 +38,18 @@ const PAGES: Shot[] = [
     draft: EXAMPLE_JOB,
     tab: { "en-US": "Plan", "zh-CN": "计划" },
   },
+  {
+    name: "plugins",
+    path: "/plugins?type=source&component=fake&plugin=fake%400.1.0",
+    ready: { "en-US": "Rows to generate; the source is bounded.", "zh-CN": "Rows to generate; the source is bounded." },
+  },
+  {
+    name: "functions",
+    path: "/functions",
+    ready: { "en-US": "88 functions", "zh-CN": "88 个函数" },
+    click: { "en-US": "Evaluate", "zh-CN": "求值" },
+  },
+  { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
   {
     name: "job-editor-problem",
     path: "/editor",
@@ -60,6 +74,10 @@ for (const shot of PAGES) {
         await page.goto(shot.path);
         await expect(page.getByText(shot.ready[language], { exact: true })).toBeVisible();
         if (shot.tab) await page.getByRole("tab", { name: shot.tab[language] }).click();
+        if (shot.click) {
+          await page.getByRole("button", { name: shot.click[language], exact: true }).click();
+          await expect(page.getByText("PIPEFORGE pays 25.00")).toBeVisible();
+        }
         await page.mouse.move(0, 0);
         await page.screenshot({ path: `${OUT}${shot.name}-${theme}-${language}.png`, animations: "disabled" });
       });

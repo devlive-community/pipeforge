@@ -1,0 +1,282 @@
+[
+  {
+    "code": "PF-CONF-0001",
+    "name": "OPTION_REQUIRED",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "option"],
+    "message": "Required option '{option}' is missing in node '{node}'",
+    "hint": "Add '{option}' to the node, or set it in env or in the cluster defaults."
+  },
+  {
+    "code": "PF-CONF-0002",
+    "name": "OPTION_INVALID",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "option", "reason", "value"],
+    "message": "Option '{option}' of node '{node}' has the invalid value '{value}': {reason}",
+    "hint": "Check the type and the allowed range of '{option}' on the plugin page."
+  },
+  {
+    "code": "PF-CONF-0003",
+    "name": "NATIVE_KEY_CONTROLLED",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["key", "node", "reason"],
+    "message": "Native option '{key}' of node '{node}' is controlled by PipeForge and cannot be set: {reason}",
+    "hint": "Remove '{key}' from the native options; use the corresponding PipeForge option instead."
+  },
+  {
+    "code": "PF-CONF-0004",
+    "name": "VARIABLE_UNDEFINED",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["variable"],
+    "message": "Variable '${{variable}}' is not defined",
+    "hint": "Define it in env.variables or pass a value when running the job, or give a default: ${{variable}:-default}."
+  },
+  {
+    "code": "PF-CONF-0005",
+    "name": "SECRET_NOT_FOUND",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["secret"],
+    "message": "Secret '{secret}' does not exist",
+    "hint": "Create the secret first, or check its name and the project it belongs to."
+  },
+  {
+    "code": "PF-CONF-0006",
+    "name": "JOB_INVALID",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["location", "reason"],
+    "message": "The job definition is invalid at {location}: {reason}",
+    "hint": "Compare the job with the job DSL reference; the location gives the line, column and path of the problem."
+  },
+  {
+    "code": "PF-CONF-0007",
+    "name": "REQUEST_INVALID",
+    "category": "CONF",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["reason"],
+    "message": "The request is invalid: {reason}",
+    "hint": "Compare the request with the API reference; the reason names the field or the endpoint."
+  },
+  {
+    "code": "PF-DATA-0006",
+    "name": "EXPRESSION_ERROR",
+    "category": "DATA",
+    "kind": "DATA",
+    "deprecated": false,
+    "params": ["expression", "reason"],
+    "message": "Expression '{expression}' failed: {reason}",
+    "hint": "Guard the expression (for example NULLIF(qty, 0) or TRY_CAST), or set on-error to null or fail on the node."
+  },
+  {
+    "code": "PF-PLAN-0001",
+    "name": "DAG_CYCLE",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["path"],
+    "message": "The job contains a cycle: {path}",
+    "hint": "Change the inputs of the nodes on this path so that data flows in one direction only."
+  },
+  {
+    "code": "PF-PLAN-0002",
+    "name": "SCHEMA_INCOMPATIBLE",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "reason", "upstream"],
+    "message": "Node '{node}' cannot accept the schema produced by '{upstream}': {reason}",
+    "hint": "Map or cast the columns with a field-mapper transform, or adjust the target table."
+  },
+  {
+    "code": "PF-PLAN-0003",
+    "name": "DELIVERY_UNSUPPORTED",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["guarantee", "node"],
+    "message": "Exactly-once delivery is required, but sink '{node}' only supports {guarantee}",
+    "hint": "Use a sink that supports two-phase commit or idempotent writes, or lower the delivery guarantee."
+  },
+  {
+    "code": "PF-PLAN-0004",
+    "name": "ROUTE_CONFLICT",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["routes", "table"],
+    "message": "Routes {routes} write to table '{table}' with schemas that cannot be merged",
+    "hint": "Make the column types compatible with type hints, or route the tables to different targets."
+  },
+  {
+    "code": "PF-PLAN-0005",
+    "name": "UPSERT_REQUIRES_PK",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node", "table"],
+    "message": "Sink '{node}' receives changes for table '{table}', which has no primary key",
+    "hint": "Declare the key columns with the sink's primary-key option, or write append-only data."
+  },
+  {
+    "code": "PF-PLAN-0006",
+    "name": "CHANGELOG_INCOMPATIBLE",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["accepted", "node", "produced", "upstream"],
+    "message": "Node '{node}' accepts {accepted} streams but receives a {produced} stream from '{upstream}'",
+    "hint": "Use a sink that accepts updates, or convert the stream before this node."
+  },
+  {
+    "code": "PF-PLAN-0007",
+    "name": "EXPRESSION_INVALID",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["column", "expression", "line", "reason"],
+    "message": "Invalid expression '{expression}' at line {line}, column {column}: {reason}",
+    "hint": "Check the syntax, the column names and the argument types of the functions."
+  },
+  {
+    "code": "PF-PLAN-0008",
+    "name": "ROLLBACK_UNSUPPORTED",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["mode", "node"],
+    "message": "Sink '{node}' does not support the rollback mode '{mode}'",
+    "hint": "Choose a rollback mode the sink supports, or disable rollback for this job."
+  },
+  {
+    "code": "PF-PLAN-0009",
+    "name": "INPUT_INVALID",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["input", "node", "reason"],
+    "message": "Node '{node}' cannot read from '{input}': {reason}",
+    "hint": "List the ids of source or transform nodes in inputs; sinks produce no data."
+  },
+  {
+    "code": "PF-PLAN-0010",
+    "name": "NODE_DISCONNECTED",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node"],
+    "message": "The output of node '{node}' does not reach any sink",
+    "hint": "Add '{node}' to the inputs of a downstream node, or remove it from the job."
+  },
+  {
+    "code": "PF-PLAN-0011",
+    "name": "BOUNDEDNESS_MISMATCH",
+    "category": "PLAN",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["node"],
+    "message": "The job runs in batch mode, but source '{node}' is unbounded",
+    "hint": "Remove env.mode to derive the mode from the sources, set it to streaming, or configure the source to stop."
+  },
+  {
+    "code": "PF-PLUG-0001",
+    "name": "PLUGIN_NOT_FOUND",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["plugin", "type"],
+    "message": "The {type} plugin '{plugin}' is not installed",
+    "hint": "Install the plugin into the plugins directory, or check the spelling of its name."
+  },
+  {
+    "code": "PF-PLUG-0002",
+    "name": "PLUGIN_API_INCOMPATIBLE",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["plugin", "provided", "required"],
+    "message": "Plugin '{plugin}' requires connector API {required}, but this engine provides {provided}",
+    "hint": "Install a plugin version built for this engine version."
+  },
+  {
+    "code": "PF-PLUG-0003",
+    "name": "DRIVER_MISSING",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["driver", "plugin"],
+    "message": "Plugin '{plugin}' needs the driver '{driver}', which is not installed",
+    "hint": "Upload the driver; drivers with restrictive licenses are not shipped with PipeForge."
+  },
+  {
+    "code": "PF-PLUG-0004",
+    "name": "PLUGIN_LOAD_FAILED",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["plugin", "reason"],
+    "message": "Plugin '{plugin}' cannot be loaded: {reason}",
+    "hint": "Check that the plugin package is complete and was built for this engine version."
+  },
+  {
+    "code": "PF-PLUG-0005",
+    "name": "PLUGIN_FORBIDDEN_CALL",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["call", "location", "plugin"],
+    "message": "Plugin '{plugin}' calls {call} in {location}, which changes the whole JVM",
+    "hint": "Plugins must not exit the JVM or change global settings; pass configuration through options instead."
+  },
+  {
+    "code": "PF-PLUG-0006",
+    "name": "PLUGIN_TIMEOUT",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["operation", "plugin", "timeoutMs"],
+    "message": "Plugin '{plugin}' did not finish {operation} within {timeoutMs} ms",
+    "hint": "Check whether the external system responds; raise the timeout only if the operation is legitimately slow."
+  },
+  {
+    "code": "PF-PLUG-0007",
+    "name": "PLUGIN_CALL_FAILED",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["operation", "plugin", "reason"],
+    "message": "Plugin '{plugin}' failed in {operation}: {reason}",
+    "hint": "See the cause in the error details; report it to the plugin vendor if it looks like a defect."
+  },
+  {
+    "code": "PF-PLUG-0008",
+    "name": "COMPONENT_AMBIGUOUS",
+    "category": "PLUG",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["identifier", "plugins", "type"],
+    "message": "The {type} '{identifier}' is provided by several plugins: {plugins}",
+    "hint": "Choose one with the plugin field of the node, for example plugin: {identifier}@1.0.0."
+  },
+  {
+    "code": "PF-SYS-0001",
+    "name": "INTERNAL",
+    "category": "SYS",
+    "kind": "FATAL",
+    "deprecated": false,
+    "params": ["detail"],
+    "message": "Internal error: {detail}",
+    "hint": "This is a bug. Please report it with the error details and the log of the run."
+  }
+]

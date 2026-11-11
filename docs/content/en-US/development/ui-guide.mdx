@@ -67,8 +67,11 @@ The documentation site runs the same rules, defined once in `@pipeforge/design-t
 | `Empty`, `Skeleton` | Empty, error and loading states |
 | `Tabs`, `Splitter` | Tab panels with arrow-key navigation; two panes with a draggable, keyboard-movable divider |
 | `Table` | Data tables with a caption and an empty text |
+| `Input` | A labelled text field with an optional icon and an error that is announced with it; the label can be visually hidden |
+| `SegmentedControl` | A small set of exclusive choices, such as filters, as a radio group moved with the arrow keys |
+| `OptionForm` | The options of a component from its option rule: type, requirement, default, range, choices; read-only for now |
 | `FileButton` | Opens the file picker and hands over the file's name and text |
-| `CodeEditor` | YAML editing with completion and problems; imported from `@/ui/CodeEditor` so that CodeMirror only loads with the pages that use it. Completion is a function of the text and the cursor that returns the suggestions, so pages never touch CodeMirror |
+| `CodeEditor` | YAML or SQL-style expression editing (`language`) with completion and problems; imported from `@/ui/CodeEditor` so that CodeMirror only loads with the pages that use it. Completion is a function of the text and the cursor that returns the suggestions, so pages never touch CodeMirror |
 | `DagCanvas` | A read-only job graph: layered layout from `src/canvas`, pan, zoom, fit, nodes as buttons |
 
 Conventions for every component:

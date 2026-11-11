@@ -1,0 +1,1567 @@
+[
+  {
+    "name": "COALESCE",
+    "category": "comparison",
+    "syntax": "COALESCE(value, ...)",
+    "deterministic": true,
+    "signatures": ["COALESCE(INT32, INT64) → INT64"],
+    "description": "返回第一个不为 NULL 的参数；后面的参数只在需要时才计算。",
+    "nulls": "只有所有参数都为 NULL 时才返回 NULL。",
+    "examples": [
+      {
+        "expression": "COALESCE(NULL, 'b', 'c')",
+        "result": "b"
+      },
+      {
+        "expression": "COALESCE(NULL, NULL)",
+        "result": "NULL"
+      }
+    ]
+  },
+  {
+    "name": "IFNULL",
+    "category": "comparison",
+    "syntax": "IFNULL(value, fallback)",
+    "deterministic": true,
+    "signatures": ["IFNULL(STRING, STRING) → STRING"],
+    "description": "第一个参数为 NULL 时返回第二个参数。",
+    "nulls": "为 NULL 时返回备用值。",
+    "examples": [
+      {
+        "expression": "IFNULL(NULL, 0)",
+        "result": "0"
+      },
+      {
+        "expression": "IFNULL('a', 'b')",
+        "result": "a"
+      }
+    ]
+  },
+  {
+    "name": "NULLIF",
+    "category": "comparison",
+    "syntax": "NULLIF(value, other)",
+    "deterministic": true,
+    "signatures": ["NULLIF(INT32, INT32) → INT32"],
+    "description": "两个参数相等时返回 NULL，否则返回第一个参数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "NULLIF(5, 5)",
+        "result": "NULL"
+      },
+      {
+        "expression": "NULLIF(5, 3)",
+        "result": "5"
+      }
+    ]
+  },
+  {
+    "name": "IF",
+    "category": "comparison",
+    "syntax": "IF(condition, then, else)",
+    "deterministic": true,
+    "signatures": ["IF(BOOLEAN, INT32, DECIMAL(10, 2)) → DECIMAL(12, 2)"],
+    "description": "条件为 TRUE 时返回第二个参数，否则返回第三个参数；只计算被选中的分支。",
+    "nulls": "条件为 NULL 时视为不成立。",
+    "examples": [
+      {
+        "expression": "IF(1 < 2, 'yes', 'no')",
+        "result": "yes"
+      },
+      {
+        "expression": "IF(NULL, 'yes', 'no')",
+        "result": "no"
+      }
+    ]
+  },
+  {
+    "name": "GREATEST",
+    "category": "comparison",
+    "syntax": "GREATEST(value, ...)",
+    "deterministic": true,
+    "signatures": ["GREATEST(INT32, INT64) → INT64"],
+    "description": "返回最大的参数；各参数先转换为它们的公共类型。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "GREATEST(3, 7.5, 1)",
+        "result": "7.5"
+      },
+      {
+        "expression": "GREATEST('b', 'a')",
+        "result": "b"
+      },
+      {
+        "expression": "GREATEST(1, NULL)",
+        "result": "NULL"
+      }
+    ]
+  },
+  {
+    "name": "LEAST",
+    "category": "comparison",
+    "syntax": "LEAST(value, ...)",
+    "deterministic": true,
+    "signatures": ["LEAST(INT32, INT64) → INT64"],
+    "description": "返回最小的参数；各参数先转换为它们的公共类型。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LEAST(3, 7.5, 1)",
+        "result": "1.0"
+      },
+      {
+        "expression": "LEAST(DATE '2026-11-07', DATE '2026-01-01')",
+        "result": "2026-01-01"
+      }
+    ]
+  },
+  {
+    "name": "IS_NUMERIC",
+    "category": "comparison",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["IS_NUMERIC(STRING) → BOOLEAN"],
+    "description": "判断文本是否是数字。",
+    "nulls": "NULL 返回 FALSE。",
+    "examples": [
+      {
+        "expression": "IS_NUMERIC(' 12.5 ')",
+        "result": "TRUE"
+      },
+      {
+        "expression": "IS_NUMERIC('1e3')",
+        "result": "TRUE"
+      },
+      {
+        "expression": "IS_NUMERIC('x')",
+        "result": "FALSE"
+      }
+    ]
+  },
+  {
+    "name": "IS_DATE",
+    "category": "comparison",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["IS_DATE(STRING) → BOOLEAN"],
+    "description": "判断文本是否是 ISO 日期（yyyy-MM-dd）。",
+    "nulls": "NULL 返回 FALSE。",
+    "examples": [
+      {
+        "expression": "IS_DATE('2026-11-07')",
+        "result": "TRUE"
+      },
+      {
+        "expression": "IS_DATE('2026-02-30')",
+        "result": "FALSE"
+      }
+    ]
+  },
+  {
+    "name": "CAST",
+    "category": "conversion",
+    "syntax": "CAST(value AS type)",
+    "deterministic": true,
+    "signatures": [],
+    "description": "把值转换为另一种类型；无法转换时报错。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CAST('42' AS INT)",
+        "result": "42"
+      },
+      {
+        "expression": "CAST(3.7 AS INT)",
+        "result": "4"
+      },
+      {
+        "expression": "CAST('abc' AS INT)",
+        "result": "ERROR: cannot cast 'abc' to INT32"
+      }
+    ]
+  },
+  {
+    "name": "TRY_CAST",
+    "category": "conversion",
+    "syntax": "TRY_CAST(value AS type)",
+    "deterministic": true,
+    "signatures": [],
+    "description": "与 CAST 相同，但无法转换时返回 NULL。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TRY_CAST('abc' AS INT)",
+        "result": "NULL"
+      },
+      {
+        "expression": "TRY_CAST('2026-11-07' AS DATE)",
+        "result": "2026-11-07"
+      }
+    ]
+  },
+  {
+    "name": "TYPEOF",
+    "category": "conversion",
+    "syntax": "TYPEOF(value)",
+    "deterministic": true,
+    "signatures": ["TYPEOF(DECIMAL(10, 2)) → STRING"],
+    "description": "返回参数的逻辑类型，在计划阶段确定。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TYPEOF(1.5)",
+        "result": "DECIMAL(2, 1)"
+      },
+      {
+        "expression": "TYPEOF('ab')",
+        "result": "STRING(2)"
+      }
+    ]
+  },
+  {
+    "name": "ABS",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": [
+      "ABS(INT32) → INT32",
+      "ABS(INT64) → INT64",
+      "ABS(DECIMAL(10, 2)) → DECIMAL(10, 2)",
+      "ABS(FLOAT64) → FLOAT64"
+    ],
+    "description": "绝对值。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "ABS(-5)",
+        "result": "5"
+      },
+      {
+        "expression": "ABS(-2.50)",
+        "result": "2.50"
+      }
+    ]
+  },
+  {
+    "name": "SIGN",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["SIGN(INT64) → INT32", "SIGN(DECIMAL(10, 2)) → INT32", "SIGN(FLOAT64) → INT32"],
+    "description": "按参数的符号返回 -1、0 或 1。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "SIGN(-3)",
+        "result": "-1"
+      },
+      {
+        "expression": "SIGN(0.0)",
+        "result": "0"
+      }
+    ]
+  },
+  {
+    "name": "CEIL",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CEIL(INT64) → INT64", "CEIL(DECIMAL(10, 2)) → DECIMAL(9, 0)", "CEIL(FLOAT64) → FLOAT64"],
+    "description": "向上取整。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CEIL(1.2)",
+        "result": "2"
+      },
+      {
+        "expression": "CEIL(-1.2)",
+        "result": "-1"
+      }
+    ]
+  },
+  {
+    "name": "FLOOR",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["FLOOR(INT64) → INT64", "FLOOR(DECIMAL(10, 2)) → DECIMAL(9, 0)", "FLOOR(FLOAT64) → FLOAT64"],
+    "description": "向下取整。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "FLOOR(1.8)",
+        "result": "1"
+      },
+      {
+        "expression": "FLOOR(-1.2)",
+        "result": "-2"
+      }
+    ]
+  },
+  {
+    "name": "ROUND",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": [
+      "ROUND(INT64, INT32) → INT64",
+      "ROUND(DECIMAL(10, 3), INT32) → DECIMAL(10, 3)",
+      "ROUND(FLOAT64) → FLOAT64"
+    ],
+    "description": "按四舍五入保留指定位数的小数（默认 0 位）；位数为负时取整到十位、百位等。DECIMAL 结果保持参数的小数位数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "ROUND(2.345, 2)",
+        "result": "2.350"
+      },
+      {
+        "expression": "ROUND(1234, -2)",
+        "result": "1200"
+      },
+      {
+        "expression": "ROUND(2.5)",
+        "result": "3.0"
+      }
+    ]
+  },
+  {
+    "name": "TRUNCATE",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["TRUNCATE(DECIMAL(10, 3), INT32) → DECIMAL(10, 3)", "TRUNCATE(FLOAT64, INT32) → FLOAT64"],
+    "description": "截断到指定位数的小数，不做四舍五入。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TRUNCATE(2.789, 1)",
+        "result": "2.700"
+      },
+      {
+        "expression": "TRUNCATE(-2.789, 2)",
+        "result": "-2.780"
+      }
+    ]
+  },
+  {
+    "name": "MOD",
+    "category": "numeric",
+    "syntax": "MOD(a, b)",
+    "deterministic": true,
+    "signatures": ["MOD(INT32, INT32) → INT32", "MOD(DECIMAL(10, 2), INT32) → DECIMAL(10, 2)"],
+    "description": "除法的余数，符号与被除数相同，等同于 a % b。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "MOD(7, 3)",
+        "result": "1"
+      },
+      {
+        "expression": "MOD(-7, 3)",
+        "result": "-1"
+      },
+      {
+        "expression": "MOD(1, 0)",
+        "result": "ERROR: division by zero"
+      }
+    ]
+  },
+  {
+    "name": "DIV",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["DIV(INT64, INT64) → INT64", "DIV(DECIMAL(10, 2), DECIMAL(10, 2)) → INT64"],
+    "description": "整数除法，向零截断。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DIV(7, 2)",
+        "result": "3"
+      },
+      {
+        "expression": "DIV(-7, 2)",
+        "result": "-3"
+      },
+      {
+        "expression": "DIV(1, 0)",
+        "result": "ERROR: division by zero"
+      }
+    ]
+  },
+  {
+    "name": "POWER",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["POWER(FLOAT64, FLOAT64) → FLOAT64"],
+    "description": "第一个参数的第二个参数次幂。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "POWER(2, 10)",
+        "result": "1024.0"
+      },
+      {
+        "expression": "POWER(4, 0.5)",
+        "result": "2.0"
+      }
+    ]
+  },
+  {
+    "name": "SQRT",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["SQRT(FLOAT64) → FLOAT64"],
+    "description": "平方根；参数为负数时报错。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "SQRT(16)",
+        "result": "4.0"
+      },
+      {
+        "expression": "SQRT(-1)",
+        "result": "ERROR: SQRT of a negative number: -1.0"
+      }
+    ]
+  },
+  {
+    "name": "EXP",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["EXP(FLOAT64) → FLOAT64"],
+    "description": "e 的参数次幂。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "EXP(0)",
+        "result": "1.0"
+      }
+    ]
+  },
+  {
+    "name": "LN",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LN(FLOAT64) → FLOAT64"],
+    "description": "自然对数，参数必须为正数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LN(1)",
+        "result": "0.0"
+      },
+      {
+        "expression": "LN(0)",
+        "result": "ERROR: LN needs a positive number, got 0.0"
+      }
+    ]
+  },
+  {
+    "name": "LOG",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LOG(FLOAT64) → FLOAT64", "LOG(FLOAT64, FLOAT64) → FLOAT64"],
+    "description": "对数：LOG(x) 为自然对数，LOG(base, x) 为以 base 为底的对数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LOG(2, 8)",
+        "result": "3.0"
+      },
+      {
+        "expression": "LOG(1, 8)",
+        "result": "ERROR: LOG with base 1 is undefined"
+      }
+    ]
+  },
+  {
+    "name": "LOG10",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LOG10(FLOAT64) → FLOAT64"],
+    "description": "以 10 为底的对数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LOG10(1000)",
+        "result": "3.0"
+      }
+    ]
+  },
+  {
+    "name": "RAND",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": false,
+    "signatures": ["RAND() → FLOAT64"],
+    "description": "0（含）到 1（不含）之间的随机数，每行重新生成。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "RAND() >= 0 AND RAND() < 1",
+        "result": "TRUE"
+      }
+    ]
+  },
+  {
+    "name": "BIN",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["BIN(INT64) → STRING"],
+    "description": "整数的二进制表示。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "BIN(5)",
+        "result": "101"
+      },
+      {
+        "expression": "BIN(0)",
+        "result": "0"
+      }
+    ]
+  },
+  {
+    "name": "HEX",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["HEX(INT64) → STRING", "HEX(STRING) → STRING", "HEX(BYTES) → STRING"],
+    "description": "整数，或者字符串（UTF-8）、二进制值的字节的十六进制表示。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "HEX(255)",
+        "result": "FF"
+      },
+      {
+        "expression": "HEX('hi')",
+        "result": "6869"
+      }
+    ]
+  },
+  {
+    "name": "CONV",
+    "category": "numeric",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CONV(STRING, INT32, INT32) → STRING"],
+    "description": "把一个进制的数字转换为另一个进制（2 到 36 进制）。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CONV('ff', 16, 10)",
+        "result": "255"
+      },
+      {
+        "expression": "CONV('255', 10, 2)",
+        "result": "11111111"
+      },
+      {
+        "expression": "CONV('xyz', 10, 2)",
+        "result": "ERROR: 'xyz' is not a number in base 10"
+      }
+    ]
+  },
+  {
+    "name": "LENGTH",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LENGTH(STRING) → INT32", "LENGTH(BYTES) → INT32"],
+    "description": "字符串的字符数，或者二进制值的字节数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LENGTH('héllo')",
+        "result": "5"
+      },
+      {
+        "expression": "LENGTH(X'0102')",
+        "result": "2"
+      }
+    ]
+  },
+  {
+    "name": "CHAR_LENGTH",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CHAR_LENGTH(STRING) → INT32"],
+    "description": "字符数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CHAR_LENGTH('中文')",
+        "result": "2"
+      }
+    ]
+  },
+  {
+    "name": "OCTET_LENGTH",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["OCTET_LENGTH(STRING) → INT32"],
+    "description": "UTF-8 编码的字节数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "OCTET_LENGTH('中文')",
+        "result": "6"
+      }
+    ]
+  },
+  {
+    "name": "LOWER",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LOWER(STRING) → STRING"],
+    "description": "转为小写。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LOWER('ABC')",
+        "result": "abc"
+      }
+    ]
+  },
+  {
+    "name": "UPPER",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["UPPER(STRING) → STRING"],
+    "description": "转为大写。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "UPPER('abc')",
+        "result": "ABC"
+      }
+    ]
+  },
+  {
+    "name": "INITCAP",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["INITCAP(STRING) → STRING"],
+    "description": "每个单词首字母大写，其余字母小写。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "INITCAP('hello wORLD')",
+        "result": "Hello World"
+      }
+    ]
+  },
+  {
+    "name": "TRIM",
+    "category": "string",
+    "syntax": "TRIM([BOTH | LEADING | TRAILING] [characters] FROM value)",
+    "deterministic": true,
+    "signatures": ["TRIM(STRING) → STRING"],
+    "description": "去掉两端的字符：默认去掉空格，也可以指定字符。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TRIM('  a  ')",
+        "result": "a"
+      },
+      {
+        "expression": "TRIM(BOTH 'x' FROM 'xxaxx')",
+        "result": "a"
+      },
+      {
+        "expression": "TRIM(LEADING '0' FROM '007')",
+        "result": "7"
+      }
+    ]
+  },
+  {
+    "name": "LTRIM",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LTRIM(STRING) → STRING", "LTRIM(STRING, STRING) → STRING"],
+    "description": "去掉开头的字符：默认去掉空白，也可以指定字符。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LTRIM('xxa', 'x')",
+        "result": "a"
+      }
+    ]
+  },
+  {
+    "name": "RTRIM",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["RTRIM(STRING) → STRING", "RTRIM(STRING, STRING) → STRING"],
+    "description": "去掉末尾的字符：默认去掉空白，也可以指定字符。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "RTRIM('axx', 'x')",
+        "result": "a"
+      }
+    ]
+  },
+  {
+    "name": "LPAD",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LPAD(STRING, INT32) → STRING", "LPAD(STRING, INT32, STRING) → STRING"],
+    "description": "在左侧填充到指定长度（默认填充空格）；更长的值会被截断。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LPAD('7', 3, '0')",
+        "result": "007"
+      },
+      {
+        "expression": "LPAD('hello', 3)",
+        "result": "hel"
+      }
+    ]
+  },
+  {
+    "name": "RPAD",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["RPAD(STRING, INT32) → STRING", "RPAD(STRING, INT32, STRING) → STRING"],
+    "description": "在右侧填充到指定长度（默认填充空格）；更长的值会被截断。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "RPAD('ab', 5, '-')",
+        "result": "ab---"
+      }
+    ]
+  },
+  {
+    "name": "SUBSTRING",
+    "category": "string",
+    "syntax": "SUBSTRING(value, start[, length]) or SUBSTRING(value FROM start [FOR length])",
+    "deterministic": true,
+    "signatures": ["SUBSTRING(STRING, INT64) → STRING", "SUBSTRING(STRING, INT64, INT64) → STRING"],
+    "description": "从某个位置（从 1 开始）开始的子串，可以指定长度。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "SUBSTRING('hello', 2, 3)",
+        "result": "ell"
+      },
+      {
+        "expression": "SUBSTRING('hello' FROM 3)",
+        "result": "llo"
+      },
+      {
+        "expression": "SUBSTRING('hello', 0)",
+        "result": "ERROR: SUBSTRING start must be at least 1, got 0"
+      }
+    ]
+  },
+  {
+    "name": "LEFT",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LEFT(STRING, INT32) → STRING"],
+    "description": "字符串开头的若干个字符。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LEFT('hello', 2)",
+        "result": "he"
+      }
+    ]
+  },
+  {
+    "name": "RIGHT",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["RIGHT(STRING, INT32) → STRING"],
+    "description": "字符串末尾的若干个字符。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "RIGHT('hello', 2)",
+        "result": "lo"
+      }
+    ]
+  },
+  {
+    "name": "POSITION",
+    "category": "string",
+    "syntax": "POSITION(part IN value)",
+    "deterministic": true,
+    "signatures": [],
+    "description": "子串第一次出现的位置（从 1 开始），不存在时为 0。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "POSITION('l' IN 'hello')",
+        "result": "3"
+      },
+      {
+        "expression": "POSITION('z' IN 'hello')",
+        "result": "0"
+      }
+    ]
+  },
+  {
+    "name": "INSTR",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["INSTR(STRING, STRING) → INT32"],
+    "description": "第二个参数在第一个参数中第一次出现的位置（从 1 开始），不存在时为 0。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "INSTR('hello', 'lo')",
+        "result": "4"
+      }
+    ]
+  },
+  {
+    "name": "REPLACE",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["REPLACE(STRING, STRING, STRING) → STRING"],
+    "description": "替换所有出现的子串。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "REPLACE('a-b-c', '-', '+')",
+        "result": "a+b+c"
+      }
+    ]
+  },
+  {
+    "name": "TRANSLATE",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["TRANSLATE(STRING, STRING, STRING) → STRING"],
+    "description": "逐个字符替换；没有对应字符的会被删除。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TRANSLATE('abc', 'ab', 'x')",
+        "result": "xc"
+      }
+    ]
+  },
+  {
+    "name": "REVERSE",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["REVERSE(STRING) → STRING"],
+    "description": "反转字符顺序。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "REVERSE('abc')",
+        "result": "cba"
+      }
+    ]
+  },
+  {
+    "name": "REPEAT",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["REPEAT(STRING, INT32) → STRING"],
+    "description": "重复字符串。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "REPEAT('ab', 3)",
+        "result": "ababab"
+      }
+    ]
+  },
+  {
+    "name": "CONCAT",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CONCAT(STRING, STRING, STRING) → STRING"],
+    "description": "拼接字符串；任一参数为 NULL 时结果为 NULL。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CONCAT('a', 'b', 'c')",
+        "result": "abc"
+      },
+      {
+        "expression": "CONCAT('a', NULL)",
+        "result": "NULL"
+      }
+    ]
+  },
+  {
+    "name": "CONCAT_WS",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CONCAT_WS(STRING, STRING, STRING) → STRING"],
+    "description": "用分隔符连接字符串。",
+    "nulls": "跳过 NULL 值；分隔符为 NULL 时结果为 NULL。",
+    "examples": [
+      {
+        "expression": "CONCAT_WS('-', 'a', NULL, 'c')",
+        "result": "a-c"
+      }
+    ]
+  },
+  {
+    "name": "SPLIT_PART",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["SPLIT_PART(STRING, STRING, INT32) → STRING"],
+    "description": "按分隔符拆分后的第 n 部分（从 1 开始），不存在时为空字符串。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "SPLIT_PART('a,b,c', ',', 2)",
+        "result": "b"
+      }
+    ]
+  },
+  {
+    "name": "SPLIT",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["SPLIT(STRING, STRING) → ARRAY<STRING>"],
+    "description": "按分隔符（按字面匹配）把字符串拆分成数组。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "SPLIT('a,b,c', ',')",
+        "result": "[a, b, c]"
+      }
+    ]
+  },
+  {
+    "name": "REGEXP_LIKE",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["REGEXP_LIKE(STRING, STRING) → BOOLEAN"],
+    "description": "RE2 正则表达式是否匹配字符串的某一部分。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "REGEXP_LIKE('abc123', '[0-9]+')",
+        "result": "TRUE"
+      }
+    ]
+  },
+  {
+    "name": "REGEXP_EXTRACT",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["REGEXP_EXTRACT(STRING, STRING) → STRING", "REGEXP_EXTRACT(STRING, STRING, INT32) → STRING"],
+    "description": "第一个匹配中的某个分组（默认为整个匹配）；没有匹配时为 NULL。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "REGEXP_EXTRACT('order-42', '([a-z]+)-([0-9]+)', 2)",
+        "result": "42"
+      },
+      {
+        "expression": "REGEXP_EXTRACT('x', '[0-9]')",
+        "result": "NULL"
+      }
+    ]
+  },
+  {
+    "name": "REGEXP_REPLACE",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["REGEXP_REPLACE(STRING, STRING, STRING) → STRING"],
+    "description": "替换 RE2 正则表达式的所有匹配；$1 表示第 1 个分组。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "REGEXP_REPLACE('2026-11-07', '([0-9]+)-([0-9]+)-([0-9]+)', '$3/$2/$1')",
+        "result": "07/11/2026"
+      }
+    ]
+  },
+  {
+    "name": "FORMAT",
+    "category": "string",
+    "syntax": "FORMAT(pattern, value, ...)",
+    "deterministic": true,
+    "signatures": ["FORMAT(STRING, INT32) → STRING"],
+    "description": "printf 风格的格式化。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "FORMAT('%s has %d items', 'cart', 3)",
+        "result": "cart has 3 items"
+      },
+      {
+        "expression": "FORMAT('%.2f', 3.14159)",
+        "result": "3.14"
+      }
+    ]
+  },
+  {
+    "name": "ASCII",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["ASCII(STRING) → INT32"],
+    "description": "第一个字符的码点；空字符串为 0。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "ASCII('A')",
+        "result": "65"
+      }
+    ]
+  },
+  {
+    "name": "CHR",
+    "category": "string",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CHR(INT32) → STRING"],
+    "description": "给定码点对应的字符。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CHR(65)",
+        "result": "A"
+      }
+    ]
+  },
+  {
+    "name": "CURRENT_DATE",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": false,
+    "signatures": ["CURRENT_DATE → DATE"],
+    "description": "作业时区的当前日期。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CURRENT_DATE",
+        "result": "2026-11-07"
+      }
+    ]
+  },
+  {
+    "name": "CURRENT_TIMESTAMP",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": false,
+    "signatures": ["CURRENT_TIMESTAMP → TIMESTAMP_LTZ(3)"],
+    "description": "当前处理时间，每行求值一次。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CURRENT_TIMESTAMP",
+        "result": "2026-11-07 12:30:00.25+08:00"
+      }
+    ]
+  },
+  {
+    "name": "NOW",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": false,
+    "signatures": ["NOW() → TIMESTAMP_LTZ(3)"],
+    "description": "等同于 CURRENT_TIMESTAMP。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "NOW()",
+        "result": "2026-11-07 12:30:00.25+08:00"
+      }
+    ]
+  },
+  {
+    "name": "RUN_START_TIME",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["RUN_START_TIME() → TIMESTAMP_LTZ(3)"],
+    "description": "本次运行的开始时间；对每一行都相同，重试和恢复后也不变。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "RUN_START_TIME()",
+        "result": "2026-11-07 08:00:00+08:00"
+      }
+    ]
+  },
+  {
+    "name": "DATE_FORMAT",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": [
+      "DATE_FORMAT(TIMESTAMP(3), STRING) → STRING",
+      "DATE_FORMAT(DATE, STRING) → STRING",
+      "DATE_FORMAT(TIMESTAMP_LTZ(3), STRING) → STRING"
+    ],
+    "description": "按 yyyy-MM-dd HH:mm:ss 这类模式格式化日期时间；时间点按作业时区格式化。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DATE_FORMAT(TIMESTAMP '2026-11-07 12:30:00', 'yyyy/MM/dd HH:mm')",
+        "result": "2026/11/07 12:30"
+      }
+    ]
+  },
+  {
+    "name": "TO_DATE",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["TO_DATE(STRING) → DATE", "TO_DATE(STRING, STRING) → DATE"],
+    "description": "解析日期，默认 ISO 格式，也可以指定模式。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TO_DATE('20261107', 'yyyyMMdd')",
+        "result": "2026-11-07"
+      },
+      {
+        "expression": "TO_DATE('11/07')",
+        "result": "ERROR: '11/07' is not a date (yyyy-MM-dd)"
+      }
+    ]
+  },
+  {
+    "name": "TO_TIMESTAMP",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["TO_TIMESTAMP(STRING) → TIMESTAMP(3)", "TO_TIMESTAMP(STRING, STRING) → TIMESTAMP(3)"],
+    "description": "解析时间戳，默认 ISO 格式，也可以指定模式。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TO_TIMESTAMP('2026-11-07 12:30:00')",
+        "result": "2026-11-07 12:30:00"
+      },
+      {
+        "expression": "TO_TIMESTAMP('07/11/2026 08:15', 'dd/MM/yyyy HH:mm')",
+        "result": "2026-11-07 08:15:00"
+      }
+    ]
+  },
+  {
+    "name": "TO_TIMESTAMP_LTZ",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": [
+      "TO_TIMESTAMP_LTZ(STRING) → TIMESTAMP_LTZ(3)",
+      "TO_TIMESTAMP_LTZ(STRING, STRING) → TIMESTAMP_LTZ(3)"
+    ],
+    "description": "解析时间点；不带时区偏移的文本按作业时区的本地时间解析。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TO_TIMESTAMP_LTZ('2026-11-07T00:00:00Z')",
+        "result": "2026-11-07 08:00:00+08:00"
+      },
+      {
+        "expression": "TO_TIMESTAMP_LTZ('2026-11-07 12:30:00')",
+        "result": "2026-11-07 12:30:00+08:00"
+      }
+    ]
+  },
+  {
+    "name": "FROM_UNIXTIME",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["FROM_UNIXTIME(INT64) → TIMESTAMP_LTZ(0)"],
+    "description": "1970-01-01T00:00:00Z 之后若干秒的时间点。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "FROM_UNIXTIME(0)",
+        "result": "1970-01-01 08:00:00+08:00"
+      }
+    ]
+  },
+  {
+    "name": "UNIX_TIMESTAMP",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": false,
+    "signatures": [
+      "UNIX_TIMESTAMP() → INT64",
+      "UNIX_TIMESTAMP(TIMESTAMP_LTZ(3)) → INT64",
+      "UNIX_TIMESTAMP(TIMESTAMP(3)) → INT64"
+    ],
+    "description": "当前时间或指定时间距 1970-01-01T00:00:00Z 的秒数；本地时间按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "UNIX_TIMESTAMP(TIMESTAMP_LTZ '1970-01-01 00:01:00Z')",
+        "result": "60"
+      },
+      {
+        "expression": "UNIX_TIMESTAMP()",
+        "result": "1794025800"
+      }
+    ]
+  },
+  {
+    "name": "EXTRACT",
+    "category": "datetime",
+    "syntax": "EXTRACT(unit FROM value)",
+    "deterministic": true,
+    "signatures": [],
+    "description": "日期时间的某个字段：YEAR、QUARTER、MONTH、WEEK、DAY、DOW（1 表示星期日）、DOY、HOUR、MINUTE 或 SECOND。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "EXTRACT(YEAR FROM DATE '2026-11-07')",
+        "result": "2026"
+      },
+      {
+        "expression": "EXTRACT(DOW FROM DATE '2026-11-07')",
+        "result": "7"
+      }
+    ]
+  },
+  {
+    "name": "YEAR",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["YEAR(DATE) → INT32", "YEAR(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "年份。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "YEAR(DATE '2026-11-07')",
+        "result": "2026"
+      }
+    ]
+  },
+  {
+    "name": "QUARTER",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["QUARTER(DATE) → INT32", "QUARTER(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "季度（1 到 4）。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "QUARTER(DATE '2026-11-07')",
+        "result": "4"
+      }
+    ]
+  },
+  {
+    "name": "MONTH",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["MONTH(DATE) → INT32", "MONTH(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "月份（1 到 12）。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "MONTH(DATE '2026-11-07')",
+        "result": "11"
+      }
+    ]
+  },
+  {
+    "name": "WEEK",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["WEEK(DATE) → INT32", "WEEK(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "ISO 周数（每周从星期一开始）。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "WEEK(DATE '2026-11-07')",
+        "result": "45"
+      }
+    ]
+  },
+  {
+    "name": "DAYOFMONTH",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["DAYOFMONTH(DATE) → INT32", "DAYOFMONTH(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "一个月中的第几天。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DAYOFMONTH(DATE '2026-11-07')",
+        "result": "7"
+      }
+    ]
+  },
+  {
+    "name": "DAYOFWEEK",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["DAYOFWEEK(DATE) → INT32", "DAYOFWEEK(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "星期几：1 表示星期日，2 表示星期一，……，7 表示星期六。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DAYOFWEEK(DATE '2026-11-07')",
+        "result": "7"
+      }
+    ]
+  },
+  {
+    "name": "DAYOFYEAR",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["DAYOFYEAR(DATE) → INT32", "DAYOFYEAR(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "一年中的第几天。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DAYOFYEAR(DATE '2026-11-07')",
+        "result": "311"
+      }
+    ]
+  },
+  {
+    "name": "DAY",
+    "category": "datetime",
+    "syntax": "DAY(value)",
+    "deterministic": true,
+    "signatures": ["DAY(DATE) → INT32"],
+    "description": "一个月中的第几天，等同于 DAYOFMONTH。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DAY(DATE '2026-11-07')",
+        "result": "7"
+      }
+    ]
+  },
+  {
+    "name": "HOUR",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["HOUR(TIME(0)) → INT32", "HOUR(TIMESTAMP(3)) → INT32", "HOUR(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "小时（0 到 23）。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "HOUR(TIMESTAMP '2026-11-07 12:30:45')",
+        "result": "12"
+      },
+      {
+        "expression": "HOUR(TIMESTAMP_LTZ '2026-11-07 00:00:00Z')",
+        "result": "8"
+      }
+    ]
+  },
+  {
+    "name": "MINUTE",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["MINUTE(TIME(0)) → INT32", "MINUTE(TIMESTAMP(3)) → INT32", "MINUTE(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "分钟（0 到 59）。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "MINUTE(TIMESTAMP '2026-11-07 12:30:45')",
+        "result": "30"
+      }
+    ]
+  },
+  {
+    "name": "SECOND",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["SECOND(TIME(0)) → INT32", "SECOND(TIMESTAMP(3)) → INT32", "SECOND(TIMESTAMP_LTZ(3)) → INT32"],
+    "description": "秒（0 到 59）。时间点按作业时区计算。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "SECOND(TIMESTAMP '2026-11-07 12:30:45')",
+        "result": "45"
+      }
+    ]
+  },
+  {
+    "name": "DATE_ADD",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": [
+      "DATE_ADD(DATE, INT32) → DATE",
+      "DATE_ADD(DATE, INT64, STRING) → DATE",
+      "DATE_ADD(TIMESTAMP(3), INT32, STRING) → TIMESTAMP(3)",
+      "DATE_ADD(TIMESTAMP_LTZ(3), INT32, STRING) → TIMESTAMP_LTZ(3)"
+    ],
+    "description": "加上若干天，或者若干个单位（SECOND、MINUTE、HOUR、DAY、WEEK、MONTH、QUARTER、YEAR）。月末会自动调整。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DATE_ADD(DATE '2026-11-07', 30)",
+        "result": "2026-12-07"
+      },
+      {
+        "expression": "DATE_ADD(TIMESTAMP '2026-11-07 12:00:00', 90, 'minute')",
+        "result": "2026-11-07 13:30:00"
+      },
+      {
+        "expression": "DATE_ADD(DATE '2026-01-31', 1, 'month')",
+        "result": "2026-02-28"
+      }
+    ]
+  },
+  {
+    "name": "DATE_SUB",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["DATE_SUB(DATE, INT32) → DATE", "DATE_SUB(TIMESTAMP(3), INT32, STRING) → TIMESTAMP(3)"],
+    "description": "减去若干天，或者若干个单位。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DATE_SUB(DATE '2026-11-07', 7)",
+        "result": "2026-10-31"
+      },
+      {
+        "expression": "DATE_SUB(TIMESTAMP '2026-11-07 00:00:00', 1, 'hour')",
+        "result": "2026-11-06 23:00:00"
+      }
+    ]
+  },
+  {
+    "name": "DATEDIFF",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["DATEDIFF(DATE, DATE) → INT64", "DATEDIFF(TIMESTAMP(3), TIMESTAMP(3)) → INT64"],
+    "description": "从第二个日期到第一个日期的天数。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DATEDIFF(DATE '2026-12-25', DATE '2026-11-07')",
+        "result": "48"
+      }
+    ]
+  },
+  {
+    "name": "TIMESTAMPDIFF",
+    "category": "datetime",
+    "syntax": "TIMESTAMPDIFF(unit, start, end)",
+    "deterministic": true,
+    "signatures": [],
+    "description": "从第一个时间到第二个时间经过的完整单位数（SECOND、MINUTE、HOUR、DAY、WEEK、MONTH、QUARTER、YEAR）。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "TIMESTAMPDIFF(MONTH, DATE '2026-01-31', DATE '2026-03-01')",
+        "result": "1"
+      },
+      {
+        "expression": "TIMESTAMPDIFF(HOUR, TIMESTAMP '2026-11-07 00:00:00', TIMESTAMP '2026-11-07 12:30:00')",
+        "result": "12"
+      }
+    ]
+  },
+  {
+    "name": "DATE_TRUNC",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": [
+      "DATE_TRUNC(STRING, DATE) → DATE",
+      "DATE_TRUNC(STRING, TIMESTAMP(3)) → TIMESTAMP(3)",
+      "DATE_TRUNC(STRING, TIMESTAMP_LTZ(3)) → TIMESTAMP_LTZ(3)"
+    ],
+    "description": "截断到年、季度、月、周（星期一）、天、小时、分钟或秒的开始。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "DATE_TRUNC('month', TIMESTAMP '2026-11-07 12:30:00')",
+        "result": "2026-11-01 00:00:00"
+      },
+      {
+        "expression": "DATE_TRUNC('week', DATE '2026-11-07')",
+        "result": "2026-11-02"
+      }
+    ]
+  },
+  {
+    "name": "LAST_DAY",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["LAST_DAY(DATE) → DATE"],
+    "description": "所在月份的最后一天。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "LAST_DAY(DATE '2026-02-10')",
+        "result": "2026-02-28"
+      }
+    ]
+  },
+  {
+    "name": "CONVERT_TZ",
+    "category": "datetime",
+    "syntax": null,
+    "deterministic": true,
+    "signatures": ["CONVERT_TZ(TIMESTAMP(3), STRING, STRING) → TIMESTAMP(3)"],
+    "description": "把本地时间从一个时区转换到另一个时区。",
+    "nulls": null,
+    "examples": [
+      {
+        "expression": "CONVERT_TZ(TIMESTAMP '2026-11-07 12:00:00', 'Asia/Shanghai', 'UTC')",
+        "result": "2026-11-07 04:00:00"
+      }
+    ]
+  }
+]

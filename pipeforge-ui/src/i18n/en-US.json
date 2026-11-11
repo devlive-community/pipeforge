@@ -6,7 +6,10 @@
   },
   "nav": {
     "overview": "Overview",
-    "jobEditor": "Job editor"
+    "jobEditor": "Job editor",
+    "plugins": "Plugins",
+    "functions": "Functions",
+    "errors": "Error codes"
   },
   "preferences": {
     "theme": "Theme",
@@ -35,7 +38,8 @@
     "reason": "Reason",
     "errorTitle": "The server cannot be reached",
     "errorDescription": "Check that the PipeForge server is running and that this page is served by it or by the development server.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "open": "Open {page}"
   },
   "notFound": {
     "title": "Page not found",
@@ -117,5 +121,98 @@
     "nodeLabel": "{id}, {kind} {type}",
     "nodeError": "{id}, {kind} {type}, has a problem",
     "hint": "Hint: {hint}"
+  },
+  "plugins": {
+    "title": "Plugins",
+    "description": "The plugins installed on the server, their components and the options of each component.",
+    "components": "Components",
+    "choose": "Choose a component to see its options.",
+    "options": "Options of {component}",
+    "noOptions": "This component has no options.",
+    "nativeNamespaces": "Native configuration: {namespaces}",
+    "exclusive": "Set exactly one of: {options}",
+    "condition": "When {option} is {value}, also set: {required}",
+    "datasource": "Data source {type}, verified with {versions}",
+    "drivers": "Needs drivers: {drivers}",
+    "vendor": "Vendor",
+    "license": "License",
+    "none": "No plugins are installed.",
+    "noneHint": "Put plugin packages into the server's plugin directory (pipeforge.plugin.paths) and restart it.",
+    "unavailableTitle": "Packages that could not be loaded",
+    "kinds": {
+      "source": "Source",
+      "transform": "Transform",
+      "sink": "Sink"
+    },
+    "requirement": {
+      "required": "required",
+      "one-of": "one of",
+      "conditional": "conditional",
+      "optional": "optional"
+    },
+    "default": "Default",
+    "range": "Range",
+    "values": "Values",
+    "sensitive": "secret",
+    "deprecated": "Old names",
+    "since": "Since"
+  },
+  "functions": {
+    "title": "Functions",
+    "description": "The built-in functions of the expression language, and a playground to try expressions.",
+    "search": "Search functions",
+    "category": "Category",
+    "all": "All",
+    "categories": {
+      "comparison": "Comparison",
+      "numeric": "Numeric",
+      "string": "String",
+      "datetime": "Date and time",
+      "conversion": "Conversion"
+    },
+    "count": "{count} functions",
+    "none": "No function matches.",
+    "nondeterministic": "not deterministic",
+    "nulls": "NULL",
+    "nullDefault": "NULL when any argument is NULL.",
+    "examples": "Examples",
+    "tryIt": "Try",
+    "playground": "Playground",
+    "playgroundHint": "Write an expression over the columns below and evaluate it on their values.",
+    "expression": "Expression",
+    "columns": "Columns",
+    "column": "Column {index}",
+    "name": "Name",
+    "type": "Type",
+    "value": "Value",
+    "valueHint": "empty means NULL",
+    "addColumn": "Add a column",
+    "removeColumn": "Remove column {name}",
+    "timezone": "Time zone",
+    "timezoneHint": "server default",
+    "evaluate": "Evaluate",
+    "result": "Result",
+    "resultType": "Type",
+    "resultValue": "Value",
+    "null": "NULL",
+    "deterministic": "deterministic"
+  },
+  "errors": {
+    "title": "Error codes",
+    "description": "Every registered error code with its message and hint, in the language of the UI.",
+    "search": "Search error codes",
+    "category": "Category",
+    "all": "All",
+    "count": "{count} codes",
+    "none": "No error code matches.",
+    "kind": "Kind",
+    "kinds": {
+      "FATAL": "fatal",
+      "TRANSIENT": "transient",
+      "DATA": "data"
+    },
+    "deprecated": "deprecated",
+    "hint": "Hint",
+    "params": "Parameters"
   }
 }

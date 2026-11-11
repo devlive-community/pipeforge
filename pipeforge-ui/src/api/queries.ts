@@ -35,3 +35,16 @@ export function useErrorCodes() {
 export function useJobSchema() {
   return useQuery({ queryKey: ["job-schema"], queryFn: api.getJobSchema, staleTime: Infinity });
 }
+
+/** The options of one component; only fetched once a component is chosen. */
+export function useComponent(
+  type: "source" | "transform" | "sink" | undefined,
+  identifier: string | undefined,
+  plugin?: string,
+) {
+  return useQuery({
+    queryKey: ["component", type, identifier, plugin],
+    queryFn: () => api.getComponent(type as "source", identifier as string, plugin),
+    enabled: Boolean(type && identifier),
+  });
+}

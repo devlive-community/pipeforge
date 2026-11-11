@@ -1,0 +1,49 @@
+---
+title: Plugins
+description: Browsing the plugins installed on the server, their components and the options of each component.
+order: 30
+---
+
+The **Plugins** page shows what the server can run: every installed plugin with its components, and
+for a chosen component every option with its type, requirement, default, range and choices. It is
+the same information that completion in the [job editor](./job-editor) uses, read from
+[`GET /api/v1/components`](../reference/api#getcomponent).
+
+<Screenshot name="plugins" alt="The plugins page with the options of the fake source" />
+
+## Plugins
+
+Each plugin is a card with its name, `id@version`, license, description and vendor. A plugin that
+connects to a data source also names the source type and the versions it was verified with, and
+the drivers it needs. See [plugins](../concepts/plugins) for how plugins are packaged and loaded.
+
+Packages in the plugin directory that could not be loaded are listed at the bottom with the reason,
+for example an invalid `plugin.yaml`.
+
+## Options of a component
+
+Choose a component, such as **Source fake**, to see its options next to the list. Every option
+shows:
+
+| Field | Meaning |
+|---|---|
+| Key and type | The name used in the job, and its type such as `string`, `long` or `enum` |
+| Requirement | **required**; **one of** (exactly one option of a group must be set); **conditional** (required when another option has a given value); **optional** |
+| Default | The value used when the option is not set anywhere ([option scopes](../reference/job-dsl#option-scopes)) |
+| Range and values | The allowed numbers, or the allowed choices |
+| Old names | Earlier keys that are still accepted |
+| Since | The plugin version that added the option |
+| secret | The value is masked in plans, logs and the API |
+
+Below the options, the rules between options are spelled out: which options exclude each other,
+and which options become required when another option has a certain value.
+
+The chosen component is part of the address (`/plugins?type=source&component=fake&plugin=fake@0.1.0`),
+so it can be bookmarked or shared.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "No plugins are installed" | Put plugin packages into the server's plugin directory and restart it, see [server](../operations/server) |
+| A plugin is listed under the packages that could not be loaded | Fix the reason shown, usually its `plugin.yaml`, and restart the server |

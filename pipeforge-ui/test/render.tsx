@@ -26,6 +26,8 @@ export function renderApp(path = "/") {
 
 export interface Recorded {
   path: string;
+  search: string;
+  body: string;
   language: string | null;
 }
 
@@ -37,11 +39,12 @@ export function fakeServer(routes: Record<string, unknown>): Recorded[] {
   const requests: Recorded[] = [];
   vi.stubGlobal("fetch", async (input: Request | string | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(new URL(String(input), "http://ui.test"), init);
-    const path = new URL(request.url).pathname;
-    requests.push({ path, language: request.headers.get("Accept-Language") });
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const sent = await request.clone().text();
+    requests.push({ path, search: url.search, body: sent, language: request.headers.get("Accept-Language") });
     const route = routes[path];
-    const answer =
-      typeof route === "function" ? (route as (body: string) => unknown)(await request.clone().text()) : route;
+    const answer = typeof route === "function" ? (route as (body: string) => unknown)(sent) : route;
     const [status, body] =
       Array.isArray(answer) && typeof answer[0] === "number" ? answer : [answer ? 200 : 404, answer];
     return new Response(JSON.stringify(body ?? { code: "PF-CONF-0007", message: "no endpoint" }), {

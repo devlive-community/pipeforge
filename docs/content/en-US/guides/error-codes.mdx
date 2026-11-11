@@ -1,0 +1,33 @@
+---
+title: Error codes
+description: Looking up an error code in the Web UI, with its message, hint and parameters in the language of the UI.
+order: 50
+---
+
+The **Error codes** page lists every registered error code, as the
+[error code reference](../reference/errors) does, in the language of the UI. Use it to look up a
+code from a log, the command line or an API answer.
+
+<Screenshot name="error-codes" alt="The error codes page" />
+
+## Finding a code
+
+Type a code, a name or words from the message into the search field, or choose a category:
+`CONF` (configuration), `PLAN` (planning), `PLUG` (plugins), `DATA` (data) or `SYS` (system).
+Every entry shows:
+
+| Field | Meaning |
+|---|---|
+| Code and name | For example `PF-CONF-0001 OPTION_REQUIRED`; the code never changes its meaning |
+| Kind | **fatal** (fix the cause and run again), **transient** (retried automatically) or **data** (one record is wrong) |
+| Message | The text with its parameters marked, such as `{option}`, which are filled in when the error occurs |
+| Hint | What to do about it |
+| Parameters | The values the error carries, also in the API's `params` |
+| deprecated | The code is no longer raised but keeps its meaning |
+
+See [error handling](../concepts/errors) for how kinds and scopes are used.
+
+## Linking to a code
+
+Every code has its own address, the code in lower case after `#`: `/errors#pf-plan-0007` opens the
+page at that code. Use it in runbooks and tickets.

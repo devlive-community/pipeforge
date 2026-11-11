@@ -12,4 +12,7 @@ import type { IconName } from "@/ui";
 export const NAVIGATION: { to: string; label: MessageKey; icon: IconName }[] = [
   { to: "/", label: "nav.overview", icon: "home" },
   { to: "/editor", label: "nav.jobEditor", icon: "code" },
+  { to: "/plugins", label: "nav.plugins", icon: "plug" },
+  { to: "/functions", label: "nav.functions", icon: "functions" },
+  { to: "/errors", label: "nav.errors", icon: "codes" },
 ];

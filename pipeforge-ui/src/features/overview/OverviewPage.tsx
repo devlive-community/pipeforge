@@ -6,23 +6,44 @@
  */
 
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { useErrorCodes, useFunctions, usePlugins, useVersion } from "@/api/queries";
 import { useT } from "@/i18n";
-import { Badge, Button, Card, DescriptionList, Empty, Icon, PageHeader, Skeleton, type IconName } from "@/ui";
+import {
+  Badge,
+  Button,
+  buttonClass,
+  Card,
+  DescriptionList,
+  Empty,
+  Icon,
+  PageHeader,
+  Skeleton,
+  type IconName,
+} from "@/ui";
 
 function Stat({
   icon,
   label,
   value,
   note,
+  to,
 }: {
   icon: IconName;
   label: string;
   value: number | undefined;
   note?: ReactNode;
+  to: string;
 }) {
+  const t = useT();
   return (
-    <Card>
+    <Card
+      actions={
+        <Link to={to} className={buttonClass("ghost", "sm")} aria-label={t("overview.open", { page: label })}>
+          <Icon name="arrowRight" />
+        </Link>
+      }
+    >
       <div className="flex items-center gap-2 text-sm text-fg-muted">
         <Icon name={icon} />
         {label}
@@ -101,6 +122,7 @@ export function OverviewPage() {
         </Card>
         <Stat
           icon="plug"
+          to="/plugins"
           label={t("overview.plugins")}
           value={plugins.data?.plugins?.length}
           note={
@@ -113,9 +135,10 @@ export function OverviewPage() {
             ) : null
           }
         />
-        <Stat icon="functions" label={t("overview.functions")} value={functions.data?.length} />
+        <Stat icon="functions" to="/functions" label={t("overview.functions")} value={functions.data?.length} />
         <Stat
           icon="codes"
+          to="/errors"
           label={t("overview.errorCodes")}
           value={errors.data?.length}
           note={errors.data ? <Badge>{t("overview.registered")}</Badge> : null}

@@ -6,7 +6,10 @@
   },
   "nav": {
     "overview": "概览",
-    "jobEditor": "作业编辑器"
+    "jobEditor": "作业编辑器",
+    "plugins": "插件",
+    "functions": "函数",
+    "errors": "错误码"
   },
   "preferences": {
     "theme": "主题",
@@ -35,7 +38,8 @@
     "reason": "原因",
     "errorTitle": "无法连接服务",
     "errorDescription": "请确认 PipeForge 服务正在运行，并且本页面由服务或开发服务器提供。",
-    "retry": "重试"
+    "retry": "重试",
+    "open": "打开{page}"
   },
   "notFound": {
     "title": "页面不存在",
@@ -117,5 +121,98 @@
     "nodeLabel": "{id}，{kind} {type}",
     "nodeError": "{id}，{kind} {type}，有问题",
     "hint": "提示：{hint}"
+  },
+  "plugins": {
+    "title": "插件",
+    "description": "服务上安装的插件、插件中的组件以及每个组件的选项。",
+    "components": "组件",
+    "choose": "选择一个组件查看它的选项。",
+    "options": "{component} 的选项",
+    "noOptions": "该组件没有选项。",
+    "nativeNamespaces": "原生配置：{namespaces}",
+    "exclusive": "以下选项必须且只能设置一个：{options}",
+    "condition": "当 {option} 为 {value} 时，还需要设置：{required}",
+    "datasource": "数据源 {type}，已验证版本 {versions}",
+    "drivers": "需要驱动：{drivers}",
+    "vendor": "提供者",
+    "license": "许可证",
+    "none": "没有安装插件。",
+    "noneHint": "把插件包放入服务的插件目录（pipeforge.plugin.paths）并重启服务。",
+    "unavailableTitle": "无法加载的插件包",
+    "kinds": {
+      "source": "Source",
+      "transform": "Transform",
+      "sink": "Sink"
+    },
+    "requirement": {
+      "required": "必填",
+      "one-of": "多选一",
+      "conditional": "条件必填",
+      "optional": "可选"
+    },
+    "default": "默认值",
+    "range": "范围",
+    "values": "可选值",
+    "sensitive": "敏感",
+    "deprecated": "旧名称",
+    "since": "起始版本"
+  },
+  "functions": {
+    "title": "函数",
+    "description": "表达式语言的内置函数，以及试验表达式的试验台。",
+    "search": "搜索函数",
+    "category": "类别",
+    "all": "全部",
+    "categories": {
+      "comparison": "比较与条件",
+      "numeric": "数值",
+      "string": "字符串",
+      "datetime": "日期时间",
+      "conversion": "类型转换"
+    },
+    "count": "{count} 个函数",
+    "none": "没有匹配的函数。",
+    "nondeterministic": "不确定",
+    "nulls": "NULL",
+    "nullDefault": "任一参数为 NULL 时结果为 NULL。",
+    "examples": "示例",
+    "tryIt": "试一试",
+    "playground": "试验台",
+    "playgroundHint": "用下面的列编写表达式，并用这些列的取值求值。",
+    "expression": "表达式",
+    "columns": "列",
+    "column": "第 {index} 列",
+    "name": "名称",
+    "type": "类型",
+    "value": "取值",
+    "valueHint": "留空表示 NULL",
+    "addColumn": "添加列",
+    "removeColumn": "删除列 {name}",
+    "timezone": "时区",
+    "timezoneHint": "服务默认值",
+    "evaluate": "求值",
+    "result": "结果",
+    "resultType": "类型",
+    "resultValue": "取值",
+    "null": "NULL",
+    "deterministic": "确定"
+  },
+  "errors": {
+    "title": "错误码",
+    "description": "每个已登记的错误码及其消息和提示，语言与 UI 一致。",
+    "search": "搜索错误码",
+    "category": "类别",
+    "all": "全部",
+    "count": "{count} 个错误码",
+    "none": "没有匹配的错误码。",
+    "kind": "类型",
+    "kinds": {
+      "FATAL": "致命",
+      "TRANSIENT": "暂时",
+      "DATA": "数据"
+    },
+    "deprecated": "已弃用",
+    "hint": "提示",
+    "params": "参数"
   }
 }
