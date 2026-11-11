@@ -75,12 +75,13 @@ greeting-plugin-1.0.0.zip
 |---|---|---|
 | `pipeforge:validate` | `verify` | 校验描述文件、依赖和每个组件 |
 | `pipeforge:package` | `package` | 执行同样的校验，然后构建并附加 zip 包 |
-| `pipeforge:docs` | — | 把文档数据写入 `docs/generated/plugins/<id>.json` |
+| `pipeforge:docs` | — | 把文档数据写入 `<outputDirectory>/<id>.json`；设置 `pipeforge.docs.check` 时改为与该文件比较 |
 
 | 属性 | 默认值 | 含义 |
 |---|---|---|
 | `pipeforge.descriptor` | `src/main/plugin/plugin.yaml` | 描述文件的位置 |
-| `pipeforge.docs.outputDirectory` | 仓库的 `docs/generated/plugins` | `docs` 目标输出 JSON 的目录 |
+| `pipeforge.docs.outputDirectory` | 仓库的 `docs/generated/plugins` | `docs` 目标输出 JSON 的目录；本仓库中的插件使用 `src/generated/plugin-docs` |
+| `pipeforge.docs.check` | `false` | 不写文件，而是在输出目录中的文件与插件当前导出的内容不一致时失败 |
 | `pipeforge.skip` | `false` | 跳过该目标 |
 
 ## 校验内容
@@ -106,6 +107,15 @@ greeting-plugin-1.0.0.zip
 `one-of`、`conditional`）、取值范围、可选值和说明；互斥组；条件规则；原生配置命名空间；以及每个组件的能力（从工厂方法返回的类型中读取）。
 敏感选项的默认值永远不会被导出。
 
+本仓库中的插件把这些数据提交为 `src/generated/plugin-docs/<id>.json`，文档站从这里读取；插件的构建中以 `pipeforge.docs.check`
+运行 `docs` 目标。修改了选项、能力或描述文件而没有重新生成该文件时，构建失败：
+
 ```bash
-./mvnw -pl pipeforge-connectors/connector-fake pipeforge:docs
+./mvnw -pl pipeforge-connectors/connector-fake pipeforge:docs \
+    -Dpipeforge.docs.outputDirectory=src/generated/plugin-docs
+```
+
+```text
+[ERROR] …/src/generated/plugin-docs/fake.json is out of date: line 42 differs, expected '"default" : 1000,';
+        run the docs goal of pipeforge-maven-plugin without -Dpipeforge.docs.check to update it, and commit the result
 ```

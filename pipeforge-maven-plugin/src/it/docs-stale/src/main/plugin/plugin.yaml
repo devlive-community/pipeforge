@@ -1,0 +1,10 @@
+id: greeting
+name: Greeting
+version: 1.0.0
+api-version: "0.x"
+vendor: Example
+license: MIT
+description: Emits greetings.
+provides:
+  - { type: source, identifier: greeting, class: org.example.greeting.GreetingSourceFactory }
+datasource: { type: greeting, versions: ["1.0"] }

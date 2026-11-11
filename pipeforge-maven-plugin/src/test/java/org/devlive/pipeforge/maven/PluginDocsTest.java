@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -56,6 +57,25 @@ class PluginDocsTest {
         assertThat(options.get(4).get("default").isNull()).isTrue();
         assertThat(options.get(4).get("sensitive").asBoolean()).isTrue();
         assertThat(options.get(5).get("values").toString()).isEqualTo("[\"FAST\",\"SAFE\"]");
+    }
+
+    @Test
+    void reportsStaleFiles(@TempDir Path dir) throws IOException {
+        PluginDescriptor descriptor = PluginInspectorTest.descriptor("  - { type: source, identifier: good, class: "
+                + PluginInspectorTest.FIXTURES + "GoodSourceFactory }\n");
+        Map<String, Object> model = PluginDocs.model(
+                descriptor,
+                PluginInspector.inspect(descriptor, getClass().getClassLoader()).components());
+
+        assertThat(PluginDocs.stale(model, dir)).endsWith("sample.json is missing");
+        Path file = PluginDocs.write(model, dir);
+        assertThat(PluginDocs.stale(model, dir)).isNull();
+        Files.writeString(file, Files.readString(file).replace("\"good\"", "\"bad\""));
+        assertThat(PluginDocs.stale(model, dir))
+                .contains("sample.json is out of date: line ")
+                .contains("expected '\"identifier\" : \"good\",'");
+        Files.writeString(file, Files.readString(file).replace("\"bad\"", "\"good\"") + "{}\n");
+        assertThat(PluginDocs.stale(model, dir)).endsWith("differs, unexpected extra lines");
     }
 
     @Test

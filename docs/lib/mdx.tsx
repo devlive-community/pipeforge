@@ -16,12 +16,25 @@ import { ApiList } from "@/components/mdx/ApiList";
 import { ErrorList } from "@/components/mdx/ErrorList";
 import { FunctionList } from "@/components/mdx/FunctionList";
 import { MetricList } from "@/components/mdx/MetricList";
+import {
+  PluginCapabilities,
+  PluginChangelog,
+  PluginNativeOptions,
+  PluginOptions,
+  PluginTypeMapping,
+  PluginVersions,
+} from "@/components/mdx/PluginSections";
 import { Screenshot } from "@/components/mdx/Screenshot";
 import { Step, Steps } from "@/components/mdx/Steps";
 import { Tab, Tabs } from "@/components/mdx/Tabs";
 import { CURRENT_VERSION, pageUrl, resolveLink } from "./content-core.mjs";
 import type { Lang } from "./i18n";
 import { rehypeHeadingIds, remarkCodeMeta } from "./mdx-plugins.mjs";
+
+interface PluginProps {
+  plugin: string;
+  component?: string;
+}
 
 interface Context {
   lang: Lang;
@@ -85,6 +98,12 @@ function components(context: Context) {
     ErrorList: () => <ErrorList lang={context.lang} />,
     FunctionList: () => <FunctionList lang={context.lang} />,
     MetricList: () => <MetricList lang={context.lang} />,
+    PluginCapabilities: (props: PluginProps) => <PluginCapabilities {...props} lang={context.lang} />,
+    PluginVersions: (props: PluginProps) => <PluginVersions {...props} lang={context.lang} />,
+    PluginOptions: (props: PluginProps) => <PluginOptions {...props} lang={context.lang} />,
+    PluginNativeOptions: (props: PluginProps) => <PluginNativeOptions {...props} lang={context.lang} />,
+    PluginTypeMapping: (props: PluginProps) => <PluginTypeMapping {...props} lang={context.lang} />,
+    PluginChangelog: (props: PluginProps) => <PluginChangelog {...props} lang={context.lang} />,
     Screenshot: (props: { name: string; alt: string }) => <Screenshot {...props} lang={context.lang} />,
     Tabs,
     Tab,

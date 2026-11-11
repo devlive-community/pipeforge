@@ -82,6 +82,27 @@ marked as generated render data exported from the plugin's code and are never wr
 | Known limitations | written |
 | Changelog | generated |
 
+Each generated section contains only the component that renders it, for the plugin the page is
+named after; `component` selects one component of a plugin that provides several:
+
+```mdx
+## Node options
+
+<PluginOptions plugin="fake" component="source" />
+```
+
+| Section | Component | Renders |
+|---|---|---|
+| Capabilities | `<PluginCapabilities />` | each component with the optional capabilities its factory returns |
+| Verified versions | `<PluginVersions />` | the system and versions from `plugin.yaml`, or that the plugin needs no external system |
+| Node options | `<PluginOptions />` | every option with type, default, requirement, range, choices, old names and the exclusive and conditional rules |
+| Native options | `<PluginNativeOptions />` | the native configuration namespaces |
+| Type mapping | `<PluginTypeMapping />` | the read and write mappings of `src/main/plugin/type-mapping.yaml` |
+| Changelog | `<PluginChangelog />` | the commits that changed the plugin module, from git |
+
+The data comes from `src/generated/plugin-docs/<id>.json` of the plugin module, which the plugin's
+build checks against its code (see [packaging plugins](./plugin-packaging#documentation-data)).
+
 ## Components
 
 <Callout type="tip">
@@ -119,7 +140,7 @@ and anchor. Anchors are the heading text in lower case with spaces replaced by h
 ```bash
 cd docs
 pnpm generate    # search index and data exported from the code
-pnpm check       # structure, translations, links and the UI scan
+pnpm check       # structure, translations, links, the UI scan and plugin pages
 pnpm build       # static export to docs/out
 pnpm dev         # preview with live reload
 ```
@@ -130,6 +151,7 @@ pnpm dev         # preview with live reload
 | i18n | a page is missing in one language, or the two languages differ in template, order, omitted sections, heading structure or number of code blocks |
 | links | a link points to a page or anchor that does not exist, or uses a site-absolute path |
 | ui | site code uses raw palette colors, `dark:` variants, inline colors, native controls outside `components/ui`, title tooltips or browser dialogs; the rules are shared with the Web UI and live in `@pipeforge/design-tokens/ui-scan` |
+| plugins | a generated section of a plugin page holds anything but its component, names another plugin, or the plugin has no documentation data |
 | Lighthouse | performance, accessibility, best practices or SEO score below 95 |
 
 ## Documentation coverage

@@ -78,6 +78,25 @@ Observability、Performance and tuning、Troubleshooting、Limitations 和 Versi
 | 已知限制 | 人工 |
 | 变更记录 | 生成 |
 
+每个生成章节只包含渲染它的组件，组件指向页面所对应的插件；插件提供多个组件时用 `component` 选择其中一个：
+
+```mdx
+## 节点选项
+
+<PluginOptions plugin="fake" component="source" />
+```
+
+| 章节 | 组件 | 渲染内容 |
+|---|---|---|
+| 能力 | `<PluginCapabilities />` | 每个组件，以及其工厂返回的类型实现的可选能力 |
+| 已验证版本 | `<PluginVersions />` | `plugin.yaml` 中的系统和版本，或说明插件不需要外部系统 |
+| 节点选项 | `<PluginOptions />` | 每个选项的类型、默认值、是否必填、范围、可选值、旧名称，以及互斥与条件规则 |
+| 原生配置项目录 | `<PluginNativeOptions />` | 原生配置命名空间 |
+| 类型映射 | `<PluginTypeMapping />` | `src/main/plugin/type-mapping.yaml` 中读、写两个方向的映射 |
+| 变更记录 | `<PluginChangelog />` | 修改过该插件模块的提交，来自 git |
+
+数据来自插件模块中的 `src/generated/plugin-docs/<id>.json`，插件构建时会与代码比对（见[插件打包](./plugin-packaging#文档数据)）。
+
 ## 组件
 
 <Callout type="tip">
@@ -114,7 +133,7 @@ Observability、Performance and tuning、Troubleshooting、Limitations 和 Versi
 ```bash
 cd docs
 pnpm generate    # 搜索索引和从代码导出的数据
-pnpm check       # 结构、中英文一致、链接和 UI 违规扫描
+pnpm check       # 结构、中英文一致、链接、UI 违规扫描和插件页
 pnpm build       # 静态导出到 docs/out
 pnpm dev         # 本地预览，修改后实时刷新
 ```
@@ -125,6 +144,7 @@ pnpm dev         # 本地预览，修改后实时刷新
 | i18n | 某种语言缺少页面，或两种语言的模板、顺序、省略的章节、标题结构、代码块数量不一致 |
 | links | 链接指向不存在的页面或锚点，或使用了站点绝对路径 |
 | ui | 站点代码使用了原始色板、`dark:` 变体、行内颜色、`components/ui` 以外的原生控件、title 提示或浏览器对话框；这些规则与 Web UI 共用，定义在 `@pipeforge/design-tokens/ui-scan` 中 |
+| plugins | 插件页的生成章节包含组件以外的内容、指向其他插件，或该插件没有文档数据 |
 | Lighthouse | 性能、可访问性、最佳实践或 SEO 任一得分低于 95 |
 
 ## 文档覆盖检查

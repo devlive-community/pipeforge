@@ -28,6 +28,14 @@ public final class DocsMojo extends AbstractPluginMojo {
             defaultValue = "${maven.multiModuleProjectDirectory}/docs/generated/plugins")
     private File outputDirectory;
 
+    /**
+     * Compares instead of writing: fails when the file in {@code outputDirectory} differs from what
+     * the plugin exports now. Plugin builds run the goal this way, so that the committed documentation
+     * data never goes stale.
+     */
+    @Parameter(property = "pipeforge.docs.check", defaultValue = "false")
+    private boolean checkOnly;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         if (skip) {
@@ -36,6 +44,19 @@ public final class DocsMojo extends AbstractPluginMojo {
         }
         Checked checked = check();
         failOnProblems(checked);
+        if (checkOnly) {
+            try {
+                String problem = PluginDocs.stale(docsModel(checked), outputDirectory.toPath());
+                if (problem != null) {
+                    throw new MojoFailureException(problem + "; run the docs goal of pipeforge-maven-plugin"
+                            + " without -Dpipeforge.docs.check to update it, and commit the result");
+                }
+                getLog().info("Plugin documentation data is up to date");
+                return;
+            } catch (IOException e) {
+                throw new MojoExecutionException("Cannot read the plugin docs", e);
+            }
+        }
         try {
             Path file = PluginDocs.write(docsModel(checked), outputDirectory.toPath());
             getLog().info("Wrote " + file);

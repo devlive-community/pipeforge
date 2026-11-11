@@ -79,3 +79,57 @@ export interface MetricEntry {
 export function metricEntries(): MetricEntry[] {
   return read<MetricEntry[]>("metrics.json", []);
 }
+
+export interface PluginOption {
+  key: string;
+  type: string;
+  requirement: "required" | "optional" | "one-of" | "conditional";
+  default: unknown;
+  description: string;
+  group: string | null;
+  min: number | null;
+  max: number | null;
+  values: string[];
+  sensitive: boolean;
+  deprecatedKeys: string[];
+  since: string | null;
+}
+
+export interface PluginComponent {
+  type: string;
+  identifier: string;
+  factory: string;
+  capabilities: string[];
+  options?: PluginOption[];
+  exclusive?: string[][];
+  conditions?: { option: string; value: unknown; required: string[] }[];
+  nativeNamespaces?: string[];
+}
+
+export interface TypeMappingEntry {
+  logical?: string;
+  external?: string;
+  note?: string;
+}
+
+export interface PluginEntry {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  datasource?: { type: string; versions: string[] };
+  components: PluginComponent[];
+  module: string;
+  source: string;
+  typeMapping: { read?: TypeMappingEntry[]; write?: TypeMappingEntry[] } | null;
+  changelog: { commit: string; date: string; subject: string }[];
+}
+
+/** Every plugin's documentation data, exported by `pnpm generate`. */
+export function pluginEntries(): PluginEntry[] {
+  return read<PluginEntry[]>("plugins.json", []);
+}
+
+export function pluginEntry(id: string): PluginEntry | undefined {
+  return pluginEntries().find((plugin) => plugin.id === id);
+}

@@ -169,8 +169,40 @@ public final class PluginDocs {
     /** Writes the model as {@code <dir>/<plugin id>.json} and returns the file. */
     public static Path write(Map<String, Object> model, Path dir) throws IOException {
         Files.createDirectories(dir);
-        Path file = dir.resolve(model.get("id") + ".json");
-        Files.writeString(file, MAPPER.writeValueAsString(model) + "\n");
+        Path file = file(model, dir);
+        Files.writeString(file, json(model));
         return file;
+    }
+
+    /**
+     * Compares the model with the file {@link #write} would write; returns what is wrong, or {@code
+     * null} when the file is up to date.
+     */
+    public static @Nullable String stale(Map<String, Object> model, Path dir) throws IOException {
+        Path file = file(model, dir);
+        if (!Files.isRegularFile(file)) {
+            return file + " is missing";
+        }
+        String expected = json(model);
+        String actual = Files.readString(file);
+        if (actual.equals(expected)) {
+            return null;
+        }
+        String[] want = expected.split("\n");
+        String[] got = actual.split("\n");
+        int line = 0;
+        while (line < want.length && line < got.length && want[line].equals(got[line])) {
+            line++;
+        }
+        String detail = line < want.length ? "expected '" + want[line].strip() + "'" : "unexpected extra lines";
+        return file + " is out of date: line " + (line + 1) + " differs, " + detail;
+    }
+
+    private static Path file(Map<String, Object> model, Path dir) {
+        return dir.resolve(model.get("id") + ".json");
+    }
+
+    private static String json(Map<String, Object> model) throws IOException {
+        return MAPPER.writeValueAsString(model) + "\n";
     }
 }

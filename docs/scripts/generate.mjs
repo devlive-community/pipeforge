@@ -19,6 +19,7 @@ import { collectApi } from "./api-data.mjs";
 import { collectErrors } from "./errors-data.mjs";
 import { collectFunctions } from "./functions-data.mjs";
 import { collectMetrics } from "./metrics-data.mjs";
+import { collectPlugins } from "./plugins-data.mjs";
 import { buildSearchDocuments } from "./search-index.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,6 +39,10 @@ console.log(`function catalog: ${functions.length} function(s)`);
 const metrics = collectMetrics(join(root, ".."));
 writeFileSync(join(root, "generated", "metrics.json"), JSON.stringify(metrics, null, 2));
 console.log(`metric catalog: ${metrics.length} metric(s)`);
+
+const plugins = collectPlugins(join(root, ".."));
+writeFileSync(join(root, "generated", "plugins.json"), JSON.stringify(plugins, null, 2));
+console.log(`plugin docs: ${plugins.length} plugin(s)`);
 
 const api = collectApi(join(root, ".."));
 writeFileSync(join(root, "generated", "api.json"), JSON.stringify(api, null, 2));

@@ -78,12 +78,13 @@ and each plugin gets its own class loader, so libraries in different versions ne
 |---|---|---|
 | `pipeforge:validate` | `verify` | Checks the descriptor, the dependencies and every component |
 | `pipeforge:package` | `package` | Runs the same checks, then builds and attaches the zip |
-| `pipeforge:docs` | — | Writes the documentation data to `docs/generated/plugins/<id>.json` |
+| `pipeforge:docs` | — | Writes the documentation data to `<outputDirectory>/<id>.json`, or with `pipeforge.docs.check` compares it with the file there |
 
 | Property | Default | Meaning |
 |---|---|---|
 | `pipeforge.descriptor` | `src/main/plugin/plugin.yaml` | Location of the descriptor |
-| `pipeforge.docs.outputDirectory` | `docs/generated/plugins` of the repository | Where `docs` writes the JSON |
+| `pipeforge.docs.outputDirectory` | `docs/generated/plugins` of the repository | Where `docs` writes the JSON; plugins of this repository use `src/generated/plugin-docs` |
+| `pipeforge.docs.check` | `false` | Fails when the file in the output directory differs from what the plugin exports, instead of writing it |
 | `pipeforge.skip` | `false` | Skips the goal |
 
 ## What validation checks
@@ -111,6 +112,16 @@ values and description; exclusive groups; conditional rules; native namespaces; 
 capabilities of each component, read from the type its factory method returns. Sensitive defaults
 are never exported.
 
+Plugins in this repository commit the data as `src/generated/plugin-docs/<id>.json`, where the
+documentation site reads it, and run `docs` with `pipeforge.docs.check` in their build. A change of
+an option, a capability or the descriptor then fails the build until the file is regenerated:
+
 ```bash
-./mvnw -pl pipeforge-connectors/connector-fake pipeforge:docs
+./mvnw -pl pipeforge-connectors/connector-fake pipeforge:docs \
+    -Dpipeforge.docs.outputDirectory=src/generated/plugin-docs
+```
+
+```text
+[ERROR] …/src/generated/plugin-docs/fake.json is out of date: line 42 differs, expected '"default" : 1000,';
+        run the docs goal of pipeforge-maven-plugin without -Dpipeforge.docs.check to update it, and commit the result
 ```

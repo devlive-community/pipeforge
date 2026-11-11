@@ -71,6 +71,9 @@ jobs:
         working-directory: docs
     steps:
       - uses: actions/checkout@v5
+        with:
+          # the changelog of plugin pages is read from the history of each plugin module
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
