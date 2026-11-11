@@ -159,6 +159,13 @@ describe("links check", () => {
     expect(errors[2]).toMatch(/site-absolute/);
   });
 
+  it("accepts anchors that a page renders from generated data", () => {
+    const errors = page("en-US", "reference/errors", { ...guide, data: "errors" }, "## All error codes");
+    const source = page("en-US", "concepts/x", guide, "[e](../reference/errors#pf-conf-0001)");
+    expect(checkLinks([errors, source])).toHaveLength(1);
+    expect(checkLinks([errors, source], { errors: ["pf-conf-0001"] })).toEqual([]);
+  });
+
   it("does not resolve links across languages", () => {
     const source = page("zh-CN", "development/x", guide, "[p](../concepts/plugins)");
     expect(checkLinks([target, source])).toHaveLength(1);

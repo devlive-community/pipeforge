@@ -1,0 +1,52 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Configuration errors. Codes never change their meaning and are never reused.
+
+- code: PF-CONF-0001
+  name: OPTION_REQUIRED
+  message:
+    en-US: "Required option '{option}' is missing in node '{node}'"
+    zh-CN: "节点 '{node}' 缺少必填选项 '{option}'"
+  hint:
+    en-US: "Add '{option}' to the node, or set it in env or in the cluster defaults."
+    zh-CN: "在节点中添加 '{option}'，或者在 env 或集群默认配置中设置它。"
+
+- code: PF-CONF-0002
+  name: OPTION_INVALID
+  message:
+    en-US: "Option '{option}' of node '{node}' has the invalid value '{value}': {reason}"
+    zh-CN: "节点 '{node}' 的选项 '{option}' 取值 '{value}' 不合法：{reason}"
+  hint:
+    en-US: "Check the type and the allowed range of '{option}' on the plugin page."
+    zh-CN: "在插件文档页中查看 '{option}' 的类型和取值范围。"
+
+- code: PF-CONF-0003
+  name: NATIVE_KEY_CONTROLLED
+  message:
+    en-US: "Native option '{key}' of node '{node}' is controlled by PipeForge and cannot be set: {reason}"
+    zh-CN: "节点 '{node}' 的原生配置 '{key}' 由 PipeForge 控制，不能设置：{reason}"
+  hint:
+    en-US: "Remove '{key}' from the native options; use the corresponding PipeForge option instead."
+    zh-CN: "从原生配置中删除 '{key}'，改用对应的 PipeForge 选项。"
+
+- code: PF-CONF-0004
+  name: VARIABLE_UNDEFINED
+  message:
+    en-US: "Variable '{variable}' is not defined"
+    zh-CN: "变量 '{variable}' 未定义"
+  hint:
+    en-US: "Define it with --var {variable}=..., in the job's variables, or give a default: ${{variable}:-default}."
+    zh-CN: "用 --var {variable}=... 或作业的 variables 定义它，或者写上默认值：${{variable}:-默认值}。"
+
+- code: PF-CONF-0005
+  name: SECRET_NOT_FOUND
+  message:
+    en-US: "Secret '{secret}' does not exist"
+    zh-CN: "密钥 '{secret}' 不存在"
+  hint:
+    en-US: "Create the secret first, or check its name and the project it belongs to."
+    zh-CN: "先创建该密钥，或者检查密钥名称及其所属项目。"

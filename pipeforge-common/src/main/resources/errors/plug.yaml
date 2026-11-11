@@ -1,0 +1,34 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Plugin errors.
+
+- code: PF-PLUG-0001
+  name: PLUGIN_NOT_FOUND
+  message:
+    en-US: "The {type} plugin '{plugin}' is not installed"
+    zh-CN: "{type} 插件 '{plugin}' 未安装"
+  hint:
+    en-US: "Install the plugin into the plugins directory, or check the spelling of its name."
+    zh-CN: "把插件安装到 plugins 目录，或者检查插件名称的拼写。"
+
+- code: PF-PLUG-0002
+  name: PLUGIN_API_INCOMPATIBLE
+  message:
+    en-US: "Plugin '{plugin}' requires connector API {required}, but this engine provides {provided}"
+    zh-CN: "插件 '{plugin}' 需要连接器 API {required}，但当前引擎提供的是 {provided}"
+  hint:
+    en-US: "Install a plugin version built for this engine version."
+    zh-CN: "安装为当前引擎版本构建的插件版本。"
+
+- code: PF-PLUG-0003
+  name: DRIVER_MISSING
+  message:
+    en-US: "Plugin '{plugin}' needs the driver '{driver}', which is not installed"
+    zh-CN: "插件 '{plugin}' 需要驱动 '{driver}'，但该驱动未安装"
+  hint:
+    en-US: "Upload the driver; drivers with restrictive licenses are not shipped with PipeForge."
+    zh-CN: "上传该驱动；许可证受限的驱动不随 PipeForge 分发。"

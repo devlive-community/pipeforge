@@ -34,6 +34,7 @@
     </scm>
 
     <modules>
+        <module>pipeforge-common</module>
     </modules>
 
     <properties>

@@ -21,3 +21,5 @@
   docs: ["development/docs-guide"]
 - paths: ["pipeforge-design-tokens/**"]
   docs: ["development/docs-guide"]
+- paths: ["pipeforge-common/**"]
+  docs: ["concepts/errors"]

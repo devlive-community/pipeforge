@@ -98,6 +98,12 @@
   .prose ul {
     list-style: disc;
   }
+  /* Generated lists and widgets inside content keep their own layout. */
+  .prose .not-prose ul,
+  .prose .not-prose ol {
+    padding-left: 0;
+    list-style: none;
+  }
   .prose ol {
     list-style: decimal;
   }

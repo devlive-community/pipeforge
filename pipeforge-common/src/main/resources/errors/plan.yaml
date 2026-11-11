@@ -1,0 +1,79 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Planning errors: the job is valid configuration but cannot be planned.
+
+- code: PF-PLAN-0001
+  name: DAG_CYCLE
+  message:
+    en-US: "The job contains a cycle: {path}"
+    zh-CN: "作业中存在环：{path}"
+  hint:
+    en-US: "Change the inputs of the nodes on this path so that data flows in one direction only."
+    zh-CN: "调整该路径上节点的输入，使数据只朝一个方向流动。"
+
+- code: PF-PLAN-0002
+  name: SCHEMA_INCOMPATIBLE
+  message:
+    en-US: "Node '{node}' cannot accept the schema produced by '{upstream}': {reason}"
+    zh-CN: "节点 '{node}' 无法接受 '{upstream}' 输出的 Schema：{reason}"
+  hint:
+    en-US: "Map or cast the columns with a field-mapper transform, or adjust the target table."
+    zh-CN: "用 field-mapper 转换映射或转换列类型，或者调整目标表。"
+
+- code: PF-PLAN-0003
+  name: DELIVERY_UNSUPPORTED
+  message:
+    en-US: "Exactly-once delivery is required, but sink '{node}' only supports {guarantee}"
+    zh-CN: "作业要求 exactly-once，但 Sink '{node}' 只支持 {guarantee}"
+  hint:
+    en-US: "Use a sink that supports two-phase commit or idempotent writes, or lower the delivery guarantee."
+    zh-CN: "改用支持两阶段提交或幂等写入的 Sink，或者降低投递语义要求。"
+
+- code: PF-PLAN-0004
+  name: ROUTE_CONFLICT
+  message:
+    en-US: "Routes {routes} write to table '{table}' with schemas that cannot be merged"
+    zh-CN: "路由 {routes} 写入同一张表 '{table}'，但它们的 Schema 无法合并"
+  hint:
+    en-US: "Make the column types compatible with type hints, or route the tables to different targets."
+    zh-CN: "用类型提示让列类型兼容，或者把这些表路由到不同的目标表。"
+
+- code: PF-PLAN-0005
+  name: UPSERT_REQUIRES_PK
+  message:
+    en-US: "Sink '{node}' receives changes for table '{table}', which has no primary key"
+    zh-CN: "Sink '{node}' 接收表 '{table}' 的变更数据，但该表没有主键"
+  hint:
+    en-US: "Declare the key columns with the sink's primary-key option, or write append-only data."
+    zh-CN: "用 Sink 的 primary-key 选项声明主键列，或者只写入仅追加的数据。"
+
+- code: PF-PLAN-0006
+  name: CHANGELOG_INCOMPATIBLE
+  message:
+    en-US: "Node '{node}' accepts {accepted} streams but receives a {produced} stream from '{upstream}'"
+    zh-CN: "节点 '{node}' 只接受{accepted}流，但 '{upstream}' 输出的是{produced}流"
+  hint:
+    en-US: "Use a sink that accepts updates, or convert the stream before this node."
+    zh-CN: "改用可以接受更新的 Sink，或者在该节点之前转换流类型。"
+
+- code: PF-PLAN-0007
+  name: EXPRESSION_INVALID
+  message:
+    en-US: "Invalid expression '{expression}' at line {line}, column {column}: {reason}"
+    zh-CN: "表达式 '{expression}' 在第 {line} 行第 {column} 列有误：{reason}"
+  hint:
+    en-US: "Check the syntax, the column names and the argument types of the functions."
+    zh-CN: "检查语法、列名以及函数的参数类型。"
+
+- code: PF-PLAN-0008
+  name: ROLLBACK_UNSUPPORTED
+  message:
+    en-US: "Sink '{node}' does not support the rollback mode '{mode}'"
+    zh-CN: "Sink '{node}' 不支持回滚方式 '{mode}'"
+  hint:
+    en-US: "Choose a rollback mode the sink supports, or disable rollback for this job."
+    zh-CN: "选择该 Sink 支持的回滚方式，或者关闭作业的回滚。"
