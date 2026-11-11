@@ -6,6 +6,7 @@
  */
 package org.devlive.pipeforge.engine.worker;
 
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
@@ -59,7 +60,8 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
                 nodes.get(0).id(),
                 new org.devlive.pipeforge.api.factory.JobContext(plan.name(), 1, plan.timeZone()),
                 nodes);
-        return new TaskDeployment(new ExecutionAttemptId("run-1", nodes.get(0).id(), 0, 0), chain, 1, settings);
+        return new TaskDeployment(
+                new ExecutionAttemptId("run-1", nodes.get(0).id(), 0, 0), chain, 1, settings, Instant.EPOCH);
     }
 
     static TaskSettings settings() {

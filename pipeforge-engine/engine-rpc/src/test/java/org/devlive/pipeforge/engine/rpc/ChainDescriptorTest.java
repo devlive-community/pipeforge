@@ -9,6 +9,7 @@ package org.devlive.pipeforge.engine.rpc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Callable;
 import org.devlive.pipeforge.api.factory.Factory;
@@ -96,9 +97,9 @@ class ChainDescriptorTest {
                 new ChainDescriptor("src", JOB, List.of(node("src", NodeKind.SOURCE), node("out", NodeKind.SINK)));
         ExecutionAttemptId second = new ExecutionAttemptId("run", "src", 1, 0);
 
-        assertThat(new TaskDeployment(second, chain, 2, TaskSettings.defaults()).parallelism())
+        assertThat(new TaskDeployment(second, chain, 2, TaskSettings.defaults(), Instant.EPOCH).parallelism())
                 .isEqualTo(2);
-        assertThatThrownBy(() -> new TaskDeployment(second, chain, 1, TaskSettings.defaults()))
+        assertThatThrownBy(() -> new TaskDeployment(second, chain, 1, TaskSettings.defaults(), Instant.EPOCH))
                 .hasMessageContaining("outside parallelism 1");
     }
 }

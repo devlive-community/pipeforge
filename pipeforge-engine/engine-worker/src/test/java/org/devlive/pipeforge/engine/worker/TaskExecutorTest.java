@@ -63,6 +63,21 @@ class TaskExecutorTest {
     }
 
     @Test
+    void transformsEvaluateExpressionsWithTheRunStartTime() throws Exception {
+        String probe = Probe.create();
+        String expr = "expr: \"UPPER(name) || '@' || CAST(EXTRACT(YEAR FROM RUN_START_TIME()) AS STRING)\"";
+        TaskStateUpdate end = run(TestConnectors.job(probe, "", expr, "", 1));
+
+        assertThat(end.state()).isEqualTo(TaskState.FINISHED);
+        // the deployment says the run started at the epoch: every task of the run sees the same time
+        assertThat(Probe.get(probe).rows)
+                .hasSize(10)
+                .extracting(r -> r.get(1))
+                .contains("NAME-0@1970", "NAME-9@1970")
+                .allSatisfy(name -> assertThat((String) name).endsWith("@1970"));
+    }
+
+    @Test
     void writesOnTheTaskThreadWithoutTheBuffer() throws Exception {
         String probe = Probe.create();
         TaskSettings direct =

@@ -8,6 +8,7 @@ package org.devlive.pipeforge.engine.worker;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.factory.SourceFactory;
 import org.devlive.pipeforge.api.serialization.VersionedSerializer;
@@ -48,10 +49,10 @@ final class SourceOperator {
     }
 
     @SuppressWarnings("unchecked")
-    void open(JobContext job) {
+    void open(JobContext job, ExpressionCompiler expressions) {
         SourceFactory factory = (SourceFactory) node.component().factory();
         Source<SourceSplit, ?> source = (Source<SourceSplit, ?>)
-                call.call("create the source", () -> factory.createSource(NodeContext.of(node, job)));
+                call.call("create the source", () -> factory.createSource(NodeContext.of(node, job, expressions)));
         splitSerializer = call.call("get the split serializer", source::splitSerializer);
         reader = call.call("create the reader", () -> source.createReader(context));
     }

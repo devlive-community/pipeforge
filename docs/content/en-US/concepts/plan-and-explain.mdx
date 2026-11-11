@@ -27,7 +27,8 @@ comes from, or to find out which columns reach a sink.
    and every node must lead to a sink.
 4. **Components and options** — the component of each node is found in the installed plugins, and
    its options are merged (node, then `env`, then cluster configuration, then plugin defaults) and
-   checked against the plugin's option rules.
+   checked against the plugin's option rules. Expressions in options, such as the `expr` of a field
+   mapping, are type-checked against the node's input here (`PF-PLAN-0007`).
 5. **Schemas** — in topological order, each source reports the tables it produces, each transform
    derives its output from its merged inputs, and each sink checks what it receives.
 6. **Mode and delivery** — the job is batch when every source is bounded, otherwise streaming; with

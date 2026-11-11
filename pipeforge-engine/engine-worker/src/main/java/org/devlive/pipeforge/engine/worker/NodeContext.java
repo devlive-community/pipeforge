@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.worker;
 
 import java.util.List;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.FactoryContext;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.option.ReadonlyConfig;
@@ -19,15 +20,17 @@ record NodeContext(
         ReadonlyConfig options,
         JobContext job,
         List<CatalogTable> inputTables,
-        ClassLoader classLoader)
+        ClassLoader classLoader,
+        ExpressionCompiler expressions)
         implements FactoryContext {
 
-    static NodeContext of(PlannedNode node, JobContext job) {
+    static NodeContext of(PlannedNode node, JobContext job, ExpressionCompiler expressions) {
         return new NodeContext(
                 node.id(),
                 node.config(),
                 job,
                 node.inputTables(),
-                node.component().classLoader());
+                node.component().classLoader(),
+                expressions);
     }
 }

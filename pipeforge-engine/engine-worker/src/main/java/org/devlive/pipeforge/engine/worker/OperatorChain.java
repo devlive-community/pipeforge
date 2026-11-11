@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.api.source.PollStatus;
@@ -17,6 +18,7 @@ import org.devlive.pipeforge.api.source.ReaderOutput;
 import org.devlive.pipeforge.api.table.SchemaChangeEvent;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.core.expression.EngineExpressions;
 import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
@@ -40,11 +42,13 @@ final class OperatorChain {
     private final ReaderOutput output;
     private final OperatorMetrics sourceMetrics;
     private final OperatorClock clock;
+    private final ExpressionCompiler expressions;
 
     OperatorChain(TaskDeployment deployment, ErrorScope scope, String taskName, JobMasterGateway master) {
         this.deployment = deployment;
         ChainDescriptor chain = deployment.chain();
         JobContext job = chain.job();
+        expressions = EngineExpressions.forRun(job.timeZone(), deployment.runStartTime());
         int sinkSlot = chain.nodes().size() - 1;
         // one slot per operator, from the source (0) to the sink, plus one for handing rows to the write thread
         clock = new OperatorClock(sinkSlot + 2);
@@ -77,11 +81,11 @@ final class OperatorChain {
         JobContext job = deployment.chain().job();
         int subtask = deployment.id().subtask();
         int parallelism = deployment.parallelism();
-        sink.open(job, subtask, parallelism, deployment.settings());
+        sink.open(job, subtask, parallelism, deployment.settings(), expressions);
         for (int i = transforms.size() - 1; i >= 0; i--) {
-            transforms.get(i).open(job, subtask, parallelism);
+            transforms.get(i).open(job, subtask, parallelism, expressions);
         }
-        source.open(job);
+        source.open(job, expressions);
     }
 
     /** Starts the reader; see {@link SourceOperator#start()}. */

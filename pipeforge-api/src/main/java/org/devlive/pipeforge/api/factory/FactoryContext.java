@@ -9,6 +9,7 @@ package org.devlive.pipeforge.api.factory;
 import java.util.List;
 import java.util.Map;
 import org.devlive.pipeforge.api.annotation.Stable;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.option.ReadonlyConfig;
 import org.devlive.pipeforge.api.table.CatalogTable;
 
@@ -33,4 +34,13 @@ public interface FactoryContext {
     List<CatalogTable> inputTables();
 
     ClassLoader classLoader();
+
+    /**
+     * The expression language, to type-check expressions while planning (and to compile them when
+     * the component is created at run time). Engines that cannot evaluate expressions throw {@link
+     * UnsupportedOperationException}.
+     */
+    default ExpressionCompiler expressions() {
+        throw new UnsupportedOperationException("Expressions are not available in this context");
+    }
 }

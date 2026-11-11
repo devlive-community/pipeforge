@@ -6,6 +6,7 @@
  */
 package org.devlive.pipeforge.engine.local;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -18,6 +19,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.FactoryContext;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.factory.SinkFactory;
@@ -34,6 +36,7 @@ import org.devlive.pipeforge.api.table.CatalogTable;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.core.expression.EngineExpressions;
 import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.api.JobHandle;
@@ -87,6 +90,8 @@ final class LocalJobMaster {
     private final MetricsAggregator aggregator;
     private final Handle handle = new Handle();
     private final long started = System.nanoTime();
+    private final Instant runStartTime = Instant.now();
+    private final ExpressionCompiler expressions;
     private final Map<Integer, TaskState> states = new HashMap<>();
     private final Set<Integer> readers = new LinkedHashSet<>();
     private final List<SerializedValue> committables = new ArrayList<>();
@@ -117,6 +122,7 @@ final class LocalJobMaster {
                 options.metricsInterval());
         this.executor = executor;
         this.onEnded = onEnded;
+        this.expressions = EngineExpressions.forRun(plan.timeZone(), runStartTime);
         this.aggregator = new MetricsAggregator(chain, parallelism, started);
         this.thread = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread t = new Thread(runnable, "jobmaster-" + plan.name());
@@ -191,7 +197,8 @@ final class LocalJobMaster {
         }
         for (int subtask = 0; subtask < parallelism; subtask++) {
             states.put(subtask, TaskState.DEPLOYING);
-            TaskDeployment deployment = new TaskDeployment(attempt(subtask), chain, parallelism, settings);
+            TaskDeployment deployment =
+                    new TaskDeployment(attempt(subtask), chain, parallelism, settings, runStartTime);
             executor.deployTask(deployment).whenComplete((ignored, error) -> {
                 if (error != null) {
                     post(() -> fail(PipeForgeException.wrap(error)));
@@ -482,7 +489,8 @@ final class LocalJobMaster {
                 node.config(),
                 chain.job(),
                 node.inputTables(),
-                node.component().classLoader());
+                node.component().classLoader(),
+                expressions);
     }
 
     private ErrorScope scope(PlannedNode node) {
@@ -544,7 +552,8 @@ final class LocalJobMaster {
             ReadonlyConfig options,
             JobContext job,
             List<CatalogTable> inputTables,
-            ClassLoader classLoader)
+            ClassLoader classLoader,
+            ExpressionCompiler expressions)
             implements FactoryContext {}
 
     private final class Handle implements JobHandle {

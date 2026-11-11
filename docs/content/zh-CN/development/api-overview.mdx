@@ -33,7 +33,7 @@ order: 40
 | `api.factory` | `Factory`、`SourceFactory`、`SinkFactory`、`TransformFactory`、`CatalogFactory`、`FactoryContext`、`JobContext` |
 | `api.serialization` | 用于分片、待提交物和状态的 `VersionedSerializer` |
 | `api.capability` | 可选能力接口，例如 `SupportsFilterPushDown`、`SupportsUpsert` |
-| `api.expression` | `Predicate`，即交给 `SupportsFilterPushDown` 的过滤条件 |
+| `api.expression` | `Predicate`，即交给 `SupportsFilterPushDown` 的过滤条件；`ExpressionCompiler`、`RowEvaluator`、`ExpressionInfo` 和 `OnError`，即供组件使用的表达式语言 |
 
 ## Source
 
@@ -60,6 +60,28 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 
 `Sink` 在计划阶段校验输入表并创建 Writer。Writer 负责 `write`、`flush`，需要 exactly-once 时在 `prepareCommit`
 中产生待提交物，由 `SinkCommitter` 或 `GlobalCommitter` 在 checkpoint 完成后提交。
+
+## 表达式
+
+需要用户写表达式的组件（例如字段映射的 `expr`、过滤条件）不需要自带解析器：`context.expressions()` 提供引擎的[表达式语言](../concepts/expressions)，
+类型规则和函数与 PipeForge 其他地方完全一致。
+
+```java
+// 计划阶段，在工厂中：读取数据之前就知道类型
+ExpressionCompiler expressions = factoryContext.expressions();
+ExpressionInfo info = expressions.analyze(List.of("amount * qty"), table.columns()).get(0);
+info.type();           // DECIMAL(21, 2)
+
+// 运行时，在 Transform.open 中：每个并行实例一个求值器
+RowEvaluator evaluator = context.expressions().compile(List.of("amount * qty"), columns, OnError.DIRTY);
+Object[] values = new Object[evaluator.size()];
+evaluator.evaluate(row, values);
+```
+
+- 无法解析或类型检查不通过的表达式会让计划失败，错误码 `PF-PLAN-0007`，带出错的行、列，作用范围中带节点。
+- 一起编译的表达式共享公共子表达式。求值器不是线程安全的。
+- `OnError` 决定求值失败时的处理（`dirty`、`null` 或 `fail`），请把它作为组件的 `on-error` 选项提供给用户。
+- `RUN_START_TIME()` 在一次运行的所有 Task 中都相同，日期时间按作业的 `env.timezone` 计算。
 
 ## 选项
 

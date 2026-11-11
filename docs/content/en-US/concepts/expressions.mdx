@@ -27,6 +27,10 @@ described separately.
    times — in one expression or across the operator's expressions — is computed once per row.
 4. **Run** — failures such as division by zero follow the node's `on-error` setting.
 
+Plugins use the same language through the connector API (`context.expressions()`, see the
+[API overview](../development/api-overview#expressions)), so an expression in a plugin option
+behaves exactly like one in the playground or in another plugin.
+
 An interpreter with exactly the same semantics exists as well; every build compares thousands of
 random expressions compiled and interpreted.
 

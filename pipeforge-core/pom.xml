@@ -26,6 +26,12 @@
             <artifactId>pipeforge-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- The expression language that components get through FactoryContext.expressions(). -->
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-expressions</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>
             <artifactId>pipeforge-plugin</artifactId>

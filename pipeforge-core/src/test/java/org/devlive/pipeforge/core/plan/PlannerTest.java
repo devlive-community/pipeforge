@@ -298,4 +298,43 @@ class PlannerTest {
         assertThat(Errors.message(ErrorCode.PLUGIN_CALL_FAILED, () -> plan(broken)))
                 .contains("derive the tables of t", "IllegalStateException: cannot derive");
     }
+
+    @Test
+    void componentsTypeCheckExpressionsWhilePlanning() {
+        JobPlan plan = plan(
+                job(
+                        """
+                source:
+                  - { id: src, type: fake }
+                transform:
+                  - { id: calc, type: compute, expr: "amount * 2", to: doubled }
+                sink:
+                  - { id: out, type: console }
+                """));
+        Column doubled = plan.node("calc")
+                .orElseThrow()
+                .outputTables()
+                .get(0)
+                .column("doubled")
+                .orElseThrow();
+        assertThat(doubled.type()).isEqualTo(DataTypes.DECIMAL(21, 2));
+    }
+
+    @Test
+    void anInvalidExpressionFailsPlanningAtItsNode() {
+        PipeForgeException error = Errors.thrown(
+                ErrorCode.EXPRESSION_INVALID,
+                () -> plan(
+                        job(
+                                """
+                source:
+                  - { id: src, type: fake }
+                transform:
+                  - { id: calc, type: compute, expr: "UPPR(name)", to: loud }
+                sink:
+                  - { id: out, type: console }
+                """)));
+        assertThat(error.scope().node()).isEqualTo("calc");
+        assertThat(error.params()).containsEntry("line", 1).containsEntry("column", 1);
+    }
 }

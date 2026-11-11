@@ -8,6 +8,7 @@ package org.devlive.pipeforge.engine.worker;
 
 import java.util.List;
 import java.util.Optional;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.factory.SinkFactory;
 import org.devlive.pipeforge.api.row.Row;
@@ -63,10 +64,10 @@ final class SinkOperator implements ChainOutput {
     }
 
     @SuppressWarnings("unchecked")
-    void open(JobContext job, int subtask, int parallelism, TaskSettings settings) {
+    void open(JobContext job, int subtask, int parallelism, TaskSettings settings, ExpressionCompiler expressions) {
         SinkFactory factory = (SinkFactory) node.component().factory();
         Sink<Object, Object> created = (Sink<Object, Object>)
-                call.call("create the sink", () -> factory.createSink(NodeContext.of(node, job)));
+                call.call("create the sink", () -> factory.createSink(NodeContext.of(node, job, expressions)));
         sink = created;
         WriterContext context = new TaskWriterContext(job, subtask, parallelism, call.classLoader());
         SinkWriter<Object, Object> opened =

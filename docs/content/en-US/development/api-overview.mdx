@@ -34,7 +34,7 @@ same plugin can therefore run on the PipeForge engine and, later, on Flink or Sp
 | `api.factory` | `Factory`, `SourceFactory`, `SinkFactory`, `TransformFactory`, `CatalogFactory`, `FactoryContext`, `JobContext` |
 | `api.serialization` | `VersionedSerializer` for splits, committables and state |
 | `api.capability` | Optional capabilities such as `SupportsFilterPushDown` and `SupportsUpsert` |
-| `api.expression` | `Predicate`, the filters handed to `SupportsFilterPushDown` |
+| `api.expression` | `Predicate`, the filters handed to `SupportsFilterPushDown`; `ExpressionCompiler`, `RowEvaluator`, `ExpressionInfo` and `OnError`, the expression language for components |
 
 ## Sources
 
@@ -65,6 +65,34 @@ by one (`process(row, out)`); schema changes go through `transformSchemaChange`.
 A `Sink` validates its input tables while planning and creates writers. Writers `write`, `flush`
 and, for exactly-once delivery, produce committables in `prepareCommit`; a `SinkCommitter` or
 `GlobalCommitter` commits them after the checkpoint completes.
+
+## Expressions
+
+Components that take expressions from the user, such as the `expr` of a field mapping or a filter
+condition, do not ship their own parser: `context.expressions()` hands them the
+[expression language](../concepts/expressions) of the engine, with the same type rules and
+functions as everywhere else in PipeForge.
+
+```java
+// while planning, in the factory: types are known before any data is read
+ExpressionCompiler expressions = factoryContext.expressions();
+ExpressionInfo info = expressions.analyze(List.of("amount * qty"), table.columns()).get(0);
+info.type();           // DECIMAL(21, 2)
+
+// at run time, in Transform.open: one evaluator per parallel instance
+RowEvaluator evaluator = context.expressions().compile(List.of("amount * qty"), columns, OnError.DIRTY);
+Object[] values = new Object[evaluator.size()];
+evaluator.evaluate(row, values);
+```
+
+- An expression that does not parse or type-check fails planning with `PF-PLAN-0007`, the line
+  and column of the problem, and the node in the scope.
+- Expressions compiled together share their common subexpressions. The evaluator is not
+  thread-safe.
+- `OnError` decides what a failure while evaluating does (`dirty`, `null` or `fail`); expose it as
+  the component's `on-error` option.
+- `RUN_START_TIME()` is the same in every task of a run, and dates and times follow the job's
+  `env.timezone`.
 
 ## Options
 

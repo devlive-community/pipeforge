@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.worker;
 
 import java.util.List;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.factory.TransformFactory;
 import org.devlive.pipeforge.api.row.Row;
@@ -52,12 +53,13 @@ final class TransformOperator implements ChainOutput {
         return clock.selfNanos(slot);
     }
 
-    void open(JobContext job, int subtask, int parallelism) {
+    void open(JobContext job, int subtask, int parallelism, ExpressionCompiler expressions) {
         TransformFactory factory = (TransformFactory) node.component().factory();
-        Transform created = call.call("create the transform", () -> factory.createTransform(NodeContext.of(node, job)));
+        Transform created = call.call(
+                "create the transform", () -> factory.createTransform(NodeContext.of(node, job, expressions)));
         transform = created;
-        TransformContext context =
-                new TaskTransformContext(job, subtask, parallelism, node.inputTables(), call.classLoader());
+        TransformContext context = new TaskTransformContext(
+                job, subtask, parallelism, node.inputTables(), call.classLoader(), expressions);
         call.run("open the transform", () -> created.open(context));
     }
 
@@ -108,6 +110,11 @@ final class TransformOperator implements ChainOutput {
     }
 
     private record TaskTransformContext(
-            JobContext job, int subtaskIndex, int parallelism, List<CatalogTable> inputTables, ClassLoader classLoader)
+            JobContext job,
+            int subtaskIndex,
+            int parallelism,
+            List<CatalogTable> inputTables,
+            ClassLoader classLoader,
+            ExpressionCompiler expressions)
             implements TransformContext {}
 }

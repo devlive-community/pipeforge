@@ -137,6 +137,7 @@ handle.result().get().status();   // CANCELLED
 - **取消逐级升级。** 先调用 Reader 的取消钩子并中断写线程；超过 `cancelTimeout` 后中断 Task 线程；超过两倍 `cancelTimeout` 后以
   `PF-RES-0005` 放弃该 Task，作业失败。
 - **插件代码隔离。** 每次调用插件代码时，都把插件的 ClassLoader 设为上下文 ClassLoader，插件抛出的异常会转换为带错误码的错误（见“排障”）。
+- **统一的运行开始时间。** JobMaster 确定本次运行的开始时间并交给每个 Task，因此表达式中的 `RUN_START_TIME()` 在所有 Task 中都相同。
 - **顺序。** 在一个 Task 内，无论是否开启写缓冲，行和 Schema 变更都按 Reader 输出的顺序到达 Sink。
 
 ## 可观测性

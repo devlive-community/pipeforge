@@ -156,6 +156,8 @@ committed.
   up with `PF-RES-0005` and the job fails.
 - **Plugin code is isolated.** Every call into a plugin runs with the plugin's class loader as the
   context class loader, and what it throws is turned into an error with a code (see Troubleshooting).
+- **One run start time.** The job master fixes when the run started and hands it to every task, so
+  `RUN_START_TIME()` in expressions is the same in all of them.
 - **Ordering.** Within a task, rows and schema changes reach the sink in the order the reader emitted
   them, with or without the write buffer.
 

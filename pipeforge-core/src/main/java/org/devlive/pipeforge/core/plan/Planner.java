@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.devlive.pipeforge.api.capability.SupportsUpsert;
+import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.EngineKind;
 import org.devlive.pipeforge.api.factory.Factory;
 import org.devlive.pipeforge.api.factory.FactoryContext;
@@ -40,6 +41,7 @@ import org.devlive.pipeforge.api.transform.Transform;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.core.expression.EngineExpressions;
 import org.devlive.pipeforge.core.job.Delivery;
 import org.devlive.pipeforge.core.job.EnvOptions;
 import org.devlive.pipeforge.core.job.JobDefinition;
@@ -323,8 +325,13 @@ public final class Planner {
         Map<String, List<CatalogTable>> upstream = new LinkedHashMap<>();
         node.inputs().forEach(input -> upstream.put(input, planned.get(input).outputTables()));
         List<CatalogTable> inputTables = SchemaMerger.merge(node.id(), upstream);
-        FactoryContext factoryContext =
-                new PlanningContext(node.id(), config, context, inputTables, component.classLoader());
+        FactoryContext factoryContext = new PlanningContext(
+                node.id(),
+                config,
+                context,
+                inputTables,
+                component.classLoader(),
+                EngineExpressions.planning(context.timeZone()));
 
         Boundedness boundedness = null;
         List<CatalogTable> outputTables = List.of();
@@ -429,7 +436,8 @@ public final class Planner {
             ReadonlyConfig options,
             JobContext job,
             List<CatalogTable> inputTables,
-            ClassLoader classLoader)
+            ClassLoader classLoader,
+            ExpressionCompiler expressions)
             implements FactoryContext {}
 
     private record PlanningSourceContext(JobContext job, ClassLoader classLoader) implements SourceContext {}

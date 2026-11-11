@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.devlive.pipeforge.api.capability.SupportsUpsert;
+import org.devlive.pipeforge.api.expression.ExpressionInfo;
 import org.devlive.pipeforge.api.factory.FactoryContext;
 import org.devlive.pipeforge.api.factory.SinkFactory;
 import org.devlive.pipeforge.api.factory.SourceFactory;
@@ -95,6 +96,7 @@ public final class TestComponents {
     static final Option<String> FROM = Options.key("from").stringType().noDefault();
     static final Option<String> TO = Options.key("to").stringType().noDefault();
     static final Option<Integer> LIMIT = Options.key("limit").intType().defaultValue(20);
+    static final Option<String> EXPR = Options.key("expr").stringType().noDefault();
 
     private TestComponents() {}
 
@@ -125,6 +127,7 @@ public final class TestComponents {
                             }
                             return out;
                         }))
+                .transform(compute())
                 .transform(transform("drop-all", OptionRule.builder().build(), (config, inputs) -> List.of()))
                 .transform(transform("broken", OptionRule.builder().build(), (config, inputs) -> {
                     throw new IllegalStateException("cannot derive");
@@ -244,6 +247,51 @@ public final class TestComponents {
                     @Override
                     public List<CatalogTable> transformSchema(List<CatalogTable> inputs) {
                         return schema.derive(config, inputs);
+                    }
+
+                    @Override
+                    public void open(TransformContext ctx) {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public void process(Row row, Collector<Row> out) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
+            }
+        };
+    }
+
+    /** Appends a column {@code to} computed by {@code expr}; its type comes from the expression language. */
+    static TransformFactory compute() {
+        return new TransformFactory() {
+            @Override
+            public String identifier() {
+                return "compute";
+            }
+
+            @Override
+            public OptionRule optionRule() {
+                return OptionRule.builder().required(EXPR, TO).build();
+            }
+
+            @Override
+            public Transform createTransform(FactoryContext context) {
+                ReadonlyConfig config = context.options();
+                return new Transform() {
+                    @Override
+                    public List<CatalogTable> transformSchema(List<CatalogTable> inputs) {
+                        List<CatalogTable> out = new ArrayList<>();
+                        for (CatalogTable table : inputs) {
+                            ExpressionInfo info = context.expressions()
+                                    .analyze(List.of(config.get(EXPR)), table.columns())
+                                    .get(0);
+                            List<Column> columns = new ArrayList<>(table.columns());
+                            columns.add(Column.of(config.get(TO), info.type()));
+                            out.add(table.withColumns(columns));
+                        }
+                        return out;
                     }
 
                     @Override

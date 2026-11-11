@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.devlive.pipeforge.api.expression.OnError;
+import org.devlive.pipeforge.api.expression.RowEvaluator;
 import org.devlive.pipeforge.api.factory.FactoryContext;
 import org.devlive.pipeforge.api.factory.SinkFactory;
 import org.devlive.pipeforge.api.factory.SourceFactory;
@@ -95,6 +97,9 @@ public final class TestConnectors {
             Options.key("drop-odd").booleanType().defaultValue(false);
     static final Option<Boolean> DUPLICATE =
             Options.key("duplicate").booleanType().defaultValue(false);
+    /** An expression that replaces the name, evaluated with the expression language of the engine. */
+    static final Option<String> EXPR = Options.key("expr").stringType().noDefault();
+
     static final Option<Integer> SLOW_MS = Options.key("slow-ms").intType().defaultValue(0);
     static final Option<String> COMMIT = Options.key("commit").stringType().defaultValue("none");
 
@@ -445,13 +450,18 @@ public final class TestConnectors {
         public OptionRule optionRule() {
             return OptionRule.builder()
                     .required(PROBE)
-                    .optional(FAIL_AT, FAIL_WITH, DROP_ODD, DUPLICATE)
+                    .optional(FAIL_AT, FAIL_WITH, DROP_ODD, DUPLICATE, EXPR)
                     .build();
         }
 
         @Override
         public Transform createTransform(FactoryContext context) {
-            return new UpperTransform(context.options());
+            ReadonlyConfig config = context.options();
+            if (config.contains(EXPR)) {
+                // type-checked while planning and again when the task creates the transform
+                context.expressions().analyze(List.of(config.get(EXPR)), table().columns());
+            }
+            return new UpperTransform(config);
         }
     }
 
@@ -459,6 +469,7 @@ public final class TestConnectors {
         private static final long serialVersionUID = 1L;
         private final transient ReadonlyConfig config;
         private transient int seen;
+        private transient @Nullable RowEvaluator expression;
 
         UpperTransform(ReadonlyConfig config) {
             this.config = config;
@@ -471,6 +482,13 @@ public final class TestConnectors {
 
         @Override
         public void open(TransformContext context) {
+            if (config.contains(EXPR)) {
+                expression = context.expressions()
+                        .compile(
+                                List.of(config.get(EXPR)),
+                                context.inputTables().get(0).columns(),
+                                OnError.FAIL);
+            }
             Probe.get(config.get(PROBE))
                     .events
                     .add("transform opened " + context.subtaskIndex() + "/" + context.parallelism() + " "
@@ -486,8 +504,16 @@ public final class TestConnectors {
             if (config.get(DROP_ODD) && id % 2 == 1) {
                 return;
             }
-            Row upper =
-                    GenericRow.of(row.table(), id, String.valueOf(row.get(1)).toUpperCase(Locale.ROOT));
+            RowEvaluator evaluator = expression;
+            Object name;
+            if (evaluator == null) {
+                name = String.valueOf(row.get(1)).toUpperCase(Locale.ROOT);
+            } else {
+                Object[] value = new Object[1];
+                evaluator.evaluate(row, value);
+                name = String.valueOf(value[0]);
+            }
+            Row upper = GenericRow.of(row.table(), id, name);
             out.collect(upper);
             if (config.get(DUPLICATE)) {
                 out.collect(upper);
