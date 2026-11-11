@@ -32,4 +32,4 @@ jobs:
             template asks for. Questions are best asked in GitHub Discussions.
           pr-message: |
             Thanks for your first pull request to PipeForge! Please read CONTRIBUTING.md: commits follow
-            Conventional Commits, are signed off (`git commit -s`) and update the documentation in the same commit.
+            Conventional Commits and update the documentation in the same commit.

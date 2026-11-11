@@ -115,7 +115,7 @@ while IFS= read -r line || [ -n "$line" ]; do
 done <"$root/.github/CODEOWNERS"
 
 # ---------------------------------------------------------------- pull request template
-for item in 'Conventional Commits' 'Docs-Not-Needed' 'error codes' 'license header' 'git commit -s'; do
+for item in 'Conventional Commits' 'Docs-Not-Needed' 'error codes' 'license header'; do
     grep -Fq "$item" "$root/.github/PULL_REQUEST_TEMPLATE.md" ||
         fail "PULL_REQUEST_TEMPLATE.md lost the checklist item about '$item'"
 done

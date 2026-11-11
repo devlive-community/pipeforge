@@ -69,19 +69,6 @@ jobs:
       - run: .ci/tests/run.sh
       - run: .ci/check-community-files.sh
 
-  dco:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash .ci/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
-
   java:
     needs: changes
     if: needs.changes.outputs.java == 'true' && needs.changes.outputs.maven_modules != ''
@@ -150,7 +137,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [changes, lint, dco, java, build-checks, dev-env, web]
+    needs: [changes, lint, java, build-checks, dev-env, web]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

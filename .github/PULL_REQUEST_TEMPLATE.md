@@ -15,4 +15,3 @@
 - [ ] New metrics are registered and documented
 - [ ] Compatibility impact explained when `pipeforge-api`, a protocol or a state format changes
 - [ ] Source files carry the license header; new dependencies use whitelisted licenses
-- [ ] Every commit is signed off (`git commit -s`)

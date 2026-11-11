@@ -135,33 +135,6 @@ check "dev environment runs dev-env only" "dev-env" "$(components_for dev/docker
 check "community files run nothing" "" \
     "$(components_for .github/CODEOWNERS .github/ISSUE_TEMPLATE/bug_report.yml .github/labels.yml)"
 
-# ------------------------------------------------------------------ check-dco.sh
-
-echo "check-dco.sh:"
-G="$WORK/dco"
-mkdir -p "$G"
-(
-    cd "$G"
-    git init -q -b main
-    git config user.name "Ada Lovelace"
-    git config user.email "ada@example.org"
-    git commit -q --allow-empty -m "chore: base"
-) >/dev/null
-base="$(git -C "$G" rev-parse HEAD)"
-
-git -C "$G" commit -q --allow-empty -s -m "feat: signed"
-check "signed commits pass" "0" "$(cd "$G" && bash "$CI_DIR/check-dco.sh" "$base" >/dev/null 2>&1; echo $?)"
-
-git -C "$G" commit -q --allow-empty -m "feat: unsigned"
-check "unsigned commit fails" "1" "$(cd "$G" && bash "$CI_DIR/check-dco.sh" "$base" >/dev/null 2>&1; echo $?)"
-check "failure names the commit" "1" \
-    "$(cd "$G" && bash "$CI_DIR/check-dco.sh" "$base" 2>/dev/null | grep -c 'feat: unsigned')"
-
-mid="$(git -C "$G" rev-parse HEAD)"
-git -C "$G" commit -q --allow-empty -m "feat: other signer" -m "Signed-off-by: Someone Else <else@example.org>"
-check "sign-off by someone other than the author fails" "1" \
-    "$(cd "$G" && bash "$CI_DIR/check-dco.sh" "$mid" >/dev/null 2>&1; echo $?)"
-
 # ------------------------------------------------------------------ check-community-files.sh
 
 echo "check-community-files.sh:"
@@ -221,10 +194,6 @@ check "labeler with undefined label fails" "1" "$(community_status "$C")"
 C="$(community_copy color)"
 printf -- '- name: extra\n  color: zzzzzz\n  description: bad color\n' >>"$C/.github/labels.yml"
 check "label with invalid color fails" "1" "$(community_status "$C")"
-
-C="$(community_copy dco)"
-sed -i.bak '/git commit -s/d' "$C/.github/PULL_REQUEST_TEMPLATE.md"
-check "PR template without the sign-off item fails" "1" "$(community_status "$C")"
 
 C="$(community_copy guides)"
 printf '\n## 10. Extra\n' >>"$C/CONTRIBUTING.md"

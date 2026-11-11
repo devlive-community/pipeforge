@@ -74,12 +74,3 @@ plugin repository index.
   format need two maintainers.
 - CI must be green (the `ci-ok` check).
 - Pull requests are merged with rebase so that every commit is kept.
-
-## 9. Sign your work (DCO)
-
-PipeForge uses the [Developer Certificate of Origin](https://developercertificate.org/) instead
-of a CLA. Every commit needs a `Signed-off-by` line that matches the commit author:
-
-```bash
-git commit -s -m "fix(core): handle empty job names"
-```
