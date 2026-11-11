@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.devlive.pipeforge</groupId>
+        <artifactId>pipeforge-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>pipeforge-connectors</artifactId>
+    <packaging>pom</packaging>
+    <name>PipeForge Connectors</name>
+    <description>Source and sink plugins</description>
+
+    <modules>
+        <module>connector-fake</module>
+    </modules>
+
+    <!--
+      Conventions of every connector plugin: the API is provided by the engine, the testkit runs the
+      contract tests, the build packages the plugin zip and checks that the committed documentation
+      data (src/generated/plugin-docs/<id>.json) matches the code.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-api</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-connector-testkit</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Each plugin module lists pipeforge-maven-plugin under build/plugins to get these executions. -->
+        <pluginManagement>
+            <plugins>
+            <plugin>
+                <groupId>org.devlive.pipeforge</groupId>
+                <artifactId>pipeforge-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>plugin-package</id>
+                        <goals>
+                            <goal>package</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>plugin-docs-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>docs</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/src/generated/plugin-docs</outputDirectory>
+                            <checkOnly>true</checkOnly>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

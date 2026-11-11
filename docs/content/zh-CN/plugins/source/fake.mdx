@@ -1,0 +1,196 @@
+---
+title: Fake Source
+description: 按 Schema 生成数据或回放字面行，支持限速、乱序事件时间、坏数据和多表，用于测试、演示和基准测试。
+order: 10
+template: plugin
+---
+
+## 简介
+
+fake Source（`type: fake`）不连接任何系统就能产出数据：可以按声明的列生成行，也可以回放写在作业中的字面行。
+生成的行只取决于种子、表和行号，因此每次运行、在任意并行度下产出的数据都完全相同。
+
+适用场景：真实数据源还不可用时先试跑管道；用可预期的输入演示某个 Transform 或 Sink；在没有源端系统干扰的情况下对引擎和 Sink
+做基准测试；验证下游节点如何处理限速、迟到事件、坏数据和多表。它不用于模拟真实数据的统计分布。
+
+## 能力
+
+<PluginCapabilities plugin="fake" component="source" />
+
+## 已验证版本
+
+<PluginVersions plugin="fake" />
+
+## 快速开始
+
+生成默认表 `fake.rows`（`id`、`name`、`amount`、`created_at`）的 1,000 行数据：
+
+```yaml
+version: 1
+name: fake-demo
+source:
+  - { id: src, type: fake }
+sink:
+  - { id: out, type: console }
+```
+
+## 前置条件
+
+无：该插件随发行包提供，不需要外部系统、网络访问或凭据。
+
+## 数据源配置
+
+fake Source 没有数据源：它不连接任何系统，因此没有连接选项、原生配置，也没有需要导入的配置文件。
+
+## 节点选项
+
+<PluginOptions plugin="fake" component="source" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="fake" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="fake" />
+
+## 分片与并行
+
+- 每张表按行号切成 `splits` 个连续区间（默认 4 个）；Reader 读完一个分片后再领取下一个，因此 `splits` 至少设为并行度。
+- `unbounded: true` 时，每张表有 `splits` 个交错分配行号的无尽分片；领不到分片的 Reader 会立即结束，因此 Reader 数不要超过分片数。
+- 字面行（`data`）与生成的行按同样方式切分。
+- `rows-per-second` 限制整个 Source 的速率，由各 Reader 平均分担。
+
+## 一致性语义
+
+相同的选项始终产出相同的行，与并行度、分片大小以及 Reader 领取分片的顺序无关。因此重新运行会产出完全相同的数据，
+从状态恢复的 Reader 会从它输出的最后一行之后继续。目标端出现重复或缺失时，原因在管道的其他部分，而不在 fake Source。
+
+## 示例
+
+### 自定义列的表
+
+```yaml
+version: 1
+name: orders-sample
+source:
+  - id: orders
+    type: fake
+    table: shop.orders
+    columns:
+      - order_id INT64 NOT NULL
+      - customer STRING(40)
+      - amount DECIMAL(12, 2) NOT NULL
+      - status STRING(10)
+      - created_at TIMESTAMP(3)
+    primary-key: [order_id]
+    rows: 100000
+    seed: 42
+    null-ratio: 0.05
+sink:
+  - { id: out, type: console }
+```
+
+`order_id` 从 0 开始计数，其他列取各自类型的随机值，可空列中有 5% 为 NULL。
+
+### 含迟到事件的流
+
+```yaml
+version: 1
+name: clicks-stream
+source:
+  - id: clicks
+    type: fake
+    table: web.clicks
+    columns:
+      - click_id INT64 NOT NULL
+      - page STRING(64)
+      - clicked_at TIMESTAMP_LTZ(3)
+    primary-key: [click_id]
+    unbounded: true
+    rows-per-second: 2000
+    event-time-column: clicked_at
+    event-time-step: 500ms
+    max-out-of-order: 5s
+sink:
+  - { id: out, type: console }
+```
+
+作业一直运行，直到被取消。事件时间每行前进 500 毫秒，每行最多迟到 5 秒到达，下游节点因此会看到乱序的事件。
+
+### 多表与坏数据
+
+```yaml
+version: 1
+name: shards
+source:
+  - id: shards
+    type: fake
+    tables: [shop.orders_0, shop.orders_1, shop.orders_2, shop.orders_3]
+    columns:
+      - id INT64 NOT NULL
+      - code STRING(8) NOT NULL
+      - total DECIMAL(10, 2)
+    primary-key: [id]
+    rows: 5000
+    bad-row-ratio: 0.01
+sink:
+  - { id: out, type: console }
+```
+
+每张表各有 5,000 行。每一百行中有一行违反 Schema：`code` 列声明为 NOT NULL，这一行的值却是 NULL，可以用来验证 Sink 对坏数据的处理。
+
+### 字面行
+
+```yaml
+version: 1
+name: fixed-rows
+source:
+  - id: src
+    type: fake
+    table: demo.users
+    columns: [id INT32 NOT NULL, name STRING, tags ARRAY<STRING>, joined DATE]
+    primary-key: [id]
+    data:
+      - '[1, "Ada", ["admin"], "2026-01-05"]'
+      - '[2, "Lin", [], null]'
+sink:
+  - { id: out, type: console }
+```
+
+每一行是按列顺序排列的 JSON 数组。小数、日期、时间和时间戳写成字符串，二进制值写成 Base64，Map 写成 JSON 对象，嵌套行写成数组或对象。
+
+## 指标
+
+fake Source 报告标准的 Source 指标：`rowsRead` 和读取速率。设置 `rows-per-second` 后读取速率保持在上限附近；`readerWaitMs`
+持续增长说明 Sink 跟不上这个速率。除无界模式外，它会估算总行数（`rows` × 表数）用于进度展示。
+
+## 性能与调优
+
+- 生成数据的开销很小：fake 搭配丢弃数据的 Sink 时，吞吐就是引擎本身的吞吐，因此这一组合是引擎基准测试的基线。
+- 宽行和嵌套类型（`ARRAY`、`MAP`、`ROW`）的生成开销高于标量列。
+- `splits` 至少设为并行度；分片更多时，速度不均的 Reader 之间负载更均衡。
+- 字面行在作业启动时解析一次；`data` 只用于少量手写数据。
+
+## 错误码与排障
+
+| 错误 | 原因与处理 |
+|---|---|
+| `PF-CONF-0002` … `columns: 'id': write the column as 'name TYPE'` | 每一列都需要名称和类型，例如 `id INT64 NOT NULL` |
+| `PF-CONF-0002` … `columns: '…': unexpected …` | 无法识别类型；逻辑类型见[数据模型](../../concepts/data-model) |
+| `PF-CONF-0002` … `data: row 2, column amount: 1.555 has more than 2 decimal places` | 字面值与列类型不符；原因中写明了行和列 |
+| `PF-CONF-0002` … `set either table or tables, not both` / `set either rows or data, not both` | 两种写法表达同一件事，只保留一种 |
+| `PF-CONF-0002` … `event-time-column: column name is STRING(32)` | 事件时间列必须是 `TIMESTAMP`、`TIMESTAMP_LTZ` 或 `INT64` |
+
+`columns` 要写成 YAML 列表：写成逗号分隔的字符串时，`DECIMAL(10, 2)` 这类类型会被拆开。
+
+## 已知限制
+
+- `tables` 中的所有表使用相同的列。
+- 生成的值在类型范围内均匀随机；没有分布设置、列间相关性或表之间的外键。
+- 字面行只能用于单表，且不能无界。
+- 生成的整数主键从 0 开始计数，在 `INT8` 和 `INT16` 列中会回绕。
+
+## 变更记录
+
+<PluginChangelog plugin="fake" />

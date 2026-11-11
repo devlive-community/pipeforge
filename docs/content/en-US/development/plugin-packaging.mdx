@@ -72,6 +72,24 @@ and each plugin gets its own class loader, so libraries in different versions ne
 `mvn package` now produces `target/greeting-plugin-1.0.0.zip` and attaches it to the build, so
 `mvn install` and `mvn deploy` publish it next to the jar.
 
+### Plugins in this repository
+
+Source and sink plugins of PipeForge are modules of `pipeforge-connectors`, which sets the
+conventions once: `pipeforge-api` with provided scope, the [testkit](./testkit) with test scope, and
+`pipeforge-maven-plugin` under `pluginManagement` with two executions, `package` and the docs check
+in the `verify` phase. A plugin module only lists the Maven plugin to get them:
+
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-maven-plugin</artifactId>
+        </plugin>
+    </plugins>
+</build>
+```
+
 ## Goals
 
 | Goal | Default phase | What it does |

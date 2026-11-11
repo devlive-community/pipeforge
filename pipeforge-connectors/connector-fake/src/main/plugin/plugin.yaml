@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+id: fake
+name: Fake
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Generates rows from a schema, or replays literal rows, with rate limits, out-of-order event times, bad rows and many tables. For tests, demos and benchmarks.
+provides:
+  - { type: source, identifier: fake, class: org.devlive.pipeforge.connector.fake.FakeSourceFactory }

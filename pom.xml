@@ -42,6 +42,7 @@
         <module>pipeforge-core</module>
         <module>pipeforge-engine</module>
         <module>pipeforge-connector-testkit</module>
+        <module>pipeforge-connectors</module>
         <module>pipeforge-server</module>
     </modules>
 
@@ -438,6 +439,8 @@
                                 <banDuplicatePomDependencyVersions/>
                                 <requirePluginVersions>
                                     <banSnapshots>true</banSnapshots>
+                                    <!-- Built in this reactor and used by the plugin modules at the same version. -->
+                                    <unCheckedPluginList>org.devlive.pipeforge:pipeforge-maven-plugin</unCheckedPluginList>
                                 </requirePluginVersions>
                             </rules>
                         </configuration>

@@ -69,6 +69,23 @@ greeting-plugin-1.0.0.zip
 
 此后 `mvn package` 会生成 `target/greeting-plugin-1.0.0.zip` 并附加到构建结果上，`mvn install` 和 `mvn deploy` 会把它和 jar 一起发布。
 
+### 本仓库中的插件
+
+PipeForge 的 Source 和 Sink 插件是 `pipeforge-connectors` 的子模块，由它统一设置约定：`pipeforge-api` 为 provided 范围，
+[testkit](./testkit) 为 test 范围，`pipeforge-maven-plugin` 放在 `pluginManagement` 中，带两个执行：`package`，以及 `verify`
+阶段的文档数据检查。插件模块只需要列出该 Maven 插件即可获得这些执行：
+
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-maven-plugin</artifactId>
+        </plugin>
+    </plugins>
+</build>
+```
+
 ## 目标
 
 | 目标 | 默认阶段 | 作用 |

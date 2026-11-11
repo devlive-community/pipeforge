@@ -1,0 +1,214 @@
+---
+title: Fake source
+description: Generate rows from a schema or replay literal rows, with rate limits, out-of-order event times, bad rows and many tables — for tests, demos and benchmarks.
+order: 10
+template: plugin
+---
+
+## Introduction
+
+The fake source (`type: fake`) produces data without connecting to anything. It either generates
+rows from the columns you declare, or replays the literal rows you write in the job. Generated rows
+depend only on the seed, the table and the row number, so a job produces the same data on every run
+and at any parallelism.
+
+Use it to try a pipeline before the real source is reachable, to show a transform or a sink with
+predictable input, to benchmark the engine and sinks without a source system in the way, and to
+exercise how downstream nodes handle rate limits, late events, bad rows and many tables. It is not
+meant to model the statistics of real data.
+
+## Capabilities
+
+<PluginCapabilities plugin="fake" component="source" />
+
+## Verified versions
+
+<PluginVersions plugin="fake" />
+
+## Quick start
+
+Generate 1,000 rows of the default table `fake.rows` (`id`, `name`, `amount`, `created_at`):
+
+```yaml
+version: 1
+name: fake-demo
+source:
+  - { id: src, type: fake }
+sink:
+  - { id: out, type: console }
+```
+
+## Prerequisites
+
+None: the plugin is part of the distribution and needs no external system, network access or
+credentials.
+
+## Data source configuration
+
+The fake source has no data source: it connects to nothing, so there are no connection options,
+native configuration or configuration files to import.
+
+## Node options
+
+<PluginOptions plugin="fake" component="source" />
+
+## Native options
+
+<PluginNativeOptions plugin="fake" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="fake" />
+
+## Splits and parallelism
+
+- Each table is cut into `splits` contiguous ranges of row numbers (4 by default); readers pull the
+  next split when they finish one, so set `splits` to at least the parallelism.
+- With `unbounded: true` every table has `splits` endless splits that interleave row numbers; a reader
+  that gets no split ends at once, so use no more readers than splits.
+- Literal rows (`data`) are split the same way as generated rows.
+- `rows-per-second` limits the whole source and is shared equally by its readers.
+
+## Consistency
+
+The same options always produce the same rows, whatever the parallelism, the split size and the order
+in which readers take splits. A rerun therefore produces exactly the same data, and a reader restored
+from its state continues with the row after the last one it emitted. Duplicates or gaps in the target
+come from the rest of the pipeline, never from the fake source.
+
+## Examples
+
+### A table with chosen columns
+
+```yaml
+version: 1
+name: orders-sample
+source:
+  - id: orders
+    type: fake
+    table: shop.orders
+    columns:
+      - order_id INT64 NOT NULL
+      - customer STRING(40)
+      - amount DECIMAL(12, 2) NOT NULL
+      - status STRING(10)
+      - created_at TIMESTAMP(3)
+    primary-key: [order_id]
+    rows: 100000
+    seed: 42
+    null-ratio: 0.05
+sink:
+  - { id: out, type: console }
+```
+
+`order_id` counts from 0, the other columns get random values of their type, and 5% of the nullable
+columns are NULL.
+
+### A stream with late events
+
+```yaml
+version: 1
+name: clicks-stream
+source:
+  - id: clicks
+    type: fake
+    table: web.clicks
+    columns:
+      - click_id INT64 NOT NULL
+      - page STRING(64)
+      - clicked_at TIMESTAMP_LTZ(3)
+    primary-key: [click_id]
+    unbounded: true
+    rows-per-second: 2000
+    event-time-column: clicked_at
+    event-time-step: 500ms
+    max-out-of-order: 5s
+sink:
+  - { id: out, type: console }
+```
+
+The job runs until it is cancelled. Event times advance by 500 ms per row, and each row arrives up to
+5 seconds late, so downstream nodes see out-of-order events.
+
+### Many tables and bad rows
+
+```yaml
+version: 1
+name: shards
+source:
+  - id: shards
+    type: fake
+    tables: [shop.orders_0, shop.orders_1, shop.orders_2, shop.orders_3]
+    columns:
+      - id INT64 NOT NULL
+      - code STRING(8) NOT NULL
+      - total DECIMAL(10, 2)
+    primary-key: [id]
+    rows: 5000
+    bad-row-ratio: 0.01
+sink:
+  - { id: out, type: console }
+```
+
+Every table gets its own 5,000 rows. One row in a hundred breaks its schema: its `code` is NULL
+although the column is NOT NULL, which is how to try the handling of bad rows in a sink.
+
+### Literal rows
+
+```yaml
+version: 1
+name: fixed-rows
+source:
+  - id: src
+    type: fake
+    table: demo.users
+    columns: [id INT32 NOT NULL, name STRING, tags ARRAY<STRING>, joined DATE]
+    primary-key: [id]
+    data:
+      - '[1, "Ada", ["admin"], "2026-01-05"]'
+      - '[2, "Lin", [], null]'
+sink:
+  - { id: out, type: console }
+```
+
+Each row is a JSON array of the column values. Decimals, dates, times and timestamps are strings,
+binary values are Base64, maps are JSON objects and nested rows are arrays or objects.
+
+## Metrics
+
+The fake source reports the standard source metrics: `rowsRead` and the read rate. With
+`rows-per-second` the read rate stays at the limit; a `readerWaitMs` that grows means the sink cannot
+keep up with it. It estimates its total row count (`rows` × tables) for progress reporting, except
+when unbounded.
+
+## Performance and tuning
+
+- Generation is cheap: the throughput of `fake` with a sink that discards rows is the throughput of
+  the engine itself, which makes the pair the baseline of engine benchmarks.
+- Wide rows and nested types (`ARRAY`, `MAP`, `ROW`) cost more to generate than scalar columns.
+- Use at least as many `splits` as the parallelism; more splits even out uneven readers.
+- Literal rows are parsed once when the job starts; keep `data` to small, hand-written sets.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-CONF-0002` … `columns: 'id': write the column as 'name TYPE'` | Every column needs a name and a type, e.g. `id INT64 NOT NULL` |
+| `PF-CONF-0002` … `columns: '…': unexpected …` | The type cannot be read; see the logical types of the [data model](../../concepts/data-model) |
+| `PF-CONF-0002` … `data: row 2, column amount: 1.555 has more than 2 decimal places` | A literal value does not fit its column; the reason names the row and column |
+| `PF-CONF-0002` … `set either table or tables, not both` / `set either rows or data, not both` | Two ways to say the same thing; keep one |
+| `PF-CONF-0002` … `event-time-column: column name is STRING(32)` | The event time column must be `TIMESTAMP`, `TIMESTAMP_LTZ` or `INT64` |
+
+Write `columns` as a YAML list: a comma-separated string would split types such as `DECIMAL(10, 2)`.
+
+## Known limitations
+
+- All tables of `tables` share the same columns.
+- Generated values are uniformly random within their type; there are no distributions, correlations
+  or foreign keys between tables.
+- Literal rows need a single table and cannot be unbounded.
+- Generated integer primary keys count from 0 and wrap around in `INT8` and `INT16` columns.
+
+## Changelog
+
+<PluginChangelog plugin="fake" />

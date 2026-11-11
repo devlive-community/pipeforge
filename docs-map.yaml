@@ -56,6 +56,11 @@
   docs: ["concepts/execution"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
+# Plugins: every plugin module has its page; the conventions of plugin builds are part of packaging.
+- paths: ["pipeforge-connectors/pom.xml"]
+  docs: ["development/plugin-packaging"]
+- paths: ["pipeforge-connectors/connector-fake/**"]
+  docs: ["plugins/source/fake"]
 - paths: ["pipeforge-server/**"]
   docs: ["operations/server"]
 - paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]
