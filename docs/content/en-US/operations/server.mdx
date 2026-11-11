@@ -29,7 +29,9 @@ curl -s http://127.0.0.1:8080/api/v1/version
 The server hosts the [Web UI](../guides/web-ui) at `/` when the UI was built before the server was
 packaged (`pnpm --filter @pipeforge/ui build`); the build output in `pipeforge-ui/dist` is then
 part of the jar. Addresses outside `/api` that are not files open the UI, so its pages can be
-bookmarked; unknown `/api` addresses always answer with an error object.
+bookmarked; unknown `/api` addresses always answer with an error object. `index.html` is sent with
+`Cache-Control: no-cache` and the files under `/assets/`, whose names contain a content hash, are
+cached for a year, so browsers pick up a new version of the UI on the next load.
 
 ## Configuration
 

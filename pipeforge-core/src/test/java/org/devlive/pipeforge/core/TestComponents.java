@@ -51,6 +51,7 @@ import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.job.JobDefinition;
 import org.devlive.pipeforge.core.job.JobParser;
+import org.devlive.pipeforge.core.job.NodeKind;
 import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.core.plan.Planner;
 import org.devlive.pipeforge.core.plan.StaticComponents;
@@ -132,6 +133,22 @@ public final class TestComponents {
                 .sink(sink("keyed", true, false))
                 .sink(sink("committed", false, true))
                 .build();
+    }
+
+    /** The option rules of the test components, by kind and identifier, as the job schema takes them. */
+    public static Map<NodeKind, Map<String, OptionRule>> rules() {
+        Map<NodeKind, Map<String, OptionRule>> rules = new java.util.EnumMap<>(NodeKind.class);
+        rules.put(
+                NodeKind.SOURCE,
+                Map.of(
+                        "fake",
+                        source("fake", Boundedness.BOUNDED, TestComponents::orders)
+                                .optionRule()));
+        rules.put(
+                NodeKind.TRANSFORM,
+                Map.of("rename", OptionRule.builder().required(FROM, TO).build()));
+        rules.put(NodeKind.SINK, Map.of("console", sink("console", false, false).optionRule()));
+        return rules;
     }
 
     /** Parses a job with the test context: scheduled time {@link #SCHEDULED}, Shanghai, fixed env. */

@@ -98,7 +98,11 @@ public final class Planner {
         Set<String> declared = new HashSet<>();
         Map<String, PlannedNode> planned = new LinkedHashMap<>();
         for (NodeDefinition node : order) {
-            planned.put(node.id(), planNode(job, node, context, delivery, planned, declared, warnings));
+            try {
+                planned.put(node.id(), planNode(job, node, context, delivery, planned, declared, warnings));
+            } catch (PipeForgeException e) {
+                throw atNode(e, node.id());
+            }
         }
         warnUnusedDefaults(job, declared, warnings);
 
@@ -139,6 +143,22 @@ public final class Planner {
             throw new IllegalStateException("No default for " + option.key());
         }
         return value;
+    }
+
+    /**
+     * The error with {@code node} in its scope when it names no node yet, e.g. a plugin that is not
+     * installed, so that editors can point at the node.
+     */
+    static PipeForgeException atNode(PipeForgeException error, String node) {
+        if (error.scope().node() != null) {
+            return error;
+        }
+        PipeForgeException.Builder builder = PipeForgeException.of(error.code())
+                .scope(error.scope().withNode(node))
+                .kind(error.kind())
+                .cause(error.getCause());
+        error.params().forEach(builder::param);
+        return builder.build();
     }
 
     // ------------------------------------------------------------------ graph

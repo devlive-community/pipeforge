@@ -30,3 +30,8 @@ export function useErrorCodes() {
   const language = usePreferences((s) => s.language);
   return useQuery({ queryKey: ["errors", language], queryFn: api.listErrorCodes });
 }
+
+/** The JSON Schema of jobs with the options of the installed components; fetched once. */
+export function useJobSchema() {
+  return useQuery({ queryKey: ["job-schema"], queryFn: api.getJobSchema, staleTime: Infinity });
+}

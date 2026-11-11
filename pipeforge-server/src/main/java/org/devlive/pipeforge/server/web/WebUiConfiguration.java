@@ -7,10 +7,12 @@
 package org.devlive.pipeforge.server.web;
 
 import java.io.IOException;
+import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -32,10 +34,20 @@ public class WebUiConfiguration implements WebMvcConfigurer {
         registry.addViewController("/").setViewName("forward:/index.html");
     }
 
+    /**
+     * Built files under assets/ carry a content hash in their name and are cached for a year;
+     * index.html and the client-side routes are revalidated on every load, so a new version of the
+     * UI is picked up at once.
+     */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/assets/**")
+                .addResourceLocations("classpath:/" + LOCATION + "assets/")
+                .setCacheControl(
+                        CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable());
         registry.addResourceHandler("/**")
                 .addResourceLocations("classpath:/" + LOCATION)
+                .setCacheControl(CacheControl.noCache())
                 .resourceChain(true)
                 .addResolver(new SpaResolver());
     }

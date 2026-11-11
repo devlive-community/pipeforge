@@ -18,7 +18,8 @@ data: api
 | 422 | 作业、表达式或插件选项不合法（`CONF`、`PLAN`、`PLUG`、`DATA` 类错误码） |
 | 500 | `PF-SYS-0001`：内部错误 |
 
-- OpenAPI 文档位于 `/api/v1/openapi.json`。Web UI 使用的 TypeScript 客户端 `@pipeforge/client` 由它生成。
+- OpenAPI 文档位于 `/api/v1/openapi.json`。Web UI 使用的 TypeScript 客户端 `@pipeforge/client` 由它生成，每个接口都有一个以 operation id
+  命名的辅助方法（`validateJob`、`getJobSchema` 等）。
 
 ## 接口
 

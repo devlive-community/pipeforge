@@ -365,6 +365,61 @@
         }
       }
     },
+    "/api/v1/jobs/schema" : {
+      "get" : {
+        "description" : "The JSON Schema (draft 2020-12) of job definitions, with the options of every installed source, transform and sink, for completion in editors. Validation stays with validateJob.",
+        "operationId" : "getJobSchema",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : { }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get the job schema",
+        "tags" : [ "jobs" ],
+        "x-zh-CN" : {
+          "description" : "作业定义的 JSON Schema（draft 2020-12），包含每个已安装的 Source、Transform 和 Sink 的选项，供编辑器补全使用。校验仍以 validateJob 为准。",
+          "summary" : "获取作业 Schema"
+        }
+      }
+    },
     "/api/v1/jobs/validate" : {
       "post" : {
         "description" : "Parses the definition, resolves its variables, checks the plugins, options, graph and schemas. Problems are part of the result, not an error response.",

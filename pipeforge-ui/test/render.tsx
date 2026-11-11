@@ -30,8 +30,8 @@ export interface Recorded {
 }
 
 /**
- * Replaces fetch with a fake server: `routes` maps API paths to bodies, or to [status, body].
- * Unknown paths answer 404. Returns the requests made.
+ * Replaces fetch with a fake server: `routes` maps API paths to bodies, to [status, body], or to a
+ * function of the request body returning either. Unknown paths answer 404. Returns the requests made.
  */
 export function fakeServer(routes: Record<string, unknown>): Recorded[] {
   const requests: Recorded[] = [];
@@ -39,7 +39,9 @@ export function fakeServer(routes: Record<string, unknown>): Recorded[] {
     const request = input instanceof Request ? input : new Request(new URL(String(input), "http://ui.test"), init);
     const path = new URL(request.url).pathname;
     requests.push({ path, language: request.headers.get("Accept-Language") });
-    const answer = routes[path];
+    const route = routes[path];
+    const answer =
+      typeof route === "function" ? (route as (body: string) => unknown)(await request.clone().text()) : route;
     const [status, body] =
       Array.isArray(answer) && typeof answer[0] === "number" ? answer : [answer ? 200 : 404, answer];
     return new Response(JSON.stringify(body ?? { code: "PF-CONF-0007", message: "no endpoint" }), {

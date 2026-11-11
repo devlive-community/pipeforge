@@ -73,6 +73,7 @@
         <calcite.version>1.40.0</calcite.version>
         <janino.version>3.1.12</janino.version>
         <re2j.version>1.8</re2j.version>
+        <json-schema-validator.version>2.0.1</json-schema-validator.version>
         <!-- Versions above follow the Spring Boot BOM so that the server converges with the libraries. -->
         <spring-boot.version>4.1.2</spring-boot.version>
         <springdoc.version>3.2.0</springdoc.version>
@@ -171,6 +172,11 @@
                 <groupId>com.google.re2j</groupId>
                 <artifactId>re2j</artifactId>
                 <version>${re2j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

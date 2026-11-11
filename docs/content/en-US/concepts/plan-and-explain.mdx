@@ -122,7 +122,7 @@ job is streaming, because `live` never ends.
 - Planning never reads data and never writes to a target; it creates each component once to ask
   for its schema and discards it.
 - The first problem stops planning and is reported with its error code; the node is named in the
-  error's scope.
+  error's scope, also for problems that come from its plugin, such as a plugin that is not installed.
 - The output is deterministic: the same job and the same variable values always give the same
   plan, so plans can be compared between versions of a job.
 - Variables are resolved once per run; the values printed are the ones the run uses.

@@ -29,6 +29,7 @@ pipeforge-ui/
 ├── src/
 │   ├── app/              # 外壳、路由、导航
 │   ├── ui/               # 组件库：唯一允许使用原生控件的地方
+│   ├── canvas/           # 图的布局
 │   ├── features/         # 每个页面或功能一个目录
 │   ├── api/              # API 客户端和查询 hook
 │   ├── i18n/             # en-US.json、zh-CN.json
@@ -60,6 +61,11 @@ pipeforge-ui/
 | `Card`、`PageHeader` | 页面结构 |
 | `Badge`、`DescriptionList` | 状态标签和“标签—取值”列表 |
 | `Empty`、`Skeleton` | 空状态、错误状态和加载状态 |
+| `Tabs`、`Splitter` | 支持方向键切换的标签页；两栏布局，分隔条可拖动，也可用键盘移动 |
+| `Table` | 带说明文字和空状态文本的数据表格 |
+| `FileButton` | 打开文件选择框，并交出文件名和文本内容 |
+| `CodeEditor` | 带补全和问题标注的 YAML 编辑器；从 `@/ui/CodeEditor` 导入，CodeMirror 只随用到它的页面加载。补全是“文本和光标位置 → 建议列表”的函数，页面不直接接触 CodeMirror |
+| `DagCanvas` | 只读的作业图：使用 `src/canvas` 的分层布局，支持平移、缩放、适应窗口，节点是按钮 |
 
 所有组件遵守的约定：
 

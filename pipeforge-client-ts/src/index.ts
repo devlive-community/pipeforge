@@ -88,6 +88,7 @@ export function createClient(options: ClientOptions = {}) {
       ),
     listFunctions: () => unwrap(raw.GET("/api/v1/functions")),
     listErrorCodes: () => unwrap(raw.GET("/api/v1/errors")),
+    getJobSchema: () => unwrap(raw.GET("/api/v1/jobs/schema")),
     validateJob: (body: JobRequest) => unwrap(raw.POST("/api/v1/jobs/validate", { body })),
     explainJob: (body: JobRequest) => unwrap(raw.POST("/api/v1/explain", { body })),
     evaluateExpression: (body: EvaluationRequest) => unwrap(raw.POST("/api/v1/expressions/evaluate", { body })),

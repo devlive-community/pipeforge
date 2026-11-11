@@ -47,10 +47,10 @@ public final class JobParser {
     static final List<String> FIELDS = List.of("version", "name", "description", "env", "source", "transform", "sink");
     static final List<String> NODE_FIELDS = List.of("id", "type", "plugin", "inputs", "parallelism");
 
-    private static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}");
-    private static final Pattern ID = Pattern.compile("[A-Za-z_][A-Za-z0-9_-]{0,63}");
-    private static final Pattern TYPE = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
-    private static final Pattern PLUGIN =
+    static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}");
+    static final Pattern ID = Pattern.compile("[A-Za-z_][A-Za-z0-9_-]{0,63}");
+    static final Pattern TYPE = Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*");
+    static final Pattern PLUGIN =
             Pattern.compile("[a-z0-9]+(?:-[a-z0-9]+)*(?:@\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)?");
     private static final String VARIABLES = "variables";
 

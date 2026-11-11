@@ -1,0 +1,77 @@
+---
+title: Job editor
+description: Writing a job in the Web UI with completion, validation while typing, the plan and a picture of the graph.
+order: 20
+---
+
+The job editor is the place to write and check a job definition before it runs. It validates the
+YAML on the server while you type, marks problems where they are, and shows the plan and the graph
+once the job is valid. It does not run jobs or store them on the server: the definition is kept in
+your browser until you export it.
+
+<Screenshot name="job-editor" alt="The job editor with a valid job and its plan" />
+
+## Opening the editor
+
+Choose **Job editor** in the navigation, or open `/editor`. The first time it shows an example job;
+afterwards it shows your last draft. **Load the example** replaces the draft with the example
+again.
+
+## Writing a job
+
+The editor follows the [job DSL](../reference/job-dsl). Completion knows the fields of the job, of
+`env` and of the nodes, and the options of every installed plugin:
+
+| Where | What is offered |
+|---|---|
+| At the top level | `version`, `name`, `env`, `source`, `transform`, `sink`, … |
+| In `env` | `mode`, `parallelism`, `delivery`, `timezone`, `variables`, and under `env.source` the options sources declare |
+| In a node | `id`, `type`, `plugin`, `inputs`, `parallelism`, and the options of the node's `type` |
+| After `type:` | The installed components of that kind |
+| After `inputs:` | The ids of the sources and transforms |
+| After an option with choices | Its values, for example `batch` and `streaming` after `mode:` |
+
+Completion opens while you type, or with **Ctrl+Space**. It works in block style (one key per
+line); in flow style (`{ id: src, type: fake }`) the editor still validates but does not complete.
+Fields already written in the same mapping are not offered again.
+
+## Problems
+
+About half a second after you stop typing, the server [validates](../reference/api#validatejob)
+the job. The status next to the title says **Valid** or how many problems there are.
+
+<Screenshot name="job-editor-problem" alt="A missing plugin marked at its node in the editor, the graph and the problem list" />
+
+- A mistake in the YAML is marked at its line and column, with the reason.
+- A problem of a node, such as a plugin that is not installed, is marked at the node: in the
+  editor, in red in the graph, and in the **Problems** tab with the error code and a hint.
+- **Line N** in the problem list moves the cursor there; choosing a node in the graph does the same.
+- Warnings, such as an `env` default that no node uses, are listed as well.
+
+## Plan and text
+
+Once the job is valid, the **Plan** tab shows what `explain` prints, in tables: the job settings
+and variables, the nodes with their plugins, parallelism and inputs, the options of each node with
+where every value comes from, and the tables each node produces. The **Text** tab shows the same
+plan as text. See [plan and explain](../concepts/plan-and-explain) for what it contains.
+
+## The graph
+
+The graph shows the nodes from left to right in the order data flows, and follows the definition
+as you type, even while it is invalid. It fits itself into the available space; drag to pan, use
+**Ctrl** or **Cmd** with the wheel to zoom, or the buttons in its corner. The divider between the
+editor and the graph can be dragged or moved with the arrow keys.
+
+## Importing and exporting
+
+**Import** reads a `.yaml`, `.yml` or `.json` file into the editor; **Export** downloads the
+definition as `<name>.yaml`. The draft is saved in the browser as you type, so a reload keeps it,
+but it is not shared with other browsers.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "The job cannot be checked" | The server does not answer; check that it is running |
+| A plugin is not installed (`PF-PLUG-0001`) | Install it into the server's plugin directory, see [server](../operations/server) |
+| No completion for options | Completion needs the node's `type` written in block style; options come from the installed plugins |

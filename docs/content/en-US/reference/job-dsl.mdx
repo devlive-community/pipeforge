@@ -139,6 +139,14 @@ The same job in JSON:
 }
 ```
 
+## Editors and the JSON Schema
+
+`GET /api/v1/jobs/schema` ([REST API](./api#getjobschema)) returns the JSON Schema (draft 2020-12)
+of job definitions, including the options of every plugin installed on the server. The
+[job editor](../guides/job-editor) uses it for completion, and other editors can use it the same
+way. It allows variables wherever the parser does, but the server's validation stays the
+authority: it also checks the connections between nodes and the schemas.
+
 ## Validation
 
 | Step | Error codes |

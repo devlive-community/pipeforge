@@ -282,6 +282,10 @@ class PlannerTest {
 
     @Test
     void componentProblemsKeepTheirCodes() {
+        assertThat(Errors.thrown(ErrorCode.PLUGIN_NOT_FOUND, () -> plan(LINEAR.replace("type: console", "type: kafka")))
+                        .scope()
+                        .node())
+                .isEqualTo("out");
         assertThat(Errors.message(
                         ErrorCode.PLUGIN_NOT_FOUND, () -> plan(LINEAR.replace("type: console", "type: kafka"))))
                 .contains("kafka");

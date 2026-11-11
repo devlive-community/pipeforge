@@ -30,6 +30,7 @@ pipeforge-ui/
 ├── src/
 │   ├── app/              # shell, routes, navigation
 │   ├── ui/               # component library: the only place for native controls
+│   ├── canvas/           # graph layout
 │   ├── features/         # one directory per page or feature
 │   ├── api/              # API client and query hooks
 │   ├── i18n/             # en-US.json, zh-CN.json
@@ -64,6 +65,11 @@ The documentation site runs the same rules, defined once in `@pipeforge/design-t
 | `Card`, `PageHeader` | Page structure |
 | `Badge`, `DescriptionList` | Status labels and label–value pairs |
 | `Empty`, `Skeleton` | Empty, error and loading states |
+| `Tabs`, `Splitter` | Tab panels with arrow-key navigation; two panes with a draggable, keyboard-movable divider |
+| `Table` | Data tables with a caption and an empty text |
+| `FileButton` | Opens the file picker and hands over the file's name and text |
+| `CodeEditor` | YAML editing with completion and problems; imported from `@/ui/CodeEditor` so that CodeMirror only loads with the pages that use it. Completion is a function of the text and the cursor that returns the suggestions, so pages never touch CodeMirror |
+| `DagCanvas` | A read-only job graph: layered layout from `src/canvas`, pan, zoom, fit, nodes as buttons |
 
 Conventions for every component:
 

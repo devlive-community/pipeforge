@@ -21,6 +21,18 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
+// jsdom has no PointerEvent; pointer handlers read clientX and pointerId from it.
+if (typeof window.PointerEvent === "undefined") {
+  class PointerEvent extends MouseEvent {
+    readonly pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+    }
+  }
+  Object.defineProperty(window, "PointerEvent", { writable: true, value: PointerEvent });
+}
+
 afterEach(() => {
   cleanup();
   localStorage.clear();

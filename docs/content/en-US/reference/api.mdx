@@ -21,7 +21,8 @@ data: api
 | 500 | `PF-SYS-0001`: an internal error |
 
 - The OpenAPI document is served at `/api/v1/openapi.json`. The TypeScript client
-  `@pipeforge/client`, which the Web UI uses, is generated from it.
+  `@pipeforge/client`, which the Web UI uses, is generated from it and has a helper for every
+  operation, named after its operation id (`validateJob`, `getJobSchema`, …).
 
 ## Endpoints
 

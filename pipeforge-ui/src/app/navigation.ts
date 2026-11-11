@@ -11,4 +11,5 @@ import type { IconName } from "@/ui";
 /** The pages in the main navigation; each feature adds its entry together with its page. */
 export const NAVIGATION: { to: string; label: MessageKey; icon: IconName }[] = [
   { to: "/", label: "nav.overview", icon: "home" },
+  { to: "/editor", label: "nav.jobEditor", icon: "code" },
 ];

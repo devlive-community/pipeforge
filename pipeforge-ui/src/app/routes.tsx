@@ -17,6 +17,11 @@ export const ROUTES: RouteObject[] = [
     element: <Shell />,
     children: [
       { index: true, element: <OverviewPage /> },
+      {
+        path: "editor",
+        // The editor brings CodeMirror; load it only when the page is opened.
+        lazy: async () => ({ Component: (await import("@/features/job-editor/JobEditorPage")).JobEditorPage }),
+      },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -233,6 +234,29 @@ class ServerApiTest {
                 .andExpect(jsonPath("$.params.reason", containsString("definition")));
     }
 
+    @Test
+    void servesTheJobSchemaWithTheInstalledComponents() throws Exception {
+        mvc.perform(get("/api/v1/jobs/schema"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.$schema").value("https://json-schema.org/draft/2020-12/schema"))
+                .andExpect(jsonPath("$.required[0]").value("version"))
+                .andExpect(jsonPath("$.$defs.sourceNode.properties.type.examples[0]")
+                        .value("demo-source"))
+                .andExpect(jsonPath("$.$defs.sourceNode.allOf[0].if.properties.type.const")
+                        .value("demo-source"))
+                .andExpect(jsonPath("$.$defs.sourceNode.allOf[0].then.properties.rows.description")
+                        .value("Rows to produce"))
+                .andExpect(jsonPath("$.$defs.sourceNode.allOf[0].then.properties.mode.examples[1]")
+                        .value("safe"))
+                .andExpect(jsonPath("$.$defs.sourceNode.allOf[0].then.properties.password.writeOnly")
+                        .value(true))
+                .andExpect(
+                        jsonPath("$.$defs.sinkNode.properties.type.examples[0]").value("demo-sink"))
+                .andExpect(jsonPath("$.$defs.env.properties.source.properties.interval.default")
+                        .value("30s"))
+                .andExpect(jsonPath("$.properties.name.x-zh-CN.description").isString());
+    }
+
     // ------------------------------------------------------------------ expressions
 
     private static final String ROW =
@@ -331,6 +355,10 @@ class ServerApiTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("export const app")));
         mvc.perform(get("/assets/missing.js")).andExpect(status().isNotFound());
+        mvc.perform(get("/index.html")).andExpect(header().string("Cache-Control", "no-cache"));
+        mvc.perform(get("/jobs/editor")).andExpect(header().string("Cache-Control", "no-cache"));
+        mvc.perform(get("/assets/app.js"))
+                .andExpect(header().string("Cache-Control", "max-age=31536000, public, immutable"));
         mvc.perform(get("/api"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PF-CONF-0007"));
