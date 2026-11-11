@@ -36,6 +36,7 @@
     <modules>
         <module>pipeforge-common</module>
         <module>pipeforge-api</module>
+        <module>pipeforge-maven-plugin</module>
     </modules>
 
     <properties>
@@ -222,7 +223,6 @@
                             <includes>
                                 <include>src/main/java/**/*.java</include>
                                 <include>src/test/java/**/*.java</include>
-                                <include>src/it/**/*.java</include>
                             </includes>
                             <palantirJavaFormat>
                                 <version>${palantir-java-format.version}</version>

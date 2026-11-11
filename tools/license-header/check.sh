@@ -44,7 +44,7 @@ style_of() {
     base="$(basename "$file")"
     case "$file" in
         */node_modules/* | */target/* | */.next/* | */out/* | */dist/* | */generated/*) return ;;
-        */src/test/resources/* | */fixtures/* | */testdata/* | */__fixtures__/*) return ;;
+        */src/test/resources/* | */src/it/* | */fixtures/* | */testdata/* | */__fixtures__/*) return ;;
         .claude/* | */.claude/* | .idea/* | */.idea/* | .mvn/wrapper/*) return ;;
     esac
     case "$base" in
