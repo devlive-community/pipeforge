@@ -1,0 +1,13 @@
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <style>:root { color: #4f46e5 } @media (prefers-color-scheme: dark) { :root { color: #818cf8 } }</style>
+  <circle cx="5" cy="12" r="3" fill="currentColor" />
+  <circle cx="19" cy="6" r="3" fill="currentColor" opacity="0.7" />
+  <circle cx="19" cy="18" r="3" fill="currentColor" opacity="0.7" />
+  <path d="M8 12h4l4-5M12 12l4 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+</svg>

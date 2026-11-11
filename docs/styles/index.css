@@ -145,6 +145,17 @@
   }
 }
 
+/* Web UI screenshots: the version matching the site theme is shown. */
+.screenshot-dark {
+  display: none;
+}
+.dark .screenshot-dark {
+  display: block;
+}
+.dark .screenshot-light {
+  display: none;
+}
+
 /* Main content enters with a short fade; the sidebar stays still. */
 @view-transition {
   navigation: auto;

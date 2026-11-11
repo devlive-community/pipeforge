@@ -1,0 +1,44 @@
+{
+  "app": {
+    "name": "PipeForge",
+    "skipToContent": "Skip to content",
+    "mainNavigation": "Main navigation"
+  },
+  "nav": {
+    "overview": "Overview"
+  },
+  "preferences": {
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "language": "Language"
+  },
+  "overview": {
+    "title": "Overview",
+    "description": "The server this UI is connected to and what is installed on it.",
+    "server": "Server",
+    "connected": "Connected",
+    "unreachable": "Unreachable",
+    "version": "Version",
+    "connectorApi": "Connector API",
+    "java": "Java",
+    "plugins": "Plugins",
+    "pluginsUnavailable": "{count} could not be loaded",
+    "pluginsAllLoaded": "All loaded",
+    "functions": "Built-in functions",
+    "errorCodes": "Error codes",
+    "registered": "Registered",
+    "unavailableTitle": "Plugins that could not be loaded",
+    "package": "Package",
+    "reason": "Reason",
+    "errorTitle": "The server cannot be reached",
+    "errorDescription": "Check that the PipeForge server is running and that this page is served by it or by the development server.",
+    "retry": "Retry"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "This address does not belong to any page of the Web UI.",
+    "back": "Back to the overview"
+  }
+}

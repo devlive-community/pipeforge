@@ -22,6 +22,11 @@ java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar
 curl -s http://127.0.0.1:8080/api/v1/version
 ```
 
+## Web UI
+
+如果在打包服务之前先构建了 UI（`pnpm --filter @pipeforge/ui build`），`pipeforge-ui/dist` 中的构建产物会进入 jar，服务在 `/` 提供
+[Web UI](../guides/web-ui)。`/api` 以外且不是文件的地址都会打开 UI，因此 UI 的页面可以直接收藏；未知的 `/api` 地址始终返回错误对象。
+
 ## 配置
 
 配置项是 Spring Boot 属性：写在 jar 旁边的 `application.yaml` 中、以 `--名称=取值` 传入，或者设置为环境变量（`PIPEFORGE_JOB_TIMEZONE`）。

@@ -93,6 +93,7 @@ Observability、Performance and tuning、Troubleshooting、Limitations 和 Versi
 | `<ErrorList />` | 由错误码登记表生成的全部错误码，支持搜索和按类别筛选；页面在 frontmatter 中声明 `data: errors`，指向 `#pf-conf-0001` 这类锚点的链接因此也会被校验 |
 | `<FunctionList />` | 由函数目录生成的全部内置函数，包括签名、NULL 行为和示例，支持搜索和按类别筛选；页面在 frontmatter 中声明 `data: functions`，指向 `#substring` 这类锚点的链接因此也会被校验 |
 | `<ApiList />` | 由 `pipeforge-server/openapi.json` 生成的全部 REST API 接口，包括参数、请求和响应结构；页面在 frontmatter 中声明 `data: api`，指向 `#validatejob`、`#schema-errorinfo` 这类锚点的链接因此也会被校验 |
+| `<Screenshot name="overview" alt="..." />` | 页面语言对应的 Web UI 截图，浅色或深色跟随站点主题；图片由 `pnpm --filter @pipeforge/ui screenshots` 生成到 `public/screenshots/ui/`，缺少图片时构建失败 |
 
 ```mdx title="example.mdx"
 <Tabs>
@@ -122,7 +123,7 @@ pnpm dev         # 本地预览，修改后实时刷新
 | structure | frontmatter 不完整、缺少模板章节或章节为空、页面包含 `TODO` |
 | i18n | 某种语言缺少页面，或两种语言的模板、顺序、省略的章节、标题结构、代码块数量不一致 |
 | links | 链接指向不存在的页面或锚点，或使用了站点绝对路径 |
-| ui | 站点代码使用了原始色板、`dark:` 变体、行内颜色、`components/ui` 以外的原生控件、title 提示或浏览器对话框 |
+| ui | 站点代码使用了原始色板、`dark:` 变体、行内颜色、`components/ui` 以外的原生控件、title 提示或浏览器对话框；这些规则与 Web UI 共用，定义在 `@pipeforge/design-tokens/ui-scan` 中 |
 | Lighthouse | 性能、可访问性、最佳实践或 SEO 任一得分低于 95 |
 
 ## 文档覆盖检查

@@ -3,12 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Design tokens shared by the PipeForge web UI and documentation site",
+  "description": "Design tokens and UI rules shared by the PipeForge web UI and documentation site",
   "type": "module",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
     "./tokens.css": "./src/tokens.css",
-    "./theme.css": "./src/theme.css"
+    "./theme.css": "./src/theme.css",
+    "./ui-scan": {
+      "types": "./src/ui-scan.d.ts",
+      "default": "./src/ui-scan.js"
+    }
   },
   "files": [
     "src"

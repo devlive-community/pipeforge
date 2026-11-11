@@ -1,0 +1,71 @@
+---
+title: Web UI
+description: Opening the PipeForge Web UI, finding your way around it, and switching theme and language.
+order: 10
+---
+
+The Web UI is the browser front end of the PipeForge server. Everything it shows comes from the
+[REST API](../reference/api), so whatever you see in the UI you can also get from the API and,
+later, from the command line. Pages are added together with the features they belong to.
+
+<Screenshot name="overview" alt="The overview page of the Web UI" />
+
+## Opening the UI
+
+The server hosts the UI when it has been built into the server package:
+
+```bash
+pnpm install
+pnpm --filter @pipeforge/ui build
+./mvnw -B -pl pipeforge-server -am package -DskipTests
+java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar
+```
+
+Then open `http://127.0.0.1:8080`. The server only listens on the loopback interface, see
+[server](../operations/server).
+
+## Layout
+
+- **Top bar**: the language menu (globe) and the theme menu.
+- **Navigation**: the pages, on the left; on narrow screens it moves above the page.
+- **Page**: a title and a short description, then the content. Every address can be bookmarked
+  and opened directly; an unknown address shows a page with a way back.
+
+## Theme and language
+
+| Setting | Choices | Default |
+|---|---|---|
+| Theme | Light, Dark, System | System: follows the operating system, also when it changes |
+| Language | English, 中文 | The language of the browser |
+
+Both choices are kept in the browser. The language also decides the language of the messages the
+server returns, such as error messages.
+
+## Overview
+
+The start page shows the server the UI talks to and what is installed on it:
+
+| Card | Content |
+|---|---|
+| Server | Connection state, PipeForge version, connector API version and Java runtime |
+| Plugins | The number of installed plugins, and how many packages could not be loaded |
+| Built-in functions | The number of functions of the [expression language](../reference/functions) |
+| Error codes | The number of registered [error codes](../reference/errors) |
+
+Plugin packages that could not be loaded are listed below the cards with the reason, for example
+an invalid `plugin.yaml`.
+
+## Keyboard
+
+Everything works with the keyboard. `Tab` first reaches **Skip to content**, which jumps over the
+top bar and the navigation. Menus open with `Enter`, `Space` or the arrow keys, move with the
+arrow keys, `Home` and `End`, and close with `Escape`, which returns the focus to the menu
+button.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "The server cannot be reached" | The page was loaded but the API does not answer: check that the server is running, then choose **Retry** |
+| The address shows an error object instead of the UI | The server was packaged without the UI; build the UI first, as shown above |
+| A plugin is missing from the count | It may be listed under the plugins that could not be loaded, with the reason |

@@ -1,0 +1,44 @@
+{
+  "app": {
+    "name": "PipeForge",
+    "skipToContent": "跳到正文",
+    "mainNavigation": "主导航"
+  },
+  "nav": {
+    "overview": "概览"
+  },
+  "preferences": {
+    "theme": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统",
+    "language": "语言"
+  },
+  "overview": {
+    "title": "概览",
+    "description": "当前连接的服务以及服务上安装的内容。",
+    "server": "服务",
+    "connected": "已连接",
+    "unreachable": "无法连接",
+    "version": "版本",
+    "connectorApi": "连接器 API",
+    "java": "Java",
+    "plugins": "插件",
+    "pluginsUnavailable": "{count} 个无法加载",
+    "pluginsAllLoaded": "全部已加载",
+    "functions": "内置函数",
+    "errorCodes": "错误码",
+    "registered": "已登记",
+    "unavailableTitle": "无法加载的插件",
+    "package": "插件包",
+    "reason": "原因",
+    "errorTitle": "无法连接服务",
+    "errorDescription": "请确认 PipeForge 服务正在运行，并且本页面由服务或开发服务器提供。",
+    "retry": "重试"
+  },
+  "notFound": {
+    "title": "页面不存在",
+    "description": "这个地址不属于 Web UI 的任何页面。",
+    "back": "返回概览"
+  }
+}

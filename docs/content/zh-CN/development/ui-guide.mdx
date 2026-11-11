@@ -1,0 +1,98 @@
+---
+title: Web UI 开发
+description: Web UI 的构建方式——技术栈、目录结构、两条硬规则、组件、翻译、测试和截图——以及新增页面的检查清单。
+order: 40
+---
+
+Web UI 位于 `pipeforge-ui`。它只是 [REST API](../reference/api) 的客户端，从不直接读取服务的文件或数据库。页面随所属的功能一起构建，
+每个页面都在文档中带有对应的使用指南。
+
+## 技术栈
+
+| 领域 | 选型 |
+|---|---|
+| 框架 | React 19、TypeScript（strict） |
+| 构建 | Vite |
+| 样式 | Tailwind CSS v4，使用 `@pipeforge/design-tokens` 中的共享设计令牌 |
+| 组件 | 自研，位于 `src/ui`；不使用第三方组件库 |
+| 路由 | React Router |
+| 服务端状态 | TanStack Query，配合生成的客户端 `@pipeforge/client` |
+| 客户端状态 | Zustand，只存放所有页面共享的偏好（主题、语言） |
+| 翻译 | JSON 字典，键名有类型检查 |
+| 测试 | Vitest 和 Testing Library；浏览器测试和截图使用 Playwright |
+
+## 目录结构
+
+```text
+pipeforge-ui/
+├── index.html            # 构建时加入首帧主题脚本
+├── src/
+│   ├── app/              # 外壳、路由、导航
+│   ├── ui/               # 组件库：唯一允许使用原生控件的地方
+│   ├── features/         # 每个页面或功能一个目录
+│   ├── api/              # API 客户端和查询 hook
+│   ├── i18n/             # en-US.json、zh-CN.json
+│   ├── state/            # 偏好设置
+│   └── styles/           # Tailwind 和设计令牌
+├── test/                 # Vitest 测试
+├── e2e/                  # Playwright 冒烟测试和截图
+└── scripts/lint-ui.mjs   # UI 规则扫描
+```
+
+## 两条硬规则
+
+1. **只用语义令牌。** 使用 `bg-surface`、`text-fg-muted`、`border-border`、`bg-primary`、`rounded-control`、`shadow-popover`
+   这类类名。不允许原始色板（`bg-gray-100`）、任意颜色（`bg-[#1e293b]`）、行内颜色和 `dark:` 变体；切换主题只改令牌的取值。
+2. **`src/ui` 以外不用原生控件。** 页面中不出现 `<button>`、`<input>`、`<select>`、`<textarea>`、`<dialog>`、`title` 提示以及
+   `alert` / `confirm` / `prompt`，一律使用组件。CodeMirror 只能通过 `CodeEditor` 组件使用。
+
+`pnpm --filter @pipeforge/ui lint:ui` 检查这两条规则，代码符合规则时没有任何输出。文档站使用同一套规则，规则只在
+`@pipeforge/design-tokens/ui-scan` 中定义一次。
+
+## 组件
+
+| 组件 | 用途 |
+|---|---|
+| `Button` | 操作；`variant` 为 primary、secondary、ghost 或 danger，`size` 为 sm、md 或 lg，`loading` 显示转圈并禁用按钮 |
+| `IconButton` | 图标操作；`label` 既是无障碍名称也是提示文字 |
+| `Tooltip` | 悬停（有延迟）和键盘聚焦时显示的简短提示 |
+| `DropdownMenu` | 由触发按钮打开的菜单；传入 `value` 时为单选菜单项 |
+| `Card`、`PageHeader` | 页面结构 |
+| `Badge`、`DescriptionList` | 状态标签和“标签—取值”列表 |
+| `Empty`、`Skeleton` | 空状态、错误状态和加载状态 |
+
+所有组件遵守的约定：
+
+- 受控组件使用 `value` 和 `onChange`（或 `onSelect`）。
+- 悬停、按下、键盘聚焦、禁用、加载、空、错误七种状态都要设计；状态只用颜色和透明度过渡表达，不使用水波纹。
+- 键盘：浮层用 `Escape` 关闭并归还焦点；列表和菜单用方向键移动。
+- 抽屉和弹窗打开时首帧内容就完整（由调用方先加载数据），高度固定，提交时用加载遮罩覆盖内容。
+- 组件随第一个使用它的页面一起加入，并带有测试。
+
+## 翻译
+
+每段文字都是 `src/i18n/en-US.json` 和 `src/i18n/zh-CN.json` 中的一个键；`useT()` 返回翻译函数，缺少或拼错键名时会出现类型错误。
+占位符写作 `{name}`。测试会检查两份字典的键完全一致且没有空文本。请求会带上 `Accept-Language`，因此服务返回的消息与 UI 语言一致。
+
+## 新增页面
+
+1. 在 `src/features/<功能>/` 下添加页面，在 `src/app/routes.tsx` 中添加路由，在 `src/app/navigation.ts` 中添加导航入口。
+2. 在两份字典中添加文字。
+3. 为页面行为编写 Vitest 测试；只有浏览器才能体现的流程，补充 Playwright 冒烟测试。
+4. 把页面加入 `e2e/screenshots.spec.ts`，并运行 `pnpm --filter @pipeforge/ui screenshots`。
+5. 编写中英文的 `guides/<页面>.mdx`，使用 `<Screenshot name="..." alt="..." />`，并在 `docs-map.yaml` 中登记
+   `pipeforge-ui/src/features/<功能>/**`。
+
+以上内容与页面放在同一个提交中，或者页面紧随它所属的功能提交。
+
+## 运行与测试
+
+```bash
+pnpm --filter @pipeforge/ui dev           # http://localhost:5173，/api 转发到 127.0.0.1:8080
+pnpm --filter @pipeforge/ui test          # UI 规则扫描、类型检查和 Vitest
+pnpm --filter @pipeforge/ui e2e           # 针对生产构建的 Playwright 冒烟测试
+pnpm --filter @pipeforge/ui screenshots   # 文档截图：浅色和深色、en-US 和 zh-CN
+```
+
+开发服务器把 `/api` 转发到 `PIPEFORGE_SERVER`（默认 `http://127.0.0.1:8080`）。浏览器测试和截图会模拟 API，不需要启动服务。
+本地使用已安装的 Google Chrome；CI 中安装 Playwright 自带的 Chromium。

@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+@import "tailwindcss";
+@import "@pipeforge/design-tokens/tokens.css";
+@import "@pipeforge/design-tokens/theme.css";
+
+@source "../";
+
+@layer base {
+  html {
+    background-color: var(--pf-surface);
+    color: var(--pf-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei",
+      sans-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--pf-ring);
+    outline-offset: 2px;
+  }
+}

@@ -85,6 +85,12 @@
                 <directory>src/main/resources-filtered</directory>
                 <filtering>true</filtering>
             </resource>
+            <!-- The Web UI, when it has been built (the build script of @pipeforge/ui); served from /. -->
+            <resource>
+                <directory>../pipeforge-ui/dist</directory>
+                <targetPath>ui</targetPath>
+                <filtering>false</filtering>
+            </resource>
         </resources>
         <plugins>
             <plugin>

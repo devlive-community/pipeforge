@@ -24,6 +24,13 @@ It listens on `http://127.0.0.1:8080`. Check that it answers:
 curl -s http://127.0.0.1:8080/api/v1/version
 ```
 
+## Web UI
+
+The server hosts the [Web UI](../guides/web-ui) at `/` when the UI was built before the server was
+packaged (`pnpm --filter @pipeforge/ui build`); the build output in `pipeforge-ui/dist` is then
+part of the jar. Addresses outside `/api` that are not files open the UI, so its pages can be
+bookmarked; unknown `/api` addresses always answer with an error object.
+
 ## Configuration
 
 Settings are Spring Boot properties: put them in an `application.yaml` next to the jar, pass them

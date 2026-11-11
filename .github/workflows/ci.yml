@@ -119,6 +119,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r --filter '!@pipeforge/docs' test
+      # Browser tests of the Web UI against its production build, with the API mocked.
+      - run: pnpm --filter @pipeforge/ui exec playwright install --with-deps chromium
+      - run: pnpm --filter @pipeforge/ui e2e
 
   # Starts the docker compose environment (including MinIO) and checks every service.
   dev-env:

@@ -116,6 +116,7 @@ components_for() { # <files...> -> "name=value ..." for the components that are 
 echo "components.conf:"
 check "Java source runs java and docs" "java docs" "$(components_for pipeforge-api/src/main/java/A.java)"
 check "design tokens run web and docs" "web docs" "$(components_for pipeforge-design-tokens/src/tokens.css)"
+check "Web UI runs web and docs" "web docs" "$(components_for pipeforge-ui/src/app/Shell.tsx)"
 check "TypeScript client runs web and docs" "web docs" "$(components_for pipeforge-client-ts/src/index.ts)"
 check "OpenAPI document runs java, web and docs" "java web docs" "$(components_for pipeforge-server/openapi.json)"
 check "docs content runs docs only" "docs" "$(components_for docs/content/en-US/getting-started/overview.mdx)"

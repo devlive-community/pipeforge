@@ -1,0 +1,112 @@
+---
+title: Web UI development
+description: How the Web UI is built — stack, structure, the two hard rules, components, translations, tests and screenshots — and the checklist for adding a page.
+order: 40
+---
+
+The Web UI lives in `pipeforge-ui`. It is a client of the [REST API](../reference/api) only: it
+never reads the server's files or database. Pages are built together with the features they
+belong to, and every page ships with its guide in the documentation.
+
+## Stack
+
+| Area | Choice |
+|---|---|
+| Framework | React 19, TypeScript (strict) |
+| Build | Vite |
+| Styles | Tailwind CSS v4 with the shared design tokens of `@pipeforge/design-tokens` |
+| Components | Our own, in `src/ui`; no third-party component library |
+| Routing | React Router |
+| Server state | TanStack Query with the generated client `@pipeforge/client` |
+| Client state | Zustand, only for preferences shared by every page (theme, language) |
+| Translations | JSON dictionaries with type-checked keys |
+| Tests | Vitest and Testing Library; Playwright for the browser tests and the screenshots |
+
+## Structure
+
+```text
+pipeforge-ui/
+├── index.html            # the first-frame theme script is added at build time
+├── src/
+│   ├── app/              # shell, routes, navigation
+│   ├── ui/               # component library: the only place for native controls
+│   ├── features/         # one directory per page or feature
+│   ├── api/              # API client and query hooks
+│   ├── i18n/             # en-US.json, zh-CN.json
+│   ├── state/            # preferences
+│   └── styles/           # Tailwind and the tokens
+├── test/                 # Vitest tests
+├── e2e/                  # Playwright smoke tests and screenshots
+└── scripts/lint-ui.mjs   # UI rule scan
+```
+
+## The two hard rules
+
+1. **Semantic tokens only.** Use `bg-surface`, `text-fg-muted`, `border-border`, `bg-primary`,
+   `rounded-control`, `shadow-popover` and the like. Raw palette colors (`bg-gray-100`), arbitrary
+   colors (`bg-[#1e293b]`), inline colors and `dark:` variants are not allowed; the theme switches
+   by changing token values.
+2. **No native controls outside `src/ui`.** Pages never use `<button>`, `<input>`, `<select>`,
+   `<textarea>`, `<dialog>`, `title` tooltips or `alert` / `confirm` / `prompt`; they use the
+   components. CodeMirror is only used through the `CodeEditor` component.
+
+`pnpm --filter @pipeforge/ui lint:ui` enforces both and prints nothing when the code follows them.
+The documentation site runs the same rules, defined once in `@pipeforge/design-tokens/ui-scan`.
+
+## Components
+
+| Component | Use |
+|---|---|
+| `Button` | Actions; `variant` primary, secondary, ghost or danger, `size` sm, md or lg, `loading` shows a spinner and disables it |
+| `IconButton` | An icon action; `label` is its accessible name and its tooltip |
+| `Tooltip` | A short hint on hover (after a delay) and on keyboard focus |
+| `DropdownMenu` | A menu from a trigger; radio items when given a `value` |
+| `Card`, `PageHeader` | Page structure |
+| `Badge`, `DescriptionList` | Status labels and label–value pairs |
+| `Empty`, `Skeleton` | Empty, error and loading states |
+
+Conventions for every component:
+
+- Controlled components take `value` and `onChange` (or `onSelect`).
+- Hover, active, focus-visible, disabled, loading, empty and error states are designed; state is
+  shown with color and opacity transitions, never with a ripple.
+- Keyboard: overlays close with `Escape` and return the focus; lists and menus move with the
+  arrow keys.
+- Drawers and dialogs open with their content complete in the first frame (the caller loads the
+  data first), keep a fixed height, and cover their content with a loading overlay while
+  submitting.
+- Components are added with the first page that uses them, with their tests.
+
+## Translations
+
+Every text is a key in `src/i18n/en-US.json` and `src/i18n/zh-CN.json`; `useT()` returns the
+translate function and a missing or misspelt key is a type error. Placeholders are written
+`{name}`. A test checks that both dictionaries have the same keys and no empty texts. Requests
+send `Accept-Language`, so server messages follow the UI language.
+
+## Adding a page
+
+1. Add the page under `src/features/<feature>/`, its route in `src/app/routes.tsx` and its entry in
+   `src/app/navigation.ts`.
+2. Add its texts to both dictionaries.
+3. Write Vitest tests for its behavior, and extend the Playwright smoke tests when it has a flow
+   that only a browser shows.
+4. Add it to `e2e/screenshots.spec.ts` and run `pnpm --filter @pipeforge/ui screenshots`.
+5. Write `guides/<page>.mdx` in English and Chinese with `<Screenshot name="..." alt="..." />`,
+   and register `pipeforge-ui/src/features/<feature>/**` in `docs-map.yaml`.
+
+All of this goes into the same commit as the page, or the page directly follows the feature it
+belongs to.
+
+## Running and testing
+
+```bash
+pnpm --filter @pipeforge/ui dev           # http://localhost:5173, /api forwarded to 127.0.0.1:8080
+pnpm --filter @pipeforge/ui test          # UI rule scan, type check and Vitest
+pnpm --filter @pipeforge/ui e2e           # Playwright smoke tests against the production build
+pnpm --filter @pipeforge/ui screenshots   # documentation screenshots, light and dark, en-US and zh-CN
+```
+
+The development server forwards `/api` to `PIPEFORGE_SERVER` (default `http://127.0.0.1:8080`).
+The browser tests and screenshots mock the API, so they need no server. Locally they use the
+installed Google Chrome; CI installs Playwright's Chromium.

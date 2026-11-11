@@ -52,6 +52,14 @@
 - paths: ["pipeforge-core/src/main/java/org/devlive/pipeforge/core/plan/**", "pipeforge-core/src/main/java/org/devlive/pipeforge/core/explain/**"]
   docs: ["concepts/plan-and-explain"]
 - paths: ["pipeforge-server/**"]
-  docs: ["reference/api", "operations/server"]
+  docs: ["operations/server"]
+- paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]
+  docs: ["reference/api"]
 - paths: ["pipeforge-client-ts/**"]
   docs: ["reference/api"]
+# The Web UI: every page has a guide in guides/; the component library and the tooling are
+# described in development/ui-guide. Features register their own src/features/<feature>/** entry.
+- paths: ["pipeforge-ui/src/ui/**", "pipeforge-ui/src/styles/**", "pipeforge-ui/scripts/**", "pipeforge-ui/e2e/**", "pipeforge-ui/package.json"]
+  docs: ["development/ui-guide"]
+- paths: ["pipeforge-ui/src/app/**", "pipeforge-ui/src/features/overview/**", "pipeforge-ui/src/features/not-found/**"]
+  docs: ["guides/web-ui"]
