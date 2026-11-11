@@ -26,6 +26,7 @@ directory must be one of `getting-started`, `concepts`, `guides`, `reference`, `
 title: Local development environment   # page title, shown as the heading
 description: One sentence for search results and link previews.
 order: 20                              # position in the section navigation
+data: errors                           # optional: generated data the page renders (adds its anchors)
 template: feature                      # guide (default), feature or plugin
 omit:                                  # template sections that do not apply, with a reason
   performance: The environment is meant for development, not for benchmarks.
@@ -93,6 +94,7 @@ marked as generated render data exported from the plugin's code and are never wr
 | Code fences | Highlighted code with a copy button; add `title="file.yaml"`, `{2-4}` to highlight lines, or `showLineNumbers` |
 | `<Tabs>` with `<Tab label="...">` | Alternatives such as YAML, SQL and CLI |
 | `<Steps>` with `<Step title="...">` | Step-by-step procedures |
+| `<ErrorList />` | Every registered error code with search and category filters, generated from the error registry; the page declares `data: errors` in its frontmatter so that links to `#pf-conf-0001` anchors are checked |
 
 ```mdx title="example.mdx"
 <Tabs>
