@@ -215,7 +215,6 @@ expressions, for example many regular expressions per row.
 - The same mapping applies to every table; rules per table and patterns over column names and types
   come with the multi-table rules of field mapping.
 - A column the source adds while the job runs is kept only when it is added at the end of its table.
-- `type` cannot yet be a sized `BYTES(n)`, a `MAP` or a `ROW`; compute such columns with `expr`.
 - Expression failures turned into NULL by `on-error: null` are not yet counted in the metrics.
 - `order: target`, the order of the target table, needs the sink's table and is not available in a
   transform.

@@ -6,15 +6,22 @@
  */
 package org.devlive.pipeforge.expressions.parse;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
+import org.devlive.pipeforge.api.type.DataType;
+import org.devlive.pipeforge.api.type.DataTypes;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 
@@ -26,6 +33,12 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
  * <p>{@code TIMESTAMP_LTZ '...'} literals, which Calcite does not know, are rewritten to a call
  * before parsing, and {@code DAY(x)} (DAY is a keyword) to {@code DAYOFMONTH(x)}; reported
  * positions are mapped back to the original text.
+ *
+ * <p>The target of {@code CAST} and {@code TRY_CAST} may be written as a logical type, as in job
+ * definitions ({@code STRING(20)}, {@code TIMESTAMP_LTZ(3)}, {@code ARRAY<INT32>}, {@code MAP<STRING,
+ * INT64>}), which Calcite cannot parse: such a target is read with {@link DataTypes#parse} and
+ * replaced by a quoted placeholder of the same length, which {@link Parsed#castType} resolves. Targets
+ * that are not logical types, such as {@code VARCHAR(20)}, are left to Calcite.
  */
 public final class ExpressionParser {
 
@@ -41,10 +54,20 @@ public final class ExpressionParser {
 
     private ExpressionParser() {}
 
-    /** The parsed tree and the rewritten text it refers to. */
-    public record Parsed(SqlNode node, String text, List<int[]> shifts) {
+    /**
+     * The parsed tree and the rewritten text it refers to.
+     *
+     * @param castTypes the logical types of {@code CAST} targets, by placeholder name
+     */
+    public record Parsed(SqlNode node, String text, List<int[]> shifts, Map<String, DataType> castTypes) {
         public Parsed {
             shifts = List.copyOf(shifts);
+            castTypes = Map.copyOf(castTypes);
+        }
+
+        /** The logical type a {@code CAST} target placeholder stands for, if {@code name} is one. */
+        public Optional<DataType> castType(String name) {
+            return Optional.ofNullable(castTypes.get(name));
         }
 
         /** Maps a column of the rewritten text back to the original text. */
@@ -66,12 +89,13 @@ public final class ExpressionParser {
      */
     public static Parsed parse(String text) {
         List<int[]> shifts = new ArrayList<>();
-        String rewritten = rewriteLtzLiterals(text, shifts);
+        Map<String, DataType> castTypes = new HashMap<>();
+        String rewritten = rewriteCastTypes(rewriteLtzLiterals(text, shifts), castTypes);
         try {
             SqlNode node = SqlParser.create(rewritten, CONFIG).parseExpression();
-            return new Parsed(node, rewritten, shifts);
+            return new Parsed(node, rewritten, shifts, castTypes);
         } catch (SqlParseException e) {
-            Parsed parsed = new Parsed(null, rewritten, shifts);
+            Parsed parsed = new Parsed(null, rewritten, shifts, castTypes);
             int line = e.getPos() == null ? 1 : e.getPos().getLineNum();
             int column = e.getPos() == null
                     ? 1
@@ -158,6 +182,83 @@ public final class ExpressionParser {
                 column++;
             }
             i++;
+        }
+        return out.toString();
+    }
+
+    /** The prefix of {@code CAST} target placeholders; {@code #} cannot start a type name. */
+    public static final String CAST_TYPE = "#";
+
+    /**
+     * Replaces {@code CAST} / {@code TRY_CAST} targets that are logical types by placeholders of the
+     * same length ({@code `#0`} padded with spaces), so that positions do not move. A target that is
+     * not a logical type, spans lines, or is shorter than its placeholder stays as it is.
+     */
+    static String rewriteCastTypes(String text, Map<String, DataType> types) {
+        record Frame(boolean cast, int as) {}
+        List<int[]> targets = new ArrayList<>();
+        Deque<Frame> frames = new ArrayDeque<>();
+        boolean castNext = false;
+        int i = 0;
+        while (i < text.length()) {
+            char c = text.charAt(i);
+            if (c == '\'' || c == '`') {
+                i = skipQuoted(text, i, c);
+                castNext = false;
+                continue;
+            }
+            if (isIdentifierPart(c)) {
+                int end = i;
+                while (end < text.length() && isIdentifierPart(text.charAt(end))) {
+                    end++;
+                }
+                String word = text.substring(i, end).toUpperCase(Locale.ROOT);
+                boolean wordStart = i == 0 || text.charAt(i - 1) != '.';
+                Frame top = frames.peek();
+                if (word.equals("AS") && top != null && top.cast() && top.as() < 0) {
+                    frames.pop();
+                    frames.push(new Frame(true, end));
+                }
+                castNext = wordStart && (word.equals("CAST") || word.equals("TRY_CAST"));
+                i = end;
+                continue;
+            }
+            if (c == '(') {
+                frames.push(new Frame(castNext, -1));
+            } else if (c == ')') {
+                Frame frame = frames.poll();
+                if (frame != null && frame.cast() && frame.as() >= 0) {
+                    targets.add(new int[] {frame.as(), i});
+                }
+            }
+            if (!Character.isWhitespace(c)) {
+                castNext = false;
+            }
+            i++;
+        }
+        if (targets.isEmpty()) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder(text);
+        for (int[] target : targets) {
+            String written = text.substring(target[0], target[1]);
+            String trimmed = written.strip();
+            if (trimmed.isEmpty() || written.indexOf('\n') >= 0) {
+                continue;
+            }
+            DataType type;
+            try {
+                type = DataTypes.parse(trimmed);
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            String name = CAST_TYPE + types.size();
+            String placeholder = " `" + name + "`";
+            if (placeholder.length() > written.length()) {
+                continue;
+            }
+            types.put(name, type);
+            out.replace(target[0], target[1], placeholder + " ".repeat(written.length() - placeholder.length()));
         }
         return out.toString();
     }

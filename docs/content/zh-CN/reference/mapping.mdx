@@ -17,7 +17,7 @@ order: 30
 | `to` | 输出列名，原样使用。不写时取 `from` 的名称并按 `name-case` 转换风格。没有 `from` 时必填 |
 | `expr` | 基于输入行的[表达式](../concepts/expressions)，可以读取任意列。不写时取 `from` 的值 |
 | `value` | 常量，以文本书写，在计划阶段转换为 `type`（默认 `STRING`）一次。其中的[变量](./variables)会先被替换 |
-| `type` | 输出类型，即[逻辑类型](../concepts/data-model)，例如 `DECIMAL(14, 2)`；取值按 `CAST(… AS type)` 转换。不写时取 `from` 或表达式的类型 |
+| `type` | 输出类型，可以是任意[逻辑类型](../concepts/data-model)，例如 `DECIMAL(14, 2)`、`ARRAY<STRING(8)>`；取值按 `CAST(… AS type)` 转换。不写时取 `from` 或表达式的类型 |
 | `nullable` | `false` 使该列非空；`true` 使其可空 |
 | `default` | 替换 NULL；以文本书写，转换为列的类型。有默认值的列为非空 |
 | `comment` | 列注释；不写时，原样传递的列沿用 `from` 的注释 |

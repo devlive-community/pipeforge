@@ -135,19 +135,9 @@ final class Names {
         return "`" + name.replace("`", "``") + "`";
     }
 
-    /**
-     * {@code type} as the expression language reads it in {@code CAST}: sized strings as {@code
-     * VARCHAR(n)}, instants as {@code TIMESTAMP(p) WITH LOCAL TIME ZONE}, arrays as {@code T ARRAY};
-     * other types as they are written.
-     */
+    /** {@code type} as the target of {@code CAST}: the logical type, without NOT NULL. */
     static String castType(org.devlive.pipeforge.api.type.DataType type) {
-        org.devlive.pipeforge.api.type.DataType plain = type.withNullability(true);
-        return switch (plain.root()) {
-            case STRING -> plain.length() == null ? "STRING" : "VARCHAR(" + plain.length() + ")";
-            case TIMESTAMP_LTZ -> "TIMESTAMP(" + plain.precision() + ") WITH LOCAL TIME ZONE";
-            case ARRAY -> castType(plain.elementType()) + " ARRAY";
-            default -> plain.toString();
-        };
+        return type.withNullability(true).toString();
     }
 
     /** {@code text} as a string literal of the expression language. */

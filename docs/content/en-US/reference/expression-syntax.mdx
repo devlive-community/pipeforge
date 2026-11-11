@@ -90,9 +90,10 @@ CAST(value AS type)       -- fails when the value cannot be converted
 TRY_CAST(value AS type)   -- NULL when the value cannot be converted
 ```
 
-Types can be written as logical types (`INT64`, `STRING(20)`, `DECIMAL(10, 2)`) or with SQL names
-(`BIGINT`, `VARCHAR(20)`, `NUMERIC(10, 2)`). Instants are written `TIMESTAMP(3) WITH LOCAL TIME ZONE`
-or `TIMESTAMP_LTZ`; arrays as `BIGINT ARRAY`.
+Types can be written as [logical types](../concepts/data-model), exactly as in job definitions
+(`INT64`, `STRING(20)`, `BYTES(16)`, `DECIMAL(10, 2)`, `TIMESTAMP_LTZ(3)`, `ARRAY<INT64>`,
+`MAP<STRING, INT64>`, `ROW<a INT32, b STRING>`), or with SQL names (`BIGINT`, `VARCHAR(20)`,
+`NUMERIC(10, 2)`, `TIMESTAMP(3) WITH LOCAL TIME ZONE`, `BIGINT ARRAY`).
 
 | From | To | Rule |
 |---|---|---|

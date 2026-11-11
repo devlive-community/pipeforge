@@ -56,9 +56,12 @@ class NamesTest {
                 "DECIMAL(10, 2)",
                 "STRING",
                 "STRING(10)",
+                "BYTES(4)",
                 "TIMESTAMP(3)",
                 "TIMESTAMP_LTZ(3)",
                 "ARRAY<STRING(4)>",
+                "MAP<STRING, INT64>",
+                "ROW<a INT32, b STRING>",
                 "DATE",
                 "BOOLEAN",
                 "JSON")) {

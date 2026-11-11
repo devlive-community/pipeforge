@@ -71,6 +71,7 @@ CASE WHEN qty = 0 THEN 0 ELSE amount / qty END
 ```sql
 TRY_CAST(raw_price AS DECIMAL(12, 2))     -- raw_price 不是数字时为 NULL
 CAST(created AS TIMESTAMP(3))             -- 文本不是时间戳时报错
+CAST(code AS STRING(8))                   -- 类型名称与作业定义中的写法相同
 ```
 
 ## 行为与语义

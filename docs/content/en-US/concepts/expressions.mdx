@@ -81,6 +81,7 @@ CASE WHEN qty = 0 THEN 0 ELSE amount / qty END
 ```sql
 TRY_CAST(raw_price AS DECIMAL(12, 2))     -- NULL when raw_price is not a number
 CAST(created AS TIMESTAMP(3))             -- fails for text that is not a timestamp
+CAST(code AS STRING(8))                   -- the same type names as in job definitions
 ```
 
 ## Behavior

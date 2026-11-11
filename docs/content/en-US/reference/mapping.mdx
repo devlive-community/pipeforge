@@ -18,7 +18,7 @@ Every entry of `mapping` produces one output column:
 | `to` | The output name, used as written. Without it, the name of `from` in the style of `name-case`. Required when there is no `from` |
 | `expr` | An [expression](../concepts/expressions) over the input row, which may read any column. Without `expr`, the value of `from` |
 | `value` | A constant, written as text and converted to `type` (default `STRING`) once while planning. [Variables](./variables) are resolved before |
-| `type` | The output type, a [logical type](../concepts/data-model) such as `DECIMAL(14, 2)`; the value is converted as `CAST(… AS type)`. Without it, the type of `from` or of the expression |
+| `type` | The output type, any [logical type](../concepts/data-model) such as `DECIMAL(14, 2)` or `ARRAY<STRING(8)>`; the value is converted as `CAST(… AS type)`. Without it, the type of `from` or of the expression |
 | `nullable` | `false` makes the column NOT NULL; `true` makes it nullable |
 | `default` | Replaces NULL; written as text and converted to the column type. A column with a default is NOT NULL |
 | `comment` | The column comment; without it, the comment of `from` when the column is passed through unchanged |

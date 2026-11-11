@@ -629,6 +629,11 @@ public final class Analyzer {
     }
 
     private DataType typeSpec(SqlDataTypeSpec spec) {
+        List<String> names = spec.getTypeNameSpec().getTypeName().names;
+        Optional<DataType> logical = names.size() == 1 ? parsed.castType(names.get(0)) : Optional.empty();
+        if (logical.isPresent()) {
+            return logical.get();
+        }
         String typeText = typeText(spec.getTypeNameSpec());
         try {
             return DataTypes.parse(typeText);

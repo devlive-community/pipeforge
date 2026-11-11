@@ -208,6 +208,11 @@ class SemanticsTest {
         assertThat(eval("CAST(12345.6 AS DECIMAL(4, 1))"))
                 .isEqualTo("ERROR: value 12345.6 is out of range of DECIMAL(4, 1)");
         assertThat(eval("CAST(d AS STRING)")).isEqualTo("12.50");
+        assertThat(eval("CAST('abcdef' AS STRING(3))")).isEqualTo("abc");
+        assertThat(eval("CAST('abcdef' AS VARCHAR(3))")).isEqualTo("abc");
+        assertThat(eval("CAST('2026-11-07 12:30:00+08:00' AS TIMESTAMP_LTZ(3))"))
+                .isEqualTo(java.time.Instant.parse("2026-11-07T04:30:00Z"));
+        assertThat(eval("CAST(ARRAY[1, 2] AS ARRAY<INT64>)")).isEqualTo(java.util.List.of(1L, 2L));
         assertThat(eval("CAST(x AS STRING)")).isEqualTo("2.25");
         assertThat(eval("CAST(b AS STRING)")).isEqualTo("true");
         assertThat(eval("CAST('yes' AS BOOLEAN)")).isEqualTo(true);

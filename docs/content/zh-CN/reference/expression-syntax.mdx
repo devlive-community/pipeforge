@@ -85,8 +85,9 @@ CAST(value AS type)       -- 无法转换时报错
 TRY_CAST(value AS type)   -- 无法转换时为 NULL
 ```
 
-类型可以写成逻辑类型（`INT64`、`STRING(20)`、`DECIMAL(10, 2)`），也可以用 SQL 名称（`BIGINT`、`VARCHAR(20)`、`NUMERIC(10, 2)`）。
-时间点写作 `TIMESTAMP(3) WITH LOCAL TIME ZONE` 或 `TIMESTAMP_LTZ`，数组写作 `BIGINT ARRAY`。
+类型可以写成[逻辑类型](../concepts/data-model)，写法与作业定义完全相同（`INT64`、`STRING(20)`、`BYTES(16)`、`DECIMAL(10, 2)`、
+`TIMESTAMP_LTZ(3)`、`ARRAY<INT64>`、`MAP<STRING, INT64>`、`ROW<a INT32, b STRING>`），也可以用 SQL 名称（`BIGINT`、`VARCHAR(20)`、
+`NUMERIC(10, 2)`、`TIMESTAMP(3) WITH LOCAL TIME ZONE`、`BIGINT ARRAY`）。
 
 | 从 | 到 | 规则 |
 |---|---|---|
