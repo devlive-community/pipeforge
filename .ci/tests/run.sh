@@ -124,6 +124,8 @@ check "Markdown only runs nothing" "" "$(components_for README.md CONTRIBUTING.z
 check "CI workflow runs everything" "java build-checks" "$(components_for .github/workflows/ci.yml)"
 check "CI scripts run everything" "java build-checks" "$(components_for .ci/maven-modules.sh)"
 check "Dependabot config runs nothing" "" "$(components_for .github/dependabot.yml)"
+check "community files run nothing" "" \
+    "$(components_for .github/CODEOWNERS .github/ISSUE_TEMPLATE/bug_report.yml .github/labels.yml)"
 
 # ------------------------------------------------------------------ check-dco.sh
 
@@ -151,6 +153,78 @@ mid="$(git -C "$G" rev-parse HEAD)"
 git -C "$G" commit -q --allow-empty -m "feat: other signer" -m "Signed-off-by: Someone Else <else@example.org>"
 check "sign-off by someone other than the author fails" "1" \
     "$(cd "$G" && bash "$CI_DIR/check-dco.sh" "$mid" >/dev/null 2>&1; echo $?)"
+
+# ------------------------------------------------------------------ check-community-files.sh
+
+echo "check-community-files.sh:"
+
+community_copy() { # -> fresh copy of the real community files
+    local c="$WORK/community-$1"
+    mkdir -p "$c/.github"
+    cp "$ROOT"/CONTRIBUTING.md "$ROOT"/CONTRIBUTING.zh-CN.md "$ROOT"/CODE_OF_CONDUCT.md \
+        "$ROOT"/SECURITY.md "$ROOT"/GOVERNANCE.md "$ROOT"/MAINTAINERS.md "$ROOT"/docs-map.yaml "$c/"
+    cp -R "$ROOT"/.github/ISSUE_TEMPLATE "$c/.github/"
+    cp "$ROOT"/.github/CODEOWNERS "$ROOT"/.github/PULL_REQUEST_TEMPLATE.md \
+        "$ROOT"/.github/labels.yml "$ROOT"/.github/labeler.yml "$c/.github/"
+    echo "$c"
+}
+
+community_status() { # <dir> -> exit status of the checker
+    bash "$CI_DIR/check-community-files.sh" --root "$1" >/dev/null 2>&1
+    echo $?
+}
+
+C="$(community_copy ok)"
+check "repository files pass" "0" "$(community_status "$C")"
+
+C="$(community_copy missing)"
+rm "$C/SECURITY.md"
+check "missing SECURITY.md fails" "1" "$(community_status "$C")"
+
+C="$(community_copy owner)"
+echo "/pipeforge-api/ @someone-unknown" >>"$C/.github/CODEOWNERS"
+check "CODEOWNERS owner not in MAINTAINERS fails" "1" "$(community_status "$C")"
+
+C="$(community_copy noowner)"
+echo "/pipeforge-api/" >>"$C/.github/CODEOWNERS"
+check "CODEOWNERS rule without owner fails" "1" "$(community_status "$C")"
+
+C="$(community_copy badowner)"
+echo "/dev/ qianmoQ" >>"$C/.github/CODEOWNERS"
+check "CODEOWNERS owner without @ fails" "1" "$(community_status "$C")"
+
+C="$(community_copy label)"
+sed -i.bak 's/labels: \["type\/bug"\]/labels: ["type\/defect"]/' "$C/.github/ISSUE_TEMPLATE/bug_report.yml"
+check "issue form with undefined label fails" "1" "$(community_status "$C")"
+
+C="$(community_copy dupid)"
+printf '  - type: input\n    id: version\n    attributes:\n      label: Again\n' \
+    >>"$C/.github/ISSUE_TEMPLATE/bug_report.yml"
+check "issue form with duplicate id fails" "1" "$(community_status "$C")"
+
+C="$(community_copy noname)"
+sed -i.bak '/^name:/d' "$C/.github/ISSUE_TEMPLATE/docs_issue.yml"
+check "issue form without name fails" "1" "$(community_status "$C")"
+
+C="$(community_copy labeler)"
+printf 'area/unknown:\n  - changed-files:\n      - any-glob-to-any-file: x/**\n' >>"$C/.github/labeler.yml"
+check "labeler with undefined label fails" "1" "$(community_status "$C")"
+
+C="$(community_copy color)"
+printf -- '- name: extra\n  color: zzzzzz\n  description: bad color\n' >>"$C/.github/labels.yml"
+check "label with invalid color fails" "1" "$(community_status "$C")"
+
+C="$(community_copy dco)"
+sed -i.bak '/git commit -s/d' "$C/.github/PULL_REQUEST_TEMPLATE.md"
+check "PR template without the sign-off item fails" "1" "$(community_status "$C")"
+
+C="$(community_copy guides)"
+printf '\n## 10. Extra\n' >>"$C/CONTRIBUTING.md"
+check "contribution guides with different sections fail" "1" "$(community_status "$C")"
+
+C="$(community_copy docsmap)"
+printf -- '- paths: ["pipeforge-cli/**"]\n' >"$C/docs-map.yaml"
+check "docs-map entry without docs fails" "1" "$(community_status "$C")"
 
 # ------------------------------------------------------------------ summary
 

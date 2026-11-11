@@ -55,7 +55,8 @@ jobs:
               | bash .ci/maven-modules.sh --github-output
           fi
 
-  # Cheap repository-wide checks that need no build: license headers, shell scripts, CI script tests.
+  # Cheap repository-wide checks that need no build: license headers, shell scripts, CI script
+  # tests and the format of the community files.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -64,6 +65,7 @@ jobs:
       - run: tools/license-header/check.sh
       - run: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning
       - run: .ci/tests/run.sh
+      - run: .ci/check-community-files.sh
 
   dco:
     if: github.event_name == 'pull_request'

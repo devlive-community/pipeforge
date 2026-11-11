@@ -32,7 +32,11 @@ PipeForge 是插件化的分布式数据集成平台：一套连接器 API 覆�
 
 ## 社区
 
-贡献指南、行为准则和安全策略会陆续加入仓库。欢迎在 GitHub Discussions 中提问。
+- 提交 Pull Request 之前请阅读[贡献指南](CONTRIBUTING.zh-CN.md)。
+- 所有参与者都应遵守[行为准则](CODE_OF_CONDUCT.md)。
+- 安全问题请按 [SECURITY.md](SECURITY.md) 中的方式私下报告。
+- 决策方式见 [GOVERNANCE.md](GOVERNANCE.md)，维护者名单见 [MAINTAINERS.md](MAINTAINERS.md)。
+- 欢迎在 GitHub Discussions 中提问和交流想法。
 
 ## 许可证
 

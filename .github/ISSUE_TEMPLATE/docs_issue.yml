@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+name: Documentation issue
+description: Something in the documentation is wrong, missing or unclear.
+title: "[Docs] "
+labels: ["type/docs"]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page link
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true

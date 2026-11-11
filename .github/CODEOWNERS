@@ -1,0 +1,11 @@
+# Code owners per module. Keep in sync with MAINTAINERS.md.
+# Changes to pipeforge-api and the protocol need two approvals (see GOVERNANCE.md).
+
+*                         @qianmoQ
+
+/pom.xml                  @qianmoQ
+/.github/                 @qianmoQ
+/.ci/                     @qianmoQ
+/tools/                   @qianmoQ
+/docs/                    @qianmoQ
+/docs-map.yaml            @qianmoQ

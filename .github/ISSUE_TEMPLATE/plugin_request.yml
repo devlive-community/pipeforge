@@ -1,0 +1,48 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+name: New plugin request
+description: Ask for a new source, sink, transform, catalog, dialect or format plugin.
+title: "[Plugin] "
+labels: ["type/plugin"]
+body:
+  - type: input
+    id: datasource
+    attributes:
+      label: Data source name and versions
+      placeholder: ClickHouse 24.x
+    validations:
+      required: true
+  - type: checkboxes
+    id: capabilities
+    attributes:
+      label: Required capabilities
+      options:
+        - label: Batch source
+        - label: Streaming source
+        - label: CDC source
+        - label: Sink
+        - label: Catalog
+        - label: Transform
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Official client or driver and its license
+      placeholder: clickhouse-java, Apache-2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: maintain
+    attributes:
+      label: Would you maintain the plugin?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
