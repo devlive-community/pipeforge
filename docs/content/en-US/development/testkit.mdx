@@ -1,0 +1,158 @@
+---
+title: Connector testkit
+description: Run the contract tests of a source or sink with pipeforge-connector-testkit — the options, types and batch groups, test data and skipped groups.
+order: 60
+---
+
+## What the testkit checks
+
+Every plugin runs the contract tests of its kind before it is merged. The testkit derives the cases
+from the connector itself, so a plugin only says how to prepare data and how to read it back:
+
+| Group | For | What it checks |
+|---|---|---|
+| `options` | Sources, sinks | The option rule as the planner applies it: valid options plan, unknown options are rejected, every required option is reported missing (`PF-CONF-0001`), defaults appear in the plan, values outside the range or the choices are rejected (`PF-CONF-0002`), old option names still work, exclusive and conditional options, sensitive values are masked in `explain` |
+| `types` | Sources, sinks | Every logical type round-trips: NULL, minimum and maximum, the largest decimal, empty and 64 KB strings, Unicode, binary, the earliest and latest dates and times, `TIMESTAMP_LTZ` in a time zone other than UTC, arrays, maps, nested rows and JSON |
+| `batch` | Sources, sinks | An empty table, a single row, and a large table at parallelism 1, 4 and 16; for sources, once per split strategy |
+
+Every job that runs also checks the [row counters](../reference/metrics): `rowsRead` or
+`rowsWritten` must match the data, and the counters must reconcile. More groups (`resume`,
+`metrics`, `stream`, …) are added to the testkit together with the engine features they test.
+
+## Set up a test
+
+Add the testkit with test scope:
+
+```xml
+<dependency>
+    <groupId>org.devlive.pipeforge</groupId>
+    <artifactId>pipeforge-connector-testkit</artifactId>
+    <version>${pipeforge.version}</version>
+    <scope>test</scope>
+</dependency>
+```
+
+### A source
+
+Implement `SourceUnderTest` and extend `SourceContract`. `options(table)` puts the rows of the test
+table into the source system and returns the options that make the source read exactly them:
+
+```java
+class JdbcSourceContractTest extends SourceContract {
+    @Override
+    protected SourceUnderTest source() {
+        return new SourceUnderTest() {
+            public SourceFactory factory() {
+                return new JdbcSourceFactory();
+            }
+
+            public Map<String, Object> options(TestTable table) throws Exception {
+                database.create(table);              // create the table and insert table.rows()
+                return Map.of("url", database.url(), "table", "testkit.items");
+            }
+
+            public void cleanup(TestTable table) throws Exception {
+                database.drop(table);
+            }
+
+            public Set<TypeRoot> supportedTypes() {
+                return EnumSet.complementOf(EnumSet.of(TypeRoot.ROW, TypeRoot.NULL));
+            }
+        };
+    }
+}
+```
+
+The source must produce the table with the same columns and type roots and every row, in any
+order. `splitStrategies()` adds options per split strategy, e.g. `Map.of("by key", Map.of("split-by",
+"id"), "by size", Map.of("split-size", 1000))`; `largeRowCount()` sets the size of the large batch
+cases (100,000 by default).
+
+### A sink
+
+Implement `SinkUnderTest` and extend `SinkContract`. `options(table)` returns where the sink writes,
+and `readBack(table, options)` returns what it wrote:
+
+```java
+class ConsoleSinkContractTest extends SinkContract {
+    @Override
+    protected SinkUnderTest sink() {
+        return new SinkUnderTest() {
+            public SinkFactory factory() {
+                return new ConsoleSinkFactory();
+            }
+
+            public Map<String, Object> options(TestTable table) {
+                return Map.of("format", "json");
+            }
+
+            public Optional<List<Row>> readBack(TestTable table, Map<String, Object> options) {
+                return Optional.empty();             // only the job result and the counters are checked
+            }
+        };
+    }
+}
+```
+
+A sink whose output cannot be read back returns `Optional.empty()`; then the testkit still checks
+that the job succeeds, `rowsWritten` and the reconciliation identity.
+
+## How the cases run
+
+`SourceContract` and `SinkContract` are JUnit 5 test factories: each group is a container of cases,
+reported like any other test.
+
+```text
+JdbcSourceContractTest
+├── options
+│   ├── plans with valid options
+│   ├── requires url
+│   ├── defaults fetch-size to 1000
+│   └── rejects fetch-size = 0 below its minimum
+├── types
+│   ├── BOOLEAN
+│   ├── DECIMAL(38, 10)
+│   └── ROW<a INT32, b STRING>       skipped: the source does not support ROW
+└── batch
+    ├── an empty table
+    ├── a single row
+    └── 100,000 rows at parallelism 16 (by key)
+```
+
+A source under test is paired with the testkit's `testkit-collect` sink, and a sink under test with
+the `testkit-rows` source; the jobs are planned by the real planner and run on the local engine with
+the time zone `Asia/Shanghai`. When rows differ, the failure lists the missing and unexpected rows:
+
+```text
+rows read by the source: expected 9 row(s) but got 8
+  missing (1):
+    (L8, 'x…')
+```
+
+Values are compared by meaning: `1.50` equals `1.5` for decimals, byte arrays by content, maps in
+any order; floating point values must be exactly equal.
+
+## Skipping a group
+
+A group that does not apply is declared in the plugin's `plugin.yaml` with the reason, and is
+reported as skipped:
+
+```yaml
+skipped-testkit-groups:
+  - { group: types, reason: "the sink discards rows; nothing can be read back" }
+```
+
+Any group name that is not a testkit group fails the contract, so typos are caught.
+
+## Writing other tests
+
+The pieces of the contracts can be used on their own:
+
+| Class | Use |
+|---|---|
+| `TestkitExtension` | `@ExtendWith(TestkitExtension.class)` injects a `TestkitEngine` into test methods |
+| `TestJob` | Builds a job from factory instances and plans it like any other job |
+| `TestkitEngine` | Runs a `TestJob` on the local engine and returns a `TestRun` with the job result; `requireSuccess()` fails with the error, its hint and the run analysis |
+| `TestData` | Tables of every type, boundary values and rows generated from a seed |
+| `RowAssertions` | `assertSameRows(what, expected, actual)` |
+| `Datasets`, `TestkitConnectors` | The in-memory `testkit-rows` source and `testkit-collect` sink |

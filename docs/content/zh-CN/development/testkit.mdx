@@ -1,0 +1,148 @@
+---
+title: 连接器测试套件
+description: 用 pipeforge-connector-testkit 运行 Source 或 Sink 的契约测试：options、types、batch 用例组，测试数据，以及跳过用例组。
+order: 60
+---
+
+## testkit 检查什么
+
+每个插件合并之前都要通过其类型的契约测试。testkit 从连接器本身推导用例，插件只需要说明如何准备数据、如何读回数据：
+
+| 用例组 | 适用于 | 检查内容 |
+|---|---|---|
+| `options` | Source、Sink | 规划器应用的选项规则：合法选项能够规划；未知选项被拒绝；每个必填选项缺失时报错（`PF-CONF-0001`）；默认值出现在计划中；超出范围或不在可选值中的值被拒绝（`PF-CONF-0002`）；旧选项名仍然可用；互斥选项与条件选项；敏感值在 `explain` 中被遮蔽 |
+| `types` | Source、Sink | 每种逻辑类型的往返：NULL、最小值和最大值、最大精度的小数、空字符串和 64 KB 字符串、Unicode、二进制、最早和最晚的日期与时间、非 UTC 时区下的 `TIMESTAMP_LTZ`、数组、Map、嵌套行和 JSON |
+| `batch` | Source、Sink | 空表、单行，以及并行度 1、4、16 下的大表；Source 对每种分片策略各跑一遍 |
+
+运行的每个作业还会检查[行数指标](../reference/metrics)：`rowsRead` 或 `rowsWritten` 必须与数据一致，并且满足对账恒等式。
+其他用例组（`resume`、`metrics`、`stream` 等）随它们所测试的引擎功能一起加入 testkit。
+
+## 编写测试
+
+以 test 范围引入 testkit：
+
+```xml
+<dependency>
+    <groupId>org.devlive.pipeforge</groupId>
+    <artifactId>pipeforge-connector-testkit</artifactId>
+    <version>${pipeforge.version}</version>
+    <scope>test</scope>
+</dependency>
+```
+
+### Source
+
+实现 `SourceUnderTest` 并继承 `SourceContract`。`options(table)` 把测试表的行放进源端系统，并返回让 Source 恰好读取这些行的选项：
+
+```java
+class JdbcSourceContractTest extends SourceContract {
+    @Override
+    protected SourceUnderTest source() {
+        return new SourceUnderTest() {
+            public SourceFactory factory() {
+                return new JdbcSourceFactory();
+            }
+
+            public Map<String, Object> options(TestTable table) throws Exception {
+                database.create(table);              // 建表并写入 table.rows()
+                return Map.of("url", database.url(), "table", "testkit.items");
+            }
+
+            public void cleanup(TestTable table) throws Exception {
+                database.drop(table);
+            }
+
+            public Set<TypeRoot> supportedTypes() {
+                return EnumSet.complementOf(EnumSet.of(TypeRoot.ROW, TypeRoot.NULL));
+            }
+        };
+    }
+}
+```
+
+Source 必须产出列名和类型根都相同的表，并读出全部行，顺序不限。`splitStrategies()` 为每种分片策略提供额外选项，例如
+`Map.of("by key", Map.of("split-by", "id"), "by size", Map.of("split-size", 1000))`；`largeRowCount()` 设置 batch 用例组中大表的行数
+（默认 100,000）。
+
+### Sink
+
+实现 `SinkUnderTest` 并继承 `SinkContract`。`options(table)` 返回 Sink 的写入位置，`readBack(table, options)` 返回它写入的内容：
+
+```java
+class ConsoleSinkContractTest extends SinkContract {
+    @Override
+    protected SinkUnderTest sink() {
+        return new SinkUnderTest() {
+            public SinkFactory factory() {
+                return new ConsoleSinkFactory();
+            }
+
+            public Map<String, Object> options(TestTable table) {
+                return Map.of("format", "json");
+            }
+
+            public Optional<List<Row>> readBack(TestTable table, Map<String, Object> options) {
+                return Optional.empty();             // 只检查作业结果和行数指标
+            }
+        };
+    }
+}
+```
+
+无法读回输出的 Sink 返回 `Optional.empty()`，此时 testkit 仍然检查作业成功、`rowsWritten` 和对账恒等式。
+
+## 用例如何运行
+
+`SourceContract` 和 `SinkContract` 是 JUnit 5 的测试工厂：每个用例组是一个包含若干用例的容器，与其他测试一样展示结果。
+
+```text
+JdbcSourceContractTest
+├── options
+│   ├── plans with valid options
+│   ├── requires url
+│   ├── defaults fetch-size to 1000
+│   └── rejects fetch-size = 0 below its minimum
+├── types
+│   ├── BOOLEAN
+│   ├── DECIMAL(38, 10)
+│   └── ROW<a INT32, b STRING>       skipped: the source does not support ROW
+└── batch
+    ├── an empty table
+    ├── a single row
+    └── 100,000 rows at parallelism 16 (by key)
+```
+
+被测的 Source 与 testkit 的 `testkit-collect` Sink 组成作业，被测的 Sink 与 `testkit-rows` Source 组成作业；作业由真实的规划器规划，
+在本地引擎上以 `Asia/Shanghai` 时区运行。行不一致时，失败信息列出缺少的行和多出的行：
+
+```text
+rows read by the source: expected 9 row(s) but got 8
+  missing (1):
+    (L8, 'x…')
+```
+
+值按含义比较：小数 `1.50` 等于 `1.5`，字节数组按内容比较，Map 不区分顺序；浮点数必须完全相等。
+
+## 跳过用例组
+
+不适用的用例组在插件的 `plugin.yaml` 中声明并写明原因，结果中显示为跳过：
+
+```yaml
+skipped-testkit-groups:
+  - { group: types, reason: "the sink discards rows; nothing can be read back" }
+```
+
+写了不存在的用例组名称时契约测试失败，拼写错误因此会被发现。
+
+## 编写其他测试
+
+契约测试的组成部分也可以单独使用：
+
+| 类 | 用途 |
+|---|---|
+| `TestkitExtension` | `@ExtendWith(TestkitExtension.class)` 向测试方法注入 `TestkitEngine` |
+| `TestJob` | 用工厂实例构造作业，并像其他作业一样规划 |
+| `TestkitEngine` | 在本地引擎上运行 `TestJob`，返回带作业结果的 `TestRun`；`requireSuccess()` 失败时给出错误、排查建议和运行分析 |
+| `TestData` | 每种类型的表、边界值，以及由种子生成的行 |
+| `RowAssertions` | `assertSameRows(what, expected, actual)` |
+| `Datasets`、`TestkitConnectors` | 内存中的 `testkit-rows` Source 和 `testkit-collect` Sink |

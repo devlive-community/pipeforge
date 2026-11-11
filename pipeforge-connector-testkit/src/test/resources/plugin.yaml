@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Descriptor of the test classes: SkippingContractTest checks that its skipped group is applied.
+id: testkit-fixture
+name: Testkit fixture
+version: 1.0.0
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Components of the testkit's own tests.
+provides:
+  - { type: source, identifier: fixture-rows, class: org.devlive.pipeforge.testkit.FixtureRowsFactory }
+skipped-testkit-groups:
+  - { group: batch, reason: "the fixture reads in memory; batch is covered by RowsSourceContractTest" }

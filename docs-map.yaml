@@ -54,6 +54,8 @@
 # The native engine. In local mode the runtime is described by the execution concept page.
 - paths: ["pipeforge-engine/**"]
   docs: ["concepts/execution"]
+- paths: ["pipeforge-connector-testkit/**"]
+  docs: ["development/testkit"]
 - paths: ["pipeforge-server/**"]
   docs: ["operations/server"]
 - paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]
