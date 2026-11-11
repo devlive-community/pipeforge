@@ -125,3 +125,31 @@ pnpm dev         # preview with live reload
 | links | a link points to a page or anchor that does not exist, or uses a site-absolute path |
 | ui | site code uses raw palette colors, `dark:` variants, inline colors, native controls outside `components/ui`, title tooltips or browser dialogs |
 | Lighthouse | performance, accessibility, best practices or SEO score below 95 |
+
+## Documentation coverage
+
+Every pull request runs `docs/scripts/check-docs-coverage.sh <base> <head>`. For each commit
+in the pull request:
+
+- a `feat` or `perf` commit, or a breaking commit (`type!:` or a `BREAKING CHANGE:` footer),
+  that changes a path listed in `docs-map.yaml` must also change every page mapped to that
+  path, in both `en-US` and `zh-CN`;
+- a commit that ends with `Docs-Not-Needed: <reason>` is exempt; an empty reason is rejected;
+- other commit types are not checked.
+
+Independently, every module (each `pipeforge-*` directory and its Maven submodules) must be
+covered by an entry in `docs-map.yaml`, and every page listed there must exist in both languages.
+
+```yaml title="docs-map.yaml"
+- paths: ["pipeforge-cli/**"]
+  docs: ["reference/cli"]
+- paths: ["pipeforge-engine/engine-worker/src/main/**"]
+  docs: ["concepts/execution", "reference/metrics"]
+```
+
+In paths, `**` spans directories and `*` matches within one directory. Run the check locally
+before you push:
+
+```bash
+docs/scripts/check-docs-coverage.sh origin/main HEAD
+```

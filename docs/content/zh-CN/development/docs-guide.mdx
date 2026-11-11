@@ -120,3 +120,28 @@ pnpm dev         # 本地预览，修改后实时刷新
 | links | 链接指向不存在的页面或锚点，或使用了站点绝对路径 |
 | ui | 站点代码使用了原始色板、`dark:` 变体、行内颜色、`components/ui` 以外的原生控件、title 提示或浏览器对话框 |
 | Lighthouse | 性能、可访问性、最佳实践或 SEO 任一得分低于 95 |
+
+## 文档覆盖检查
+
+每个 Pull Request 都会运行 `docs/scripts/check-docs-coverage.sh <base> <head>`。对其中的每一个提交：
+
+- `feat`、`perf` 提交，以及不兼容的提交（`type!:` 或带 `BREAKING CHANGE:` 脚注），如果改动了 `docs-map.yaml`
+  中登记的路径，必须同时改动该路径对应的每一个页面，`en-US` 和 `zh-CN` 都要改；
+- 提交信息末尾写了 `Docs-Not-Needed: <原因>` 的提交不检查；原因为空会被拒绝；
+- 其他类型的提交不检查。
+
+另外，每个模块（每个 `pipeforge-*` 目录及其 Maven 子模块）都必须被 `docs-map.yaml` 中的某个条目覆盖，
+其中列出的每个页面都必须在两种语言中存在。
+
+```yaml title="docs-map.yaml"
+- paths: ["pipeforge-cli/**"]
+  docs: ["reference/cli"]
+- paths: ["pipeforge-engine/engine-worker/src/main/**"]
+  docs: ["concepts/execution", "reference/metrics"]
+```
+
+路径中 `**` 可以跨越多级目录，`*` 只匹配一级目录之内。推送之前可以在本地运行：
+
+```bash
+docs/scripts/check-docs-coverage.sh origin/main HEAD
+```

@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 // jsdom lacks the layout and media APIs the components use.
-if (!window.matchMedia) {
+if (typeof window !== "undefined" && !window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({

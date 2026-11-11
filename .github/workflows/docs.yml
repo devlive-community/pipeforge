@@ -6,7 +6,8 @@
 #
 # Documentation site: content checks, lint, component tests, static build and Lighthouse on
 # every change that can affect the site; deployment to GitHub Pages from main. Pull requests
-# get the built site as a downloadable preview. "docs-ok" is the required status check.
+# get the built site as a downloadable preview and the documentation coverage check.
+# "docs-ok" is the required status check.
 
 name: Docs
 
@@ -35,6 +36,26 @@ jobs:
           fetch-depth: 0
       - id: detect
         run: bash .ci/changed-components.sh --github-output -v
+
+  # Every feat / perf / breaking commit must update the pages mapped in docs-map.yaml.
+  coverage:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @pipeforge/docs...
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: docs/scripts/check-docs-coverage.sh "$BASE_SHA" "$HEAD_SHA"
 
   build:
     needs: changes
@@ -90,7 +111,7 @@ jobs:
 
   docs-ok:
     if: always()
-    needs: [changes, build, deploy]
+    needs: [changes, coverage, build, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
