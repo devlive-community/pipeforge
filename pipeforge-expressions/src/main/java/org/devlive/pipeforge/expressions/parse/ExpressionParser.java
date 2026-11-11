@@ -24,7 +24,8 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
  * case and match case-insensitively, and the lenient conformance accepts {@code !=} and {@code %}.
  *
  * <p>{@code TIMESTAMP_LTZ '...'} literals, which Calcite does not know, are rewritten to a call
- * before parsing; reported positions are mapped back to the original text.
+ * before parsing, and {@code DAY(x)} (DAY is a keyword) to {@code DAYOFMONTH(x)}; reported
+ * positions are mapped back to the original text.
  */
 public final class ExpressionParser {
 
@@ -51,7 +52,7 @@ public final class ExpressionParser {
             int result = column;
             for (int[] shift : shifts) {
                 if (shift[0] == line && column > shift[1]) {
-                    result--;
+                    result -= shift[2];
                 }
             }
             return result;
@@ -136,10 +137,18 @@ public final class ExpressionParser {
                     int end = skipQuoted(text, k, '\'');
                     out.append(text, i, k - 1).append('(').append(text, k, end).append(')');
                     column += end - i;
-                    shifts.add(new int[] {line, column});
+                    shifts.add(new int[] {line, column, 1});
                     i = end;
                     continue;
                 }
+            }
+            if (isDayCall(text, i)) {
+                // DAY is a keyword for Calcite; DAY(x) is the same as DAYOFMONTH(x).
+                out.append(DAY_FUNCTION);
+                column += DAY.length();
+                shifts.add(new int[] {line, column, DAY_FUNCTION.length() - DAY.length()});
+                i += DAY.length();
+                continue;
             }
             out.append(c);
             if (c == '\n') {
@@ -151,6 +160,24 @@ public final class ExpressionParser {
             i++;
         }
         return out.toString();
+    }
+
+    private static final String DAY = "DAY";
+    private static final String DAY_FUNCTION = "DAYOFMONTH";
+
+    /** {@code DAY} as a whole word followed by an opening parenthesis. */
+    private static boolean isDayCall(String text, int i) {
+        int end = i + DAY.length();
+        if (end > text.length()
+                || !text.substring(i, end).equalsIgnoreCase(DAY)
+                || (i > 0 && (isIdentifierPart(text.charAt(i - 1)) || text.charAt(i - 1) == '.'))) {
+            return false;
+        }
+        int k = end;
+        while (k < text.length() && Character.isWhitespace(text.charAt(k))) {
+            k++;
+        }
+        return k < text.length() && text.charAt(k) == '(';
     }
 
     private static boolean matchesKeyword(String text, int i) {

@@ -89,8 +89,15 @@ CAST(created AS TIMESTAMP(3))             -- fails for text that is not a timest
   is NULL counts as not satisfied.
 - **Laziness**: `CASE`, `IF`, `COALESCE`, `AND` and `OR` only evaluate what they need, so a guard in
   the condition protects the branch.
-- **Time zone**: conversions between `TIMESTAMP` and `TIMESTAMP_LTZ`, and rendering `TIMESTAMP_LTZ`
-  as text, use the job time zone.
+- **Time zone**: conversions between `TIMESTAMP` and `TIMESTAMP_LTZ`, rendering `TIMESTAMP_LTZ`
+  as text, and the date and time functions (`CURRENT_DATE`, `NOW()`, `TO_TIMESTAMP_LTZ`, `HOUR`, …)
+  use the job time zone.
+- **Run time**: `RUN_START_TIME()` is the moment the run started and is the same for every row and
+  every retry, so it is deterministic; `NOW()` and `CURRENT_TIMESTAMP` read the clock on every call.
+- **Functions**: the [function reference](../reference/functions) lists every built-in function with
+  its signatures and NULL behavior. Unless stated otherwise a function returns NULL when any argument
+  is NULL. Invalid arguments, such as `SUBSTRING(s, 0)` or a date that does not exist, are run-time
+  errors handled by `on-error`.
 - **Determinism**: functions are marked deterministic or not. Non-deterministic calls are never
   shared between expressions and are not pushed down to sources.
 - **Safety**: expressions cannot reach files, the network, reflection or system properties; regular
@@ -114,7 +121,8 @@ share one generated class, so many parallel instances do not compile repeatedly.
 
 ## Limitations
 
-- `INTERVAL` values and the date arithmetic that uses them arrive with the date and time functions.
+- `INTERVAL` values are not supported; use `DATE_ADD`, `DATE_SUB` and `TIMESTAMPDIFF` for date arithmetic.
+- User-defined functions are not available yet.
 - Subqueries are not expressions; `IN` takes a list of values.
 - `BETWEEN SYMMETRIC` is not supported.
 

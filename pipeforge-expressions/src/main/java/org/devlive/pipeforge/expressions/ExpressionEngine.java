@@ -28,6 +28,11 @@ public final class ExpressionEngine {
 
     private final FunctionRegistry functions;
 
+    /** An engine with the built-in function library. */
+    public ExpressionEngine() {
+        this(org.devlive.pipeforge.expressions.function.builtin.BuiltinFunctions.registry());
+    }
+
     public ExpressionEngine(FunctionRegistry functions) {
         this.functions = functions;
     }
@@ -48,12 +53,12 @@ public final class ExpressionEngine {
     /** Compiles expressions to bytecode; shared subexpressions are evaluated once per row. */
     public Evaluator compile(List<Expression> expressions, OnError onError, EvaluationContext context) {
         List<Node> roots = expressions.stream().map(Expression::root).toList();
-        return new Evaluator(expressions, CodeGenerator.compile(roots, context.timeZone()), onError);
+        return new Evaluator(expressions, CodeGenerator.compile(roots, context), onError);
     }
 
     /** Evaluates expressions by walking their trees (the reference semantics of {@link #compile}). */
     public Evaluator interpret(List<Expression> expressions, OnError onError, EvaluationContext context) {
         List<Node> roots = expressions.stream().map(Expression::root).toList();
-        return new Evaluator(expressions, new Interpreter(roots, context.timeZone()), onError);
+        return new Evaluator(expressions, new Interpreter(roots, context), onError);
     }
 }

@@ -7,7 +7,6 @@
 package org.devlive.pipeforge.expressions.eval;
 
 import java.lang.reflect.Method;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.codehaus.commons.compiler.CompileException;
 import org.codehaus.janino.SimpleCompiler;
+import org.devlive.pipeforge.expressions.EvaluationContext;
 import org.devlive.pipeforge.expressions.ast.Kind;
 import org.devlive.pipeforge.expressions.ast.Node;
 import org.devlive.pipeforge.expressions.function.FunctionCall;
@@ -64,7 +64,7 @@ public final class CodeGenerator {
     private CodeGenerator() {}
 
     /** Compiles the expressions; {@code roots.get(i)} is evaluated by {@code eval(i, row)}. */
-    public static RowFunctions compile(List<Node> roots, ZoneId zone) {
+    public static RowFunctions compile(List<Node> roots, EvaluationContext context) {
         CodeGenerator generator = new CodeGenerator();
         for (Node root : roots) {
             generator.count(root);
@@ -83,8 +83,8 @@ public final class CodeGenerator {
         }
         try {
             return (RowFunctions) generated
-                    .getConstructor(Object[].class, ZoneId.class, int.class)
-                    .newInstance(generator.constants.toArray(), zone, roots.size());
+                    .getConstructor(Object[].class, EvaluationContext.class, int.class)
+                    .newInstance(generator.constants.toArray(), context, roots.size());
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Cannot instantiate generated expressions", e);
         }
@@ -403,9 +403,13 @@ public final class CodeGenerator {
         }
         Class<?>[] params = method.getParameterTypes();
         List<String> actual = new ArrayList<>();
-        int fixed = method.isVarArgs() ? params.length - 1 : params.length;
+        int offset = Invocations.takesContext(method) ? 1 : 0;
+        if (offset == 1) {
+            actual.add("ctx");
+        }
+        int fixed = (method.isVarArgs() ? params.length - 1 : params.length) - offset;
         for (int i = 0; i < fixed; i++) {
-            actual.add(convert("a" + i, params[i]));
+            actual.add(convert("a" + i, params[i + offset]));
         }
         if (method.isVarArgs()) {
             Class<?> component = params[params.length - 1].getComponentType();
@@ -417,7 +421,12 @@ public final class CodeGenerator {
         }
         String invocation = method.getDeclaringClass().getCanonicalName() + "." + method.getName() + "("
                 + String.join(", ", actual) + ")";
-        ret(b, box(invocation, method.getReturnType()));
+        String result = box(invocation, method.getReturnType());
+        ret(
+                b,
+                node.type().root() == org.devlive.pipeforge.api.type.TypeRoot.DECIMAL
+                        ? R + ".result(" + result + ", " + type(node) + ")"
+                        : result);
     }
 
     private static String convert(String value, Class<?> type) {
@@ -450,7 +459,8 @@ public final class CodeGenerator {
                 .append(PACKAGE)
                 .append(";\n\n")
                 .append("public final class __NAME__ extends org.devlive.pipeforge.expressions.eval.GeneratedBase {\n")
-                .append("  public __NAME__(Object[] c, java.time.ZoneId zone, int size) { super(c, zone, size); }\n")
+                .append(
+                        "  public __NAME__(Object[] c, org.devlive.pipeforge.expressions.EvaluationContext ctx, int size) { super(c, ctx, size); }\n")
                 .append("  public void reset() {\n");
         for (int id : memoized) {
             source.append("    m")

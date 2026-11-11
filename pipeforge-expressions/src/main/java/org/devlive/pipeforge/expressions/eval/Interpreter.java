@@ -10,6 +10,7 @@ import java.time.ZoneId;
 import java.util.List;
 import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.api.type.DataType;
+import org.devlive.pipeforge.expressions.EvaluationContext;
 import org.devlive.pipeforge.expressions.ast.Node;
 import org.devlive.pipeforge.expressions.function.FunctionCall;
 import org.devlive.pipeforge.expressions.runtime.R;
@@ -22,10 +23,12 @@ public final class Interpreter implements RowFunctions {
 
     private final List<Node> roots;
     private final ZoneId zone;
+    private final EvaluationContext context;
 
-    public Interpreter(List<Node> roots, ZoneId zone) {
+    public Interpreter(List<Node> roots, EvaluationContext context) {
         this.roots = List.copyOf(roots);
-        this.zone = zone;
+        this.context = context;
+        this.zone = context.timeZone();
     }
 
     @Override
@@ -140,7 +143,7 @@ public final class Interpreter implements RowFunctions {
                 for (int i = 0; i < values.length; i++) {
                     values[i] = eval(args.get(i), in);
                 }
-                yield Invocations.invoke((FunctionCall) node.payload(), values);
+                yield R.result(Invocations.invoke((FunctionCall) node.payload(), values, context), type);
             }
         };
     }

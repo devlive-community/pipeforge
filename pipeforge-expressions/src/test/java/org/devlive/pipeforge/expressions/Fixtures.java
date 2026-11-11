@@ -25,7 +25,6 @@ import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.table.Column;
 import org.devlive.pipeforge.api.type.DataTypes;
 import org.devlive.pipeforge.common.error.PipeForgeException;
-import org.devlive.pipeforge.expressions.function.FunctionRegistry;
 import org.devlive.pipeforge.expressions.runtime.R;
 
 /** Schema, rows and helpers shared by the expression tests. */
@@ -60,7 +59,10 @@ final class Fixtures {
             Column.of("name", DataTypes.STRING()),
             Column.of("id", DataTypes.INT64().notNull())));
 
-    static final EvaluationContext SHANGHAI = new EvaluationContext(ZoneId.of("Asia/Shanghai"));
+    static final EvaluationContext SHANGHAI = new EvaluationContext(
+            ZoneId.of("Asia/Shanghai"),
+            java.time.Instant.parse("2026-11-07T00:00:00Z"),
+            java.time.Clock.fixed(java.time.Instant.parse("2026-11-07T04:30:00.250Z"), ZoneId.of("UTC")));
 
     /** A row with typical values. */
     static Row row() {
@@ -98,7 +100,7 @@ final class Fixtures {
         return GenericRow.of(TABLE, values);
     }
 
-    static final ExpressionEngine ENGINE = new ExpressionEngine(FunctionRegistry.empty());
+    static final ExpressionEngine ENGINE = new ExpressionEngine();
 
     /**
      * Evaluates an expression interpreted and compiled, asserts both agree, and returns the value,
