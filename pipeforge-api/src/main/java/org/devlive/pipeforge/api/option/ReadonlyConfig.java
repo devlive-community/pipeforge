@@ -160,6 +160,7 @@ public final class ReadonlyConfig {
                         yield Enum.valueOf((Class) option.valueClass(), upper);
                     }
                     case LIST -> toList(raw, text);
+                    case OBJECT_LIST -> toObjectList(raw);
                     case MAP -> {
                         if (!(raw instanceof Map<?, ?> map)) {
                             yield fail("expected a mapping");
@@ -232,6 +233,30 @@ public final class ReadonlyConfig {
         } catch (DateTimeParseException e) {
             return fail("expected a duration such as 30s, 5m, 1h or 200ms");
         }
+    }
+
+    private static List<Map<String, String>> toObjectList(Object raw) {
+        if (!(raw instanceof List<?> items)) {
+            return fail("expected a list of objects");
+        }
+        List<Map<String, String>> list = new ArrayList<>();
+        for (Object item : items) {
+            if (!(item instanceof Map<?, ?> map)) {
+                return fail("expected a list of objects");
+            }
+            Map<String, String> entry = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> field : map.entrySet()) {
+                Object value = field.getValue();
+                if (value instanceof Map || value instanceof List) {
+                    return fail("'" + field.getKey() + "' must be a plain value, not a list or an object");
+                }
+                if (value != null) {
+                    entry.put(String.valueOf(field.getKey()), String.valueOf(value));
+                }
+            }
+            list.add(Collections.unmodifiableMap(entry));
+        }
+        return List.copyOf(list);
     }
 
     private static List<String> toList(Object raw, String text) {

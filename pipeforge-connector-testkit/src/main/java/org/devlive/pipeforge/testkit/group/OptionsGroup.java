@@ -259,6 +259,7 @@ public final class OptionsGroup {
                     : option.enumValues().get(0);
             case LIST -> List.of("testkit");
             case MAP -> Map.of("key", "value");
+            case OBJECT_LIST -> List.of(Map.of("key", "value"));
         };
     }
 

@@ -78,6 +78,11 @@ public final class Options {
         public TypedBuilder<Map<String, String>> mapType() {
             return new TypedBuilder<>(key, OptionType.MAP, Map.class, List.of());
         }
+
+        /** A list of objects with plain values, such as the entries of a field mapping. */
+        public TypedBuilder<List<Map<String, String>>> objectListType() {
+            return new TypedBuilder<>(key, OptionType.OBJECT_LIST, List.class, List.of());
+        }
     }
 
     /** Sets the default value of an option. */

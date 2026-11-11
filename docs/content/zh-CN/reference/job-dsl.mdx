@@ -134,7 +134,7 @@ sink:
 
 `GET /api/v1/jobs/schema`（[REST API](./api#getjobschema)）返回作业定义的 JSON Schema（draft 2020-12），其中包含服务上每个已安装插件的选项。
 [作业编辑器](../guides/job-editor)用它提供补全，其他编辑器也可以同样使用。凡是解析器允许变量的地方它都允许变量，但以服务的校验为准：
-校验还会检查节点之间的连接和 Schema。
+校验还会检查节点之间的连接和 Schema。取值为对象列表的选项（例如字段映射的 `mapping`）描述为由普通值组成的对象的数组。
 
 ## 校验
 

@@ -32,6 +32,8 @@ class ReadonlyConfigTest {
     static final Option<Map<String, String>> HEADERS =
             Options.key("headers").mapType().noDefault();
     static final Option<String> NAME = Options.key("name").stringType().defaultValue("job");
+    static final Option<List<Map<String, String>>> MAPPING =
+            Options.key("mapping").objectListType().noDefault();
 
     @Test
     void returnsDefaultsForMissingOptions() {
@@ -146,5 +148,29 @@ class ReadonlyConfigTest {
         assertThat(option.hashCode())
                 .isEqualTo(Options.key("batch-size").intType().noDefault().hashCode());
         assertThat(MODE.enumValues()).containsExactly("AT_LEAST_ONCE", "EXACTLY_ONCE");
+    }
+
+    @Test
+    void readsListsOfObjectsWithPlainValues() {
+        java.util.Map<String, Object> second = new java.util.LinkedHashMap<>();
+        second.put("expr", "amount / 100");
+        second.put("nullable", false);
+        second.put("default", null);
+        ReadonlyConfig config =
+                ReadonlyConfig.of(Map.of("mapping", List.of(Map.of("from", "id", "to", "order_id"), second)));
+
+        assertThat(config.get(MAPPING))
+                .containsExactly(
+                        Map.of("from", "id", "to", "order_id"), Map.of("expr", "amount / 100", "nullable", "false"));
+        assertThat(MAPPING.type()).isEqualTo(OptionType.OBJECT_LIST);
+        assertThatThrownBy(() ->
+                        ReadonlyConfig.of(Map.of("mapping", List.of("id"))).get(MAPPING))
+                .hasMessageContaining("expected a list of objects");
+        assertThatThrownBy(() -> ReadonlyConfig.of(Map.of("mapping", Map.of("from", "id")))
+                        .get(MAPPING))
+                .hasMessageContaining("expected a list of objects");
+        assertThatThrownBy(() -> ReadonlyConfig.of(Map.of("mapping", List.of(Map.of("to", List.of("a")))))
+                        .get(MAPPING))
+                .hasMessageContaining("'to' must be a plain value");
     }
 }

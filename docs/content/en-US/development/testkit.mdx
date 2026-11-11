@@ -11,7 +11,7 @@ from the connector itself, so a plugin only says how to prepare data and how to 
 
 | Group | For | What it checks |
 |---|---|---|
-| `options` | Sources, transforms, sinks | The option rule as the planner applies it: valid options plan, unknown options are rejected, every required option is reported missing (`PF-CONF-0001`), defaults appear in the plan, values outside the range or the choices are rejected (`PF-CONF-0002`), old option names still work, exclusive and conditional options, sensitive values are masked in `explain` |
+| `options` | Sources, transforms, sinks | The option rule as the planner applies it: valid options plan, unknown options are rejected, every required option is reported missing (`PF-CONF-0001`), defaults appear in the plan, values outside the range or the choices are rejected (`PF-CONF-0002`), old option names still work, exclusive and conditional options, sensitive values are masked in `explain`; options missing from the baseline get a sample value of their type, lists of objects included |
 | `types` | Sources, sinks | Every logical type round-trips: NULL, minimum and maximum, the largest decimal, empty and 64 KB strings, Unicode, binary, the earliest and latest dates and times, `TIMESTAMP_LTZ` in a time zone other than UTC, arrays, maps, nested rows and JSON |
 | `batch` | Sources, sinks | An empty table, a single row, and a large table at parallelism 1, 4 and 16; for sources, once per split strategy |
 | `transform` | Transforms | The tables derived while planning; the rows of an empty input, 1,000 rows, 1,000 rows at parallelism 4 and two input tables, compared with the transform's model and checked against the derived schema; a schema change from the source; a failing row reported at the node with a registered code |

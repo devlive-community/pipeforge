@@ -144,6 +144,9 @@ class JobSchemaTest {
                 .containsEntry("default", true);
         assertThat(JobSchema.option(Options.key("m").mapType().noDefault()).toString())
                 .contains("type=object");
+        assertThat(JobSchema.option(Options.key("o").objectListType().noDefault())
+                        .toString())
+                .contains("type=array", "items={", "type=object", "additionalProperties");
         assertThat(JobSchema.option(Options.key("d").enumType(Delivery.class).defaultValue(Delivery.EXACTLY_ONCE)))
                 .containsEntry("default", "exactly-once")
                 .containsEntry("examples", List.of("at-least-once", "exactly-once"));

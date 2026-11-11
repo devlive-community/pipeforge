@@ -97,6 +97,8 @@ public final class TestComponents {
     static final Option<String> TO = Options.key("to").stringType().noDefault();
     static final Option<Integer> LIMIT = Options.key("limit").intType().defaultValue(20);
     static final Option<String> EXPR = Options.key("expr").stringType().noDefault();
+    public static final Option<List<Map<String, String>>> NOTES =
+            Options.key("notes").objectListType().noDefault();
 
     private TestComponents() {}
 
@@ -273,7 +275,7 @@ public final class TestComponents {
 
             @Override
             public OptionRule optionRule() {
-                return OptionRule.builder().required(EXPR, TO).build();
+                return OptionRule.builder().required(EXPR, TO).optional(NOTES).build();
             }
 
             @Override

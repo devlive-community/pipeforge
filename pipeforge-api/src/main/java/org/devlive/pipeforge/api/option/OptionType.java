@@ -23,5 +23,10 @@ public enum OptionType {
     /** A list of strings, written as a YAML list or a comma-separated string. */
     LIST,
     /** A map of strings. */
-    MAP
+    MAP,
+    /**
+     * A list of objects, each a mapping of keys to plain values (strings, numbers, booleans), e.g.
+     * {@code [{ from: id, to: order_id }]}. Values are read as strings; empty values are left out.
+     */
+    OBJECT_LIST
 }

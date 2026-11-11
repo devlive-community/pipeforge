@@ -116,6 +116,12 @@ public OptionRule optionRule() {
 }
 ```
 
+Option types are `stringType`, `intType`, `longType`, `doubleType`, `booleanType`, `durationType`
+(`30s`, `5m`), `enumType`, `listType` (a list of plain values, or a comma-separated string),
+`mapType` (nested keys, also written dotted) and `objectListType`: a list of objects with plain
+values, such as the entries of a field mapping (`[{ from: id, to: order_id }]`), read as
+`List<Map<String, String>>`.
+
 Validation reports missing options as `PF-CONF-0001` and invalid values (type, range, exclusive
 groups, unknown keys with a suggestion) as `PF-CONF-0002`. Sensitive options are masked in errors.
 

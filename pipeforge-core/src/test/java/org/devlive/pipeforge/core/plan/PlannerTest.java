@@ -337,4 +337,42 @@ class PlannerTest {
         assertThat(error.scope().node()).isEqualTo("calc");
         assertThat(error.params()).containsEntry("line", 1).containsEntry("column", 1);
     }
+
+    @Test
+    void passesListsOfObjectsToComponents() {
+        JobPlan plan = plan(
+                job(
+                        """
+                source:
+                  - { id: src, type: fake }
+                transform:
+                  - id: calc
+                    type: compute
+                    expr: "1"
+                    to: one
+                    notes:
+                      - { by: "${var:who}", level: 2 }
+                      - { by: ops }
+                sink:
+                  - { id: out, type: console }
+                env:
+                  variables: { who: dev }
+                """));
+        assertThat(plan.node("calc").orElseThrow().config().get(TestComponents.NOTES))
+                .containsExactly(Map.of("by", "dev", "level", "2"), Map.of("by", "ops"));
+
+        String message = Errors.message(
+                ErrorCode.OPTION_INVALID,
+                () -> plan(
+                        job(
+                                """
+                source:
+                  - { id: src, type: fake }
+                transform:
+                  - { id: calc, type: compute, expr: "1", to: one, notes: [plain] }
+                sink:
+                  - { id: out, type: console }
+                """)));
+        assertThat(message).contains("notes", "expected a list of objects");
+    }
 }

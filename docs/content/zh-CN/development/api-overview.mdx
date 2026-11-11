@@ -104,6 +104,10 @@ public OptionRule optionRule() {
 }
 ```
 
+选项类型有 `stringType`、`intType`、`longType`、`doubleType`、`booleanType`、`durationType`（`30s`、`5m`）、`enumType`、
+`listType`（普通值的列表，或逗号分隔的字符串）、`mapType`（嵌套的键，也可以写成点号形式）和 `objectListType`：由普通值组成的对象的列表，
+例如字段映射的条目（`[{ from: id, to: order_id }]`），读取为 `List<Map<String, String>>`。
+
 校验时，缺少的选项报 `PF-CONF-0001`，不合法的取值（类型、范围、互斥组、带拼写建议的未知选项）报 `PF-CONF-0002`。
 敏感选项的取值在错误信息中会被遮蔽。
 

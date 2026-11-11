@@ -196,6 +196,16 @@ public final class JobSchema {
             }
             case LIST -> base.put("type", List.of("array", "string"));
             case MAP -> base.put("type", "object");
+            case OBJECT_LIST -> {
+                base.put("type", "array");
+                base.put(
+                        "items",
+                        Map.of(
+                                "type",
+                                "object",
+                                "additionalProperties",
+                                Map.of("type", List.of("string", "number", "boolean", "null"))));
+            }
         }
         if (option.min() != null) {
             base.put("minimum", number(option.min()));
