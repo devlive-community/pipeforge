@@ -64,7 +64,7 @@
         <mockito.version>5.23.0</mockito.version>
         <jspecify.version>1.0.1</jspecify.version>
         <slf4j.version>2.0.20</slf4j.version>
-        <logback.version>1.5.38</logback.version>
+        <logback.version>1.6.6</logback.version>
         <jackson.version>2.21.7</jackson.version>
         <snakeyaml.version>2.6</snakeyaml.version>
         <spotbugs.version>4.8.6</spotbugs.version>
