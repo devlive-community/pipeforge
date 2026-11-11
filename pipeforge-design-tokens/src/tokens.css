@@ -1,0 +1,210 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+/*
+ * PipeForge design tokens: the only place where raw values live. The light theme is the
+ * default (:root); the dark theme applies under the .dark class on <html>. Every token
+ * defined in one theme must be defined in the other (checked by the package tests).
+ * Components never read these variables directly; they use the Tailwind utilities that
+ * theme.css maps onto them (bg-surface, text-fg-muted, rounded-control, ...).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --pf-surface: #ffffff;
+  --pf-surface-2: #f6f7f9;
+  --pf-surface-3: #eceef2;
+  --pf-overlay: rgb(15 23 42 / 0.45);
+  --pf-canvas: #f3f4f7;
+
+  /* Text */
+  --pf-fg: #111827;
+  --pf-fg-muted: #4b5563;
+  --pf-fg-subtle: #5f6672;
+  --pf-fg-inverse: #ffffff;
+
+  /* Borders */
+  --pf-border: #e2e5ea;
+  --pf-border-strong: #c9ced6;
+  --pf-ring: #4f46e5;
+
+  /* Brand */
+  --pf-primary: #4f46e5;
+  --pf-primary-hover: #4338ca;
+  --pf-primary-active: #3730a3;
+  --pf-primary-fg: #ffffff;
+  --pf-primary-soft: #eef2ff;
+
+  /* Status */
+  --pf-success: #15803d;
+  --pf-success-soft: #dcfce7;
+  --pf-success-fg: #ffffff;
+  --pf-warning: #b45309;
+  --pf-warning-soft: #fef3c7;
+  --pf-warning-fg: #ffffff;
+  --pf-danger: #dc2626;
+  --pf-danger-soft: #fee2e2;
+  --pf-danger-fg: #ffffff;
+  --pf-info: #0369a1;
+  --pf-info-soft: #e0f2fe;
+  --pf-info-fg: #ffffff;
+
+  /* Job states */
+  --pf-state-running: #2563eb;
+  --pf-state-success: #16a34a;
+  --pf-state-failed: #dc2626;
+  --pf-state-paused: #d97706;
+  --pf-state-queued: #6b7280;
+
+  /* Charts */
+  --pf-chart-1: #4f46e5;
+  --pf-chart-2: #0891b2;
+  --pf-chart-3: #16a34a;
+  --pf-chart-4: #d97706;
+  --pf-chart-5: #db2777;
+  --pf-chart-6: #7c3aed;
+  --pf-chart-7: #0d9488;
+  --pf-chart-8: #64748b;
+
+  /* Code and syntax highlighting */
+  --pf-code-bg: #f6f8fa;
+  --pf-code-fg: #1f2328;
+  --pf-syntax-comment: #57606a;
+  --pf-syntax-keyword: #a40e26;
+  --pf-syntax-string: #0a3069;
+  --pf-syntax-number: #0550ae;
+  --pf-syntax-function: #6639ba;
+  --pf-syntax-type: #953800;
+  --pf-syntax-variable: #1f2328;
+
+  /* Radii */
+  --pf-radius-control: 6px;
+  --pf-radius-popover: 8px;
+  --pf-radius-card: 12px;
+
+  /* Shadows */
+  --pf-shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.08);
+  --pf-shadow-popover: 0 4px 8px -2px rgb(16 24 40 / 0.1), 0 2px 4px -2px rgb(16 24 40 / 0.06);
+  --pf-shadow-modal: 0 20px 24px -4px rgb(16 24 40 / 0.12), 0 8px 8px -4px rgb(16 24 40 / 0.05);
+
+  /* Sizes */
+  --pf-control-sm: 28px;
+  --pf-control-md: 32px;
+  --pf-control-lg: 36px;
+
+  /* Motion */
+  --pf-duration-fast: 120ms;
+  --pf-duration-normal: 200ms;
+  --pf-duration-slow: 400ms;
+  --pf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --pf-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --pf-surface: #0f1117;
+  --pf-surface-2: #161922;
+  --pf-surface-3: #1f2330;
+  --pf-overlay: rgb(0 0 0 / 0.6);
+  --pf-canvas: #0b0d12;
+
+  /* Text */
+  --pf-fg: #e6e8ee;
+  --pf-fg-muted: #a3a9b7;
+  --pf-fg-subtle: #8a91a1;
+  --pf-fg-inverse: #0f1117;
+
+  /* Borders */
+  --pf-border: #262b38;
+  --pf-border-strong: #363c4c;
+  --pf-ring: #818cf8;
+
+  /* Brand */
+  --pf-primary: #818cf8;
+  --pf-primary-hover: #a5b4fc;
+  --pf-primary-active: #6366f1;
+  --pf-primary-fg: #0f1117;
+  --pf-primary-soft: #1e1b4b;
+
+  /* Status */
+  --pf-success: #22c55e;
+  --pf-success-soft: #052e16;
+  --pf-success-fg: #0f1117;
+  --pf-warning: #f59e0b;
+  --pf-warning-soft: #451a03;
+  --pf-warning-fg: #0f1117;
+  --pf-danger: #f87171;
+  --pf-danger-soft: #450a0a;
+  --pf-danger-fg: #0f1117;
+  --pf-info: #38bdf8;
+  --pf-info-soft: #082f49;
+  --pf-info-fg: #0f1117;
+
+  /* Job states */
+  --pf-state-running: #60a5fa;
+  --pf-state-success: #4ade80;
+  --pf-state-failed: #f87171;
+  --pf-state-paused: #fbbf24;
+  --pf-state-queued: #9ca3af;
+
+  /* Charts */
+  --pf-chart-1: #818cf8;
+  --pf-chart-2: #22d3ee;
+  --pf-chart-3: #4ade80;
+  --pf-chart-4: #fbbf24;
+  --pf-chart-5: #f472b6;
+  --pf-chart-6: #a78bfa;
+  --pf-chart-7: #2dd4bf;
+  --pf-chart-8: #94a3b8;
+
+  /* Code and syntax highlighting */
+  --pf-code-bg: #161922;
+  --pf-code-fg: #e6e8ee;
+  --pf-syntax-comment: #8b949e;
+  --pf-syntax-keyword: #ff7b72;
+  --pf-syntax-string: #a5d6ff;
+  --pf-syntax-number: #79c0ff;
+  --pf-syntax-function: #d2a8ff;
+  --pf-syntax-type: #ffa657;
+  --pf-syntax-variable: #e6e8ee;
+
+  /* Radii */
+  --pf-radius-control: 6px;
+  --pf-radius-popover: 8px;
+  --pf-radius-card: 12px;
+
+  /* Shadows */
+  --pf-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --pf-shadow-popover: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --pf-shadow-modal: 0 20px 24px -4px rgb(0 0 0 / 0.6), 0 8px 8px -4px rgb(0 0 0 / 0.4);
+
+  /* Sizes */
+  --pf-control-sm: 28px;
+  --pf-control-md: 32px;
+  --pf-control-lg: 36px;
+
+  /* Motion */
+  --pf-duration-fast: 120ms;
+  --pf-duration-normal: 200ms;
+  --pf-duration-slow: 400ms;
+  --pf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --pf-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Decorative motion is switched off for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  .dark {
+    --pf-duration-fast: 0ms;
+    --pf-duration-normal: 0ms;
+    --pf-duration-slow: 0ms;
+  }
+}

@@ -115,14 +115,16 @@ components_for() { # <files...> -> "name=value ..." for the components that are 
 
 echo "components.conf:"
 check "Java source runs java only" "java" "$(components_for pipeforge-api/src/main/java/A.java)"
+check "design tokens run web only" "web" "$(components_for pipeforge-design-tokens/src/tokens.css)"
+check "pnpm lockfile runs web only" "web" "$(components_for pnpm-lock.yaml)"
 check "root POM runs java and build-checks" "java build-checks" "$(components_for pom.xml)"
 check "build-check fixture runs build-checks only" "build-checks" \
     "$(components_for tools/build-checks/fixtures/good/pom.xml)"
 check "license header script runs build-checks" "build-checks" \
     "$(components_for tools/license-header/check.sh)"
 check "Markdown only runs nothing" "" "$(components_for README.md CONTRIBUTING.zh-CN.md)"
-check "CI workflow runs everything" "java build-checks dev-env" "$(components_for .github/workflows/ci.yml)"
-check "CI scripts run everything" "java build-checks dev-env" "$(components_for .ci/maven-modules.sh)"
+check "CI workflow runs everything" "java build-checks dev-env web" "$(components_for .github/workflows/ci.yml)"
+check "CI scripts run everything" "java build-checks dev-env web" "$(components_for .ci/maven-modules.sh)"
 check "Dependabot config runs nothing" "" "$(components_for .github/dependabot.yml)"
 check "dev environment runs dev-env only" "dev-env" "$(components_for dev/docker-compose.yaml)"
 check "community files run nothing" "" \

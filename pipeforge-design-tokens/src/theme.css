@@ -1,0 +1,189 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+/*
+ * Tailwind CSS v4 mapping of the design tokens. Import it after tailwindcss:
+ *
+ *   @import "tailwindcss";
+ *   @import "@pipeforge/design-tokens/tokens.css";
+ *   @import "@pipeforge/design-tokens/theme.css";
+ *
+ * Utilities follow the semantic names: bg-surface, text-fg-muted, border-border,
+ * bg-primary, rounded-control, shadow-popover, h-control-md, duration-fast, ease-out,
+ * animate-fade-up, ... The dark variant follows the .dark class set by the first-frame
+ * theme script, so components never need dark: variants themselves.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  /* Colors */
+  --color-surface: var(--pf-surface);
+  --color-surface-2: var(--pf-surface-2);
+  --color-surface-3: var(--pf-surface-3);
+  --color-overlay: var(--pf-overlay);
+  --color-canvas: var(--pf-canvas);
+
+  --color-fg: var(--pf-fg);
+  --color-fg-muted: var(--pf-fg-muted);
+  --color-fg-subtle: var(--pf-fg-subtle);
+  --color-fg-inverse: var(--pf-fg-inverse);
+
+  --color-border: var(--pf-border);
+  --color-border-strong: var(--pf-border-strong);
+  --color-ring: var(--pf-ring);
+
+  --color-primary: var(--pf-primary);
+  --color-primary-hover: var(--pf-primary-hover);
+  --color-primary-active: var(--pf-primary-active);
+  --color-primary-fg: var(--pf-primary-fg);
+  --color-primary-soft: var(--pf-primary-soft);
+
+  --color-success: var(--pf-success);
+  --color-success-soft: var(--pf-success-soft);
+  --color-success-fg: var(--pf-success-fg);
+  --color-warning: var(--pf-warning);
+  --color-warning-soft: var(--pf-warning-soft);
+  --color-warning-fg: var(--pf-warning-fg);
+  --color-danger: var(--pf-danger);
+  --color-danger-soft: var(--pf-danger-soft);
+  --color-danger-fg: var(--pf-danger-fg);
+  --color-info: var(--pf-info);
+  --color-info-soft: var(--pf-info-soft);
+  --color-info-fg: var(--pf-info-fg);
+
+  --color-state-running: var(--pf-state-running);
+  --color-state-success: var(--pf-state-success);
+  --color-state-failed: var(--pf-state-failed);
+  --color-state-paused: var(--pf-state-paused);
+  --color-state-queued: var(--pf-state-queued);
+
+  --color-chart-1: var(--pf-chart-1);
+  --color-chart-2: var(--pf-chart-2);
+  --color-chart-3: var(--pf-chart-3);
+  --color-chart-4: var(--pf-chart-4);
+  --color-chart-5: var(--pf-chart-5);
+  --color-chart-6: var(--pf-chart-6);
+  --color-chart-7: var(--pf-chart-7);
+  --color-chart-8: var(--pf-chart-8);
+
+  --color-code-bg: var(--pf-code-bg);
+  --color-code-fg: var(--pf-code-fg);
+  --color-syntax-comment: var(--pf-syntax-comment);
+  --color-syntax-keyword: var(--pf-syntax-keyword);
+  --color-syntax-string: var(--pf-syntax-string);
+  --color-syntax-number: var(--pf-syntax-number);
+  --color-syntax-function: var(--pf-syntax-function);
+  --color-syntax-type: var(--pf-syntax-type);
+  --color-syntax-variable: var(--pf-syntax-variable);
+
+  /* Radii */
+  --radius-control: var(--pf-radius-control);
+  --radius-popover: var(--pf-radius-popover);
+  --radius-card: var(--pf-radius-card);
+
+  /* Shadows */
+  --shadow-card: var(--pf-shadow-card);
+  --shadow-popover: var(--pf-shadow-popover);
+  --shadow-modal: var(--pf-shadow-modal);
+
+  /* Sizes: h-control-sm / h-control-md / h-control-lg */
+  --spacing-control-sm: var(--pf-control-sm);
+  --spacing-control-md: var(--pf-control-md);
+  --spacing-control-lg: var(--pf-control-lg);
+
+  /* Motion */
+  --ease-out: var(--pf-ease-out);
+  --ease-in-out: var(--pf-ease-in-out);
+  --default-transition-duration: var(--pf-duration-fast);
+  --default-transition-timing-function: var(--pf-ease-out);
+
+  /* Animations */
+  --animate-fade-in: pf-fade-in var(--pf-duration-normal) var(--pf-ease-out) both;
+  --animate-fade-up: pf-fade-up var(--pf-duration-slow) var(--pf-ease-out) both;
+  --animate-scale-in: pf-scale-in var(--pf-duration-normal) var(--pf-ease-out) both;
+  --animate-flow: pf-flow 2.4s linear infinite;
+  --animate-pulse-soft: pf-pulse-soft 2s var(--pf-ease-in-out) infinite;
+
+  @keyframes pf-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes pf-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pf-scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Moves an element along its offset-path (data particles on DAG edges). */
+  @keyframes pf-flow {
+    from {
+      offset-distance: 0%;
+    }
+    to {
+      offset-distance: 100%;
+    }
+  }
+
+  @keyframes pf-pulse-soft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+}
+
+/* duration-fast / duration-normal / duration-slow */
+@utility duration-fast {
+  transition-duration: var(--pf-duration-fast);
+  animation-duration: var(--pf-duration-fast);
+}
+
+@utility duration-normal {
+  transition-duration: var(--pf-duration-normal);
+  animation-duration: var(--pf-duration-normal);
+}
+
+@utility duration-slow {
+  transition-duration: var(--pf-duration-slow);
+  animation-duration: var(--pf-duration-slow);
+}
+
+/* Decorative animations stop entirely when reduced motion is requested. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-flow,
+  .animate-pulse-soft,
+  .animate-fade-in,
+  .animate-fade-up,
+  .animate-scale-in {
+    animation: none;
+  }
+}

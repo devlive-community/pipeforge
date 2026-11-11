@@ -1,0 +1,23 @@
+{
+  "name": "@pipeforge/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Design tokens shared by the PipeForge web UI and documentation site",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./tokens.css": "./src/tokens.css",
+    "./theme.css": "./src/theme.css"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@tailwindcss/node": "4.3.5",
+    "tailwindcss": "4.3.5"
+  }
+}
