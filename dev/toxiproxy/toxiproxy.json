@@ -1,0 +1,14 @@
+[
+  {
+    "name": "mysql",
+    "listen": "0.0.0.0:23306",
+    "upstream": "mysql:3306",
+    "enabled": true
+  },
+  {
+    "name": "postgres",
+    "listen": "0.0.0.0:25432",
+    "upstream": "postgres:5432",
+    "enabled": true
+  }
+]

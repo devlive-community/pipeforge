@@ -1,0 +1,91 @@
+---
+title: Local development environment
+description: Start MySQL, PostgreSQL, object storage, a fault-injection proxy and monitoring locally with one command.
+order: 20
+omit:
+  principle: The environment is a plain docker compose project; there is no mechanism to explain.
+  behavior: The services are third-party software with their default semantics.
+  observability: Prometheus and Grafana are part of the environment itself, see Configuration.
+  performance: The environment is meant for development and tests, not for benchmarks.
+---
+
+## Overview
+
+The `dev/` directory contains a docker compose project with every service that PipeForge's
+examples and integration tests need: databases prepared for change data capture, object
+storage, a proxy for fault injection and a monitoring stack. Use it to try examples, debug a
+connector or run tests against real services. It is not meant for production or benchmarks.
+
+## Quick start
+
+Requirements: Docker with Compose v2.
+
+```bash
+./dev/up.sh          # start everything and wait until all services are healthy
+./dev/check.sh       # verify binlog, logical decoding, proxies and monitoring
+./dev/down.sh        # stop; add --volumes to delete the data as well
+```
+
+Start object storage as well with `./dev/up.sh --s3`, or a single service with
+`./dev/up.sh mysql`.
+
+## Configuration
+
+| Service | Host port | Purpose | Credentials |
+|---|---|---|---|
+| MySQL 8.4 | 33306 | Binlog in ROW format with GTID, ready for CDC | `pipeforge` / `pipeforge` |
+| PostgreSQL 16 | 35432 | `wal_level=logical`, user has the replication role | `pipeforge` / `pipeforge` |
+| MinIO (profile `s3`) | 39000, console 39001 | S3-compatible storage, buckets `pipeforge` and `pipeforge-checkpoints` | `pipeforge` / `pipeforge-secret` |
+| Toxiproxy | API 38474, MySQL 43306, PostgreSQL 45432 | Inject latency, bandwidth limits and disconnects | — |
+| Prometheus | 39090 | Scrapes a PipeForge process on the host at port 9250 | — |
+| Grafana | 33000 | Prometheus data source provisioned | `admin` / `pipeforge` |
+
+Every host port can be changed: copy `dev/.env.example` to `dev/.env` and edit the values.
+The MinIO project no longer publishes community images on Docker Hub; set
+`PIPEFORGE_MINIO_IMAGE` to an image that contains both the `minio` server and the `mc` client.
+
+Sample data is created on first start: `pipeforge.customers` and `pipeforge.orders` in MySQL,
+`inventory.products` and an empty `sync` schema in PostgreSQL.
+
+## Examples
+
+### Read the MySQL binlog
+
+The database is ready for CDC without further setup:
+
+```bash
+docker compose -f dev/docker-compose.yaml exec mysql \
+  mysql -upipeforge -ppipeforge -e "SHOW BINARY LOG STATUS"
+```
+
+### Simulate a slow or broken network
+
+Connect a job to the Toxiproxy port instead of the database port, then add a toxic:
+
+```bash
+# 500 ms latency on every MySQL response
+curl -s -X POST localhost:38474/proxies/mysql/toxics \
+  -d '{"type":"latency","attributes":{"latency":500}}'
+
+# cut the connection, then restore it
+curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":false}'
+curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":true}'
+```
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `port is already allocated` | Another process uses the port. Change it in `dev/.env`. |
+| A service never becomes healthy | Run `docker compose -f dev/docker-compose.yaml logs <service>`. |
+| Sample data is missing | Init scripts only run on an empty volume: `./dev/down.sh --volumes`, then start again. |
+| `dev/up.sh --s3` cannot pull the MinIO image | Set `PIPEFORGE_MINIO_IMAGE` in `dev/.env` to an image you can pull. |
+
+## Limitations
+
+- Kafka, Hive Metastore, HDFS and Doris will be added together with their connectors.
+- The credentials are fixed and public; never expose these ports outside your machine.
+
+## Version history
+
+Available since 0.1.0.

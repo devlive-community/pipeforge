@@ -31,6 +31,7 @@ jobs:
     outputs:
       java: ${{ steps.detect.outputs.java }}
       build-checks: ${{ steps.detect.outputs.build-checks }}
+      dev-env: ${{ steps.detect.outputs.dev-env }}
       maven_modules: ${{ steps.modules.outputs.maven_modules }}
     steps:
       - uses: actions/checkout@v5
@@ -116,9 +117,24 @@ jobs:
           cache: maven
       - run: tools/build-checks/selftest.sh
 
+  # Starts the docker compose environment (including MinIO) and checks every service.
+  dev-env:
+    needs: changes
+    if: needs.changes.outputs.dev-env == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - run: dev/up.sh --s3
+      - run: dev/check.sh
+      - if: failure()
+        run: docker compose -f dev/docker-compose.yaml --profile s3 logs --no-color --tail 200
+      - if: always()
+        run: dev/down.sh --volumes
+
   ci-ok:
     if: always()
-    needs: [changes, lint, dco, java, build-checks]
+    needs: [changes, lint, dco, java, build-checks, dev-env]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
