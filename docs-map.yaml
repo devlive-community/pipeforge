@@ -15,4 +15,5 @@
 #
 # Entries are added together with the code they describe.
 
-[]
+- paths: ["dev/**"]
+  docs: ["development/local-environment"]

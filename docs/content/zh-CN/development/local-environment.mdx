@@ -1,0 +1,88 @@
+---
+title: 本地开发环境
+description: 一条命令在本地拉起 MySQL、PostgreSQL、对象存储、故障注入代理和监控。
+order: 20
+omit:
+  principle: 环境就是一个普通的 docker compose 工程，没有需要解释的机制。
+  behavior: 各服务都是第三方软件，保持其默认语义。
+  observability: Prometheus 和 Grafana 本身就是环境的一部分，见“配置”。
+  performance: 环境用于开发和测试，不用于性能基准。
+---
+
+## 概述
+
+`dev/` 目录中是一个 docker compose 工程，包含 PipeForge 的示例和集成测试需要的全部服务：已为变更数据捕获（CDC）
+准备好的数据库、对象存储、用于故障注入的代理，以及监控组件。可以用它试运行示例、调试连接器，或者在真实服务上运行测试。
+它不用于生产环境，也不用于性能基准。
+
+## 快速上手
+
+需要安装带 Compose v2 的 Docker。
+
+```bash
+./dev/up.sh          # 启动全部服务，并等待它们全部健康
+./dev/check.sh       # 检查 binlog、逻辑解码、代理和监控
+./dev/down.sh        # 停止；加 --volumes 同时删除数据
+```
+
+用 `./dev/up.sh --s3` 同时启动对象存储，用 `./dev/up.sh mysql` 只启动一个服务。
+
+## 配置
+
+| 服务 | 主机端口 | 用途 | 账号 |
+|---|---|---|---|
+| MySQL 8.4 | 33306 | ROW 格式的 binlog，开启 GTID，可直接用于 CDC | `pipeforge` / `pipeforge` |
+| PostgreSQL 16 | 35432 | `wal_level=logical`，用户具有复制权限 | `pipeforge` / `pipeforge` |
+| MinIO（`s3` profile） | 39000，控制台 39001 | S3 兼容存储，桶 `pipeforge` 和 `pipeforge-checkpoints` | `pipeforge` / `pipeforge-secret` |
+| Toxiproxy | API 38474，MySQL 43306，PostgreSQL 45432 | 注入延迟、带宽限制和断连 | — |
+| Prometheus | 39090 | 抓取主机上 9250 端口的 PipeForge 进程 | — |
+| Grafana | 33000 | 已配置 Prometheus 数据源 | `admin` / `pipeforge` |
+
+每个主机端口都可以修改：把 `dev/.env.example` 复制为 `dev/.env` 后编辑其中的值。MinIO 项目已不再在 Docker Hub
+发布社区镜像，请把 `PIPEFORGE_MINIO_IMAGE` 设置为同时包含 `minio` 服务端和 `mc` 客户端的镜像。
+
+首次启动时会创建示例数据：MySQL 中的 `pipeforge.customers` 和 `pipeforge.orders`，PostgreSQL 中的
+`inventory.products` 和空的 `sync` schema。
+
+## 示例
+
+### 读取 MySQL binlog
+
+数据库无需额外配置即可用于 CDC：
+
+```bash
+docker compose -f dev/docker-compose.yaml exec mysql \
+  mysql -upipeforge -ppipeforge -e "SHOW BINARY LOG STATUS"
+```
+
+### 模拟慢速或中断的网络
+
+让作业连接 Toxiproxy 的端口而不是数据库端口，然后添加故障：
+
+```bash
+# 每个 MySQL 响应增加 500 毫秒延迟
+curl -s -X POST localhost:38474/proxies/mysql/toxics \
+  -d '{"type":"latency","attributes":{"latency":500}}'
+
+# 断开连接，然后恢复
+curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":false}'
+curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":true}'
+```
+
+## 排障
+
+| 问题 | 处理方法 |
+|---|---|
+| `port is already allocated` | 端口被其他进程占用，在 `dev/.env` 中修改端口。 |
+| 某个服务一直不健康 | 运行 `docker compose -f dev/docker-compose.yaml logs <服务名>` 查看日志。 |
+| 缺少示例数据 | 初始化脚本只在数据卷为空时执行：先运行 `./dev/down.sh --volumes`，再重新启动。 |
+| `dev/up.sh --s3` 无法拉取 MinIO 镜像 | 在 `dev/.env` 中把 `PIPEFORGE_MINIO_IMAGE` 设置为可以拉取的镜像。 |
+
+## 限制
+
+- Kafka、Hive Metastore、HDFS 和 Doris 会随对应的连接器一起加入。
+- 账号密码是固定且公开的，不要把这些端口暴露到本机以外。
+
+## 版本
+
+自 0.1.0 起提供。
