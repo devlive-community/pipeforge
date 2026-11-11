@@ -11,9 +11,10 @@ from the connector itself, so a plugin only says how to prepare data and how to 
 
 | Group | For | What it checks |
 |---|---|---|
-| `options` | Sources, sinks | The option rule as the planner applies it: valid options plan, unknown options are rejected, every required option is reported missing (`PF-CONF-0001`), defaults appear in the plan, values outside the range or the choices are rejected (`PF-CONF-0002`), old option names still work, exclusive and conditional options, sensitive values are masked in `explain` |
+| `options` | Sources, transforms, sinks | The option rule as the planner applies it: valid options plan, unknown options are rejected, every required option is reported missing (`PF-CONF-0001`), defaults appear in the plan, values outside the range or the choices are rejected (`PF-CONF-0002`), old option names still work, exclusive and conditional options, sensitive values are masked in `explain` |
 | `types` | Sources, sinks | Every logical type round-trips: NULL, minimum and maximum, the largest decimal, empty and 64 KB strings, Unicode, binary, the earliest and latest dates and times, `TIMESTAMP_LTZ` in a time zone other than UTC, arrays, maps, nested rows and JSON |
 | `batch` | Sources, sinks | An empty table, a single row, and a large table at parallelism 1, 4 and 16; for sources, once per split strategy |
+| `transform` | Transforms | The tables derived while planning; the rows of an empty input, 1,000 rows, 1,000 rows at parallelism 4 and two input tables, compared with the transform's model and checked against the derived schema; a schema change from the source; a failing row reported at the node with a registered code |
 
 Every job that runs also checks the [row counters](../reference/metrics): `rowsRead` or
 `rowsWritten` must match the data, and the counters must reconcile. More groups (`resume`,
@@ -97,9 +98,49 @@ class ConsoleSinkContractTest extends SinkContract {
 A sink whose output cannot be read back returns `Optional.empty()`; then the testkit still checks
 that the job succeeds, `rowsWritten` and the reconciliation identity.
 
+### A transform
+
+Implement `TransformUnderTest` and extend `TransformContract`. Besides the options, a transform
+describes what it should do — the tables it derives and the rows it emits for one input row — and
+the testkit compares the real output with that model:
+
+```java
+class UpperTransformContractTest extends TransformContract {
+    @Override
+    protected TransformUnderTest transform() {
+        return new TransformUnderTest() {
+            public TransformFactory factory() {
+                return new UpperFactory();
+            }
+
+            public Map<String, Object> options() {
+                return Map.of("column", "name");
+            }
+
+            public List<CatalogTable> expectedTables(List<CatalogTable> inputs) {
+                return inputs;                       // same columns
+            }
+
+            public List<Row> expectedRows(CatalogTable table, Row row) {
+                return List.of(upper(row));          // one row out per row in
+            }
+
+            public Optional<Map<String, Object>> failingOptions() {
+                return Optional.of(Map.of("column", "name", "expr", "1 / 0"));
+            }
+        };
+    }
+}
+```
+
+The input is `TestData.wideTable()` unless `input()` says otherwise. `expectedSchemaChange` says
+what becomes of a column the source adds (by default it passes unchanged), `failingOptions` makes
+every row fail to check how the failure is reported, and a transform that takes a single table
+returns `false` from `supportsMultipleTables()`.
+
 ## How the cases run
 
-`SourceContract` and `SinkContract` are JUnit 5 test factories: each group is a container of cases,
+`SourceContract`, `TransformContract` and `SinkContract` are JUnit 5 test factories: each group is a container of cases,
 reported like any other test.
 
 ```text
@@ -120,7 +161,7 @@ JdbcSourceContractTest
 ```
 
 A source under test is paired with the testkit's `testkit-collect` sink, and a sink under test with
-the `testkit-rows` source; the jobs are planned by the real planner and run on the local engine with
+the `testkit-rows` source; a transform under test runs between the two. The jobs are planned by the real planner and run on the local engine with
 the time zone `Asia/Shanghai`. When rows differ, the failure lists the missing and unexpected rows:
 
 ```text
@@ -155,4 +196,4 @@ The pieces of the contracts can be used on their own:
 | `TestkitEngine` | Runs a `TestJob` on the local engine and returns a `TestRun` with the job result; `requireSuccess()` fails with the error, its hint and the run analysis |
 | `TestData` | Tables of every type, boundary values and rows generated from a seed |
 | `RowAssertions` | `assertSameRows(what, expected, actual)` |
-| `Datasets`, `TestkitConnectors` | The in-memory `testkit-rows` source and `testkit-collect` sink |
+| `Datasets`, `TestkitConnectors` | The in-memory `testkit-rows` source (one table per data set, several with commas in `dataset`; `schema-change: true` adds a column after the first split) and `testkit-collect` sink |

@@ -95,4 +95,32 @@ final class BrokenConnectors {
             return Map.of("options", "not under test", "no-such-group", "a typo");
         }
     }
+
+    /** Loses the row with id 0, which its model does not say. */
+    static class DroppingTransform extends TransformContract {
+        @Override
+        protected TransformUnderTest transform() {
+            return new UpperTransformContractTest.UpperName() {
+                @Override
+                public Map<String, Object> options() {
+                    return Map.of("column", "name", "drop-first", true);
+                }
+
+                @Override
+                public Optional<Map<String, Object>> failingOptions() {
+                    return Optional.empty();
+                }
+
+                @Override
+                public boolean supportsMultipleTables() {
+                    return false;
+                }
+            };
+        }
+
+        @Override
+        protected Map<String, String> skippedGroups(TransformUnderTest transform) {
+            return Map.of("options", "not under test");
+        }
+    }
 }

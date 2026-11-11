@@ -119,4 +119,18 @@ class ContractFailuresTest {
                 .containsExactly(
                         "batch skipped: the fixture reads in memory; batch is covered by RowsSourceContractTest");
     }
+
+    @Test
+    void reportsRowsTheTransformLost() {
+        Events events = run(BrokenConnectors.DroppingTransform.class);
+        List<String> failures = failures(events);
+
+        assertThat(failures).anySatisfy(f -> assertThat(f)
+                .startsWith("1,000 rows: rows after the transform: expected 1000 row(s) but got 999")
+                .contains("missing (1):"));
+        assertThat(failures).noneSatisfy(f -> assertThat(f).startsWith("an empty input"));
+        assertThat(failures).noneSatisfy(f -> assertThat(f).startsWith("derives the output schema"));
+        assertThat(events.aborted().stream().map(e -> e.getTestDescriptor().getDisplayName()))
+                .contains("several input tables", "reports a failing row at the node", "options");
+    }
 }

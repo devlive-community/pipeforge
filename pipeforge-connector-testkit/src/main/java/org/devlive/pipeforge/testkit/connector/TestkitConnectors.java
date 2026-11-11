@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 import org.devlive.pipeforge.api.factory.FactoryContext;
@@ -19,6 +20,7 @@ import org.devlive.pipeforge.api.factory.SourceFactory;
 import org.devlive.pipeforge.api.option.Option;
 import org.devlive.pipeforge.api.option.OptionRule;
 import org.devlive.pipeforge.api.option.Options;
+import org.devlive.pipeforge.api.option.ReadonlyConfig;
 import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.api.serialization.StringSerializer;
 import org.devlive.pipeforge.api.serialization.VersionedSerializer;
@@ -36,8 +38,11 @@ import org.devlive.pipeforge.api.source.SourceContext;
 import org.devlive.pipeforge.api.source.SourceReader;
 import org.devlive.pipeforge.api.source.SourceSplit;
 import org.devlive.pipeforge.api.source.SplitEnumerator;
+import org.devlive.pipeforge.api.table.AddColumn;
 import org.devlive.pipeforge.api.table.CatalogTable;
+import org.devlive.pipeforge.api.table.Column;
 import org.devlive.pipeforge.api.table.SchemaChangeEvent;
+import org.devlive.pipeforge.api.type.DataTypes;
 import org.devlive.pipeforge.testkit.data.TestTable;
 import org.jspecify.annotations.Nullable;
 
@@ -46,8 +51,9 @@ import org.jspecify.annotations.Nullable;
  * Datasets}:
  *
  * <ul>
- *   <li>source {@value #ROWS}: reads the rows of a data set, cut into {@code splits} splits that
- *       readers pull;
+ *   <li>source {@value #ROWS}: reads the rows of one or more data sets (one table each), cut into
+ *       {@code splits} splits that readers pull; with {@code schema-change} it also adds a column
+ *       {@value #ADDED_COLUMN} to every table once the rows of the first split are read;
  *   <li>sink {@value #COLLECT}: appends what it receives to a data set; rows become visible when
  *       the writer flushes.
  * </ul>
@@ -57,8 +63,17 @@ public final class TestkitConnectors {
     public static final String ROWS = "testkit-rows";
     public static final String COLLECT = "testkit-collect";
 
-    public static final Option<String> DATASET =
-            Options.key("dataset").stringType().noDefault().withDescription("The testkit data set id.");
+    /** The column the source adds with {@code schema-change: true}. */
+    public static final String ADDED_COLUMN = "testkit_added";
+
+    public static final Option<String> DATASET = Options.key("dataset")
+            .stringType()
+            .noDefault()
+            .withDescription("The testkit data set id; the source reads several, one table each, separated by commas.");
+    public static final Option<Boolean> SCHEMA_CHANGE = Options.key("schema-change")
+            .booleanType()
+            .defaultValue(false)
+            .withDescription("Add the column " + ADDED_COLUMN + " to every table after the first split.");
     public static final Option<Integer> SPLITS = Options.key("splits")
             .intType()
             .defaultValue(4)
@@ -119,13 +134,16 @@ public final class TestkitConnectors {
 
         @Override
         public OptionRule optionRule() {
-            return OptionRule.builder().required(DATASET).optional(SPLITS).build();
+            return OptionRule.builder()
+                    .required(DATASET)
+                    .optional(SPLITS, SCHEMA_CHANGE)
+                    .build();
         }
 
         @Override
         public Source<?, ?> createSource(FactoryContext context) {
-            return new RowsSource(
-                    context.options().get(DATASET), context.options().get(SPLITS));
+            ReadonlyConfig options = context.options();
+            return new RowsSource(options.get(DATASET), options.get(SPLITS), options.get(SCHEMA_CHANGE));
         }
     }
 
@@ -133,10 +151,26 @@ public final class TestkitConnectors {
         private static final long serialVersionUID = 1L;
         private final String dataset;
         private final int splits;
+        private final boolean schemaChange;
 
-        RowsSource(String dataset, int splits) {
+        RowsSource(String dataset, int splits, boolean schemaChange) {
             this.dataset = dataset;
             this.splits = splits;
+            this.schemaChange = schemaChange;
+        }
+
+        /** The data sets read, in order. */
+        private List<TestTable> tables() {
+            return Arrays.stream(dataset.split(","))
+                    .map(String::trim)
+                    .filter(id -> !id.isEmpty())
+                    .map(Datasets::table)
+                    .toList();
+        }
+
+        /** The rows of every data set, one after the other. */
+        private List<Row> rows() {
+            return tables().stream().flatMap(t -> t.rows().stream()).toList();
         }
 
         @Override
@@ -146,12 +180,12 @@ public final class TestkitConnectors {
 
         @Override
         public List<CatalogTable> producedTables(SourceContext context) {
-            return List.of(Datasets.table(dataset).table());
+            return tables().stream().map(TestTable::table).toList();
         }
 
         @Override
         public SplitEnumerator<IndexSplit, String> createEnumerator(EnumeratorContext<IndexSplit> context) {
-            return new RowsEnumerator(context, Datasets.table(dataset).rows().size(), splits);
+            return new RowsEnumerator(context, rows().size(), splits);
         }
 
         @Override
@@ -162,7 +196,13 @@ public final class TestkitConnectors {
 
         @Override
         public SourceReader<IndexSplit> createReader(ReaderContext context) {
-            return new RowsReader(Datasets.table(dataset), context);
+            List<SchemaChangeEvent> changes = schemaChange
+                    ? tables().stream()
+                            .<SchemaChangeEvent>map(t ->
+                                    new AddColumn(t.table().id(), Column.of(ADDED_COLUMN, DataTypes.STRING()), null))
+                            .toList()
+                    : List.of();
+            return new RowsReader(rows(), changes, context);
         }
 
         @Override
@@ -216,15 +256,17 @@ public final class TestkitConnectors {
     }
 
     private static final class RowsReader implements SourceReader<IndexSplit> {
-        private final TestTable table;
+        private final List<Row> rows;
+        private final List<SchemaChangeEvent> changes;
         private final ReaderContext context;
         private final Deque<IndexSplit> splits = new ArrayDeque<>();
         private @Nullable IndexSplit current;
         private int next;
         private boolean noMore;
 
-        RowsReader(TestTable table, ReaderContext context) {
-            this.table = table;
+        RowsReader(List<Row> rows, List<SchemaChangeEvent> changes, ReaderContext context) {
+            this.rows = rows;
+            this.changes = changes;
             this.context = context;
         }
 
@@ -256,9 +298,12 @@ public final class TestkitConnectors {
             }
             int end = Math.min(split.to(), next + 256);
             for (; next < end; next++) {
-                output.collect(table.rows().get(next));
+                output.collect(rows.get(next));
             }
             if (next >= split.to()) {
+                if (split.from() == 0) {
+                    changes.forEach(output::collect);
+                }
                 current = null;
                 context.sendSplitRequest();
             }

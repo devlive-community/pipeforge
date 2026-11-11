@@ -10,9 +10,10 @@ order: 60
 
 | 用例组 | 适用于 | 检查内容 |
 |---|---|---|
-| `options` | Source、Sink | 规划器应用的选项规则：合法选项能够规划；未知选项被拒绝；每个必填选项缺失时报错（`PF-CONF-0001`）；默认值出现在计划中；超出范围或不在可选值中的值被拒绝（`PF-CONF-0002`）；旧选项名仍然可用；互斥选项与条件选项；敏感值在 `explain` 中被遮蔽 |
+| `options` | Source、Transform、Sink | 规划器应用的选项规则：合法选项能够规划；未知选项被拒绝；每个必填选项缺失时报错（`PF-CONF-0001`）；默认值出现在计划中；超出范围或不在可选值中的值被拒绝（`PF-CONF-0002`）；旧选项名仍然可用；互斥选项与条件选项；敏感值在 `explain` 中被遮蔽 |
 | `types` | Source、Sink | 每种逻辑类型的往返：NULL、最小值和最大值、最大精度的小数、空字符串和 64 KB 字符串、Unicode、二进制、最早和最晚的日期与时间、非 UTC 时区下的 `TIMESTAMP_LTZ`、数组、Map、嵌套行和 JSON |
 | `batch` | Source、Sink | 空表、单行，以及并行度 1、4、16 下的大表；Source 对每种分片策略各跑一遍 |
+| `transform` | Transform | 计划阶段推导出的表；空输入、1,000 行、并行度 4 下的 1,000 行以及两张输入表的输出，与 Transform 的参考模型比较，并检查是否符合推导出的 Schema；Source 发出的 Schema 变更；失败的行在节点上以登记过的错误码报告 |
 
 运行的每个作业还会检查[行数指标](../reference/metrics)：`rowsRead` 或 `rowsWritten` 必须与数据一致，并且满足对账恒等式。
 其他用例组（`resume`、`metrics`、`stream` 等）随它们所测试的引擎功能一起加入 testkit。
@@ -91,9 +92,45 @@ class ConsoleSinkContractTest extends SinkContract {
 
 无法读回输出的 Sink 返回 `Optional.empty()`，此时 testkit 仍然检查作业成功、`rowsWritten` 和对账恒等式。
 
+### Transform
+
+实现 `TransformUnderTest` 并继承 `TransformContract`。除了选项，Transform 还要描述它应该做什么——推导出的表，以及每一行输入应输出的行——testkit 把实际输出与这个参考模型比较：
+
+```java
+class UpperTransformContractTest extends TransformContract {
+    @Override
+    protected TransformUnderTest transform() {
+        return new TransformUnderTest() {
+            public TransformFactory factory() {
+                return new UpperFactory();
+            }
+
+            public Map<String, Object> options() {
+                return Map.of("column", "name");
+            }
+
+            public List<CatalogTable> expectedTables(List<CatalogTable> inputs) {
+                return inputs;                       // 列不变
+            }
+
+            public List<Row> expectedRows(CatalogTable table, Row row) {
+                return List.of(upper(row));          // 每行输入输出一行
+            }
+
+            public Optional<Map<String, Object>> failingOptions() {
+                return Optional.of(Map.of("column", "name", "expr", "1 / 0"));
+            }
+        };
+    }
+}
+```
+
+输入默认是 `TestData.wideTable()`，可以用 `input()` 修改。`expectedSchemaChange` 说明 Source 新增的列经过 Transform 后变成什么（默认原样传递），
+`failingOptions` 让每一行都失败，以检查失败如何报告；只处理单张表的 Transform 在 `supportsMultipleTables()` 中返回 `false`。
+
 ## 用例如何运行
 
-`SourceContract` 和 `SinkContract` 是 JUnit 5 的测试工厂：每个用例组是一个包含若干用例的容器，与其他测试一样展示结果。
+`SourceContract`、`TransformContract` 和 `SinkContract` 是 JUnit 5 的测试工厂：每个用例组是一个包含若干用例的容器，与其他测试一样展示结果。
 
 ```text
 JdbcSourceContractTest
@@ -112,7 +149,7 @@ JdbcSourceContractTest
     └── 100,000 rows at parallelism 16 (by key)
 ```
 
-被测的 Source 与 testkit 的 `testkit-collect` Sink 组成作业，被测的 Sink 与 `testkit-rows` Source 组成作业；作业由真实的规划器规划，
+被测的 Source 与 testkit 的 `testkit-collect` Sink 组成作业，被测的 Sink 与 `testkit-rows` Source 组成作业，被测的 Transform 位于两者之间；作业由真实的规划器规划，
 在本地引擎上以 `Asia/Shanghai` 时区运行。行不一致时，失败信息列出缺少的行和多出的行：
 
 ```text
@@ -145,4 +182,4 @@ skipped-testkit-groups:
 | `TestkitEngine` | 在本地引擎上运行 `TestJob`，返回带作业结果的 `TestRun`；`requireSuccess()` 失败时给出错误、排查建议和运行分析 |
 | `TestData` | 每种类型的表、边界值，以及由种子生成的行 |
 | `RowAssertions` | `assertSameRows(what, expected, actual)` |
-| `Datasets`、`TestkitConnectors` | 内存中的 `testkit-rows` Source 和 `testkit-collect` Sink |
+| `Datasets`、`TestkitConnectors` | 内存中的 `testkit-rows` Source（每个数据集一张表，`dataset` 中用逗号分隔可读取多个；`schema-change: true` 在第一个分片之后新增一列）和 `testkit-collect` Sink |
