@@ -1,0 +1,133 @@
+---
+title: Data model and types
+description: Rows and change kinds, tables and schema changes, and the logical types shared by every connector.
+order: 20
+template: feature
+omit:
+  observability: The data model has no runtime behavior of its own to observe.
+  performance: Types and rows have no tuning parameters.
+---
+
+## Overview
+
+Every connector speaks the same data model. A **row** belongs to a table and carries a **change
+kind**; the structure of a table is a list of columns with **logical types**. Dialect plugins map
+the native types of each system to these logical types, so data moves between any source and sink
+without connector-specific conversions in between.
+
+## How it works
+
+### Rows and change kinds
+
+| Kind | Short form | Meaning |
+|---|---|---|
+| `INSERT` | `+I` | A new row |
+| `UPDATE_BEFORE` | `-U` | The old version of an updated row |
+| `UPDATE_AFTER` | `+U` | The new version of an updated row |
+| `DELETE` | `-D` | A deleted row |
+
+Bounded (batch) sources produce only `INSERT`. Streaming and CDC sources produce all four kinds; a
+sink that cannot apply updates and deletes is rejected while planning.
+
+### Logical types
+
+| Type | Java value |
+|---|---|
+| `BOOLEAN` | `Boolean` |
+| `INT8` / `INT16` / `INT32` / `INT64` | `Byte` / `Short` / `Integer` / `Long` |
+| `FLOAT32` / `FLOAT64` | `Float` / `Double` |
+| `DECIMAL(p, s)` | `BigDecimal`, precision 1–38 |
+| `STRING` / `STRING(n)` | `String` |
+| `BYTES` / `BYTES(n)` | `byte[]` |
+| `DATE` | `LocalDate` |
+| `TIME(p)` | `LocalTime`, p fractional digits (0–9, default 0) |
+| `TIMESTAMP(p)` | `LocalDateTime` (default p = 6) |
+| `TIMESTAMP_LTZ(p)` | `Instant` |
+| `ARRAY<T>` / `MAP<K, V>` / `ROW<name T, ...>` | `List` / `Map` / `Row` |
+| `JSON` | `String` holding valid JSON |
+
+Every type is nullable unless it is marked `NOT NULL`.
+
+### Tables and schema changes
+
+A table has columns, an optional primary key, partition keys, options and a comment. Changes to a
+table — create, drop, truncate, rename, add, drop or rename a column, change a column type or
+comment — travel through the job in order with the rows, so transforms and sinks see them at the
+right moment.
+
+## Quick start
+
+Types are written the same way in jobs, type hints and plugin code. Common SQL names are accepted
+and normalized:
+
+```yaml
+columns:
+  - name: id
+    type: bigint not null        # INT64 NOT NULL
+  - name: amount
+    type: decimal(12, 2)         # DECIMAL(12, 2)
+  - name: tags
+    type: array<varchar(32)>     # ARRAY<STRING(32)>
+```
+
+## Configuration
+
+| Written | Canonical type |
+|---|---|
+| `INT`, `INTEGER` | `INT32` |
+| `BIGINT` / `SMALLINT` / `TINYINT` | `INT64` / `INT16` / `INT8` |
+| `FLOAT`, `REAL` / `DOUBLE` | `FLOAT32` / `FLOAT64` |
+| `BOOL` | `BOOLEAN` |
+| `NUMERIC(p, s)`, `DECIMAL` | `DECIMAL(p, s)`, `DECIMAL(10, 0)` |
+| `VARCHAR(n)`, `CHAR(n)`, `TEXT` | `STRING(n)`, `STRING(n)`, `STRING` |
+| `VARBINARY(n)`, `BINARY(n)` | `BYTES(n)` |
+| `DATETIME(p)` | `TIMESTAMP(p)` |
+
+Names are case-insensitive. Field names of `ROW` that are not plain identifiers are quoted with
+backticks: `` ROW<`first name` STRING> ``.
+
+## Examples
+
+### A table in plugin code
+
+```java
+CatalogTable orders = CatalogTable.of(
+                TableId.of("shop", "orders"),
+                List.of(
+                        Column.of("id", DataTypes.INT64().notNull()),
+                        Column.of("amount", DataTypes.DECIMAL(12, 2)),
+                        Column.of("items", DataTypes.parse("ARRAY<ROW<sku STRING, qty INT32>>"))))
+        .withPrimaryKey("id");
+```
+
+### A row and its change kind
+
+```java
+GenericRow row = GenericRow.of(TableId.of("shop", "orders"), 1001L, new BigDecimal("120.50"), List.of());
+Row before = row.withKind(RowKind.UPDATE_BEFORE);   // -U shop.orders(1001, 120.50, [])
+```
+
+## Behavior
+
+- Two types are equal when their family, parameters and nullability are equal; nullability can be
+  ignored explicitly when comparing schemas.
+- A table rejects duplicate column names and keys that reference missing columns.
+- Removing a column from a table also removes it from the primary and partition keys.
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `unknown type 'varchr'` | The type name is misspelled; the message gives the position. |
+| `DECIMAL precision must be between 1 and 38` | Use a smaller precision or `STRING` for larger numbers. |
+| `Duplicate ROW field` | Field names inside one `ROW` must be unique. |
+
+## Limitations
+
+- Large values (LOBs) as streaming references and the `type.lossy` policy arrive with the unified
+  schema milestone.
+- Interval types are not supported yet.
+
+## Version history
+
+Available since 0.1.0.

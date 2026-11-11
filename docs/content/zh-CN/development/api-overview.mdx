@@ -1,0 +1,103 @@
+---
+title: 连接器 API 概览
+description: 插件需要实现的接口（Source、Transform、Sink、Catalog、选项与工厂），以及 pipeforge-api 的稳定性规则。
+order: 40
+---
+
+## 只需一个依赖
+
+插件只依赖 `org.devlive.pipeforge:pipeforge-api`。它不依赖任何引擎；除 JDK 之外只带来 `pipeforge-common`（错误码）
+和 JSpecify（空值注解）。因此同一个插件可以运行在 PipeForge 引擎上，之后也可以运行在 Flink 或 Spark 上。
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>org.devlive.pipeforge</groupId>
+  <artifactId>pipeforge-api</artifactId>
+  <version>0.1.0</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+## 包结构
+
+| 包 | 内容 |
+|---|---|
+| `api.row` | `Row`、`GenericRow`、`RowKind`、`TableId` |
+| `api.type` | `DataType`、`DataTypes`（工厂与解析器）、`TypeRoot` |
+| `api.table` | `Column`、`CatalogTable`、`SchemaChangeEvent` 及其九种事件 |
+| `api.source` | `Source`、`SplitEnumerator`、`SourceReader`、`ReaderOutput`、`SourceSplit` 以及各种上下文 |
+| `api.transform` | `Transform`、`Collector`、`TransformContext` |
+| `api.sink` | `Sink`、`SinkWriter`、`SinkCommitter`、`GlobalCommitter` 以及各种上下文 |
+| `api.catalog` | `Catalog` |
+| `api.option` | `Option`、`Options`、`OptionRule`、`ReadonlyConfig`、`OptionViolation` |
+| `api.factory` | `Factory`、`SourceFactory`、`SinkFactory`、`TransformFactory`、`CatalogFactory`、`FactoryContext`、`JobContext` |
+| `api.serialization` | 用于分片、待提交物和状态的 `VersionedSerializer` |
+| `api.capability` | 可选能力接口，例如 `SupportsFilterPushDown`、`SupportsUpsert` |
+| `api.expression` | `Predicate`，即交给 `SupportsFilterPushDown` 的过滤条件 |
+
+## Source
+
+一个 Source 有一个负责发现分片的 **Enumerator** 和多个并行读取分片的 **Reader**。Reader 采用拉模式：读完一个分片后再申请下一个，
+因此快的 Reader 会多干活。批处理、流处理和 CDC 的 Source 实现同一套接口，区别只在 `boundedness()` 和分片。
+
+```java
+public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable {
+    void start() throws Exception;
+    void addSplits(List<SplitT> splits);
+    void notifyNoMoreSplits();
+    PollStatus pollNext(ReaderOutput output) throws Exception; // 不能长时间阻塞
+    List<SplitT> snapshotState(long checkpointId);           // 带进度的分片
+}
+```
+
+没有数据时 `pollNext` 返回 `NOTHING_AVAILABLE` 而不是阻塞，由引擎负责退避后再次读取。分片状态记录已经交给下游的位置，
+因此恢复后的 Reader 能从这里精确继续。
+
+## Transform 与 Sink
+
+`Transform` 在计划阶段推导输出表（`transformSchema`），运行时逐行处理（`process(row, out)`）；Schema 变更由
+`transformSchemaChange` 处理。
+
+`Sink` 在计划阶段校验输入表并创建 Writer。Writer 负责 `write`、`flush`，需要 exactly-once 时在 `prepareCommit`
+中产生待提交物，由 `SinkCommitter` 或 `GlobalCommitter` 在 checkpoint 完成后提交。
+
+## 选项
+
+每个工厂用 `OptionRule` 声明自己的选项和选项之间的规则。同一份规则用于计划阶段的校验、UI 表单的渲染和插件文档的生成。
+
+```java
+static final Option<String> URL = Options.key("url").stringType().noDefault().withDescription("JDBC URL");
+static final Option<Integer> FETCH_SIZE =
+        Options.key("fetch-size").intType().defaultValue(1000).withRange(1, null).withGroup("throughput");
+
+@Override
+public OptionRule optionRule() {
+    return OptionRule.builder()
+            .required(URL)
+            .optional(FETCH_SIZE)
+            .exclusive(QUERY, TABLE)                                  // 二者恰好设置一个
+            .conditional(SPLIT_STRATEGY, Strategy.RANGE, SPLIT_COLUMN) // 选了 RANGE 时 split-column 必填
+            .nativeNamespaces("jdbc.properties")                      // 原样透传，不做校验
+            .build();
+}
+```
+
+校验时，缺少的选项报 `PF-CONF-0001`，不合法的取值（类型、范围、互斥组、带拼写建议的未知选项）报 `PF-CONF-0002`。
+敏感选项的取值在错误信息中会被遮蔽。
+
+## 工厂
+
+工厂通过 `java.util.ServiceLoader` 从插件的类加载器中发现。工厂提供 `identifier()`（作业中使用的名称）和 `optionRule()`，
+并根据 `FactoryContext` 创建组件：其中包含已校验的选项、原生配置、作业信息和上游表结构。
+
+## 稳定性
+
+每个公开类型都带有稳定性注解：
+
+| 注解 | 承诺 |
+|---|---|
+| `@Stable` | 同一主版本内二进制兼容 |
+| `@Evolving` | 可能在次版本中调整 |
+| `@Internal` | 不做承诺，插件不应使用 |
+
+接口新增的方法一律提供默认实现。构建时用 japicmp 与上一个发布版本比较，出现不兼容改动即失败；另有测试检查每个公开类型都带有其中一个注解。

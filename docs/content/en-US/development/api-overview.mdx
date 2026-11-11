@@ -1,0 +1,112 @@
+---
+title: Connector API overview
+description: The interfaces a plugin implements — sources, transforms, sinks, catalogs, options and factories — and the stability rules of pipeforge-api.
+order: 40
+---
+
+## One dependency
+
+Plugins depend on `org.devlive.pipeforge:pipeforge-api` only. It does not depend on any engine;
+besides the JDK it brings `pipeforge-common` (error codes) and JSpecify (nullness annotations). The
+same plugin can therefore run on the PipeForge engine and, later, on Flink or Spark.
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>org.devlive.pipeforge</groupId>
+  <artifactId>pipeforge-api</artifactId>
+  <version>0.1.0</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+## Packages
+
+| Package | Contents |
+|---|---|
+| `api.row` | `Row`, `GenericRow`, `RowKind`, `TableId` |
+| `api.type` | `DataType`, `DataTypes` (factory and parser), `TypeRoot` |
+| `api.table` | `Column`, `CatalogTable`, `SchemaChangeEvent` and its nine event types |
+| `api.source` | `Source`, `SplitEnumerator`, `SourceReader`, `ReaderOutput`, `SourceSplit`, contexts |
+| `api.transform` | `Transform`, `Collector`, `TransformContext` |
+| `api.sink` | `Sink`, `SinkWriter`, `SinkCommitter`, `GlobalCommitter`, contexts |
+| `api.catalog` | `Catalog` |
+| `api.option` | `Option`, `Options`, `OptionRule`, `ReadonlyConfig`, `OptionViolation` |
+| `api.factory` | `Factory`, `SourceFactory`, `SinkFactory`, `TransformFactory`, `CatalogFactory`, `FactoryContext`, `JobContext` |
+| `api.serialization` | `VersionedSerializer` for splits, committables and state |
+| `api.capability` | Optional capabilities such as `SupportsFilterPushDown` and `SupportsUpsert` |
+| `api.expression` | `Predicate`, the filters handed to `SupportsFilterPushDown` |
+
+## Sources
+
+A source has one **enumerator** that discovers splits and many parallel **readers** that read them.
+Readers pull splits: when a reader finishes a split it asks for the next, so fast readers do more
+work. Batch, streaming and CDC sources implement the same interface and differ in
+`boundedness()` and their splits.
+
+```java
+public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable {
+    void start() throws Exception;
+    void addSplits(List<SplitT> splits);
+    void notifyNoMoreSplits();
+    PollStatus pollNext(ReaderOutput output) throws Exception; // never block for long
+    List<SplitT> snapshotState(long checkpointId);           // splits with their progress
+}
+```
+
+`pollNext` returns `NOTHING_AVAILABLE` instead of blocking; the engine backs off and polls again.
+The state of a split records the position already handed to the output, so a restored reader
+continues exactly there.
+
+## Transforms and sinks
+
+A `Transform` derives its output tables while planning (`transformSchema`) and processes rows one
+by one (`process(row, out)`); schema changes go through `transformSchemaChange`.
+
+A `Sink` validates its input tables while planning and creates writers. Writers `write`, `flush`
+and, for exactly-once delivery, produce committables in `prepareCommit`; a `SinkCommitter` or
+`GlobalCommitter` commits them after the checkpoint completes.
+
+## Options
+
+Each factory declares its options and the rules between them in an `OptionRule`. The same rule
+validates jobs while planning, renders the form in the UI and generates the plugin page.
+
+```java
+static final Option<String> URL = Options.key("url").stringType().noDefault().withDescription("JDBC URL");
+static final Option<Integer> FETCH_SIZE =
+        Options.key("fetch-size").intType().defaultValue(1000).withRange(1, null).withGroup("throughput");
+
+@Override
+public OptionRule optionRule() {
+    return OptionRule.builder()
+            .required(URL)
+            .optional(FETCH_SIZE)
+            .exclusive(QUERY, TABLE)                                  // exactly one of them
+            .conditional(SPLIT_STRATEGY, Strategy.RANGE, SPLIT_COLUMN) // RANGE needs split-column
+            .nativeNamespaces("jdbc.properties")                      // passed through unchecked
+            .build();
+}
+```
+
+Validation reports missing options as `PF-CONF-0001` and invalid values (type, range, exclusive
+groups, unknown keys with a suggestion) as `PF-CONF-0002`. Sensitive options are masked in errors.
+
+## Factories
+
+Factories are found with `java.util.ServiceLoader` from the plugin's class loader. A factory has an
+`identifier()` — the name used in jobs — and an `optionRule()`, and creates its component from a
+`FactoryContext` with validated options, native configuration, job information and input tables.
+
+## Stability
+
+Every public type is annotated:
+
+| Annotation | Promise |
+|---|---|
+| `@Stable` | Binary compatible within a major version |
+| `@Evolving` | May change in a minor version |
+| `@Internal` | No promise; not for plugins |
+
+New interface methods always get a default implementation. The build compares the API with the
+last release using japicmp and fails on incompatible changes; a test checks that every public type
+carries one of the annotations.

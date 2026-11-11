@@ -1,0 +1,124 @@
+---
+title: 数据模型与类型
+description: 行与变更类型、表与 Schema 变更，以及所有连接器共用的逻辑类型。
+order: 20
+template: feature
+omit:
+  observability: 数据模型本身没有可观测的运行时行为。
+  performance: 类型和行没有可调的参数。
+---
+
+## 概述
+
+所有连接器使用同一套数据模型。一**行**数据属于某张表，并带有**变更类型**；表结构是一组带**逻辑类型**的列。
+方言插件负责把各个系统的原生类型映射为这些逻辑类型，因此数据可以在任意 Source 和 Sink 之间流动，中间不需要针对连接器的转换。
+
+## 原理
+
+### 行与变更类型
+
+| 类型 | 简写 | 含义 |
+|---|---|---|
+| `INSERT` | `+I` | 新增的行 |
+| `UPDATE_BEFORE` | `-U` | 被更新行的旧值 |
+| `UPDATE_AFTER` | `+U` | 被更新行的新值 |
+| `DELETE` | `-D` | 被删除的行 |
+
+有界（批处理）Source 只产生 `INSERT`。流处理和 CDC 的 Source 会产生全部四种；不能处理更新和删除的 Sink 会在计划阶段被拒绝。
+
+### 逻辑类型
+
+| 类型 | Java 值 |
+|---|---|
+| `BOOLEAN` | `Boolean` |
+| `INT8` / `INT16` / `INT32` / `INT64` | `Byte` / `Short` / `Integer` / `Long` |
+| `FLOAT32` / `FLOAT64` | `Float` / `Double` |
+| `DECIMAL(p, s)` | `BigDecimal`，精度 1–38 |
+| `STRING` / `STRING(n)` | `String` |
+| `BYTES` / `BYTES(n)` | `byte[]` |
+| `DATE` | `LocalDate` |
+| `TIME(p)` | `LocalTime`，p 为小数秒位数（0–9，默认 0） |
+| `TIMESTAMP(p)` | `LocalDateTime`（默认 p = 6） |
+| `TIMESTAMP_LTZ(p)` | `Instant` |
+| `ARRAY<T>` / `MAP<K, V>` / `ROW<名称 T, ...>` | `List` / `Map` / `Row` |
+| `JSON` | 保证是合法 JSON 的 `String` |
+
+除非标记为 `NOT NULL`，每个类型都可以为空。
+
+### 表与 Schema 变更
+
+一张表包含列、可选的主键、分区键、选项和注释。表的变更（建表、删表、清空、改名，增加、删除、重命名列，修改列类型或注释）
+与数据行一起按顺序在作业中传递，Transform 和 Sink 会在正确的时机看到它们。
+
+## 快速上手
+
+在作业、类型提示和插件代码中，类型的写法相同。常见的 SQL 类型名都可以使用，并会被规范化：
+
+```yaml
+columns:
+  - name: id
+    type: bigint not null        # INT64 NOT NULL
+  - name: amount
+    type: decimal(12, 2)         # DECIMAL(12, 2)
+  - name: tags
+    type: array<varchar(32)>     # ARRAY<STRING(32)>
+```
+
+## 配置
+
+| 写法 | 规范类型 |
+|---|---|
+| `INT`、`INTEGER` | `INT32` |
+| `BIGINT` / `SMALLINT` / `TINYINT` | `INT64` / `INT16` / `INT8` |
+| `FLOAT`、`REAL` / `DOUBLE` | `FLOAT32` / `FLOAT64` |
+| `BOOL` | `BOOLEAN` |
+| `NUMERIC(p, s)`、`DECIMAL` | `DECIMAL(p, s)`、`DECIMAL(10, 0)` |
+| `VARCHAR(n)`、`CHAR(n)`、`TEXT` | `STRING(n)`、`STRING(n)`、`STRING` |
+| `VARBINARY(n)`、`BINARY(n)` | `BYTES(n)` |
+| `DATETIME(p)` | `TIMESTAMP(p)` |
+
+类型名不区分大小写。`ROW` 中不是普通标识符的字段名用反引号括起来：`` ROW<`first name` STRING> ``。
+
+## 示例
+
+### 在插件代码中定义表
+
+```java
+CatalogTable orders = CatalogTable.of(
+                TableId.of("shop", "orders"),
+                List.of(
+                        Column.of("id", DataTypes.INT64().notNull()),
+                        Column.of("amount", DataTypes.DECIMAL(12, 2)),
+                        Column.of("items", DataTypes.parse("ARRAY<ROW<sku STRING, qty INT32>>"))))
+        .withPrimaryKey("id");
+```
+
+### 行与变更类型
+
+```java
+GenericRow row = GenericRow.of(TableId.of("shop", "orders"), 1001L, new BigDecimal("120.50"), List.of());
+Row before = row.withKind(RowKind.UPDATE_BEFORE);   // -U shop.orders(1001, 120.50, [])
+```
+
+## 行为与语义
+
+- 两个类型的类别、参数和可空性都相同时才相等；比较 Schema 时可以显式忽略可空性。
+- 表不允许重复的列名，也不允许主键或分区键引用不存在的列。
+- 从表中删除一列时，该列也会从主键和分区键中移除。
+
+## 排障
+
+| 问题 | 处理方法 |
+|---|---|
+| `unknown type 'varchr'` | 类型名拼写错误，错误信息中给出了出错位置。 |
+| `DECIMAL precision must be between 1 and 38` | 使用更小的精度，或者用 `STRING` 存放更大的数值。 |
+| `Duplicate ROW field` | 同一个 `ROW` 中的字段名必须唯一。 |
+
+## 限制
+
+- 以流式引用承载的大对象（LOB）和 `type.lossy` 策略会在统一 Schema 里程碑中加入。
+- 暂不支持区间（interval）类型。
+
+## 版本
+
+自 0.1.0 起提供。
