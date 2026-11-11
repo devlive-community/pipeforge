@@ -32,6 +32,7 @@ jobs:
       java: ${{ steps.detect.outputs.java }}
       build-checks: ${{ steps.detect.outputs.build-checks }}
       dev-env: ${{ steps.detect.outputs.dev-env }}
+      web: ${{ steps.detect.outputs.web }}
       maven_modules: ${{ steps.modules.outputs.maven_modules }}
     steps:
       - uses: actions/checkout@v5
@@ -117,6 +118,21 @@ jobs:
           cache: maven
       - run: tools/build-checks/selftest.sh
 
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r test
+
   # Starts the docker compose environment (including MinIO) and checks every service.
   dev-env:
     needs: changes
@@ -134,7 +150,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [changes, lint, dco, java, build-checks, dev-env]
+    needs: [changes, lint, dco, java, build-checks, dev-env, web]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
