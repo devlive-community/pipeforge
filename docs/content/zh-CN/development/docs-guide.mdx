@@ -23,6 +23,7 @@ order: 30
 title: 本地开发环境                    # 页面标题，显示为页面主标题
 description: 一句话，用于搜索结果和链接预览。
 order: 20                              # 在所属分组导航中的位置
+data: errors                           # 可选：页面渲染的生成数据（会加入相应的锚点）
 template: feature                      # guide（默认）、feature 或 plugin
 omit:                                  # 不适用的模板章节及原因
   performance: 环境用于开发，不用于性能基准。
@@ -89,6 +90,7 @@ Observability、Performance and tuning、Troubleshooting、Limitations 和 Versi
 | 代码块 | 带复制按钮的高亮代码；可以加 `title="file.yaml"`、用 `{2-4}` 高亮行，或加 `showLineNumbers` |
 | `<Tabs>` 与 `<Tab label="...">` | 多种写法切换，例如 YAML、SQL 和 CLI |
 | `<Steps>` 与 `<Step title="...">` | 分步骤的操作说明 |
+| `<ErrorList />` | 由错误码登记表生成的全部错误码，支持搜索和按类别筛选；页面在 frontmatter 中声明 `data: errors`，指向 `#pf-conf-0001` 这类锚点的链接因此也会被校验 |
 
 ```mdx title="example.mdx"
 <Tabs>
