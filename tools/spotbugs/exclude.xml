@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<!--
+  Project-wide SpotBugs exclusions. Keep this list minimal: confirmed false positives in a
+  single place are suppressed with @SuppressFBWarnings(value = "...", justification = "...").
+-->
+<FindBugsFilter>
+    <!--
+      EI_EXPOSE_REP / EI_EXPOSE_REP2 fire on every record and constructor that stores a collection,
+      even when the value is an immutable copy (List.copyOf / Map.copyOf). Immutability is enforced
+      by code review and by the API design rules in the engineering conventions instead.
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Constructor exceptions are part of normal validation; finalizer attacks are not in scope. -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+</FindBugsFilter>
