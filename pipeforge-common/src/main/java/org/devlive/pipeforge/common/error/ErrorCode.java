@@ -55,6 +55,15 @@ public final class ErrorCode {
     public static final ErrorCode PLUGIN_API_INCOMPATIBLE =
             define("PF-PLUG-0002", "PLUGIN_API_INCOMPATIBLE", "plugin", "required", "provided");
     public static final ErrorCode DRIVER_MISSING = define("PF-PLUG-0003", "DRIVER_MISSING", "plugin", "driver");
+    public static final ErrorCode PLUGIN_LOAD_FAILED = define("PF-PLUG-0004", "PLUGIN_LOAD_FAILED", "plugin", "reason");
+    public static final ErrorCode PLUGIN_FORBIDDEN_CALL =
+            define("PF-PLUG-0005", "PLUGIN_FORBIDDEN_CALL", "plugin", "call", "location");
+    public static final ErrorCode PLUGIN_TIMEOUT =
+            define("PF-PLUG-0006", "PLUGIN_TIMEOUT", "plugin", "operation", "timeoutMs");
+    public static final ErrorCode PLUGIN_CALL_FAILED =
+            define("PF-PLUG-0007", "PLUGIN_CALL_FAILED", "plugin", "operation", "reason");
+    public static final ErrorCode COMPONENT_AMBIGUOUS =
+            define("PF-PLUG-0008", "COMPONENT_AMBIGUOUS", "type", "identifier", "plugins");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

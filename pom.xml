@@ -37,6 +37,7 @@
         <module>pipeforge-common</module>
         <module>pipeforge-api</module>
         <module>pipeforge-maven-plugin</module>
+        <module>pipeforge-plugin</module>
     </modules>
 
     <properties>

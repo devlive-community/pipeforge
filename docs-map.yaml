@@ -21,11 +21,25 @@
   docs: ["development/docs-guide"]
 - paths: ["pipeforge-design-tokens/**"]
   docs: ["development/docs-guide"]
-- paths: ["pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/**", "pipeforge-common/src/main/resources/errors/**"]
+# The error framework. New codes (ErrorCode constants and errors/*.yaml) only feed the generated
+# reference/errors page and need no hand edits.
+- paths:
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/PipeForgeException.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/ErrorRegistry.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/ErrorDefinition.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/ErrorInfo.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/ErrorScope.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/ErrorKind.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/ErrorCategory.java"
+    - "pipeforge-common/src/main/java/org/devlive/pipeforge/common/error/MessageTemplate.java"
   docs: ["concepts/errors"]
 - paths: ["pipeforge-common/src/main/java/org/devlive/pipeforge/common/plugin/**"]
   docs: ["development/plugin-packaging"]
 - paths: ["pipeforge-api/**"]
-  docs: ["development/api-overview", "concepts/data-model"]
+  docs: ["development/api-overview"]
+- paths: ["pipeforge-api/src/main/java/org/devlive/pipeforge/api/row/**", "pipeforge-api/src/main/java/org/devlive/pipeforge/api/type/**", "pipeforge-api/src/main/java/org/devlive/pipeforge/api/table/**"]
+  docs: ["concepts/data-model"]
 - paths: ["pipeforge-maven-plugin/**"]
   docs: ["development/plugin-packaging"]
+- paths: ["pipeforge-plugin/**"]
+  docs: ["concepts/plugins"]

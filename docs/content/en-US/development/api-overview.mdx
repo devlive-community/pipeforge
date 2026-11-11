@@ -107,6 +107,8 @@ Every public type is annotated:
 | `@Evolving` | May change in a minor version |
 | `@Internal` | No promise; not for plugins |
 
+`ApiVersion.current()` returns the API version at run time; a plugin declares the major version it was built for (`ApiVersion.descriptorForm()`, e.g. `0.x`) and the engine refuses plugins built for another major version.
+
 New interface methods always get a default implementation. The build compares the API with the
 last release using japicmp and fails on incompatible changes; a test checks that every public type
 carries one of the annotations.
