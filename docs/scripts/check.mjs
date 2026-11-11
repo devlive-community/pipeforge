@@ -8,6 +8,7 @@
 // Runs the documentation checks. Usage: node scripts/check.mjs [structure|i18n|links|ui ...]
 // Exits with 1 and prints every problem when a check fails.
 
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadPages } from "../lib/content-core.mjs";
@@ -19,10 +20,16 @@ import { scanUi } from "./checks/ui-scan.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pages = loadPages(join(root, "content"));
 
+// Anchors of pages that render generated data (run `pnpm generate` first).
+const errorsFile = join(root, "generated", "errors.json");
+const generatedAnchors = {
+  errors: existsSync(errorsFile) ? JSON.parse(readFileSync(errorsFile, "utf8")).map((e) => e.code.toLowerCase()) : [],
+};
+
 const checks = {
   structure: () => checkStructure(pages),
   i18n: () => checkI18n(pages),
-  links: () => checkLinks(pages),
+  links: () => checkLinks(pages, generatedAnchors),
   ui: () => scanUi(root),
 };
 

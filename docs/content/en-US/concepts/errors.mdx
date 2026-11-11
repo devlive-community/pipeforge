@@ -1,0 +1,138 @@
+---
+title: Error handling
+description: How PipeForge reports errors with stable codes, localized messages and hints, and how the engine treats each kind of error.
+order: 80
+template: feature
+omit:
+  performance: Error reporting is not on the data path and has no tuning parameters.
+---
+
+## Overview
+
+Every error a user can see carries a stable **error code** such as `PF-CONF-0001`. The code
+identifies the problem independently of the language: the CLI and the UI show a localized message
+and a troubleshooting hint for it, the engine uses its kind to decide whether to retry, alerts can
+match codes or categories, and the [error code reference](../reference/errors) documents every code.
+
+## How it works
+
+A code has the form `PF-<category>-<number>`. The category tells what went wrong and gives the
+default kind:
+
+| Category | Meaning | Default kind |
+|---|---|---|
+| `CONF` | Configuration: missing or invalid options, controlled native keys, undefined variables | fatal |
+| `PLAN` | Planning: cycles, incompatible schemas, unsupported capabilities | fatal |
+| `PLUG` | Plugins: missing, incompatible, driver not installed | fatal |
+| `CONN` | Connections: refused, timed out, lost | transient |
+| `AUTH` | Authentication and permissions | fatal |
+| `META` | Metadata: missing tables or columns, failed DDL | fatal |
+| `DATA` | Data: conversion failures, constraint violations, malformed records | data |
+| `SRC` / `SINK` | Source and sink runtime errors | depends on the error |
+| `CKPT` | Checkpoints and state | depends on the error |
+| `RES` / `CLUS` | Resources and cluster | transient |
+| `SYS` | Internal errors (always a defect) | fatal |
+
+The kind decides what the engine does: **transient** errors are retried, **data** errors go
+through the dirty data policy of the node, and **fatal** errors fail the run. A component that
+knows better may override the kind of a single error.
+
+Every code is registered with an English and a Chinese message and hint. Messages contain named
+parameters, for example `Required option '{option}' is missing in node '{node}'`; the error
+carries the values, so every client can render the text in its own language.
+
+## Quick start
+
+When a job fails, the CLI prints the code, the message and the hint:
+
+```text
+ERROR PF-CONF-0001 Required option 'url' is missing in node 'source'
+      Add 'url' to the node, or set it in env or in the cluster defaults.
+```
+
+Look the code up in the [error code reference](../reference/errors) for its full description.
+
+## Configuration
+
+Plugins register their own codes in `src/main/resources/META-INF/pipeforge/errors.yaml`. The number
+range of a plugin carries its id, for example `PF-SINK-K17-0001`:
+
+```yaml title="META-INF/pipeforge/errors.yaml"
+- code: PF-SINK-K17-0001
+  name: STREAM_LOAD_FAILED
+  kind: TRANSIENT            # optional; defaults to the category kind
+  message:
+    en-US: "Stream load '{label}' failed: {reason}"
+    zh-CN: "Stream Load 任务 '{label}' 失败：{reason}"
+  hint:
+    en-US: "Check the load status of '{label}' on the frontend."
+    zh-CN: "在 FE 上查看任务 '{label}' 的导入状态。"
+```
+
+The build rejects a registry where a code is malformed or duplicated, a name is reused, a text is
+missing in one language, or the two languages use different parameters. In Java, a code declares
+the same parameters as its message:
+
+```java
+static final ErrorCode STREAM_LOAD_FAILED = ErrorCode.define("PF-SINK-K17-0001", "STREAM_LOAD_FAILED", "label", "reason");
+
+throw PipeForgeException.of(STREAM_LOAD_FAILED).param("label", label).param("reason", body).build();
+```
+
+## Examples
+
+### Structured error object
+
+The server, the UI and the CLI with `-o json` receive the error as a structured object:
+
+```json
+{
+  "code": "PF-CONF-0001",
+  "name": "OPTION_REQUIRED",
+  "params": { "option": "url", "node": "source" },
+  "scope": { "job": "orders", "node": "source" },
+  "kind": "FATAL",
+  "message": "Required option 'url' is missing in node 'source'",
+  "hint": "Add 'url' to the node, or set it in env or in the cluster defaults.",
+  "causeChain": []
+}
+```
+
+### Unexpected exceptions
+
+An exception without a code is reported as `PF-SYS-0001` with the original exception kept in the
+cause chain. Such an error is always a defect; please report it.
+
+```text
+ERROR PF-SYS-0001 Internal error: java.lang.IllegalStateException: split assignment out of order
+```
+
+## Behavior
+
+- A code never changes its meaning and is never reused. Codes that are no longer raised stay in
+  the registry, marked as deprecated.
+- Throwing an error with missing or unknown parameters is a programming error and fails immediately
+  in tests.
+- Texts fall back to English when a language is not available.
+
+## Observability
+
+Logs record the English message, the code, the parameters and the full exception chain. The error
+of a failed run is stored with the run, and the error count per code will be exposed as the
+`errors{code}` metric together with the metrics registry.
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| The message shows `{name}` placeholders | The thrower did not pass that parameter; report the code and the message. |
+| `PF-SYS-0001` appears | An unexpected exception; report it with the run log. |
+
+## Limitations
+
+- Messages and hints are available in English and Chinese.
+- The connector testkit does not yet check that plugin error classifiers map every driver error.
+
+## Version history
+
+Available since 0.1.0.

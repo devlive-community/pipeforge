@@ -10,7 +10,12 @@
 
 import { extractLinks, resolveLink } from "../../lib/content-core.mjs";
 
-export function checkLinks(pages) {
+/**
+ * @param pages the pages of every language
+ * @param generatedAnchors anchors that pages render from generated data, by data set name;
+ *     a page declares the data set it renders with the frontmatter field `data`
+ */
+export function checkLinks(pages, generatedAnchors = {}) {
   const errors = [];
   const index = new Map(pages.map((p) => [`${p.lang}/${p.id}`, p]));
   for (const page of pages) {
@@ -27,7 +32,12 @@ export function checkLinks(pages) {
         errors.push(`${where}: ${link.href}: page '${target.id}' does not exist`);
         continue;
       }
-      if (target.anchor && !targetPage.headings.some((h) => h.id === target.anchor)) {
+      const dataAnchors = generatedAnchors[targetPage.frontmatter.data] ?? [];
+      if (
+        target.anchor &&
+        !targetPage.headings.some((h) => h.id === target.anchor) &&
+        !dataAnchors.includes(target.anchor)
+      ) {
         errors.push(`${where}: ${link.href}: '${target.id}' has no heading '#${target.anchor}'`);
       }
     }

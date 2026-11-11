@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Internal errors: always a defect.
+
+- code: PF-SYS-0001
+  name: INTERNAL
+  message:
+    en-US: "Internal error: {detail}"
+    zh-CN: "内部错误：{detail}"
+  hint:
+    en-US: "This is a bug. Please report it with the error details and the log of the run."
+    zh-CN: "这是一个缺陷。请附上错误详情和本次运行的日志提交问题。"

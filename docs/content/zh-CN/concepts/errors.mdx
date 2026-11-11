@@ -1,0 +1,129 @@
+---
+title: 错误处理
+description: PipeForge 如何用稳定的错误码、本地化的提示和排查建议报告错误，以及引擎如何处理每一类错误。
+order: 80
+template: feature
+omit:
+  performance: 错误报告不在数据处理路径上，也没有可调的参数。
+---
+
+## 概述
+
+用户能看到的每一个错误都带有稳定的**错误码**，例如 `PF-CONF-0001`。错误码与语言无关地标识问题：CLI 和 UI
+据此显示本地化的提示和排查建议，引擎根据它的分类决定是否重试，告警规则可以按错误码或类别匹配，
+[错误码参考](../reference/errors)列出了每一个错误码。
+
+## 原理
+
+错误码的格式为 `PF-<类别>-<编号>`。类别说明出了什么问题，并决定默认的分类：
+
+| 类别 | 含义 | 默认分类 |
+|---|---|---|
+| `CONF` | 配置：选项缺失或不合法、原生配置使用了受控键、变量未定义 | 致命 |
+| `PLAN` | 计划：存在环、Schema 不兼容、能力不满足 | 致命 |
+| `PLUG` | 插件：缺失、版本不兼容、驱动未安装 | 致命 |
+| `CONN` | 连接：被拒绝、超时、断开 | 暂时性 |
+| `AUTH` | 认证与权限 | 致命 |
+| `META` | 元数据：表或列不存在、DDL 执行失败 | 致命 |
+| `DATA` | 数据：类型转换失败、违反约束、格式错误 | 数据错误 |
+| `SRC` / `SINK` | 源端与目标端运行错误 | 视具体错误 |
+| `CKPT` | checkpoint 与状态 | 视具体错误 |
+| `RES` / `CLUS` | 资源与集群 | 暂时性 |
+| `SYS` | 内部错误（一定是缺陷） | 致命 |
+
+分类决定引擎的处理方式：**暂时性**错误会重试，**数据错误**交给节点的脏数据策略处理，**致命**错误使本次运行失败。
+了解具体情况的组件可以覆盖单个错误的分类。
+
+每个错误码都登记了中英文的提示和排查建议。提示中带有命名参数，例如 `节点 '{node}' 缺少必填选项 '{option}'`；
+错误对象携带参数值，因此每个客户端都能用自己的语言渲染文本。
+
+## 快速上手
+
+作业失败时，CLI 输出错误码、提示和排查建议：
+
+```text
+ERROR PF-CONF-0001 节点 'source' 缺少必填选项 'url'
+      在节点中添加 'url'，或者在 env 或集群默认配置中设置它。
+```
+
+在[错误码参考](../reference/errors)中可以查到该错误码的完整说明。
+
+## 配置
+
+插件在 `src/main/resources/META-INF/pipeforge/errors.yaml` 中登记自己的错误码，编号段带上插件 ID，
+例如 `PF-SINK-K17-0001`：
+
+```yaml title="META-INF/pipeforge/errors.yaml"
+- code: PF-SINK-K17-0001
+  name: STREAM_LOAD_FAILED
+  kind: TRANSIENT            # 可选，默认取类别的分类
+  message:
+    en-US: "Stream load '{label}' failed: {reason}"
+    zh-CN: "Stream Load 任务 '{label}' 失败：{reason}"
+  hint:
+    en-US: "Check the load status of '{label}' on the frontend."
+    zh-CN: "在 FE 上查看任务 '{label}' 的导入状态。"
+```
+
+以下情况会使构建失败：错误码格式错误或重复、名称被重复使用、某种语言缺少文本、两种语言使用的参数不同。
+在 Java 中，错误码声明的参数与提示中的参数一致：
+
+```java
+static final ErrorCode STREAM_LOAD_FAILED = ErrorCode.define("PF-SINK-K17-0001", "STREAM_LOAD_FAILED", "label", "reason");
+
+throw PipeForgeException.of(STREAM_LOAD_FAILED).param("label", label).param("reason", body).build();
+```
+
+## 示例
+
+### 结构化错误对象
+
+Server、UI 以及使用 `-o json` 的 CLI 收到的是结构化的错误对象：
+
+```json
+{
+  "code": "PF-CONF-0001",
+  "name": "OPTION_REQUIRED",
+  "params": { "option": "url", "node": "source" },
+  "scope": { "job": "orders", "node": "source" },
+  "kind": "FATAL",
+  "message": "节点 'source' 缺少必填选项 'url'",
+  "hint": "在节点中添加 'url'，或者在 env 或集群默认配置中设置它。",
+  "causeChain": []
+}
+```
+
+### 未预期的异常
+
+不带错误码的异常报告为 `PF-SYS-0001`，原始异常保留在异常链中。这类错误一定是缺陷，请提交问题。
+
+```text
+ERROR PF-SYS-0001 内部错误：java.lang.IllegalStateException: split assignment out of order
+```
+
+## 行为与语义
+
+- 错误码的含义永远不变，也不会被复用。不再使用的错误码保留在登记表中，并标记为已废弃。
+- 抛出错误时缺少参数或传入未声明的参数属于编程错误，在测试中会立即失败。
+- 某种语言没有文本时回退为英文。
+
+## 可观测性
+
+日志中记录英文提示、错误码、参数和完整的异常链。失败运行的错误随运行记录保存；按错误码统计的错误数会随指标登记表一起以
+`errors{code}` 指标提供。
+
+## 排障
+
+| 问题 | 处理方法 |
+|---|---|
+| 提示中出现 `{name}` 占位符 | 抛出错误时没有传入该参数；请附上错误码和提示提交问题。 |
+| 出现 `PF-SYS-0001` | 未预期的异常；请附上运行日志提交问题。 |
+
+## 限制
+
+- 提示和排查建议目前提供英文和中文。
+- 连接器测试套件暂时不检查插件的错误分类器是否覆盖了全部驱动错误。
+
+## 版本
+
+自 0.1.0 起提供。
