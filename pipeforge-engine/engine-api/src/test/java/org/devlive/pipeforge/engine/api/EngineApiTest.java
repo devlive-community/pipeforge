@@ -42,10 +42,8 @@ class EngineApiTest {
 
         assertThat(new JobResult(id, JobStatus.FAILED, error, JobMetrics.EMPTY).error())
                 .isSameAs(error);
-        assertThat(new JobResult(id, JobStatus.SUCCESS, null, new JobMetrics(5))
-                        .metrics()
-                        .elapsedMs())
-                .isEqualTo(5);
+        assertThat(new JobResult(id, JobStatus.SUCCESS, null, JobMetrics.EMPTY).metrics())
+                .isSameAs(JobMetrics.EMPTY);
         assertThatThrownBy(() -> new JobResult(id, JobStatus.SUCCESS, error, JobMetrics.EMPTY))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new JobResult(id, JobStatus.FAILED, null, JobMetrics.EMPTY))
@@ -62,11 +60,15 @@ class EngineApiTest {
         assertThat(defaults.writeBatchSize()).isEqualTo(1024);
         assertThat(defaults.writeQueueCapacity()).isEqualTo(4);
         assertThat(defaults.cancelTimeout()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(defaults.metricsInterval()).isEqualTo(Duration.ofSeconds(1));
         SubmitOptions changed = defaults.withAsyncWriteBuffer(false)
                 .withWriteBatchSize(10)
                 .withWriteQueueCapacity(2)
-                .withCancelTimeout(Duration.ofSeconds(1));
-        assertThat(changed).isEqualTo(new SubmitOptions(false, 10, 2, Duration.ofSeconds(1)));
+                .withCancelTimeout(Duration.ofSeconds(1))
+                .withMetricsInterval(Duration.ofMillis(50));
+        assertThat(changed).isEqualTo(new SubmitOptions(false, 10, 2, Duration.ofSeconds(1), Duration.ofMillis(50)));
+        assertThatThrownBy(() -> defaults.withMetricsInterval(Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> defaults.withWriteBatchSize(0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> defaults.withWriteQueueCapacity(0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> defaults.withCancelTimeout(Duration.ZERO))

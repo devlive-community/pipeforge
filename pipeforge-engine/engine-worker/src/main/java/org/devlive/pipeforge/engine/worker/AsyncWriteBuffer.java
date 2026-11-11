@@ -59,6 +59,7 @@ final class AsyncWriteBuffer implements AutoCloseable {
     private final Thread thread;
     private final AtomicLong producerWaitNanos = new AtomicLong();
     private final AtomicLong writerWaitNanos = new AtomicLong();
+    private final AtomicLong busyNanos = new AtomicLong();
     private volatile @Nullable PipeForgeException failure;
     private List<Object> current;
 
@@ -139,6 +140,11 @@ final class AsyncWriteBuffer implements AutoCloseable {
         return producerWaitNanos.get();
     }
 
+    /** Time the write thread spent writing and flushing. */
+    long busyNanos() {
+        return busyNanos.get();
+    }
+
     /** Time the write thread spent waiting on an empty queue. */
     long writerWaitNanos() {
         return writerWaitNanos.get();
@@ -185,10 +191,15 @@ final class AsyncWriteBuffer implements AutoCloseable {
                     element = queue.take();
                     writerWaitNanos.addAndGet(System.nanoTime() - start);
                 }
+                long start = System.nanoTime();
                 switch (element) {
-                    case Batch batch -> batch.items().forEach(target::write);
+                    case Batch batch -> {
+                        batch.items().forEach(target::write);
+                        busyNanos.addAndGet(System.nanoTime() - start);
+                    }
                     case Barrier barrier -> {
                         target.flush();
+                        busyNanos.addAndGet(System.nanoTime() - start);
                         barrier.written().complete(null);
                     }
                     case End end -> {

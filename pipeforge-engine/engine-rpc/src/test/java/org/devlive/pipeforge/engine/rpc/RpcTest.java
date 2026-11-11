@@ -61,12 +61,20 @@ class RpcTest {
 
         assertThat(TaskStateUpdate.failed(TASK, error).error()).isSameAs(error);
         assertThat(TaskStateUpdate.of(TASK, TaskState.RUNNING).committables()).isEmpty();
+        TaskMetricsSnapshot metrics =
+                new TaskMetricsSnapshot(List.of(new OperatorSnapshot("src", 3, 3, 0, 0, 10)), 100, 5, 1, 2);
+        assertThat(TaskStateUpdate.of(TASK, TaskState.CANCELED)
+                        .withMetrics(metrics)
+                        .metrics())
+                .isSameAs(metrics);
+        assertThat(TaskStateUpdate.of(TASK, TaskState.RUNNING).metrics()).isNull();
+        assertThat(TaskMetricsSnapshot.EMPTY.operators()).isEmpty();
         assertThat(TaskStateUpdate.finished(TASK, List.of(new SerializedValue(1, new byte[] {1})))
                         .committables())
                 .hasSize(1);
         assertThatThrownBy(() -> TaskStateUpdate.of(TASK, TaskState.FAILED))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new TaskStateUpdate(TASK, TaskState.FINISHED, error, List.of()))
+        assertThatThrownBy(() -> new TaskStateUpdate(TASK, TaskState.FINISHED, error, List.of(), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -78,7 +86,8 @@ class RpcTest {
         assertThat(new ReaderMessage.Custom(TASK, "src", event).event()).isSameAs(event);
         assertThat(new ReaderMessage.SplitRequest(TASK, "src").task()).isEqualTo(TASK);
         assertThatThrownBy(() -> new ReaderMessage.Custom(TASK, "src", null)).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new TaskSettings(true, 0, 1, java.time.Duration.ofSeconds(1)))
+        assertThatThrownBy(() -> new TaskSettings(
+                        true, 0, 1, java.time.Duration.ofSeconds(1), TaskSettings.DEFAULT_METRICS_INTERVAL))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(TaskSettings.defaults().asyncWriteBuffer()).isTrue();
     }
@@ -98,15 +107,22 @@ class RpcTest {
                 calls.add(Thread.currentThread().getName() + " request");
                 return CompletableFuture.completedFuture(null);
             }
+
+            @Override
+            public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
+                calls.add(Thread.currentThread().getName() + " metrics");
+                return CompletableFuture.completedFuture(null);
+            }
         };
         try (InProcessRpc.Endpoint<JobMasterGateway> endpoint = InProcessRpc.serve("m", target)) {
             endpoint.gateway().updateTaskState(TaskStateUpdate.of(TASK, TaskState.RUNNING));
             endpoint.gateway().sendReaderMessage(new ReaderMessage.SplitRequest(TASK, "src"));
+            endpoint.gateway().reportMetrics(TASK, TaskMetricsSnapshot.EMPTY);
             endpoint.gateway()
                     .updateTaskState(TaskStateUpdate.of(TASK, TaskState.CANCELED))
                     .get(5, TimeUnit.SECONDS);
         }
-        assertThat(calls).containsExactly("rpc-m RUNNING", "rpc-m request", "rpc-m CANCELED");
+        assertThat(calls).containsExactly("rpc-m RUNNING", "rpc-m request", "rpc-m metrics", "rpc-m CANCELED");
     }
 
     @Test

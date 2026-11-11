@@ -24,11 +24,15 @@ const pages = loadPages(join(root, "content"));
 const errorsFile = join(root, "generated", "errors.json");
 const functionsFile = join(root, "generated", "functions.json");
 const apiFile = join(root, "generated", "api.json");
+const metricsFile = join(root, "generated", "metrics.json");
 const api = existsSync(apiFile) ? JSON.parse(readFileSync(apiFile, "utf8")) : { operations: [], schemas: [] };
 const generatedAnchors = {
   errors: existsSync(errorsFile) ? JSON.parse(readFileSync(errorsFile, "utf8")).map((e) => e.code.toLowerCase()) : [],
   functions: existsSync(functionsFile)
     ? JSON.parse(readFileSync(functionsFile, "utf8")).map((f) => f.name.toLowerCase())
+    : [],
+  metrics: existsSync(metricsFile)
+    ? JSON.parse(readFileSync(metricsFile, "utf8")).map((m) => `${m.scope}-${m.name}`.toLowerCase())
     : [],
   api: [...api.operations.map((o) => o.id.toLowerCase()), ...api.schemas.map((s) => `schema-${s.name.toLowerCase()}`)],
 };

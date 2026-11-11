@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
@@ -22,6 +23,7 @@ import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
+import org.devlive.pipeforge.engine.rpc.TaskState;
 
 /**
  * Runs the tasks of a worker. Each task has its own thread; the executor deploys them, routes
@@ -39,6 +41,7 @@ public final class TaskExecutor implements TaskExecutorGateway, AutoCloseable {
     private final JobMasterGateway master;
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService watchdog;
+    private final Map<ExecutionAttemptId, ScheduledFuture<?>> reporters = new ConcurrentHashMap<>();
 
     /**
      * @param name the worker name, used in thread names
@@ -55,11 +58,15 @@ public final class TaskExecutor implements TaskExecutorGateway, AutoCloseable {
 
     @Override
     public CompletableFuture<Void> deployTask(TaskDeployment deployment) {
-        Task task = new Task(deployment, master, done -> tasks.remove(done.id(), done));
+        Task task = new Task(deployment, master, this::terminated);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Task " + deployment.id() + " is already deployed"));
         }
+        long interval = deployment.settings().metricsInterval().toMillis();
+        reporters.put(
+                deployment.id(),
+                watchdog.scheduleAtFixedRate(() -> report(task), interval, interval, TimeUnit.MILLISECONDS));
         task.start();
         return CompletableFuture.completedFuture(null);
     }
@@ -84,6 +91,20 @@ public final class TaskExecutor implements TaskExecutorGateway, AutoCloseable {
             task.deliver(event);
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    private void report(Task task) {
+        if (task.state() == TaskState.RUNNING) {
+            master.reportMetrics(task.id(), task.snapshot());
+        }
+    }
+
+    private void terminated(Task task) {
+        tasks.remove(task.id(), task);
+        ScheduledFuture<?> reporter = reporters.remove(task.id());
+        if (reporter != null) {
+            reporter.cancel(false);
+        }
     }
 
     /** The tasks that have not reported a final state yet. */

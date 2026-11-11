@@ -17,4 +17,7 @@ public interface JobMasterGateway {
     CompletableFuture<Void> updateTaskState(TaskStateUpdate update);
 
     CompletableFuture<Void> sendReaderMessage(ReaderMessage message);
+
+    /** The current metrics of a running task, sent periodically; the final ones come with its final state. */
+    CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics);
 }

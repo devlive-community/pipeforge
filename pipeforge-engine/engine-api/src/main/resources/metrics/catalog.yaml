@@ -1,0 +1,158 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# The metrics the engine reports. The metrics reference of the documentation site is generated
+# from this file; MetricCatalogTest checks that every field of JobMetrics, NodeMetrics and Rate
+# is listed here.
+#
+#   name:        lower camel case, as in the JSON output
+#   scope:       job | node
+#   type:        counter | gauge | meter | timer
+#   unit:        rows | ms | rows/s | ratio | tasks
+
+- name: elapsedMs
+  scope: job
+  type: gauge
+  unit: ms
+  description:
+    en-US: "Time since the job was submitted, until it ended."
+    zh-CN: "作业提交以来经过的时间，作业结束后定格。"
+
+- name: rowsRead
+  scope: job
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows emitted by the sources."
+    zh-CN: "Source 输出的行数。"
+
+- name: rowsWritten
+  scope: job
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows written by the sinks. For sinks that commit in two phases, the rows committed once the job has finished."
+    zh-CN: "Sink 写入的行数。两阶段提交的 Sink 在作业结束、提交成功后才计入。"
+
+- name: rowsFiltered
+  scope: job
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows that transforms dropped: the transform emitted nothing for them."
+    zh-CN: "被 Transform 丢弃的行数：Transform 没有为这些行输出任何行。"
+
+- name: rowsExpanded
+  scope: job
+  type: counter
+  unit: rows
+  description:
+    en-US: "Extra rows that transforms emitted when one input row became several."
+    zh-CN: "Transform 把一行变成多行时多出的行数。"
+
+- name: rowsFailed
+  scope: job
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows read but not written when the job failed or was cancelled."
+    zh-CN: "作业失败或被取消时，已读取但未写入的行数。"
+
+- name: rowsInFlight
+  scope: job
+  type: gauge
+  unit: rows
+  description:
+    en-US: "Rows read but not yet written, for example waiting in the write queue. 0 once the job has ended."
+    zh-CN: "已读取但尚未写入的行数，例如在写队列中等待的行。作业结束后为 0。"
+
+- name: readRowsPerSecond
+  scope: job
+  type: meter
+  unit: rows/s
+  description:
+    en-US: "Read rate: current (last 5 seconds), average since the start and peak over one second."
+    zh-CN: "读取速率：瞬时值（最近 5 秒）、全程平均值和 1 秒内的峰值。"
+
+- name: writeRowsPerSecond
+  scope: job
+  type: meter
+  unit: rows/s
+  description:
+    en-US: "Write rate: current (last 5 seconds), average since the start and peak over one second."
+    zh-CN: "写入速率：瞬时值（最近 5 秒）、全程平均值和 1 秒内的峰值。"
+
+- name: readerWaitMs
+  scope: job
+  type: timer
+  unit: ms
+  description:
+    en-US: "Time tasks blocked on a full write queue, summed over tasks. High values mean the target is the bottleneck."
+    zh-CN: "Task 因写队列已满而阻塞的时间，按 Task 求和。数值高说明瓶颈在目标端。"
+
+- name: writerWaitMs
+  scope: job
+  type: timer
+  unit: ms
+  description:
+    en-US: "Time write threads waited for rows on an empty queue, summed over tasks. High values mean the source is the bottleneck."
+    zh-CN: "写线程在空队列上等待数据的时间，按 Task 求和。数值高说明瓶颈在源端。"
+
+- name: parallelism
+  scope: job
+  type: gauge
+  unit: tasks
+  description:
+    en-US: "The number of tasks of the job."
+    zh-CN: "作业的 Task 数。"
+
+- name: tasksRunning
+  scope: job
+  type: gauge
+  unit: tasks
+  description:
+    en-US: "The tasks that are running now."
+    zh-CN: "当前正在运行的 Task 数。"
+
+- name: rowsIn
+  scope: node
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows the node received, summed over its tasks; for a source, the rows it read."
+    zh-CN: "节点收到的行数，按 Task 求和；对 Source 而言是读取的行数。"
+
+- name: rowsOut
+  scope: node
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows the node emitted, summed over its tasks; for a sink, the rows it wrote."
+    zh-CN: "节点输出的行数，按 Task 求和；对 Sink 而言是写入的行数。"
+
+- name: rowsFiltered
+  scope: node
+  type: counter
+  unit: rows
+  description:
+    en-US: "Rows a transform dropped."
+    zh-CN: "Transform 丢弃的行数。"
+
+- name: rowsExpanded
+  scope: node
+  type: counter
+  unit: rows
+  description:
+    en-US: "Extra rows a transform emitted when one row became several."
+    zh-CN: "Transform 把一行变成多行时多出的行数。"
+
+- name: selfTimeRatio
+  scope: node
+  type: gauge
+  unit: ratio
+  description:
+    en-US: "Share of the running time spent in the node's own code, without the nodes after it (0 to 1). Sampled on every 16th read; for a sink with the write buffer, the busy time of its write thread."
+    zh-CN: "节点自身代码占运行时间的比例（0 到 1），不含其下游节点。每 16 次读取采样一次；开启写缓冲的 Sink 取写线程的忙碌时间。"

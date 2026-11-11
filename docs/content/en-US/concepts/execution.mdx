@@ -109,6 +109,7 @@ Engine settings are given per submission with `SubmitOptions`:
 | `writeBatchSize` | `1024` | Rows per batch handed to the write thread |
 | `writeQueueCapacity` | `4` | Batches the queue holds before the task thread blocks |
 | `cancelTimeout` | `30s` | Time a cancelled task gets before its thread is interrupted; after twice this time it is given up |
+| `metricsInterval` | `1s` | How often tasks report their metrics and the job metrics and rates are refreshed |
 
 The parallelism of each task comes from the job: `env.parallelism` or the node's `parallelism`.
 
@@ -161,9 +162,41 @@ committed.
 ## Observability
 
 The result of a job carries its final status, the error with its code and scope (job, run, node,
-subtask) and its metrics. Each task logs when it starts running and when it fails; the job master
-logs the job's start, commit and end. Row counts, rates and the bottleneck indicators arrive with the
-metrics of the engine.
+subtask) and its [metrics](../reference/metrics); `JobHandle.metrics()` returns them while the job
+runs, refreshed every `metricsInterval`.
+
+- **Collection.** Each operator counts its rows with one `LongAdder` increment per row and counter.
+  Every task sends a snapshot of its counters to the job master once per `metricsInterval`, and a
+  final one with its final state; the job master sums them per node and for the job.
+- **Rows.** `rowsRead` is what the source emitted, `rowsWritten` what the sink wrote (for sinks that
+  commit in two phases: what was committed), `rowsFiltered` and `rowsExpanded` what transforms
+  dropped or added, `rowsInFlight` what is still in the write queue. A failed or cancelled job counts
+  the rows that never reached the target as `rowsFailed`. The counters always reconcile:
+  `rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed + rowsInFlight`.
+- **Rates.** Read and write rates are sampled once per interval: the current rate over the last
+  5 seconds, the average since the start and the peak over one second.
+- **Self time.** `selfTimeRatio` is the share of the running time a node spends in its own code,
+  without the nodes after it. It is measured on every 16th read, so that the hot path does not read
+  the clock for every row; for a sink with the write buffer it is the busy time of the write thread.
+- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue (the target is slow),
+  `writerWaitMs` the time write threads waited for rows (the source is slow).
+
+`AnalyzeText` prints the metrics the way `explain --analyze` shows a run:
+
+```text
+Job orders-copy  SUCCESS 12.4s  parallelism 4
+Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
+Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
+Wait   reader 1.2s (target slow)  writer 300ms (source slow)
+
+Node  kind       in rows    out rows   sel.  self%
+src   source     1,000,000  1,000,000  -     21%
+map   transform  1,000,000  999,000    1.00  4%
+out   sink       999,000    999,000    -     68%
+```
+
+Each task logs when it starts running and when it fails; the job master logs the job's start,
+commit and end.
 
 ## Performance and tuning
 
@@ -175,6 +208,8 @@ metrics of the engine.
   target is slower on average.
 - More parallelism means more tasks and threads; the source's splits must be fine-grained enough to
   keep them busy.
+- A high `readerWaitMs` with a high `selfTimeRatio` of the sink means the target is the limit; a
+  high `writerWaitMs` means the source is.
 
 ## Troubleshooting
 

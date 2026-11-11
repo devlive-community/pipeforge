@@ -9,6 +9,7 @@ package org.devlive.pipeforge.engine.worker;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.devlive.pipeforge.api.source.PollStatus;
@@ -19,6 +20,7 @@ import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
+import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskState;
 import org.devlive.pipeforge.engine.rpc.TaskStateUpdate;
 import org.jspecify.annotations.Nullable;
@@ -63,6 +65,9 @@ final class Task implements Runnable {
     private final Thread thread;
     private volatile boolean cancelled;
     private volatile @Nullable OperatorChain chain;
+    private volatile long runningSince;
+    private volatile long endedAt;
+    private final AtomicLong idleNanos = new AtomicLong();
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
         this.deployment = deployment;
@@ -104,6 +109,7 @@ final class Task implements Runnable {
                 throw new CancelledException();
             }
             operators.open();
+            runningSince = System.nanoTime();
             transition(TaskState.RUNNING);
             LOG.info("Task {} is running", deployment.id());
             operators.startSource();
@@ -142,7 +148,10 @@ final class Task implements Runnable {
             switch (status) {
                 case MORE_AVAILABLE -> idle = MIN_IDLE_NANOS;
                 case NOTHING_AVAILABLE -> {
-                    if (mailbox.waitAndDrain(idle) > 0) {
+                    long start = System.nanoTime();
+                    int handled = mailbox.waitAndDrain(idle);
+                    idleNanos.addAndGet(System.nanoTime() - start);
+                    if (handled > 0) {
                         idle = MIN_IDLE_NANOS;
                     } else {
                         idle = Math.min(idle * 2, MAX_IDLE_NANOS);
@@ -201,10 +210,24 @@ final class Task implements Runnable {
         return report(TaskStateUpdate.failed(deployment.id(), error));
     }
 
-    /** Time the task thread blocked on a full write queue. */
-    long producerWaitNanos() {
+    /**
+     * The task's metrics since it started running; callable from any thread. Empty until the task
+     * runs; frozen once it ended.
+     */
+    TaskMetricsSnapshot snapshot() {
         OperatorChain operators = chain;
-        return operators == null ? 0 : operators.producerWaitNanos();
+        long since = runningSince;
+        if (operators == null || since == 0) {
+            return TaskMetricsSnapshot.EMPTY;
+        }
+        long end = endedAt;
+        long running = (end == 0 ? System.nanoTime() : end) - since;
+        return new TaskMetricsSnapshot(
+                operators.snapshot(),
+                running,
+                idleNanos.get(),
+                operators.producerWaitNanos(),
+                operators.writerWaitNanos());
     }
 
     private void transition(TaskState next) {
@@ -225,7 +248,10 @@ final class Task implements Runnable {
                 break;
             }
         }
-        master.updateTaskState(update);
+        if (runningSince != 0) {
+            endedAt = System.nanoTime();
+        }
+        master.updateTaskState(update.withMetrics(snapshot()));
         onTerminated.accept(this);
         return true;
     }

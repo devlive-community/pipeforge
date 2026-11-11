@@ -17,8 +17,10 @@ import org.devlive.pipeforge.api.table.AddColumn;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
+import org.devlive.pipeforge.engine.rpc.OperatorSnapshot;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
+import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskSettings;
 import org.devlive.pipeforge.engine.rpc.TaskState;
 import org.devlive.pipeforge.engine.rpc.TaskStateUpdate;
@@ -63,7 +65,8 @@ class TaskExecutorTest {
     @Test
     void writesOnTheTaskThreadWithoutTheBuffer() throws Exception {
         String probe = Probe.create();
-        TaskSettings direct = new TaskSettings(false, 1024, 4, Duration.ofSeconds(30));
+        TaskSettings direct =
+                new TaskSettings(false, 1024, 4, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL);
         TaskStateUpdate end = run(TestConnectors.job(probe, "", "drop-odd: true", "", 1), direct);
 
         assertThat(end.state()).isEqualTo(TaskState.FINISHED);
@@ -72,9 +75,69 @@ class TaskExecutorTest {
     }
 
     @Test
+    void reportsTheCountersOfEveryOperatorWithTheFinalState() throws Exception {
+        String probe = Probe.create();
+        TaskStateUpdate end = run(TestConnectors.job(probe, "", "drop-odd: true", "", 1));
+
+        TaskMetricsSnapshot metrics = end.metrics();
+        assertThat(metrics.operators()).extracting(OperatorSnapshot::node).containsExactly("src", "up", "out");
+        assertThat(metrics.operators().get(0)).satisfies(src -> {
+            assertThat(src.rowsIn()).isEqualTo(10);
+            assertThat(src.rowsOut()).isEqualTo(10);
+        });
+        assertThat(metrics.operators().get(1)).satisfies(up -> {
+            assertThat(up.rowsIn()).isEqualTo(10);
+            assertThat(up.rowsOut()).isEqualTo(5);
+            assertThat(up.rowsFiltered()).isEqualTo(5);
+            assertThat(up.rowsExpanded()).isZero();
+        });
+        assertThat(metrics.operators().get(2)).satisfies(out -> {
+            assertThat(out.rowsIn()).isEqualTo(5);
+            assertThat(out.rowsOut()).isEqualTo(5);
+        });
+        assertThat(metrics.runningNanos()).isPositive();
+        assertThat(metrics.operators())
+                .allSatisfy(o -> assertThat(o.selfTimeNanos()).isNotNegative());
+    }
+
+    @Test
+    void countsExpandedRowsAndWritesOnTheTaskThreadWithoutTheBuffer() throws Exception {
+        String probe = Probe.create();
+        TaskSettings direct =
+                new TaskSettings(false, 1024, 4, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL);
+        TaskStateUpdate end = run(TestConnectors.job(probe, "", "duplicate: true", "", 1), direct);
+
+        OperatorSnapshot up = end.metrics().operators().get(1);
+        assertThat(up.rowsOut()).isEqualTo(20);
+        assertThat(up.rowsExpanded()).isEqualTo(10);
+        assertThat(end.metrics().operators().get(2).rowsOut()).isEqualTo(20);
+        assertThat(end.metrics().readerWaitNanos()).isZero();
+        assertThat(end.metrics().writerWaitNanos()).isZero();
+    }
+
+    @Test
+    void reportsMetricsPeriodicallyWhileRunning() throws Exception {
+        String probe = Probe.create();
+        TaskSettings often = new TaskSettings(true, 1024, 4, Duration.ofSeconds(30), Duration.ofMillis(20));
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(TestConnectors.job(probe, "block: cancel", "", "", 1), often))
+                    .get();
+            TaskMetricsSnapshot report = master.metrics.poll(10, TimeUnit.SECONDS);
+            assertThat(report).isNotNull();
+            assertThat(report.operators()).hasSize(3);
+            assertThat(report.runningNanos()).isPositive();
+            master.executor.cancelTask(master.id()).get();
+            TaskStateUpdate end = master.awaitEnd();
+            assertThat(end.state()).isEqualTo(TaskState.CANCELED);
+            assertThat(end.metrics()).isNotNull();
+        }
+    }
+
+    @Test
     void transformsCanEmitSeveralRowsAndBatchesCanBeSmall() throws Exception {
         String probe = Probe.create();
-        TaskSettings tiny = new TaskSettings(true, 3, 1, Duration.ofSeconds(30));
+        TaskSettings tiny = new TaskSettings(true, 3, 1, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL);
         TaskStateUpdate end = run(TestConnectors.job(probe, "", "duplicate: true", "", 1), tiny);
 
         assertThat(end.state()).isEqualTo(TaskState.FINISHED);
@@ -150,7 +213,8 @@ class TaskExecutorTest {
     @Test
     void reportsSinkFailuresOnTheTaskThreadWithoutTheBuffer() throws Exception {
         String probe = Probe.create();
-        TaskSettings direct = new TaskSettings(false, 1024, 4, Duration.ofSeconds(30));
+        TaskSettings direct =
+                new TaskSettings(false, 1024, 4, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL);
         TaskStateUpdate end = run(TestConnectors.job(probe, "", null, "fail-at: 0", 1), direct);
 
         assertThat(end.error().code().id()).isEqualTo("PF-SINK-0001");
@@ -188,7 +252,8 @@ class TaskExecutorTest {
     @Test
     void interruptsATaskThatIgnoresItsCancelHook() throws Exception {
         String probe = Probe.create();
-        TaskSettings quick = new TaskSettings(true, 1024, 4, Duration.ofMillis(100));
+        TaskSettings quick =
+                new TaskSettings(true, 1024, 4, Duration.ofMillis(100), TaskSettings.DEFAULT_METRICS_INTERVAL);
         try (ScriptedMaster master = ScriptedMaster.tenRows()) {
             master.executor
                     .deployTask(
@@ -206,7 +271,8 @@ class TaskExecutorTest {
     @Test
     void givesUpATaskThatIgnoresCancelAndInterrupts() throws Exception {
         String probe = Probe.create();
-        TaskSettings quick = new TaskSettings(true, 1024, 4, Duration.ofMillis(50));
+        TaskSettings quick =
+                new TaskSettings(true, 1024, 4, Duration.ofMillis(50), TaskSettings.DEFAULT_METRICS_INTERVAL);
         try (ScriptedMaster master = ScriptedMaster.tenRows()) {
             master.executor
                     .deployTask(
@@ -234,7 +300,8 @@ class TaskExecutorTest {
             master.executor
                     .deployTask(ScriptedMaster.deployment(
                             TestConnectors.job(probe, "", null, "block: cancel", 1),
-                            new TaskSettings(true, 1, 1, Duration.ofSeconds(30))))
+                            new TaskSettings(
+                                    true, 1, 1, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL)))
                     .get();
             assertThat(Probe.get(probe).blocking.await(10, TimeUnit.SECONDS)).isTrue();
             master.executor.cancelTask(master.id()).get();

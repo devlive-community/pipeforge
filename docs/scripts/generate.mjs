@@ -18,6 +18,7 @@ import { LANGUAGES, loadPages } from "../lib/content-core.mjs";
 import { collectApi } from "./api-data.mjs";
 import { collectErrors } from "./errors-data.mjs";
 import { collectFunctions } from "./functions-data.mjs";
+import { collectMetrics } from "./metrics-data.mjs";
 import { buildSearchDocuments } from "./search-index.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,6 +34,10 @@ console.log(`error registry: ${errors.length} code(s)`);
 const functions = collectFunctions(join(root, ".."));
 writeFileSync(join(root, "generated", "functions.json"), JSON.stringify(functions, null, 2));
 console.log(`function catalog: ${functions.length} function(s)`);
+
+const metrics = collectMetrics(join(root, ".."));
+writeFileSync(join(root, "generated", "metrics.json"), JSON.stringify(metrics, null, 2));
+console.log(`metric catalog: ${metrics.length} metric(s)`);
 
 const api = collectApi(join(root, ".."));
 writeFileSync(join(root, "generated", "api.json"), JSON.stringify(api, null, 2));

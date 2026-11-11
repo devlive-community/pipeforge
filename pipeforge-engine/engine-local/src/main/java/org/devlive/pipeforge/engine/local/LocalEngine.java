@@ -24,10 +24,12 @@ import org.devlive.pipeforge.engine.api.JobHandle;
 import org.devlive.pipeforge.engine.api.JobId;
 import org.devlive.pipeforge.engine.api.JobResult;
 import org.devlive.pipeforge.engine.api.SubmitOptions;
+import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.InProcessRpc;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.ReaderMessage;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
+import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskStateUpdate;
 import org.devlive.pipeforge.engine.worker.TaskExecutor;
 
@@ -106,6 +108,15 @@ public final class LocalEngine implements Engine {
             LocalJobMaster job = jobs.get(update.id().runId());
             if (job != null) {
                 job.onTaskState(update);
+            }
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
+            LocalJobMaster job = jobs.get(task.runId());
+            if (job != null) {
+                job.onMetrics(task, metrics);
             }
             return CompletableFuture.completedFuture(null);
         }

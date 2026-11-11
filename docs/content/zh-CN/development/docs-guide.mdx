@@ -23,7 +23,7 @@ order: 30
 title: 本地开发环境                    # 页面标题，显示为页面主标题
 description: 一句话，用于搜索结果和链接预览。
 order: 20                              # 在所属分组导航中的位置
-data: errors                           # 可选：页面渲染的生成数据，errors、functions 或 api（会加入相应的锚点）
+data: errors                           # 可选：页面渲染的生成数据，errors、functions、metrics 或 api（会加入相应的锚点）
 template: feature                      # guide（默认）、feature 或 plugin
 omit:                                  # 不适用的模板章节及原因
   performance: 环境用于开发，不用于性能基准。
@@ -93,6 +93,7 @@ Observability、Performance and tuning、Troubleshooting、Limitations 和 Versi
 | `<ErrorList />` | 由错误码登记表生成的全部错误码，支持搜索和按类别筛选；页面在 frontmatter 中声明 `data: errors`，指向 `#pf-conf-0001` 这类锚点的链接因此也会被校验 |
 | `<FunctionList />` | 由函数目录生成的全部内置函数，包括签名、NULL 行为和示例，支持搜索和按类别筛选；页面在 frontmatter 中声明 `data: functions`，指向 `#substring` 这类锚点的链接因此也会被校验 |
 | `<ApiList />` | 由 `pipeforge-server/openapi.json` 生成的全部 REST API 接口，包括参数、请求和响应结构；页面在 frontmatter 中声明 `data: api`，指向 `#validatejob`、`#schema-errorinfo` 这类锚点的链接因此也会被校验 |
+| `<MetricList />` | 由指标目录 `pipeforge-engine/engine-api/src/main/resources/metrics/catalog.yaml` 生成的全部引擎指标，包括类型、单位和含义，作业级和节点级指标各一张表；页面在 frontmatter 中声明 `data: metrics`，指向 `#job-rowsread` 这类锚点的链接因此也会被校验 |
 | `<Screenshot name="overview" alt="..." />` | 页面语言对应的 Web UI 截图，浅色或深色跟随站点主题；图片由 `pnpm --filter @pipeforge/ui screenshots` 生成到 `public/screenshots/ui/`，缺少图片时构建失败 |
 
 ```mdx title="example.mdx"

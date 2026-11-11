@@ -1,0 +1,16 @@
+---
+title: 指标
+description: 引擎为作业及其节点报告的每个指标，包括类型、单位和含义，由指标目录生成。
+order: 85
+data: metrics
+---
+
+## 全部指标
+
+引擎为每个作业报告以下指标：作业结果中、运行过程中，以及运行分析（`explain --analyze`）中都可以读取。指标名称使用小驼峰，与 JSON
+输出一致。未知的值为 `-1`，不用 `0` 表示。Task 如何采集这些指标见[执行](../concepts/execution#可观测性)。
+
+行数指标满足对账恒等式：`rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed + rowsInFlight`。成立时运行分析显示
+`reconcile OK`；不成立说明有数据丢失或重复。
+
+<MetricList />

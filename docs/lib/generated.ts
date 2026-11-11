@@ -66,3 +66,16 @@ export interface ApiSchema {
 export function apiReference(): { operations: ApiOperation[]; schemas: ApiSchema[] } {
   return read("api.json", { operations: [], schemas: [] });
 }
+
+export interface MetricEntry {
+  name: string;
+  scope: "job" | "node";
+  type: string;
+  unit: string;
+  description: Record<string, string>;
+}
+
+/** The metric catalog of the engine, exported by `pnpm generate`. */
+export function metricEntries(): MetricEntry[] {
+  return read<MetricEntry[]>("metrics.json", []);
+}

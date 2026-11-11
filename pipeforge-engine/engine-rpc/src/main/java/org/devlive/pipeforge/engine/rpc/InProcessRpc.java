@@ -57,6 +57,11 @@ public final class InProcessRpc {
             public CompletableFuture<Void> sendReaderMessage(ReaderMessage message) {
                 return dispatcher.dispatch(() -> target.sendReaderMessage(message));
             }
+
+            @Override
+            public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
+                return dispatcher.dispatch(() -> target.reportMetrics(task, metrics));
+            }
         };
         return new Endpoint<>(proxy, dispatcher);
     }

@@ -1,0 +1,19 @@
+---
+title: Metrics
+description: Every metric the engine reports for a job and its nodes, with its type, unit and meaning, generated from the metric catalog.
+order: 85
+data: metrics
+---
+
+## All metrics
+
+The engine reports these metrics for every job: in the result of a job, while it runs and in the
+run analysis (`explain --analyze`). Names are in lower camel case, as in the JSON output. Values
+that are not known are `-1`, never `0`. How tasks collect them is described in
+[execution](../concepts/execution#observability).
+
+The row counters reconcile: `rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed +
+rowsInFlight`. The analysis prints `reconcile OK` when they do; a mismatch means rows were lost or
+duplicated.
+
+<MetricList />

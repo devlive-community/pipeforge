@@ -25,13 +25,31 @@ final class TransformOperator implements ChainOutput {
     private final OperatorCall call;
     private final ChainOutput next;
     private final Collector<Row> collector;
+    private final OperatorMetrics metrics;
+    private final OperatorClock clock;
+    private final int slot;
+    private long emitted;
     private @Nullable Transform transform;
 
-    TransformOperator(PlannedNode node, OperatorCall call, ChainOutput next) {
+    TransformOperator(PlannedNode node, OperatorCall call, ChainOutput next, OperatorClock clock, int slot) {
         this.node = node;
         this.call = call;
         this.next = next;
-        this.collector = next::row;
+        this.clock = clock;
+        this.slot = slot;
+        this.metrics = new OperatorMetrics(node.id());
+        this.collector = row -> {
+            emitted++;
+            next.row(row);
+        };
+    }
+
+    OperatorMetrics metrics() {
+        return metrics;
+    }
+
+    long selfNanos() {
+        return clock.selfNanos(slot);
     }
 
     void open(JobContext job, int subtask, int parallelism) {
@@ -46,7 +64,22 @@ final class TransformOperator implements ChainOutput {
     @Override
     public void row(Row row) {
         Transform current = opened();
-        call.run("process a row", () -> current.process(row, collector));
+        metrics.rowsIn.increment();
+        emitted = 0;
+        int token = clock.enter(slot);
+        try {
+            call.run("process a row", () -> current.process(row, collector));
+        } finally {
+            clock.exit(token);
+        }
+        if (emitted == 0) {
+            metrics.rowsFiltered.increment();
+        } else {
+            metrics.rowsOut.add(emitted);
+            if (emitted > 1) {
+                metrics.rowsExpanded.add(emitted - 1);
+            }
+        }
     }
 
     @Override

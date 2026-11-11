@@ -96,6 +96,7 @@ try (Engine engine = new LocalEngine()) {
 | `writeBatchSize` | `1024` | 每批交给写线程的行数 |
 | `writeQueueCapacity` | `4` | 队列最多容纳的批数，满了之后 Task 线程阻塞 |
 | `cancelTimeout` | `30s` | 取消后 Task 停止的等待时间，超过后中断其线程；超过两倍时间后放弃该 Task |
+| `metricsInterval` | `1s` | Task 上报指标、作业指标和速率刷新的周期 |
 
 每个 Task 的并行度来自作业：`env.parallelism` 或节点的 `parallelism`。
 
@@ -140,8 +141,34 @@ handle.result().get().status();   // CANCELLED
 
 ## 可观测性
 
-作业结果中包含最终状态、带错误码和定位（作业、运行、节点、子任务）的错误，以及指标。每个 Task 在开始运行和失败时写日志；
-JobMaster 记录作业的启动、提交和结束。行数、速率和瓶颈指标随引擎的指标体系提供。
+作业结果中包含最终状态、带错误码和定位（作业、运行、节点、子任务）的错误，以及[指标](../reference/metrics)；作业运行期间
+`JobHandle.metrics()` 返回当前指标，每隔 `metricsInterval` 刷新一次。
+
+- **采集。** 每个算子按行计数，每行每个计数器只做一次 `LongAdder` 自增。每个 Task 每隔 `metricsInterval` 把计数快照发给
+  JobMaster，结束时随最终状态再发一次；JobMaster 按节点和作业汇总。
+- **行数。** `rowsRead` 是 Source 输出的行数，`rowsWritten` 是 Sink 写入的行数（两阶段提交的 Sink 为已提交的行数），`rowsFiltered`
+  和 `rowsExpanded` 是 Transform 丢弃和多出的行数，`rowsInFlight` 是仍在写队列中的行数。作业失败或被取消时，没有到达目标端的行计为
+  `rowsFailed`。这些计数始终满足对账恒等式：`rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed + rowsInFlight`。
+- **速率。** 读写速率每个周期采样一次：最近 5 秒的瞬时速率、全程平均速率和 1 秒内的峰值。
+- **自身耗时。** `selfTimeRatio` 是节点自身代码（不含其下游节点）占运行时间的比例。每 16 次读取测量一次，热路径上不必每行都读取时钟；
+  开启写缓冲的 Sink 取写线程的忙碌时间。
+- **等待。** `readerWaitMs` 是 Task 因写队列已满而阻塞的时间（目标端慢），`writerWaitMs` 是写线程等待数据的时间（源端慢）。
+
+`AnalyzeText` 按 `explain --analyze` 展示运行结果的格式输出指标：
+
+```text
+Job orders-copy  SUCCESS 12.4s  parallelism 4
+Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
+Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
+Wait   reader 1.2s (target slow)  writer 300ms (source slow)
+
+Node  kind       in rows    out rows   sel.  self%
+src   source     1,000,000  1,000,000  -     21%
+map   transform  1,000,000  999,000    1.00  4%
+out   sink       999,000    999,000    -     68%
+```
+
+每个 Task 在开始运行和失败时写日志；JobMaster 记录作业的启动、提交和结束。
 
 ## 性能与调优
 
@@ -149,6 +176,7 @@ JobMaster 记录作业的启动、提交和结束。行数、速率和瓶颈指�
 - 目标端适合大批量写入时调大 `writeBatchSize`；需要降低每个 Task 占用的内存时调小（最多占用 `writeBatchSize × writeQueueCapacity` 行）。
 - 更大的 `writeQueueCapacity` 可以吸收目标端的短暂变慢，但目标端平均速度较慢时没有帮助。
 - 并行度越高，Task 和线程越多；Source 的分片需要足够细，才能让它们都有活干。
+- `readerWaitMs` 高且 Sink 的 `selfTimeRatio` 高，说明瓶颈在目标端；`writerWaitMs` 高说明瓶颈在源端。
 
 ## 排障
 

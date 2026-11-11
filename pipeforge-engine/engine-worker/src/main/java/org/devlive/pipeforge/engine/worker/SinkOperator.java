@@ -29,14 +29,37 @@ final class SinkOperator implements ChainOutput {
     private final PlannedNode node;
     private final OperatorCall call;
     private final String taskName;
+    private final OperatorMetrics metrics;
+    private final OperatorClock clock;
+    private final int slot;
+    private final int handoffSlot;
     private @Nullable Sink<Object, Object> sink;
     private @Nullable SinkWriter<Object, Object> writer;
     private @Nullable AsyncWriteBuffer buffer;
 
-    SinkOperator(PlannedNode node, OperatorCall call, String taskName) {
+    /**
+     * @param slot the clock slot of the writer on the task thread
+     * @param handoffSlot the clock slot for handing rows to the write thread, which is not the
+     *     writer's own time
+     */
+    SinkOperator(PlannedNode node, OperatorCall call, String taskName, OperatorClock clock, int slot, int handoffSlot) {
         this.node = node;
         this.call = call;
         this.taskName = taskName;
+        this.clock = clock;
+        this.slot = slot;
+        this.handoffSlot = handoffSlot;
+        this.metrics = new OperatorMetrics(node.id());
+    }
+
+    OperatorMetrics metrics() {
+        return metrics;
+    }
+
+    /** Time in the writer: on the write thread with the buffer, sampled on the task thread without it. */
+    long selfNanos() {
+        AsyncWriteBuffer async = buffer;
+        return async == null ? clock.selfNanos(slot) : async.busyNanos();
     }
 
     @SuppressWarnings("unchecked")
@@ -80,17 +103,26 @@ final class SinkOperator implements ChainOutput {
     }
 
     private void accept(Object item) {
+        if (item instanceof Row) {
+            metrics.rowsIn.increment();
+        }
         AsyncWriteBuffer async = buffer;
-        if (async != null) {
-            async.add(item);
-        } else {
-            writeNow(opened(), item);
+        int token = clock.enter(async != null ? handoffSlot : slot);
+        try {
+            if (async != null) {
+                async.add(item);
+            } else {
+                writeNow(opened(), item);
+            }
+        } finally {
+            clock.exit(token);
         }
     }
 
     private void writeNow(SinkWriter<Object, Object> target, Object item) {
         if (item instanceof Row row) {
             call.run("write a row", () -> target.write(row));
+            metrics.rowsOut.increment();
         } else {
             call.run("apply a schema change", () -> target.applySchemaChange((SchemaChangeEvent) item));
         }
@@ -129,7 +161,7 @@ final class SinkOperator implements ChainOutput {
     void close() {
         AsyncWriteBuffer async = buffer;
         if (async != null) {
-            buffer = null;
+            // kept for the final metrics; closing twice is harmless
             async.close();
         }
         SinkWriter<Object, Object> current = writer;

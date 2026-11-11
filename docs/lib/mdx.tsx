@@ -15,6 +15,7 @@ import { CodeBlock } from "@/components/mdx/CodeBlock";
 import { ApiList } from "@/components/mdx/ApiList";
 import { ErrorList } from "@/components/mdx/ErrorList";
 import { FunctionList } from "@/components/mdx/FunctionList";
+import { MetricList } from "@/components/mdx/MetricList";
 import { Screenshot } from "@/components/mdx/Screenshot";
 import { Step, Steps } from "@/components/mdx/Steps";
 import { Tab, Tabs } from "@/components/mdx/Tabs";
@@ -83,6 +84,7 @@ function components(context: Context) {
     ApiList: () => <ApiList lang={context.lang} />,
     ErrorList: () => <ErrorList lang={context.lang} />,
     FunctionList: () => <FunctionList lang={context.lang} />,
+    MetricList: () => <MetricList lang={context.lang} />,
     Screenshot: (props: { name: string; alt: string }) => <Screenshot {...props} lang={context.lang} />,
     Tabs,
     Tab,

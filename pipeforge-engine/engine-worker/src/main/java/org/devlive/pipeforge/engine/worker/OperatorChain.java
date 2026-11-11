@@ -21,6 +21,7 @@ import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
+import org.devlive.pipeforge.engine.rpc.OperatorSnapshot;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.jspecify.annotations.Nullable;
@@ -37,19 +38,24 @@ final class OperatorChain {
     private final List<TransformOperator> transforms;
     private final SinkOperator sink;
     private final ReaderOutput output;
+    private final OperatorMetrics sourceMetrics;
+    private final OperatorClock clock;
 
     OperatorChain(TaskDeployment deployment, ErrorScope scope, String taskName, JobMasterGateway master) {
         this.deployment = deployment;
         ChainDescriptor chain = deployment.chain();
         JobContext job = chain.job();
+        int sinkSlot = chain.nodes().size() - 1;
+        // one slot per operator, from the source (0) to the sink, plus one for handing rows to the write thread
+        clock = new OperatorClock(sinkSlot + 2);
         PlannedNode sinkNode = chain.sink();
-        sink = new SinkOperator(sinkNode, call(sinkNode, scope), taskName);
+        sink = new SinkOperator(sinkNode, call(sinkNode, scope), taskName, clock, sinkSlot, sinkSlot + 1);
         ChainOutput next = sink;
         List<TransformOperator> reversed = new ArrayList<>();
         List<PlannedNode> middle = chain.transforms();
         for (int i = middle.size() - 1; i >= 0; i--) {
             PlannedNode node = middle.get(i);
-            TransformOperator transform = new TransformOperator(node, call(node, scope), next);
+            TransformOperator transform = new TransformOperator(node, call(node, scope), next, clock, i + 1);
             reversed.add(transform);
             next = transform;
         }
@@ -58,7 +64,8 @@ final class OperatorChain {
         PlannedNode sourceNode = chain.source();
         source = new SourceOperator(
                 sourceNode, call(sourceNode, scope), job, deployment.id(), deployment.parallelism(), master);
-        output = new ChainReaderOutput(next);
+        sourceMetrics = new OperatorMetrics(sourceNode.id());
+        output = new ChainReaderOutput(next, sourceMetrics);
     }
 
     private static OperatorCall call(PlannedNode node, ErrorScope scope) {
@@ -83,7 +90,23 @@ final class OperatorChain {
     }
 
     PollStatus pollNext() {
-        return source.pollNext(output);
+        boolean measured = clock.beginRead(0);
+        try {
+            return source.pollNext(output);
+        } finally {
+            if (measured) {
+                clock.endRead();
+            }
+        }
+    }
+
+    /** The counters and self time of every operator, from the source to the sink; callable from any thread. */
+    List<OperatorSnapshot> snapshot() {
+        List<OperatorSnapshot> operators = new ArrayList<>(transforms.size() + 2);
+        operators.add(sourceMetrics.snapshot(clock.selfNanos(0)));
+        transforms.forEach(t -> operators.add(t.metrics().snapshot(t.selfNanos())));
+        operators.add(sink.metrics().snapshot(sink.selfNanos()));
+        return operators;
     }
 
     void handle(OperatorEvent event) {
@@ -138,13 +161,17 @@ final class OperatorChain {
     /** Where the reader emits: straight into the first operator after it. */
     private static final class ChainReaderOutput implements ReaderOutput {
         private final ChainOutput next;
+        private final OperatorMetrics metrics;
 
-        ChainReaderOutput(ChainOutput next) {
+        ChainReaderOutput(ChainOutput next, OperatorMetrics metrics) {
             this.next = next;
+            this.metrics = metrics;
         }
 
         @Override
         public void collect(Row row) {
+            metrics.rowsIn.increment();
+            metrics.rowsOut.increment();
             next.row(row);
         }
 

@@ -14,9 +14,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.api.factory.FactoryContext;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.factory.SinkFactory;
@@ -48,6 +49,7 @@ import org.devlive.pipeforge.engine.rpc.ReaderMessage;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
+import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskSettings;
 import org.devlive.pipeforge.engine.rpc.TaskState;
 import org.devlive.pipeforge.engine.rpc.TaskStateUpdate;
@@ -81,7 +83,8 @@ final class LocalJobMaster {
     private final int parallelism;
     private final TaskSettings settings;
     private final TaskExecutorGateway executor;
-    private final ExecutorService thread;
+    private final ScheduledExecutorService thread;
+    private final MetricsAggregator aggregator;
     private final Handle handle = new Handle();
     private final long started = System.nanoTime();
     private final Map<Integer, TaskState> states = new HashMap<>();
@@ -89,7 +92,7 @@ final class LocalJobMaster {
     private final List<SerializedValue> committables = new ArrayList<>();
     private final Runnable onEnded;
     private volatile JobStatus status = JobStatus.CREATED;
-    private volatile long elapsedNanos = -1;
+    private volatile JobMetrics published = JobMetrics.EMPTY;
     private @Nullable PipeForgeException failure;
     private @Nullable SplitEnumerator<SourceSplit, ?> enumerator;
     private @Nullable Source<SourceSplit, ?> source;
@@ -110,10 +113,12 @@ final class LocalJobMaster {
                 options.asyncWriteBuffer(),
                 options.writeBatchSize(),
                 options.writeQueueCapacity(),
-                options.cancelTimeout());
+                options.cancelTimeout(),
+                options.metricsInterval());
         this.executor = executor;
         this.onEnded = onEnded;
-        this.thread = Executors.newSingleThreadExecutor(runnable -> {
+        this.aggregator = new MetricsAggregator(chain, parallelism, started);
+        this.thread = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread t = new Thread(runnable, "jobmaster-" + plan.name());
             t.setDaemon(true);
             return t;
@@ -134,6 +139,17 @@ final class LocalJobMaster {
 
     void onTaskState(TaskStateUpdate update) {
         post(() -> handleTaskState(update));
+    }
+
+    void onMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
+        post(() -> {
+            int subtask = task.subtask();
+            TaskState state = states.get(subtask);
+            // a periodic report can arrive after the final one; the final one wins
+            if (state != null && !state.isTerminal() && task.equals(attempt(subtask))) {
+                aggregator.update(subtask, metrics);
+            }
+        });
     }
 
     void onReaderMessage(ReaderMessage message) {
@@ -183,6 +199,8 @@ final class LocalJobMaster {
             });
         }
         status = JobStatus.RUNNING;
+        long interval = settings.metricsInterval().toMillis();
+        thread.scheduleAtFixedRate(() -> run(this::publish), interval, interval, TimeUnit.MILLISECONDS);
         LOG.info("Job {} ({}) is running with {} task(s)", plan.name(), id, parallelism);
     }
 
@@ -193,12 +211,20 @@ final class LocalJobMaster {
             return;
         }
         states.put(subtask, update.state());
+        if (update.metrics() != null) {
+            aggregator.update(subtask, update.metrics());
+        }
         switch (update.state()) {
             case RUNNING -> {
                 readers.add(subtask);
                 callEnumerator("register reader " + subtask, e -> e.addReader(subtask));
             }
-            case FINISHED -> committables.addAll(update.committables());
+            case FINISHED -> {
+                committables.addAll(update.committables());
+                if (!update.committables().isEmpty()) {
+                    aggregator.twoPhase();
+                }
+            }
             case FAILED -> fail(update.error());
             case CANCELED, DEPLOYING -> {
                 // nothing to do until every task has ended
@@ -256,10 +282,14 @@ final class LocalJobMaster {
         JobStatus end = failure != null
                 ? JobStatus.FAILED
                 : status == JobStatus.CANCELLING ? JobStatus.CANCELLED : JobStatus.SUCCESS;
-        elapsedNanos = System.nanoTime() - started;
+        JobMetrics last = aggregator.sample(
+                System.nanoTime(),
+                0,
+                end == JobStatus.SUCCESS ? MetricsAggregator.Phase.SUCCEEDED : MetricsAggregator.Phase.STOPPED);
+        published = last;
         status = end;
         LOG.info("Job {} ({}) ended: {}", plan.name(), id, end);
-        handle.result.complete(new JobResult(id, end, failure, metrics()));
+        handle.result.complete(new JobResult(id, end, failure, last));
         thread.shutdown();
         onEnded.run();
     }
@@ -303,6 +333,7 @@ final class LocalJobMaster {
                 return null;
             });
         }
+        aggregator.committed();
         LOG.info("Job {} ({}) committed {} committable(s) of {}", plan.name(), id, values.size(), node.id());
     }
 
@@ -476,23 +507,35 @@ final class LocalJobMaster {
         return new ExecutionAttemptId(id.value(), chain.vertexId(), subtask, 0);
     }
 
+    /** Publishes the current metrics; runs once per metrics interval while the job runs. */
+    private void publish() {
+        if (!status.isTerminal()) {
+            int running = (int)
+                    states.values().stream().filter(s -> s == TaskState.RUNNING).count();
+            published = aggregator.sample(System.nanoTime(), running, MetricsAggregator.Phase.RUNNING);
+        }
+    }
+
+    /** The metrics published last: at most one metrics interval old while running, final once ended. */
     private JobMetrics metrics() {
-        long nanos = elapsedNanos >= 0 ? elapsedNanos : System.nanoTime() - started;
-        return new JobMetrics(nanos / 1_000_000);
+        return published;
     }
 
     private void post(Runnable action) {
         try {
-            thread.execute(() -> {
-                try {
-                    action.run();
-                } catch (RuntimeException e) {
-                    LOG.error("Job master of {} failed", plan.name(), e);
-                    fail(PipeForgeException.wrap(e));
-                }
-            });
+            thread.execute(() -> run(action));
         } catch (RejectedExecutionException e) {
             // the job has ended; late messages are dropped
+        }
+    }
+
+    /** Runs an event of the job master; an unexpected exception fails the job. */
+    private void run(Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException e) {
+            LOG.error("Job master of {} failed", plan.name(), e);
+            fail(PipeForgeException.wrap(e));
         }
     }
 

@@ -23,6 +23,7 @@ import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.ReaderMessage;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
+import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskSettings;
 import org.devlive.pipeforge.engine.rpc.TaskState;
 import org.devlive.pipeforge.engine.rpc.TaskStateUpdate;
@@ -36,6 +37,7 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
 
     final BlockingQueue<TaskStateUpdate> updates = new LinkedBlockingQueue<>();
     final BlockingQueue<ReaderMessage> messages = new LinkedBlockingQueue<>();
+    final BlockingQueue<TaskMetricsSnapshot> metrics = new LinkedBlockingQueue<>();
     private final Deque<SerializedValue> splits = new ArrayDeque<>();
     private final InProcessRpc.Endpoint<JobMasterGateway> endpoint;
     final TaskExecutor executor;
@@ -67,6 +69,12 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
     @Override
     public CompletableFuture<Void> updateTaskState(TaskStateUpdate update) {
         updates.add(update);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot snapshot) {
+        metrics.add(snapshot);
         return CompletableFuture.completedFuture(null);
     }
 
