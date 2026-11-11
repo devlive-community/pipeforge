@@ -23,3 +23,5 @@
   docs: ["development/docs-guide"]
 - paths: ["pipeforge-common/**"]
   docs: ["concepts/errors"]
+- paths: ["pipeforge-api/**"]
+  docs: ["development/api-overview", "concepts/data-model"]
