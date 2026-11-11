@@ -1,0 +1,123 @@
+---
+title: Expressions
+description: The SQL expression language used by filters, routers and field mappings — typing, NULL handling, run-time errors and compilation.
+order: 40
+template: feature
+omit:
+  observability: The errors{kind=expression} metric arrives with the metrics registry; until then failures are logged with the row's node.
+---
+
+## Overview
+
+Wherever a job computes a value or a condition — `filter` and `router` conditions, the `expr` of
+`field-mapper`, quality rules, join conditions, SQL jobs — it uses the same expression language: the
+scalar expressions of SQL. A YAML job and a SQL job therefore behave identically.
+
+Use expressions for row-level computations. Aggregations and windows are stateful operators and are
+described separately.
+
+## How it works
+
+1. **Parse** — the text is parsed with Apache Calcite's SQL parser.
+2. **Analyze** — columns are resolved against the input schema, operand types are checked and
+   implicit conversions inserted. The result type is known while planning; mistakes are reported
+   before the job runs, with the line and column (`PF-PLAN-0007`).
+3. **Compile** — all expressions of one operator are compiled together into one Java class with
+   Janino. Short-circuit operators evaluate lazily, and a deterministic subexpression used several
+   times — in one expression or across the operator's expressions — is computed once per row.
+4. **Run** — failures such as division by zero follow the node's `on-error` setting.
+
+An interpreter with exactly the same semantics exists as well; every build compares thousands of
+random expressions compiled and interpreted.
+
+## Quick start
+
+```yaml
+transform:
+  - name: enrich
+    type: field-mapper
+    fields:
+      - { expr: "amount * qty", to: total }
+      - { expr: "CASE WHEN qty = 0 THEN NULL ELSE amount / qty END", to: unit_price }
+      - { expr: "country IN ('DE', 'FR')", to: is_eu }
+```
+
+## Configuration
+
+| Option | Where | Values | Default |
+|---|---|---|---|
+| `on-error` | every node that uses expressions | `dirty`, `null`, `fail` | `dirty` |
+| `env.timezone` | job | an IANA zone such as `Asia/Shanghai` | `UTC` |
+
+| `on-error` | Behavior |
+|---|---|
+| `dirty` | The row is a bad row and goes through the dirty data policy (`PF-DATA-0006`) |
+| `null` | The expression yields NULL and the row continues; the failure is counted |
+| `fail` | The run fails (`PF-DATA-0006`) |
+
+The full syntax is in the [expression syntax reference](../reference/expression-syntax).
+
+## Examples
+
+### Guarding a division
+
+```sql
+-- NULL instead of a failure when qty is 0
+amount / NULLIF(qty, 0)
+
+-- an explicit default
+CASE WHEN qty = 0 THEN 0 ELSE amount / qty END
+```
+
+### Converting text safely
+
+```sql
+TRY_CAST(raw_price AS DECIMAL(12, 2))     -- NULL when raw_price is not a number
+CAST(created AS TIMESTAMP(3))             -- fails for text that is not a timestamp
+```
+
+## Behavior
+
+- **Types are fixed before the job runs.** Integers never silently become strings or the other way
+  round: `'10' > 9` is rejected; write `CAST('10' AS INT) > 9`.
+- **Implicit conversions never lose information**: narrower integers to wider integers, DECIMAL or
+  FLOAT64; DECIMAL to a wider DECIMAL or FLOAT64; FLOAT32 to FLOAT64; DATE to TIMESTAMP.
+- **Integer division is exact**: `7 / 2` is `3.5` (a DECIMAL). Integer overflow and DECIMAL values
+  beyond 38 digits are run-time errors, never wrapped or truncated.
+- **Three-valued logic**: `NULL AND FALSE` is FALSE, `NULL AND TRUE` is NULL, `NULL OR TRUE` is TRUE.
+  Comparisons with NULL are NULL; `IS [NOT] DISTINCT FROM` treats NULL as a value. A condition that
+  is NULL counts as not satisfied.
+- **Laziness**: `CASE`, `IF`, `COALESCE`, `AND` and `OR` only evaluate what they need, so a guard in
+  the condition protects the branch.
+- **Time zone**: conversions between `TIMESTAMP` and `TIMESTAMP_LTZ`, and rendering `TIMESTAMP_LTZ`
+  as text, use the job time zone.
+- **Determinism**: functions are marked deterministic or not. Non-deterministic calls are never
+  shared between expressions and are not pushed down to sources.
+- **Safety**: expressions cannot reach files, the network, reflection or system properties; regular
+  expressions use RE2, which runs in linear time.
+
+## Performance and tuning
+
+Expressions run as bytecode; there is nothing to tune. Repeating a subexpression costs nothing extra
+as long as it is deterministic. Expressions with the same structure (differing only in literals)
+share one generated class, so many parallel instances do not compile repeatedly.
+
+## Troubleshooting
+
+| Error | Meaning |
+|---|---|
+| `PF-PLAN-0007` … `cannot compare STRING(2) with INT32` | Strings and numbers need an explicit `CAST` |
+| `PF-PLAN-0007` … `column 'nme' does not exist; did you mean 'name'?` | A typo in a column name |
+| `PF-PLAN-0007` … `column 'NAME' is ambiguous` | Two columns differ only in case; quote the one you mean: `` `Name` `` |
+| `PF-DATA-0006` … `division by zero` | Guard with `NULLIF` or `CASE`, or set `on-error` |
+| `PF-DATA-0006` … `numeric overflow` | Use a wider type, e.g. `CAST(x AS BIGINT)` |
+
+## Limitations
+
+- `INTERVAL` values and the date arithmetic that uses them arrive with the date and time functions.
+- Subqueries are not expressions; `IN` takes a list of values.
+- `BETWEEN SYMMETRIC` is not supported.
+
+## Version history
+
+Available since 0.1.0.

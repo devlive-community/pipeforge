@@ -38,6 +38,7 @@
         <module>pipeforge-api</module>
         <module>pipeforge-maven-plugin</module>
         <module>pipeforge-plugin</module>
+        <module>pipeforge-expressions</module>
     </modules>
 
     <properties>
@@ -67,6 +68,9 @@
         <snakeyaml.version>2.3</snakeyaml.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <errorprone.version>2.36.0</errorprone.version>
+        <calcite.version>1.40.0</calcite.version>
+        <janino.version>3.1.12</janino.version>
+        <re2j.version>1.8</re2j.version>
 
         <!-- Build plugins -->
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
@@ -142,6 +146,26 @@
                 <groupId>com.google.errorprone</groupId>
                 <artifactId>error_prone_annotations</artifactId>
                 <version>${errorprone.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.calcite</groupId>
+                <artifactId>calcite-core</artifactId>
+                <version>${calcite.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.codehaus.janino</groupId>
+                <artifactId>janino</artifactId>
+                <version>${janino.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.codehaus.janino</groupId>
+                <artifactId>commons-compiler</artifactId>
+                <version>${janino.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.re2j</groupId>
+                <artifactId>re2j</artifactId>
+                <version>${re2j.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -303,7 +327,8 @@
                             <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|Apache 2.0|Apache License 2.0|Apache 2|The Apache License, Version 2.0|Apache License Version 2.0|Apache Software License - Version 2.0|Apache-2.0 License|Apache License, version 2.0|ASF 2.0|AL 2.0</licenseMerge>
                             <licenseMerge>MIT|MIT License|The MIT License|The MIT License (MIT)|MIT license|MIT-0</licenseMerge>
                             <licenseMerge>BSD-2-Clause|BSD 2-Clause|The BSD 2-Clause License|BSD-2-Clause License|Simplified BSD License|BSD 2-Clause License</licenseMerge>
-                            <licenseMerge>BSD-3-Clause|BSD 3-Clause|The BSD 3-Clause License|BSD-3-Clause License|New BSD License|Revised BSD License|The BSD License|BSD License|BSD|BSD License 3|BSD 3-Clause License|The New BSD License</licenseMerge>
+                            <!-- "Go License" (RE2/J) is the BSD 3-Clause text of the Go project. -->
+                            <licenseMerge>BSD-3-Clause|Go License|BSD 3-Clause|The BSD 3-Clause License|BSD-3-Clause License|New BSD License|Revised BSD License|The BSD License|BSD License|BSD|BSD License 3|BSD 3-Clause License|The New BSD License</licenseMerge>
                             <licenseMerge>EPL-2.0|Eclipse Public License - v 2.0|Eclipse Public License v2.0|Eclipse Public License 2.0|EPL 2.0</licenseMerge>
                             <licenseMerge>MPL-2.0|Mozilla Public License 2.0|Mozilla Public License, Version 2.0|MPL 2.0</licenseMerge>
                             <licenseMerge>EDL-1.0|Eclipse Distribution License - v 1.0|EDL 1.0|Eclipse Distribution License v. 1.0</licenseMerge>

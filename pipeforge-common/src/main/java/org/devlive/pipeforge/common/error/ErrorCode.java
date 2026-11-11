@@ -65,6 +65,9 @@ public final class ErrorCode {
     public static final ErrorCode COMPONENT_AMBIGUOUS =
             define("PF-PLUG-0008", "COMPONENT_AMBIGUOUS", "type", "identifier", "plugins");
 
+    // Data
+    public static final ErrorCode EXPRESSION_ERROR = define("PF-DATA-0006", "EXPRESSION_ERROR", "expression", "reason");
+
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");
 

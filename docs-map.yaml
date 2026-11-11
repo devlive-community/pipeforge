@@ -43,3 +43,5 @@
   docs: ["development/plugin-packaging"]
 - paths: ["pipeforge-plugin/**"]
   docs: ["concepts/plugins"]
+- paths: ["pipeforge-expressions/**"]
+  docs: ["concepts/expressions", "reference/expression-syntax"]

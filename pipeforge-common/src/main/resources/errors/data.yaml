@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Data errors: one row or record is bad; handled by the dirty data policy.
+
+- code: PF-DATA-0006
+  name: EXPRESSION_ERROR
+  message:
+    en-US: "Expression '{expression}' failed: {reason}"
+    zh-CN: "表达式 '{expression}' 计算失败：{reason}"
+  hint:
+    en-US: "Guard the expression (for example NULLIF(qty, 0) or TRY_CAST), or set on-error to null or fail on the node."
+    zh-CN: "为表达式加上保护（例如 NULLIF(qty, 0) 或 TRY_CAST），或者在节点上把 on-error 设置为 null 或 fail。"
