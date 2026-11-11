@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+# Code paths and the documentation pages that describe them (see the docs guide on the
+# documentation site). A feat / perf / breaking commit that changes a mapped path must also
+# change every listed page, in English and Chinese, or explain "Docs-Not-Needed: <reason>".
+# Every new module must be registered here.
+#
+#   - paths: ["<glob>", ...]     repository-relative globs
+#     docs: ["<page>", ...]      page ids relative to docs/content/<lang>/, without extension
+#
+# Entries are added together with the code they describe.
+
+[]

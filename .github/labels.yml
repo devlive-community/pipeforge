@@ -1,0 +1,94 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+# Label definitions, synced to GitHub by .github/workflows/labels.yml.
+# Labels used by issue templates and .github/labeler.yml must be defined here.
+
+- name: type/bug
+  color: d73a4a
+  description: Something does not work as documented
+- name: type/feature
+  color: a2eeef
+  description: New capability or behavior change
+- name: type/plugin
+  color: 7057ff
+  description: New plugin or plugin change
+- name: type/docs
+  color: 0075ca
+  description: Documentation
+- name: type/question
+  color: d876e3
+  description: Question (prefer GitHub Discussions)
+
+- name: area/api
+  color: c5def5
+  description: pipeforge-api
+- name: area/engine
+  color: c5def5
+  description: Distributed engine
+- name: area/checkpoint
+  color: c5def5
+  description: Checkpoints and state
+- name: area/stateful
+  color: c5def5
+  description: Stateful processing
+- name: area/cdc
+  color: c5def5
+  description: Change data capture
+- name: area/connectors
+  color: c5def5
+  description: Source and sink plugins
+- name: area/transforms
+  color: c5def5
+  description: Transform plugins
+- name: area/core
+  color: c5def5
+  description: Job DSL, planning and validation
+- name: area/expressions
+  color: c5def5
+  description: Expressions and functions
+- name: area/cli
+  color: c5def5
+  description: Command line client
+- name: area/ui
+  color: c5def5
+  description: Web UI
+- name: area/docs-site
+  color: c5def5
+  description: Documentation site
+- name: area/build
+  color: c5def5
+  description: Build, CI and tooling
+- name: area/dev-env
+  color: c5def5
+  description: Local development environment
+
+- name: priority/critical
+  color: b60205
+  description: Must be fixed immediately
+- name: priority/high
+  color: d93f0b
+  description: Fix in the next release
+- name: priority/low
+  color: fbca04
+  description: Nice to have
+
+- name: good first issue
+  color: 7057ff
+  description: Good for newcomers
+- name: help wanted
+  color: 008672
+  description: Extra attention is needed
+- name: breaking-change
+  color: b60205
+  description: Contains an incompatible change
+- name: dependencies
+  color: 0366d6
+  description: Dependency updates
+- name: stale
+  color: eeeeee
+  description: No activity for a while

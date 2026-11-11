@@ -1,0 +1,38 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+# Reminds authors after 30 days without activity and closes 14 days later.
+# Issues and pull requests with a priority/* or "help wanted" label are never closed.
+
+name: Stale
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 30
+          days-before-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: priority/critical,priority/high,priority/low,help wanted
+          exempt-pr-labels: priority/critical,priority/high,priority/low,help wanted
+          stale-issue-message: >-
+            This issue has had no activity for 30 days. It will be closed in 14 days unless there is new activity.
+          stale-pr-message: >-
+            This pull request has had no activity for 30 days. It will be closed in 14 days unless there is new activity.

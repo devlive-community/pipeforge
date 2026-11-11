@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/devlive-community/pipeforge/discussions
+    about: Ask questions and share ideas in GitHub Discussions instead of opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/devlive-community/pipeforge/security/advisories/new
+    about: Report security problems privately. Do not open a public issue.

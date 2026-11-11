@@ -1,0 +1,76 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+name: Bug report
+description: Something does not work as documented.
+title: "[Bug] "
+labels: ["type/bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Remove passwords, keys and other secrets from everything you paste.
+  - type: input
+    id: version
+    attributes:
+      label: PipeForge version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment mode
+      options:
+        - Local (run --local)
+        - Single node
+        - Cluster
+        - Kubernetes
+    validations:
+      required: true
+  - type: input
+    id: plugins
+    attributes:
+      label: Plugins and versions
+      placeholder: connector-jdbc 0.1.0, transform-field-mapper 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: datasource
+    attributes:
+      label: Data source versions
+      placeholder: MySQL 8.4, PostgreSQL 16
+    validations:
+      required: true
+  - type: textarea
+    id: job
+    attributes:
+      label: Job definition
+      description: The job YAML with secrets removed.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened instead, including the error code (for example PLUG-0003) and the error message.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: Diagnostic bundle
+      description: Optional. Attach the output of `pipeforge diagnose`.
+    validations:
+      required: false

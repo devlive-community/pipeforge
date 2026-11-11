@@ -1,0 +1,51 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+
+# Adds area/* labels to pull requests based on the changed paths (actions/labeler v5).
+
+area/api:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-api/**
+area/engine:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-engine/**
+area/checkpoint:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-engine/engine-state/**
+area/stateful:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-engine/engine-operators/**
+area/cdc:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-connectors/connector-cdc-*/**
+area/connectors:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-connectors/**
+area/transforms:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-transforms/**
+area/core:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-core/**
+area/expressions:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-expressions/**
+area/cli:
+  - changed-files:
+      - any-glob-to-any-file: pipeforge-cli/**
+area/ui:
+  - changed-files:
+      - any-glob-to-any-file: ['pipeforge-ui/**', 'pipeforge-design-tokens/**']
+area/docs-site:
+  - changed-files:
+      - any-glob-to-any-file: ['docs/**', 'docs-map.yaml']
+area/build:
+  - changed-files:
+      - any-glob-to-any-file: ['pom.xml', '.mvn/**', '.ci/**', '.github/workflows/**', 'tools/**']
+area/dev-env:
+  - changed-files:
+      - any-glob-to-any-file: dev/**
