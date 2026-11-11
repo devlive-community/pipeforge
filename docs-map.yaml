@@ -17,3 +17,7 @@
 
 - paths: ["dev/**"]
   docs: ["development/local-environment"]
+- paths: ["docs/app/**", "docs/components/**", "docs/lib/**", "docs/styles/**", "docs/scripts/**"]
+  docs: ["development/docs-guide"]
+- paths: ["pipeforge-design-tokens/**"]
+  docs: ["development/docs-guide"]

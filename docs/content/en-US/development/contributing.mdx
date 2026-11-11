@@ -1,0 +1,67 @@
+---
+title: Contributing
+description: How to propose a change, set up a development environment and get a pull request merged.
+order: 10
+---
+
+## Before you start
+
+Small fixes can go straight to a pull request. New features, new plugins and changes to
+`pipeforge-api`, the protocol or the checkpoint format start with a feature proposal issue.
+Questions belong in GitHub Discussions.
+
+## Development environment
+
+You need JDK 21, Docker, and Node.js 22 with pnpm.
+
+```bash
+./mvnw verify                  # full build with every quality gate
+./mvnw -Pquick install         # fast build without formatting, static analysis and coverage
+./dev/up.sh                    # start the local services
+pnpm install && pnpm --filter @pipeforge/docs dev   # documentation site with live reload
+```
+
+See [the local development environment](./local-environment) for the services and ports.
+
+## Rules for every commit
+
+<Steps>
+  <Step title="One change per commit">
+    Each commit does one thing and builds and passes its tests on its own. Each plugin is
+    exactly one commit with its tests and documentation.
+  </Step>
+  <Step title="English Conventional Commits">
+    `feat(connector-fake): add fake source`. The scope is the module name; the body lists
+    verified versions and tests.
+  </Step>
+  <Step title="Documentation in the same commit">
+    Every user-visible change updates the documentation in English and Chinese, as described
+    in [writing documentation](./docs-guide). Otherwise the commit says `Docs-Not-Needed: <reason>`.
+  </Step>
+  <Step title="Sign off">
+    Use `git commit -s`; the DCO check rejects commits without a matching `Signed-off-by`.
+  </Step>
+</Steps>
+
+## Code style
+
+<Tabs>
+  <Tab label="Java">
+    Spotless with palantir-java-format, Error Prone and SpotBugs run in `./mvnw verify`.
+    Format with `./mvnw spotless:apply`.
+  </Tab>
+  <Tab label="Frontend">
+    ESLint, Prettier and TypeScript strict. Format with `pnpm lint:fix`; `pnpm lint:ui` must
+    print nothing.
+  </Tab>
+  <Tab label="License header">
+    Every source file starts with the MIT license header. `tools/license-header/check.sh --fix`
+    adds it to any file type.
+  </Tab>
+</Tabs>
+
+## Review and merge
+
+At least one maintainer approves; changes to `pipeforge-api`, the protocol or a state format
+need two. CI must pass (`ci-ok`). Pull requests are merged with rebase so that every commit
+is kept.

@@ -1,0 +1,158 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+@import "tailwindcss";
+@import "@pipeforge/design-tokens/tokens.css";
+@import "@pipeforge/design-tokens/theme.css";
+
+@source "../app";
+@source "../components";
+
+@layer base {
+  html {
+    background-color: var(--pf-surface);
+    color: var(--pf-fg);
+    -webkit-font-smoothing: antialiased;
+    scroll-padding-top: 5rem;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei",
+      sans-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--pf-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--pf-primary-soft);
+  }
+}
+
+/* Syntax highlighting: Shiki's css-variables theme mapped onto the code tokens. */
+:root {
+  --shiki-foreground: var(--pf-code-fg);
+  --shiki-background: var(--pf-code-bg);
+  --shiki-token-constant: var(--pf-syntax-number);
+  --shiki-token-string: var(--pf-syntax-string);
+  --shiki-token-string-expression: var(--pf-syntax-string);
+  --shiki-token-comment: var(--pf-syntax-comment);
+  --shiki-token-keyword: var(--pf-syntax-keyword);
+  --shiki-token-parameter: var(--pf-syntax-variable);
+  --shiki-token-function: var(--pf-syntax-function);
+  --shiki-token-punctuation: var(--pf-code-fg);
+  --shiki-token-link: var(--pf-primary);
+}
+
+/* Long-form content rendered from MDX. */
+@layer components {
+  .prose {
+    line-height: 1.75;
+    color: var(--pf-fg);
+    overflow-wrap: break-word;
+  }
+  .prose > * + * {
+    margin-top: 1.1em;
+  }
+  .prose h2 {
+    margin-top: 2.4em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--pf-border);
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1.3;
+  }
+  .prose h3 {
+    margin-top: 1.8em;
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+  .prose a {
+    color: var(--pf-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    transition: color var(--pf-duration-fast) var(--pf-ease-out);
+  }
+  .prose a:hover {
+    color: var(--pf-primary-hover);
+  }
+  .prose ul,
+  .prose ol {
+    padding-left: 1.5em;
+  }
+  .prose ul {
+    list-style: disc;
+  }
+  .prose ol {
+    list-style: decimal;
+  }
+  .prose li + li {
+    margin-top: 0.35em;
+  }
+  .prose strong {
+    font-weight: 650;
+  }
+  .prose :not(pre) > code {
+    padding: 0.15em 0.4em;
+    border-radius: var(--pf-radius-control);
+    background-color: var(--pf-surface-3);
+    font-size: 0.875em;
+  }
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.925rem;
+  }
+  .prose th,
+  .prose td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--pf-border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose th {
+    font-weight: 600;
+    background-color: var(--pf-surface-2);
+  }
+  .prose blockquote {
+    padding-left: 1rem;
+    border-left: 3px solid var(--pf-border-strong);
+    color: var(--pf-fg-muted);
+  }
+  .prose hr {
+    border-color: var(--pf-border);
+  }
+}
+
+/* Main content enters with a short fade; the sidebar stays still. */
+@view-transition {
+  navigation: auto;
+}
+
+/* Theme switch: the new theme spreads as a circle from the toggle button. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

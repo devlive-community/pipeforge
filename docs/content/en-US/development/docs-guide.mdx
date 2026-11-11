@@ -1,0 +1,127 @@
+---
+title: Writing documentation
+description: How to write feature and plugin pages, which components to use and which checks the site runs.
+order: 30
+---
+
+## When documentation is required
+
+Every user-visible change updates the documentation site **in the same commit**, in English
+(`docs/content/en-US/`) and Chinese (`docs/content/zh-CN/`). Plugins get a plugin page, other
+features a feature page, and incompatible changes a migration note. Pure refactoring, tests and
+build scripts need no documentation; their commit message says `Docs-Not-Needed: <reason>`.
+
+Which code paths belong to which pages is recorded in `docs-map.yaml` at the repository root.
+Register every new module there.
+
+## Page files and frontmatter
+
+A page is an MDX file. Its path below the language directory is its id and its URL:
+`development/docs-guide.mdx` is served at `/<language>/next/development/docs-guide/`. The first
+directory must be one of `getting-started`, `concepts`, `guides`, `reference`, `plugins`,
+`operations` or `development`.
+
+```yaml title="frontmatter"
+---
+title: Local development environment   # page title, shown as the heading
+description: One sentence for search results and link previews.
+order: 20                              # position in the section navigation
+template: feature                      # guide (default), feature or plugin
+omit:                                  # template sections that do not apply, with a reason
+  performance: The environment is meant for development, not for benchmarks.
+---
+```
+
+Do not write a level 1 heading; the title comes from the frontmatter.
+
+## Feature page template
+
+Pages with `template: feature` use these level 2 sections, in this order. A section that does
+not apply is left out and named in `omit` with the reason.
+
+| Section | Content |
+|---|---|
+| Overview | The problem the feature solves; when to use it and when not |
+| How it works | The mechanism, with a diagram or animation for core mechanisms |
+| Quick start | A minimal example that can be copied and run |
+| Configuration | Options, DSL fields and settings, taken from generated reference data |
+| Examples | At least two complete, realistic examples |
+| Behavior | Consistency, behavior on failure, interaction with other features |
+| Observability | Metrics, the related `explain` output, alerts |
+| Performance and tuning | Parameters that affect performance and recommended values |
+| Troubleshooting | Error codes, common problems and their solutions |
+| Limitations | What is not supported |
+| Version history | Since which version the feature exists and how it changed |
+
+In Chinese the headings are 概述, 原理, 快速上手, 配置, 示例, 行为与语义, 可观测性, 性能与调优,
+排障, 限制 and 版本.
+
+## Plugin page template
+
+Plugin pages live at `plugins/<type>/<plugin id>.mdx` and use `template: plugin`. Sections
+marked as generated render data exported from the plugin's code and are never written by hand.
+
+| Section | Source |
+|---|---|
+| Introduction | written |
+| Capabilities | generated |
+| Verified versions | generated |
+| Quick start | written |
+| Prerequisites | written |
+| Data source configuration | written and generated |
+| Node options | generated |
+| Native options | generated |
+| Type mapping | generated |
+| Splits and parallelism | written |
+| Consistency | written |
+| Examples | written, at least three scenarios |
+| Metrics | generated and written |
+| Performance and tuning | written |
+| Errors and troubleshooting | generated and written |
+| Known limitations | written |
+| Changelog | generated |
+
+## Components
+
+<Callout type="tip">
+  Components are available in every page without an import.
+</Callout>
+
+| Component | Use |
+|---|---|
+| `<Callout type="note">` | Notes; `type` is `note`, `tip`, `warning` or `danger` |
+| Code fences | Highlighted code with a copy button; add `title="file.yaml"`, `{2-4}` to highlight lines, or `showLineNumbers` |
+| `<Tabs>` with `<Tab label="...">` | Alternatives such as YAML, SQL and CLI |
+| `<Steps>` with `<Step title="...">` | Step-by-step procedures |
+
+```mdx title="example.mdx"
+<Tabs>
+  <Tab label="YAML">A job written in YAML.</Tab>
+  <Tab label="CLI">The same job started from the command line.</Tab>
+</Tabs>
+```
+
+## Links
+
+Link to other pages with paths relative to the current page, without language or version:
+`[local environment](./local-environment)` or `[plugins](../concepts/plugins#isolation)`. The
+same text then works in every language and version, and the build verifies the target page
+and anchor. Anchors are the heading text in lower case with spaces replaced by hyphens.
+
+## Checks
+
+```bash
+cd docs
+pnpm generate    # search index and data exported from the code
+pnpm check       # structure, translations, links and the UI scan
+pnpm build       # static export to docs/out
+pnpm dev         # preview with live reload
+```
+
+| Check | Fails when |
+|---|---|
+| structure | frontmatter is incomplete, a template section is missing or empty, the page contains `TODO` |
+| i18n | a page is missing in one language, or the two languages differ in template, order, omitted sections, heading structure or number of code blocks |
+| links | a link points to a page or anchor that does not exist, or uses a site-absolute path |
+| ui | site code uses raw palette colors, `dark:` variants, inline colors, native controls outside `components/ui`, title tooltips or browser dialogs |
+| Lighthouse | performance, accessibility, best practices or SEO score below 95 |

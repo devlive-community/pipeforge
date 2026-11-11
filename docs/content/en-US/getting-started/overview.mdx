@@ -1,0 +1,45 @@
+---
+title: Overview
+description: What PipeForge is, how it is built and where the project is heading.
+order: 10
+---
+
+## What is PipeForge
+
+PipeForge is a pluggable, distributed data integration platform. A job is a graph of
+**sources**, **transforms** and **sinks**; one connector API covers batch, streaming and
+change data capture (CDC), and jobs run on PipeForge's own distributed engine.
+
+- **Connectors are plugins.** Each plugin is packaged on its own and loaded in an isolated
+  class loader, so two plugins can depend on different versions of the same library.
+- **Distributed from the start.** A Master coordinates jobs, Workers run them. Local mode
+  runs the same Master and Worker code inside one process.
+- **One type system.** All connectors share logical types; dialect plugins map them to the
+  native types of each system.
+- **Observable.** Metrics for jobs, nodes, tasks, splits and tables, and `explain` for plans
+  and bottlenecks.
+
+## Architecture
+
+| Layer | Modules | Responsibility |
+|---|---|---|
+| Access | `pipeforge-cli`, `pipeforge-ui`, REST API | Submit, operate and observe jobs |
+| Control plane | `pipeforge-server` | Jobs, data sources, schedules, history |
+| Planning | `pipeforge-core`, `pipeforge-expressions` | Job DSL, validation, logical plan, schema inference |
+| Engine | `pipeforge-engine` | Master, Workers, tasks, data exchange, checkpoints |
+| Connector API | `pipeforge-api` | Rows, types, sources, transforms, sinks, catalogs, options |
+| Plugins | `pipeforge-plugin`, connectors, transforms | Discovery, isolation and the plugins themselves |
+
+Dependencies only point downwards: connectors depend on `pipeforge-api` and never on the engine.
+
+## Roadmap
+
+| Milestone | Focus |
+|---|---|
+| M0 | Project skeleton: build, CI, documentation site, connector API, plugin loading, expressions, local runs from the CLI |
+| M1 | Distributed runtime and parallel batch: Master and Workers, split assignment, JDBC for MySQL and PostgreSQL |
+| M2 | Checkpoints and failover: exactly resumable batch, savepoints, Master high availability |
+| M3 | Data exchange, multi-table jobs and the unified schema |
+
+The project is in milestone M0. See [the local development environment](../development/local-environment)
+to run the services that examples and tests use, and [contributing](../development/contributing) to take part.

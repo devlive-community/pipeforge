@@ -131,7 +131,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r test
+      - run: pnpm -r --filter '!@pipeforge/docs' test
 
   # Starts the docker compose environment (including MinIO) and checks every service.
   dev-env:
