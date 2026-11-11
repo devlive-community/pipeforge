@@ -6,6 +6,7 @@
  */
 package org.devlive.pipeforge.server.config;
 
+import java.nio.file.Path;
 import java.time.ZoneId;
 import org.devlive.pipeforge.api.option.ReadonlyConfig;
 import org.devlive.pipeforge.expressions.ExpressionEngine;
@@ -20,8 +21,7 @@ public class ServerConfiguration {
     /** Installed plugins, loaded once at start-up; plugin class loaders are closed with the server. */
     @Bean(destroyMethod = "close")
     public PluginManager pluginManager(ServerProperties properties) {
-        return PluginManager.load(
-                properties.plugin().paths(), properties.plugin().cache(), PluginManager.Options.defaults());
+        return PluginManager.load(PluginScan.scan(properties.plugin(), Path.of("")), PluginManager.Options.defaults());
     }
 
     @Bean

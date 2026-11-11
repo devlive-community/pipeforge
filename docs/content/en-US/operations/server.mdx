@@ -24,6 +24,43 @@ It listens on `http://127.0.0.1:8080`. Check that it answers:
 curl -s http://127.0.0.1:8080/api/v1/version
 ```
 
+## Running from a source checkout
+
+A server started from an IDE or with `./mvnw spring-boot:run` has no `plugins` directory to load
+from. Start it with the `dev` profile instead: it then also loads the plugin modules of the checkout
+it runs in, straight from their build output, so no plugin has to be packaged.
+
+1. Compile once from the repository root, so that every plugin module gets its dependency list
+   (`target/pipeforge-plugin/classpath.txt`):
+
+   ```bash
+   ./mvnw compile
+   ```
+
+2. Start the server with the profile. In IntelliJ IDEA, set **Active profiles** of the run
+   configuration to `dev`; on the command line:
+
+   ```bash
+   java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar --spring.profiles.active=dev
+   ```
+
+The server finds the checkout from its working directory, whether that is the repository root or
+`pipeforge-server`, and loads every module two levels below the root that has
+`src/main/plugin/plugin.yaml`, so new plugins are picked up without configuration. The log shows
+what it found:
+
+```text
+Development mode: loading the plugin modules of /work/pipeforge
+Development plugin fake@0.1.0-SNAPSHOT from /work/pipeforge/pipeforge-connectors/connector-fake
+Plugin directory /work/pipeforge/pipeforge-server/plugins does not exist
+Found 1 plugin(s) in /work/pipeforge
+```
+
+After changing a plugin, build it in the IDE and restart the server; run `./mvnw compile` again only
+when its dependencies change. A module that is not built yet is listed under `unavailable` by
+`GET /api/v1/plugins` with the command that builds it. A plugin of the checkout replaces an installed
+package with the same id and version.
+
 ## Web UI
 
 The server hosts the [Web UI](../guides/web-ui) at `/` when the UI was built before the server was
@@ -44,6 +81,8 @@ as `--name=value`, or set them as environment variables (`PIPEFORGE_JOB_TIMEZONE
 | `server.port` | `8080` | Port |
 | `pipeforge.plugin.paths` | `plugins` | Directories with plugin packages (zip files or extracted directories) |
 | `pipeforge.plugin.cache` | `work/plugin-cache` | Where zipped plugins are extracted |
+| `pipeforge.plugin.dev.enabled` | `false` | Also loads the plugin modules of the source checkout; the `dev` profile turns it on |
+| `pipeforge.plugin.dev.root` | found from the working directory | Root of the source checkout for development mode |
 | `pipeforge.job.timezone` | `UTC` | Time zone of jobs that do not set `env.timezone` |
 | `pipeforge.job.defaults.*` | none | Cluster defaults for node options, in the env form, e.g. `pipeforge.job.defaults.source.fetch-size` |
 
@@ -57,7 +96,8 @@ pipeforge:
       source.fetch-size: "5000"
 ```
 
-Plugins are loaded when the server starts; packages that cannot be used are listed by
+Plugins are loaded when the server starts, and the log names every plugin directory with its
+absolute path and the number of plugins in it; packages that cannot be used are listed by
 `GET /api/v1/plugins` under `unavailable`, with the reason.
 
 ## Security

@@ -22,6 +22,36 @@ java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar
 curl -s http://127.0.0.1:8080/api/v1/version
 ```
 
+## 从源码仓库启动
+
+在 IDE 中或用 `./mvnw spring-boot:run` 启动的服务端没有可以加载的 `plugins` 目录。改用 `dev` 配置文件启动：
+服务端会额外加载它所在源码仓库中的插件模块，直接使用它们的构建输出，不需要打包任何插件。
+
+1. 在仓库根目录编译一次，让每个插件模块生成依赖列表（`target/pipeforge-plugin/classpath.txt`）：
+
+   ```bash
+   ./mvnw compile
+   ```
+
+2. 用该配置文件启动服务端。在 IntelliJ IDEA 中，把运行配置的 **Active profiles** 设为 `dev`；在命令行中：
+
+   ```bash
+   java -jar pipeforge-server/target/pipeforge-server-0.1.0-SNAPSHOT-exec.jar --spring.profiles.active=dev
+   ```
+
+服务端从工作目录找到源码仓库（工作目录是仓库根目录或 `pipeforge-server` 都可以），加载根目录下两层、带有
+`src/main/plugin/plugin.yaml` 的每个模块，因此新增的插件无需配置就会被发现。日志中会列出找到的内容：
+
+```text
+Development mode: loading the plugin modules of /work/pipeforge
+Development plugin fake@0.1.0-SNAPSHOT from /work/pipeforge/pipeforge-connectors/connector-fake
+Plugin directory /work/pipeforge/pipeforge-server/plugins does not exist
+Found 1 plugin(s) in /work/pipeforge
+```
+
+修改插件后，在 IDE 中构建并重启服务端即可；只有插件的依赖变化时才需要再次运行 `./mvnw compile`。尚未构建的模块会出现在
+`GET /api/v1/plugins` 的 `unavailable` 中，并附带构建它的命令。源码仓库中的插件会替换 id 和版本相同的已安装插件包。
+
 ## Web UI
 
 如果在打包服务之前先构建了 UI（`pnpm --filter @pipeforge/ui build`），`pipeforge-ui/dist` 中的构建产物会进入 jar，服务在 `/` 提供
@@ -37,6 +67,8 @@ curl -s http://127.0.0.1:8080/api/v1/version
 | `server.port` | `8080` | 端口 |
 | `pipeforge.plugin.paths` | `plugins` | 存放插件包（zip 文件或解压后的目录）的目录 |
 | `pipeforge.plugin.cache` | `work/plugin-cache` | zip 插件解压到的位置 |
+| `pipeforge.plugin.dev.enabled` | `false` | 额外加载源码仓库中的插件模块；`dev` 配置文件会开启它 |
+| `pipeforge.plugin.dev.root` | 从工作目录查找 | 开发模式使用的源码仓库根目录 |
 | `pipeforge.job.timezone` | `UTC` | 没有设置 `env.timezone` 的作业使用的时区 |
 | `pipeforge.job.defaults.*` | 无 | 节点选项的集群默认值，采用 env 写法，例如 `pipeforge.job.defaults.source.fetch-size` |
 
@@ -50,7 +82,7 @@ pipeforge:
       source.fetch-size: "5000"
 ```
 
-插件在服务启动时加载；无法使用的插件包会出现在 `GET /api/v1/plugins` 的 `unavailable` 中，并附带原因。
+插件在服务启动时加载，日志会列出每个插件目录的绝对路径和其中的插件数；无法使用的插件包会出现在 `GET /api/v1/plugins` 的 `unavailable` 中，并附带原因。
 
 ## 安全
 

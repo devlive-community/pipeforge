@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Development profile (--spring.profiles.active=dev): besides the plugin packages in
+# pipeforge.plugin.paths, load the plugin modules of the source checkout the server is started in
+# from their build output (target/classes and target/pipeforge-plugin/classpath.txt). Run
+# ./mvnw compile once so that every module has its dependency list; afterwards a build in the IDE
+# and a restart of the server pick up plugin changes.
+
+pipeforge:
+  plugin:
+    dev:
+      enabled: true

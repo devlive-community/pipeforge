@@ -9,6 +9,7 @@ package org.devlive.pipeforge.server.config;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -24,12 +25,22 @@ public record ServerProperties(@DefaultValue Plugin plugin, @DefaultValue Job jo
     /**
      * @param paths directories that hold plugin packages
      * @param cache where zipped plugins are extracted
+     * @param dev development mode: plugins loaded from the build output of a source checkout
      */
-    public record Plugin(@DefaultValue("plugins") List<Path> paths, @DefaultValue("work/plugin-cache") Path cache) {
+    public record Plugin(
+            @DefaultValue("plugins") List<Path> paths,
+            @DefaultValue("work/plugin-cache") Path cache,
+            @DefaultValue Dev dev) {
         public Plugin {
             paths = List.copyOf(paths);
         }
     }
+
+    /**
+     * @param enabled whether the plugin modules of the source checkout are loaded
+     * @param root the root of the checkout; found from the working directory when not set
+     */
+    public record Dev(@DefaultValue("false") boolean enabled, @Nullable Path root) {}
 
     /**
      * @param timezone the time zone of jobs that do not set env.timezone
