@@ -11,8 +11,13 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Where an error happened: job, run, node, subtask, table and split. Every part is optional;
- * {@link #toMap()} contains only the parts that are set.
+ * Where an error happened: job, run, node, subtask, table and split, and for errors in a job
+ * definition the line, column and path of the offending value. Every part is optional; {@link
+ * #toMap()} contains only the parts that are set.
+ *
+ * @param line 1-based line in the job definition
+ * @param column 1-based column in the job definition
+ * @param path path of the value in the job definition, e.g. {@code sink[0].inputs}
  */
 public record ErrorScope(
         @Nullable String job,
@@ -20,11 +25,14 @@ public record ErrorScope(
         @Nullable String node,
         @Nullable Integer subtask,
         @Nullable String table,
-        @Nullable String split) {
+        @Nullable String split,
+        @Nullable Integer line,
+        @Nullable Integer column,
+        @Nullable String path) {
 
     /** A scope without any location. */
     public static ErrorScope none() {
-        return new ErrorScope(null, null, null, null, null, null);
+        return new ErrorScope(null, null, null, null, null, null, null, null, null);
     }
 
     /** A scope that names a job node. */
@@ -32,31 +40,51 @@ public record ErrorScope(
         return none().withNode(node);
     }
 
+    /** A scope that points at a value in a job definition; a line below 1 means the line is unknown. */
+    public static ErrorScope definition(int line, int column, String path) {
+        return none().withDefinition(line, column, path);
+    }
+
     public ErrorScope withJob(String value) {
-        return new ErrorScope(value, run, node, subtask, table, split);
+        return new ErrorScope(value, run, node, subtask, table, split, line, column, path);
     }
 
     public ErrorScope withRun(String value) {
-        return new ErrorScope(job, value, node, subtask, table, split);
+        return new ErrorScope(job, value, node, subtask, table, split, line, column, path);
     }
 
     public ErrorScope withNode(String value) {
-        return new ErrorScope(job, run, value, subtask, table, split);
+        return new ErrorScope(job, run, value, subtask, table, split, line, column, path);
     }
 
     public ErrorScope withSubtask(int value) {
-        return new ErrorScope(job, run, node, value, table, split);
+        return new ErrorScope(job, run, node, value, table, split, line, column, path);
     }
 
     public ErrorScope withTable(String value) {
-        return new ErrorScope(job, run, node, subtask, value, split);
+        return new ErrorScope(job, run, node, subtask, value, split, line, column, path);
     }
 
     public ErrorScope withSplit(String value) {
-        return new ErrorScope(job, run, node, subtask, table, value);
+        return new ErrorScope(job, run, node, subtask, table, value, line, column, path);
     }
 
-    /** The parts that are set, in order job, run, node, subtask, table, split. */
+    /** The location of a value in the job definition; a line below 1 keeps only the path. */
+    public ErrorScope withDefinition(int lineValue, int columnValue, String pathValue) {
+        boolean known = lineValue > 0;
+        return new ErrorScope(
+                job,
+                run,
+                node,
+                subtask,
+                table,
+                split,
+                known ? lineValue : null,
+                known ? columnValue : null,
+                pathValue.isEmpty() ? null : pathValue);
+    }
+
+    /** The parts that are set, in order job, run, node, subtask, table, split, line, column, path. */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
         put(map, "job", job);
@@ -65,6 +93,9 @@ public record ErrorScope(
         put(map, "subtask", subtask);
         put(map, "table", table);
         put(map, "split", split);
+        put(map, "line", line);
+        put(map, "column", column);
+        put(map, "path", path);
         return map;
     }
 

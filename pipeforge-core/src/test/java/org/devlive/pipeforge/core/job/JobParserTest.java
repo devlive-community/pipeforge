@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import org.devlive.pipeforge.common.error.ErrorCode;
+import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.Errors;
 import org.devlive.pipeforge.core.TestComponents;
 import org.junit.jupiter.api.Test;
@@ -236,6 +237,14 @@ class JobParserTest {
         String yaml = JOB.replace(from, to.replace("\\n", "\n"));
         assertThat(yaml).isNotEqualTo(JOB);
         assertThat(invalid(yaml)).contains(expected);
+    }
+
+    @Test
+    void definitionErrorsCarryTheirLocationInTheScope() {
+        PipeForgeException error =
+                Errors.thrown(ErrorCode.JOB_INVALID, () -> parse(JOB.replace("    rows: 100", "    inputs: [x]")));
+        assertThat(error.scope().toMap())
+                .containsExactly(Map.entry("line", 17), Map.entry("column", 13), Map.entry("path", "source[0].inputs"));
     }
 
     @Test

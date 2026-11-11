@@ -93,6 +93,12 @@ Server、UI 以及使用 `-o json` 的 CLI 收到的是结构化的错误对象�
 }
 ```
 
+`scope` 说明错误发生的位置：`job`、`run`、`node`、`subtask`、`table`、`split`；作业定义中的错误还带有取值所在的 `line`、`column` 和 `path`，编辑器据此标注错误：
+
+```json
+"scope": { "line": 17, "column": 13, "path": "source[0].inputs" }
+```
+
 ### 未预期的异常
 
 不带错误码的异常报告为 `PF-SYS-0001`，原始异常保留在异常链中。这类错误一定是缺陷，请提交问题。
