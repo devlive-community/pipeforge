@@ -69,7 +69,7 @@
         <snakeyaml.version>2.6</snakeyaml.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <errorprone.version>2.36.0</errorprone.version>
-        <calcite.version>1.40.0</calcite.version>
+        <calcite.version>1.42.0</calcite.version>
         <janino.version>3.1.12</janino.version>
         <re2j.version>1.8</re2j.version>
         <!-- Versions above follow the Spring Boot BOM so that the server converges with the libraries. -->
