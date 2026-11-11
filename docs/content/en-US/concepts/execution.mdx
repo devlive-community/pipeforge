@@ -1,0 +1,205 @@
+---
+title: Execution
+description: How the engine runs a planned job — operator chains, tasks on their own threads, the mailbox, the asynchronous write buffer, cancellation and errors.
+order: 60
+template: feature
+---
+
+## Overview
+
+Once a job is [planned](./plan-and-explain), the engine runs it. This page explains what happens at
+run time: which threads exist, how a row travels from the source to the sink, how reading and
+writing overlap, how a job is cancelled and how failures are reported.
+
+The same runtime runs in local mode (one process) and on a cluster: local mode uses in-process
+implementations of the interfaces that a cluster implements with RPC, so a job behaves the same in
+both. In this version the engine runs in local mode.
+
+## How it works
+
+### Operator chains and tasks
+
+Most integration jobs need no shuffle: the source, its transforms and the sink are connected one to
+one with the same parallelism. The engine merges them into one **operator chain** and runs one
+**task** per parallel instance. Inside a task the operators call each other directly: a row goes
+through the whole chain before the reader emits the next one, and nothing is serialized between
+operators.
+
+```text
+job: src (p=2) → map (p=2) → out (p=2)
+
+task src-0:  reader → map → writer        thread task-src-0 (+ writer-src-0)
+task src-1:  reader → map → writer        thread task-src-1 (+ writer-src-1)
+```
+
+### Splits are pulled
+
+The source's split enumerator runs in the job master. A reader asks for a split when it starts and
+again whenever it finishes one; the enumerator answers with the next split or with "no more splits".
+Fast readers therefore take more splits, which evens out skew. Splits travel to the task serialized
+with the source's split serializer, exactly as they would between machines.
+
+### The mailbox
+
+Each task has one thread and a **mailbox**. The thread alternates between handling mail (split
+assignments, cancellation, later checkpoints and timers) and reading data:
+
+```text
+loop:
+  run the pending mail
+  reader.pollNext → transforms → sink
+  nothing to read? wait for mail, 1 ms doubling up to 100 ms
+```
+
+Because events and data are handled on the same thread, operators need no locks, and a snapshot of
+their state is always consistent.
+
+### Asynchronous write buffer
+
+With the write buffer (on by default) the sink writes on its own thread, so that reading and
+writing overlap:
+
+```text
+task thread: … → batch ──► bounded queue ──► write thread: SinkWriter
+                     blocks when full
+```
+
+When the target is slower than the source, the queue fills and the task thread blocks: this is the
+backpressure that slows the reader down. When the input ends, the task waits until every batch is
+written, then asks the writer to prepare its commit.
+
+### Commit at the end of the input
+
+A sink that commits in two phases returns a committable from `prepareCommit`. When every task has
+finished, the job master commits them with the sink's committer and then its global committer, and
+only then reports `SUCCESS`. A run without checkpoints commits once, as checkpoint 1.
+
+### Job states
+
+| Status | Meaning |
+|---|---|
+| `CREATED` | Accepted; tasks are being deployed |
+| `RUNNING` | Tasks are running |
+| `CANCELLING` | A cancel was requested; tasks are stopping |
+| `SUCCESS` | Every source ended and every sink wrote and committed its data |
+| `FAILED` | A task, the enumerator or the commit failed; the result carries the error |
+| `CANCELLED` | Stopped on request |
+
+## Quick start
+
+The engine is embedded through `pipeforge-engine-local`; the `pipeforge run --local` command of
+the command line uses the same API.
+
+```java
+JobPlan plan = new Planner(components).plan(JobParser.parse(yaml, VariableContext.builder().build()));
+try (Engine engine = new LocalEngine()) {
+    JobHandle handle = engine.submit(plan);
+    JobResult result = handle.result().get();
+    System.out.println(result.status());          // SUCCESS
+}
+```
+
+## Configuration
+
+Engine settings are given per submission with `SubmitOptions`:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `asyncWriteBuffer` | `true` | Write on a separate thread behind a bounded queue; `false` writes on the task thread |
+| `writeBatchSize` | `1024` | Rows per batch handed to the write thread |
+| `writeQueueCapacity` | `4` | Batches the queue holds before the task thread blocks |
+| `cancelTimeout` | `30s` | Time a cancelled task gets before its thread is interrupted; after twice this time it is given up |
+
+The parallelism of each task comes from the job: `env.parallelism` or the node's `parallelism`.
+
+## Examples
+
+### Four parallel readers
+
+```yaml
+version: 1
+name: orders-copy
+env:
+  parallelism: 4
+source:
+  - { id: src, type: jdbc, table: demo.orders }
+transform:
+  - { id: map, type: field-mapper }
+sink:
+  - { id: out, type: jdbc, table: dw.orders }
+```
+
+The engine runs four tasks, `src-0` to `src-3`, each with its own reader, mapper and writer. The
+enumerator splits the table into key ranges; whichever reader is free takes the next range.
+
+### Cancelling a job
+
+```java
+JobHandle handle = engine.submit(plan);
+handle.cancel();
+handle.result().get().status();   // CANCELLED
+```
+
+`cancel` returns at once. Each task is woken up, the reader's `cancel()` and an interrupt of the write
+thread stop blocking calls, and the job ends with `CANCELLED` once every task has stopped. Nothing is
+committed.
+
+## Behavior
+
+- **One final state per task.** A task reports `FINISHED` with its committable, `FAILED` with its
+  error, or `CANCELED`; the job master decides the job's status from them.
+- **The first failure wins.** It cancels the other tasks and becomes the job's error. Local mode does
+  not restart tasks; region restarts come with checkpoints in the distributed engine.
+- **Cancellation escalates.** The reader's cancel hook and the write thread's interrupt come first;
+  after `cancelTimeout` the task thread is interrupted; after twice `cancelTimeout` the task is given
+  up with `PF-RES-0005` and the job fails.
+- **Plugin code is isolated.** Every call into a plugin runs with the plugin's class loader as the
+  context class loader, and what it throws is turned into an error with a code (see Troubleshooting).
+- **Ordering.** Within a task, rows and schema changes reach the sink in the order the reader emitted
+  them, with or without the write buffer.
+
+## Observability
+
+The result of a job carries its final status, the error with its code and scope (job, run, node,
+subtask) and its metrics. Each task logs when it starts running and when it fails; the job master
+logs the job's start, commit and end. Row counts, rates and the bottleneck indicators arrive with the
+metrics of the engine.
+
+## Performance and tuning
+
+- Keep the write buffer on: reading and writing then overlap, and a slow target throttles the source
+  instead of stalling it row by row.
+- Raise `writeBatchSize` for targets that write efficiently in large batches; lower it to reduce the
+  memory a task holds (`writeBatchSize × writeQueueCapacity` rows at most).
+- A larger `writeQueueCapacity` absorbs short slow-downs of the target; it does not help when the
+  target is slower on average.
+- More parallelism means more tasks and threads; the source's splits must be fine-grained enough to
+  keep them busy.
+
+## Troubleshooting
+
+| Error | Meaning |
+|---|---|
+| `PF-SRC-0001` | The source's reader or enumerator threw an error it did not classify; the reason names the operation, e.g. `read` or `start the enumerator` |
+| `PF-SINK-0001` | The sink's writer threw an error it did not classify, e.g. while writing a row or flushing |
+| `PF-SINK-0003` | The data was written but the commit failed or was still refused after 3 attempts |
+| `PF-PLUG-0007` | A transform failed while processing a row |
+| `PF-RES-0005` | A cancelled task ignored cancellation and interrupts; give the connector a socket or query timeout |
+| `PF-PLAN-0012` | The job needs data exchange between tasks, which this version cannot run (see Limitations) |
+
+Errors that a connector reports with its own code keep that code; the engine adds the node and
+subtask to their scope. The full list is in the [error reference](../reference/errors).
+
+## Limitations
+
+- Jobs must be a straight line: one source, its transforms and one sink, all with the same
+  parallelism. Several sources or sinks, fan-out and changes of parallelism need data exchange
+  between tasks and fail with `PF-PLAN-0012`.
+- No checkpoints: a failed or cancelled job starts from the beginning when it is run again, and
+  two-phase sinks commit once at the end of the input.
+- No restarts: the first task failure fails the job.
+- Streaming jobs run until they are cancelled.
+
+## Version history
+
+Available since 0.1.0.

@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Sink runtime errors.
+
+- code: PF-SINK-0001
+  name: SINK_FAILED
+  message:
+    en-US: "Sink '{node}' failed: {reason}"
+    zh-CN: "Sink '{node}' 运行失败：{reason}"
+  hint:
+    en-US: "The connector raised an error it did not classify. Check the cause in the run log; it usually names the statement, file or table that failed."
+    zh-CN: "连接器抛出了一个未分类的错误。请在运行日志中查看原因，通常会指出失败的语句、文件或表。"
+
+- code: PF-SINK-0003
+  name: COMMIT_FAILED
+  message:
+    en-US: "Sink '{node}' could not commit the written data: {reason}"
+    zh-CN: "Sink '{node}' 无法提交已写入的数据：{reason}"
+  hint:
+    en-US: "The data was written but not committed, so it is not visible in the target. Check the target system, then run the job again."
+    zh-CN: "数据已写入但未提交，在目标端不可见。请检查目标系统，然后重新运行作业。"

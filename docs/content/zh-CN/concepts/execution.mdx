@@ -1,0 +1,176 @@
+---
+title: 执行
+description: 引擎如何运行一个已经规划好的作业：算子链、各自独立线程的 Task、mailbox、异步写缓冲、取消与错误。
+order: 60
+template: feature
+---
+
+## 概述
+
+作业[规划](./plan-and-explain)完成后，由引擎运行。本页说明运行时发生了什么：有哪些线程、一行数据如何从 Source 到达 Sink、
+读和写如何重叠、作业如何取消，以及失败如何上报。
+
+本地模式（单个进程）和集群使用同一套运行时：本地模式用进程内实现替代集群中通过 RPC 实现的接口，因此同一个作业在两种形态下行为一致。
+当前版本的引擎以本地模式运行。
+
+## 原理
+
+### 算子链与 Task
+
+大多数数据集成作业不需要 shuffle：Source、它的 Transform 和 Sink 一对一相连，并行度相同。引擎把它们合并成一条**算子链**，
+每个并行实例运行一个 **Task**。Task 内部的算子直接互相调用：一行数据走完整条链之后，Reader 才输出下一行，算子之间不做任何序列化。
+
+```text
+作业：src (p=2) → map (p=2) → out (p=2)
+
+Task src-0：reader → map → writer        线程 task-src-0（+ writer-src-0）
+Task src-1：reader → map → writer        线程 task-src-1（+ writer-src-1）
+```
+
+### 拉模式分片
+
+Source 的分片枚举器（SplitEnumerator）运行在 JobMaster 中。Reader 启动时请求一个分片，每读完一个分片再请求下一个；
+枚举器回复下一个分片，或者“没有更多分片”。读得快的 Reader 自然多领分片，从而抵消数据倾斜。分片用 Source 的分片序列化器序列化后发给 Task，
+与跨机器传输时完全相同。
+
+### Mailbox
+
+每个 Task 有一个线程和一个 **mailbox**。线程交替处理 mail（分片分配、取消，以及后续的 checkpoint 和定时器）和读取数据：
+
+```text
+循环：
+  处理待处理的 mail
+  reader.pollNext → transform → sink
+  暂时没有数据？等待 mail，从 1 毫秒开始翻倍，最多 100 毫秒
+```
+
+事件和数据在同一个线程中处理，因此算子不需要加锁，状态快照也总是一致的。
+
+### 异步写缓冲
+
+开启写缓冲（默认开启）时，Sink 在自己的线程中写入，读和写可以重叠：
+
+```text
+Task 线程：… → 攒批 ──► 有界队列 ──► 写线程：SinkWriter
+                     满了就阻塞
+```
+
+目标端比源端慢时，队列被填满，Task 线程阻塞：这就是让 Reader 慢下来的背压。输入结束时，Task 等待所有批次写完，然后让 Writer 准备提交。
+
+### 输入结束时提交
+
+两阶段提交的 Sink 在 `prepareCommit` 中返回待提交内容（committable）。所有 Task 都结束后，JobMaster 先用 Sink 的 Committer、
+再用 GlobalCommitter 提交它们，之后才报告 `SUCCESS`。没有 checkpoint 的运行只提交一次，记为第 1 次 checkpoint。
+
+### 作业状态
+
+| 状态 | 含义 |
+|---|---|
+| `CREATED` | 已接受，正在部署 Task |
+| `RUNNING` | Task 正在运行 |
+| `CANCELLING` | 收到取消请求，Task 正在停止 |
+| `SUCCESS` | 所有 Source 都已结束，所有 Sink 都已写完并提交 |
+| `FAILED` | 某个 Task、枚举器或提交失败；结果中带有错误 |
+| `CANCELLED` | 按请求停止 |
+
+## 快速上手
+
+通过 `pipeforge-engine-local` 嵌入引擎；命令行的 `pipeforge run --local` 使用的也是同一套 API。
+
+```java
+JobPlan plan = new Planner(components).plan(JobParser.parse(yaml, VariableContext.builder().build()));
+try (Engine engine = new LocalEngine()) {
+    JobHandle handle = engine.submit(plan);
+    JobResult result = handle.result().get();
+    System.out.println(result.status());          // SUCCESS
+}
+```
+
+## 配置
+
+引擎设置在每次提交时通过 `SubmitOptions` 指定：
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `asyncWriteBuffer` | `true` | 在独立线程中写入，中间是有界队列；`false` 表示在 Task 线程中直接写入 |
+| `writeBatchSize` | `1024` | 每批交给写线程的行数 |
+| `writeQueueCapacity` | `4` | 队列最多容纳的批数，满了之后 Task 线程阻塞 |
+| `cancelTimeout` | `30s` | 取消后 Task 停止的等待时间，超过后中断其线程；超过两倍时间后放弃该 Task |
+
+每个 Task 的并行度来自作业：`env.parallelism` 或节点的 `parallelism`。
+
+## 示例
+
+### 四个并行 Reader
+
+```yaml
+version: 1
+name: orders-copy
+env:
+  parallelism: 4
+source:
+  - { id: src, type: jdbc, table: demo.orders }
+transform:
+  - { id: map, type: field-mapper }
+sink:
+  - { id: out, type: jdbc, table: dw.orders }
+```
+
+引擎运行 `src-0` 到 `src-3` 四个 Task，每个都有自己的 Reader、映射器和 Writer。枚举器把表按主键切成若干范围，空闲的 Reader 领取下一个范围。
+
+### 取消作业
+
+```java
+JobHandle handle = engine.submit(plan);
+handle.cancel();
+handle.result().get().status();   // CANCELLED
+```
+
+`cancel` 立即返回。每个 Task 被唤醒，Reader 的 `cancel()` 和对写线程的中断让阻塞中的调用返回；所有 Task 停止后，作业以 `CANCELLED` 结束，
+不提交任何内容。
+
+## 行为与语义
+
+- **每个 Task 只有一个最终状态。** Task 报告带 committable 的 `FINISHED`、带错误的 `FAILED` 或 `CANCELED`，JobMaster 据此决定作业状态。
+- **以第一个失败为准。** 第一个失败会取消其他 Task，并成为作业的错误。本地模式不重启 Task；Region 重启随分布式引擎的 checkpoint 一起提供。
+- **取消逐级升级。** 先调用 Reader 的取消钩子并中断写线程；超过 `cancelTimeout` 后中断 Task 线程；超过两倍 `cancelTimeout` 后以
+  `PF-RES-0005` 放弃该 Task，作业失败。
+- **插件代码隔离。** 每次调用插件代码时，都把插件的 ClassLoader 设为上下文 ClassLoader，插件抛出的异常会转换为带错误码的错误（见“排障”）。
+- **顺序。** 在一个 Task 内，无论是否开启写缓冲，行和 Schema 变更都按 Reader 输出的顺序到达 Sink。
+
+## 可观测性
+
+作业结果中包含最终状态、带错误码和定位（作业、运行、节点、子任务）的错误，以及指标。每个 Task 在开始运行和失败时写日志；
+JobMaster 记录作业的启动、提交和结束。行数、速率和瓶颈指标随引擎的指标体系提供。
+
+## 性能与调优
+
+- 保持写缓冲开启：读写可以重叠，目标端变慢时会通过背压限制源端，而不是逐行停顿。
+- 目标端适合大批量写入时调大 `writeBatchSize`；需要降低每个 Task 占用的内存时调小（最多占用 `writeBatchSize × writeQueueCapacity` 行）。
+- 更大的 `writeQueueCapacity` 可以吸收目标端的短暂变慢，但目标端平均速度较慢时没有帮助。
+- 并行度越高，Task 和线程越多；Source 的分片需要足够细，才能让它们都有活干。
+
+## 排障
+
+| 错误 | 含义 |
+|---|---|
+| `PF-SRC-0001` | Source 的 Reader 或枚举器抛出了未分类的错误；原因中会写明操作，例如 `read` 或 `start the enumerator` |
+| `PF-SINK-0001` | Sink 的 Writer 抛出了未分类的错误，例如写入一行或 flush 时 |
+| `PF-SINK-0003` | 数据已写入，但提交失败，或重试 3 次后仍被拒绝 |
+| `PF-PLUG-0007` | Transform 处理一行数据时失败 |
+| `PF-RES-0005` | 被取消的 Task 既不响应取消也不响应中断；请为连接器配置连接或查询超时 |
+| `PF-PLAN-0012` | 作业需要在 Task 之间交换数据，当前版本无法运行（见“限制”） |
+
+连接器用自己的错误码上报的错误保留原错误码，引擎会在其定位中补充节点和子任务。完整列表见[错误码参考](../reference/errors)。
+
+## 限制
+
+- 作业必须是一条直线：一个 Source、它的 Transform 和一个 Sink，并行度全部相同。多个 Source 或 Sink、一个节点输出到多个下游、
+  并行度变化都需要在 Task 之间交换数据，会以 `PF-PLAN-0012` 失败。
+- 没有 checkpoint：失败或取消的作业再次运行时从头开始，两阶段提交的 Sink 在输入结束时提交一次。
+- 没有重启：第一个 Task 失败即作业失败。
+- 流式作业一直运行，直到被取消。
+
+## 版本
+
+自 0.1.0 起提供。

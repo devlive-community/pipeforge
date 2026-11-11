@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Resource errors.
+
+- code: PF-RES-0005
+  name: CANCEL_TIMEOUT
+  message:
+    en-US: "Subtask {subtask} of '{node}' did not stop within {timeoutMs} ms after it was cancelled"
+    zh-CN: "'{node}' 的第 {subtask} 个子任务在取消后 {timeoutMs} 毫秒内仍未结束"
+  hint:
+    en-US: "The connector is blocked in a call that ignores cancellation and interrupts, often a network read without a timeout. Configure a socket or query timeout on the connector."
+    zh-CN: "连接器阻塞在一个不响应取消和中断的调用中，通常是没有设置超时的网络读取。请为连接器配置连接或查询超时。"

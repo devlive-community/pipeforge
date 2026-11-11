@@ -104,3 +104,12 @@
   hint:
     en-US: "Remove env.mode to derive the mode from the sources, set it to streaming, or configure the source to stop."
     zh-CN: "删除 env.mode 让模式由 Source 推导，改为 streaming，或者把该 Source 配置为有界读取。"
+
+- code: PF-PLAN-0012
+  name: TOPOLOGY_UNSUPPORTED
+  message:
+    en-US: "The engine cannot run node '{node}' in this job: {reason}"
+    zh-CN: "引擎无法运行该作业中的节点 '{node}'：{reason}"
+  hint:
+    en-US: "The local engine of this version runs one source, its transforms and one sink in a straight line, all with the same parallelism. Split the job or align the parallelism."
+    zh-CN: "当前版本的本地引擎只运行一条直线：一个 Source、它的 Transform 和一个 Sink，并行度全部相同。请拆分作业或统一并行度。"

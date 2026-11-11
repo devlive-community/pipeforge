@@ -54,6 +54,8 @@ public final class ErrorCode {
     public static final ErrorCode INPUT_INVALID = define("PF-PLAN-0009", "INPUT_INVALID", "node", "input", "reason");
     public static final ErrorCode NODE_DISCONNECTED = define("PF-PLAN-0010", "NODE_DISCONNECTED", "node");
     public static final ErrorCode BOUNDEDNESS_MISMATCH = define("PF-PLAN-0011", "BOUNDEDNESS_MISMATCH", "node");
+    public static final ErrorCode TOPOLOGY_UNSUPPORTED =
+            define("PF-PLAN-0012", "TOPOLOGY_UNSUPPORTED", "node", "reason");
 
     // Plugins
     public static final ErrorCode PLUGIN_NOT_FOUND = define("PF-PLUG-0001", "PLUGIN_NOT_FOUND", "plugin", "type");
@@ -72,6 +74,17 @@ public final class ErrorCode {
 
     // Data
     public static final ErrorCode EXPRESSION_ERROR = define("PF-DATA-0006", "EXPRESSION_ERROR", "expression", "reason");
+
+    // Sources
+    public static final ErrorCode SOURCE_FAILED = define("PF-SRC-0001", "SOURCE_FAILED", "node", "reason");
+
+    // Sinks
+    public static final ErrorCode SINK_FAILED = define("PF-SINK-0001", "SINK_FAILED", "node", "reason");
+    public static final ErrorCode COMMIT_FAILED = define("PF-SINK-0003", "COMMIT_FAILED", "node", "reason");
+
+    // Resources
+    public static final ErrorCode CANCEL_TIMEOUT =
+            define("PF-RES-0005", "CANCEL_TIMEOUT", "node", "subtask", "timeoutMs");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

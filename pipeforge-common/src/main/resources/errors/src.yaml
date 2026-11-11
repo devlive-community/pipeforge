@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Source runtime errors.
+
+- code: PF-SRC-0001
+  name: SOURCE_FAILED
+  message:
+    en-US: "Source '{node}' failed: {reason}"
+    zh-CN: "Source '{node}' 运行失败：{reason}"
+  hint:
+    en-US: "The connector raised an error it did not classify. Check the cause in the run log; it usually names the query, file or partition that failed."
+    zh-CN: "连接器抛出了一个未分类的错误。请在运行日志中查看原因，通常会指出失败的查询、文件或分区。"

@@ -51,6 +51,9 @@
   docs: ["reference/variables"]
 - paths: ["pipeforge-core/src/main/java/org/devlive/pipeforge/core/plan/**", "pipeforge-core/src/main/java/org/devlive/pipeforge/core/explain/**"]
   docs: ["concepts/plan-and-explain"]
+# The native engine. In local mode the runtime is described by the execution concept page.
+- paths: ["pipeforge-engine/**"]
+  docs: ["concepts/execution"]
 - paths: ["pipeforge-server/**"]
   docs: ["operations/server"]
 - paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]
