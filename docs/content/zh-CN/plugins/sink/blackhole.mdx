@@ -1,0 +1,162 @@
+---
+title: Blackhole Sink
+description: 丢弃管道产出的行，可限制速率，用于测量引擎、Source 和 Transform，以及模拟慢速目标端。
+order: 20
+template: plugin
+---
+
+## 简介
+
+blackhole Sink（`type: blackhole`）丢弃收到的每一行。它接受任意表、任意逻辑类型、任意行类型和任意 Schema 变更，不保存状态。
+不限速时写入什么也不做，因此使用这个 Sink 的作业，吞吐就是它之前所有部分的吞吐。
+
+适用场景：在没有目标系统干扰的情况下测量引擎、Source 或 Transform；判断一个慢作业的瓶颈是否在目标端（换成 blackhole 后变快，
+就说明在目标端）；配合 `rows-per-second` 模拟慢速目标端并观察反压。它不用于保存数据。
+
+## 能力
+
+<PluginCapabilities plugin="blackhole" component="sink" />
+
+## 已验证版本
+
+<PluginVersions plugin="blackhole" />
+
+## 快速开始
+
+生成一百万行并丢弃：
+
+```yaml
+version: 1
+name: blackhole-demo
+source:
+  - { id: src, type: fake, rows: 1000000 }
+sink:
+  - { id: out, type: blackhole }
+```
+
+Source 结束时作业结束。`rowsWritten` 为 1,000,000，写入速率就是引擎和 fake Source 合起来的速率。
+
+## 前置条件
+
+无：该插件随发行包提供，不需要外部系统。
+
+## 数据源配置
+
+blackhole Sink 没有数据源：它不写到任何地方，因此没有连接选项、原生配置，也没有需要导入的配置文件。
+
+## 节点选项
+
+<PluginOptions plugin="blackhole" component="sink" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="blackhole" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="blackhole" />
+
+## 分片与并行
+
+- 每个并行实例各自丢弃自己的行，实例之间不做协调。
+- `rows-per-second` 限制整个 Sink 的速率，由各实例平均分担：并行度为 4、`rows-per-second: 1000` 时，每个实例每秒写入 250 行。
+- 暂停之后，一个实例最多一次性补写十分之一秒的行。
+
+## 一致性语义
+
+什么都不保存，因此也就无所谓一致性：重启后再次写入的行会再次被丢弃。行数指标仍然准确反映到达 Sink 的数据。
+
+## 示例
+
+### 引擎基线
+
+```yaml
+version: 1
+name: engine-baseline
+env:
+  parallelism: 4
+source:
+  - id: src
+    type: fake
+    rows: 2000000
+    splits: 16
+    columns:
+      - id INT64 NOT NULL
+      - a INT32
+      - b INT64
+      - c DOUBLE
+      - d DECIMAL(12, 2)
+      - e STRING(16)
+      - f BOOLEAN
+      - g DATE
+      - h TIMESTAMP(3)
+      - i STRING(32)
+    primary-key: [id]
+sink:
+  - { id: out, type: blackhole }
+```
+
+并行度 4、十列混合类型：写入速率除以并行度就是单个 Slot 的吞吐。引擎的目标是每个 Slot 每秒不少于一百万行；
+在 8 核的 Apple M2 上，这个作业每个 Slot 约每秒 200 万行。如何解读这类运行中的等待时间，见[执行](../../concepts/execution#性能与调优)。
+
+### 慢速目标端
+
+```yaml
+version: 1
+name: slow-target
+source:
+  - { id: src, type: fake, rows: 20000 }
+sink:
+  - { id: out, type: blackhole, rows-per-second: 10000 }
+```
+
+作业大约运行两秒。写队列（默认 4 批，每批 1,024 行）被填满后，Source 开始等待 Sink，`readerWaitMs` 随之增长：
+瓶颈在目标端的作业就是这个样子。行数少于队列容量时，Source 不会等待。
+
+### Transform 的开销
+
+```yaml
+version: 1
+name: mapping-cost
+source:
+  - { id: src, type: fake, table: crm.users, columns: [id INT64 NOT NULL, name STRING, email STRING], rows: 500000 }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: email, expr: "LOWER(email)" }
+      - { expr: "CONCAT(name, '@', email)", to: contact }
+sink:
+  - { id: out, type: blackhole }
+```
+
+与去掉 Transform 的同一作业比较写入速率，差值就是映射的开销。
+
+## 指标
+
+blackhole Sink 报告标准的 Sink 指标：`rowsWritten` 和写入速率。不限速时 `readerWaitMs` 很低，因为 Sink 从不让 Source 等待；
+设置 `rows-per-second` 后，它随 Source 等待 Sink 的时间增长。
+
+## 性能与调优
+
+- 不设置 `rows-per-second` 时写入没有开销，测得的速率就是 Source、Transform 和引擎的速率。fake 的 `splits` 至少设为并行度，
+  让每个 Slot 都有活干。
+- 运行时间短的作业测到的主要是启动开销；请使用几百万行。
+- 在空闲的机器上测量，并比较多次运行的平均写入速率。
+
+## 错误码与排障
+
+| 问题 | 原因与处理 |
+|---|---|
+| `PF-CONF-0002` … `rows-per-second` | 取值为负；不限速请写 0 |
+| 限速的作业运行时间远超预期 | `rows-per-second` 是整个 Sink 的速率；调高它，或者确认 Source 的行数是否比预想的多 |
+| 速率不随并行度增长 | Source 的分片少于 Slot；调高 `splits` |
+
+## 已知限制
+
+- 行被丢弃：无法读回，作业也不能显示它本来会写入什么。
+- 限速的精度为每纳秒一行，突发流量在十分之一秒内被摊平。
+
+## 变更记录
+
+<PluginChangelog plugin="blackhole" />

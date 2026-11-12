@@ -180,7 +180,7 @@ A `readerWaitMs` that grows means the terminal or the log cannot keep up with th
 ## Performance and tuning
 
 - Printing is much slower than the engine, and a terminal slower still than a redirected output. Use
-  `limit` for large inputs; for benchmarks, use a sink that discards rows.
+  `limit` for large inputs; for benchmarks, use the [blackhole sink](./blackhole).
 - The JSON format is cheaper than tables, which measure every value of a batch before printing.
 - A smaller `batch-size` shows rows of a slow stream sooner; a larger one gives fewer, wider tables.
 

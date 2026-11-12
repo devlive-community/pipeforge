@@ -94,7 +94,7 @@ lists the Maven plugin to get them:
 
 A plugin may use other plugins of the repository as test dependencies, for example to run the
 examples of its documentation page end to end: the console sink runs every example that uses only
-`fake`, `field-mapper` and `console`. Packages never contain other plugins, and at run time each
+`fake`, `field-mapper` and `console`, and the blackhole sink the examples of its page. Packages never contain other plugins, and at run time each
 plugin sees only its own class loader.
 
 ## Goals

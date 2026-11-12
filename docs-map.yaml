@@ -65,6 +65,8 @@
   docs: ["plugins/source/fake"]
 - paths: ["pipeforge-connectors/connector-console/**"]
   docs: ["plugins/sink/console"]
+- paths: ["pipeforge-connectors/connector-blackhole/**"]
+  docs: ["plugins/sink/blackhole"]
 - paths: ["pipeforge-connectors/transform-field-mapper/**"]
   docs: ["plugins/transform/field-mapper", "reference/mapping"]
 - paths: ["pipeforge-server/**"]

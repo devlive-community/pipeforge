@@ -183,8 +183,8 @@ when unbounded.
 
 ## Performance and tuning
 
-- Generation is cheap: the throughput of `fake` with a sink that discards rows is the throughput of
-  the engine itself, which makes the pair the baseline of engine benchmarks.
+- Generation is cheap: the throughput of `fake` with the [blackhole sink](../sink/blackhole) is the
+  throughput of the engine itself, which makes the pair the baseline of engine benchmarks.
 - Wide rows and nested types (`ARRAY`, `MAP`, `ROW`) cost more to generate than scalar columns.
 - Use at least as many `splits` as the parallelism; more splits even out uneven readers.
 - Literal rows are parsed once when the job starts; keep `data` to small, hand-written sets.

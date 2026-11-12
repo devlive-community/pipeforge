@@ -1,0 +1,177 @@
+---
+title: Blackhole sink
+description: Discard the rows a pipeline produces, optionally at a limited rate — for measuring the engine, sources and transforms, and for simulating a slow target.
+order: 20
+template: plugin
+---
+
+## Introduction
+
+The blackhole sink (`type: blackhole`) discards every row it receives. It accepts every table,
+every logical type, every row kind and every schema change, and keeps no state. Without a rate
+limit a write does nothing at all, so the throughput of a job with this sink is the throughput of
+everything before it.
+
+Use it to measure the engine, a source or a transform without a target system in the way, to find
+out whether a slow job is limited by its target (if it is fast with a blackhole, it is), and, with
+`rows-per-second`, to simulate a slow target and watch backpressure. It is not a place to keep
+data.
+
+## Capabilities
+
+<PluginCapabilities plugin="blackhole" component="sink" />
+
+## Verified versions
+
+<PluginVersions plugin="blackhole" />
+
+## Quick start
+
+Generate a million rows and discard them:
+
+```yaml
+version: 1
+name: blackhole-demo
+source:
+  - { id: src, type: fake, rows: 1000000 }
+sink:
+  - { id: out, type: blackhole }
+```
+
+The job ends when the source does. Its `rowsWritten` is 1,000,000 and the write rate is the rate
+of the engine and the fake source together.
+
+## Prerequisites
+
+None: the plugin is part of the distribution and needs no external system.
+
+## Data source configuration
+
+The blackhole sink has no data source: it writes nowhere, so there are no connection options,
+native configuration or configuration files.
+
+## Node options
+
+<PluginOptions plugin="blackhole" component="sink" />
+
+## Native options
+
+<PluginNativeOptions plugin="blackhole" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="blackhole" />
+
+## Splits and parallelism
+
+- Every parallel instance discards its own rows; there is no coordination between them.
+- `rows-per-second` limits the whole sink and is shared equally by its instances: with parallelism 4
+  and `rows-per-second: 1000`, each instance writes 250 rows per second.
+- After a pause, an instance may catch up with at most a tenth of a second of rows at once.
+
+## Consistency
+
+Nothing is kept, so there is nothing to be consistent: rows written again after a restart are
+discarded again. The row counters still show exactly what reached the sink.
+
+## Examples
+
+### The engine baseline
+
+```yaml
+version: 1
+name: engine-baseline
+env:
+  parallelism: 4
+source:
+  - id: src
+    type: fake
+    rows: 2000000
+    splits: 16
+    columns:
+      - id INT64 NOT NULL
+      - a INT32
+      - b INT64
+      - c DOUBLE
+      - d DECIMAL(12, 2)
+      - e STRING(16)
+      - f BOOLEAN
+      - g DATE
+      - h TIMESTAMP(3)
+      - i STRING(32)
+    primary-key: [id]
+sink:
+  - { id: out, type: blackhole }
+```
+
+Ten columns of mixed types at parallelism 4: the write rate divided by the parallelism is the
+throughput of one slot. The engine aims at one million rows per second and slot or more; on an
+Apple M2 with 8 cores this job reaches about 2 million. How to read the wait times of such a run is
+described in [execution](../../concepts/execution#performance-and-tuning).
+
+### A slow target
+
+```yaml
+version: 1
+name: slow-target
+source:
+  - { id: src, type: fake, rows: 20000 }
+sink:
+  - { id: out, type: blackhole, rows-per-second: 10000 }
+```
+
+The job takes about two seconds. Once the write queue (4 batches of 1,024 rows by default) is full,
+the source waits for the sink and `readerWaitMs` grows: this is what a job limited by its target
+looks like. With fewer rows than the queue holds, the source never waits.
+
+### The cost of a transform
+
+```yaml
+version: 1
+name: mapping-cost
+source:
+  - { id: src, type: fake, table: crm.users, columns: [id INT64 NOT NULL, name STRING, email STRING], rows: 500000 }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: email, expr: "LOWER(email)" }
+      - { expr: "CONCAT(name, '@', email)", to: contact }
+sink:
+  - { id: out, type: blackhole }
+```
+
+Compare the write rate with the same job without the transform: the difference is the cost of the
+mapping.
+
+## Metrics
+
+The blackhole sink reports the standard sink metrics: `rowsWritten` and the write rate. Without a
+rate limit `readerWaitMs` stays low, because the sink never makes the source wait; with
+`rows-per-second` it grows with the time the source spends waiting for the sink.
+
+## Performance and tuning
+
+- Without `rows-per-second` a write costs nothing, so the measured rate is the rate of the source,
+  the transforms and the engine. Use at least as many fake `splits` as the parallelism, so that
+  every slot has work.
+- Short jobs measure start-up as much as throughput; use a few million rows.
+- Measure on a quiet machine and compare the average write rate of several runs.
+
+## Errors and troubleshooting
+
+| Problem | Cause and fix |
+|---|---|
+| `PF-CONF-0002` … `rows-per-second` | The value is negative; use 0 for no limit |
+| A job with a rate limit runs much longer than expected | `rows-per-second` is for the whole sink; raise it, or check that the source has fewer rows than you think |
+| The rate does not grow with the parallelism | The source has too few splits for the slots; raise `splits` |
+
+## Known limitations
+
+- Rows are discarded: nothing can be read back, and a job cannot show what it would have written.
+- The rate limit has a resolution of one row per nanosecond and evens out bursts over a tenth of a
+  second.
+
+## Changelog
+
+<PluginChangelog plugin="blackhole" />

@@ -1,0 +1,34 @@
+{
+  "format" : 1,
+  "id" : "blackhole",
+  "name" : "Blackhole",
+  "version" : "0.1.0-SNAPSHOT",
+  "apiVersion" : "0.x",
+  "vendor" : "PipeForge",
+  "license" : "MIT",
+  "description" : "Discards the rows it receives, optionally at a limited rate. For measuring the engine and sources, and for simulating a slow target.",
+  "drivers" : [ ],
+  "components" : [ {
+    "type" : "sink",
+    "identifier" : "blackhole",
+    "factory" : "org.devlive.pipeforge.connector.blackhole.BlackholeSinkFactory",
+    "capabilities" : [ ],
+    "options" : [ {
+      "key" : "rows-per-second",
+      "type" : "double",
+      "requirement" : "optional",
+      "default" : 0.0,
+      "description" : "Maximum rows per second of the whole sink, shared equally by its parallel instances; a write waits when it would go faster, as a slow target does. 0 for no limit.",
+      "group" : null,
+      "min" : 0.0,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    } ],
+    "exclusive" : [ ],
+    "conditions" : [ ],
+    "nativeNamespaces" : [ ]
+  } ]
+}
