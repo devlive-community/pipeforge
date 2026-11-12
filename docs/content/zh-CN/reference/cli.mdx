@@ -1,0 +1,37 @@
+---
+title: CLI
+description: pipeforge 的每个命令及其参数和选项、全局选项和退出码，由命令定义生成。
+order: 70
+data: cli
+---
+
+## 运行命令
+
+`pipeforge` 在本机校验、解释和运行作业，计算表达式，启动 Web UI。在源码仓库中构建后从应用目录运行，或者解压
+`pipeforge-<版本>.tar.gz`：
+
+```bash
+./mvnw -B -pl pipeforge-cli -am package -DskipTests
+pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge version
+```
+
+应用目录包含 `bin/pipeforge`（Windows 上是 `bin/pipeforge.cmd`）、`lib/` 中的库、`lib/server/` 中供
+[`pipeforge ui`](#cmd-ui) 使用的服务端，以及 `plugins/` 中随发行包提供的插件：`fake`、`field-mapper`、`console` 和
+`blackhole`。运行需要 Java 21 或更高版本；`JAVA_HOME` 指定运行时，`JAVA_OPTS` 添加 JVM 选项。
+
+首次运行会把类数据共享归档写入 `lib/pipeforge.jsa`（安装目录不可写时写入用户的缓存目录）；之后的命令大约 200 毫秒即可启动。
+
+## 插件
+
+需要生成作业计划的命令从 `--plugin-path` 加载插件，其次是 `PIPEFORGE_PLUGIN_PATH` 中的目录，再次是安装目录下的 `plugins/`。
+`--dev` 会像[服务端的开发模式](../operations/server)一样，额外从构建输出加载源码仓库中的插件模块，因此在 IDE 中修改的插件不打包就能试用。
+
+## 输出与错误
+
+- `-o table`（默认）适合人阅读；`-o json` 和 `-o yaml` 的字段与 [REST API](./api) 一致，同一个主版本内只增不改。
+- 结果写到标准输出，进度和提示写到标准错误；`-q` 只保留结果。
+- 错误写到标准错误，格式为 `ERROR <错误码> <消息>`，下一行是排查建议；`-o json` 时输出 REST API 的错误对象。每个错误都有登记过的
+  [错误码](./errors)；`-v` 会加上原因。
+- 提示和帮助为英文或中文：取 `--lang`，其次 `PIPEFORGE_LANG`，再次是系统语言。
+
+<CliReference />

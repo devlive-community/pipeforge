@@ -1,0 +1,23 @@
+[ {
+  "file" : "jobs/broken.yaml",
+  "job" : null,
+  "valid" : false,
+  "errors" : [ {
+    "code" : "PF-CONF-0002",
+    "name" : "OPTION_INVALID",
+    "params" : {
+      "option" : "rows",
+      "node" : "src",
+      "value" : "-1",
+      "reason" : "must be at least 0"
+    },
+    "scope" : {
+      "node" : "src"
+    },
+    "kind" : "FATAL",
+    "message" : "Option 'rows' of node 'src' has the invalid value '-1': must be at least 0",
+    "hint" : "Check the type and the allowed range of 'rows' on the plugin page.",
+    "causeChain" : [ ]
+  } ],
+  "warnings" : [ ]
+} ]

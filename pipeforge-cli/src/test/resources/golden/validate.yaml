@@ -1,0 +1,5 @@
+- file: jobs/users.yaml
+  job: users
+  valid: true
+  errors: []
+  warnings: []

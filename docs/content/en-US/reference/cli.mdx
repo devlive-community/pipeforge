@@ -1,0 +1,47 @@
+---
+title: CLI
+description: Every command of pipeforge with its arguments and options, the global options and the exit codes, generated from the command definitions.
+order: 70
+data: cli
+---
+
+## Running the command
+
+`pipeforge` validates, explains and runs jobs on this machine, evaluates expressions and starts
+the Web UI. Build it in a checkout and run it from the app directory, or unpack
+`pipeforge-<version>.tar.gz`:
+
+```bash
+./mvnw -B -pl pipeforge-cli -am package -DskipTests
+pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge version
+```
+
+The app directory holds `bin/pipeforge` (and `bin/pipeforge.cmd` on Windows), the libraries in
+`lib/`, the server in `lib/server/` for [`pipeforge ui`](#cmd-ui) and the plugins that come with the
+distribution in `plugins/`: `fake`, `field-mapper`, `console` and `blackhole`. It needs Java 21 or
+later; `JAVA_HOME` selects the runtime and `JAVA_OPTS` adds JVM options.
+
+The first run writes a class data sharing archive to `lib/pipeforge.jsa` (or to the user's cache
+directory when the installation is not writable); later commands start in about 200 ms.
+
+## Plugins
+
+Commands that plan a job load the plugins from `--plugin-path`, else from the directories in
+`PIPEFORGE_PLUGIN_PATH`, else from `plugins/` of the installation. `--dev` also loads the plugin
+modules of a source checkout from their build output, as the
+[server's development mode](../operations/server) does, so a plugin changed in the IDE can be
+tried without packaging it.
+
+## Output and errors
+
+- `-o table` (the default) is for people; `-o json` and `-o yaml` have the fields of the
+  [REST API](./api) and only gain fields within a major version.
+- Results go to the standard output, progress and notes to the standard error; `-q` keeps only the
+  results.
+- Errors go to the standard error as `ERROR <code> <message>` with the hint on the next line, or as
+  the error object of the REST API with `-o json`. Every error has a registered
+  [error code](./errors); `-v` adds the cause.
+- Messages and help are in English or Chinese: `--lang`, else `PIPEFORGE_LANG`, else the language
+  of the system.
+
+<CliReference />

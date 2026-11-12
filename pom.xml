@@ -44,6 +44,7 @@
         <module>pipeforge-connector-testkit</module>
         <module>pipeforge-connectors</module>
         <module>pipeforge-server</module>
+        <module>pipeforge-cli</module>
     </modules>
 
     <properties>
@@ -338,7 +339,7 @@
                             <includedLicense>ISC</includedLicense>
                         </includedLicenses>
                         <licenseMerges>
-                            <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|Apache 2.0|Apache License 2.0|Apache 2|The Apache License, Version 2.0|Apache License Version 2.0|Apache Software License - Version 2.0|Apache-2.0 License|Apache License, version 2.0|ASF 2.0|AL 2.0</licenseMerge>
+                            <licenseMerge>Apache-2.0|Apache License, Version 2.0|The Apache Software License, Version 2.0|Apache 2.0|Apache License 2.0|Apache 2|The Apache License, Version 2.0|Apache License Version 2.0|Apache Software License - Version 2.0|Apache-2.0 License|Apache License, version 2.0|ASF 2.0|AL 2.0|The Apache Software License, version 2.0</licenseMerge>
                             <licenseMerge>MIT|MIT License|The MIT License|The MIT License (MIT)|MIT license|MIT-0</licenseMerge>
                             <licenseMerge>BSD-2-Clause|BSD 2-Clause|The BSD 2-Clause License|BSD-2-Clause License|Simplified BSD License|BSD 2-Clause License</licenseMerge>
                             <!-- "Go License" (RE2/J) is the BSD 3-Clause text of the Go project. -->

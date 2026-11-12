@@ -68,3 +68,21 @@
   hint:
     en-US: "Compare the request with the API reference; the reason names the field or the endpoint."
     zh-CN: "对照 API 参考检查请求；原因中指出了有问题的字段或接口。"
+
+- code: PF-CONF-0008
+  name: FILE_NOT_READABLE
+  message:
+    en-US: "Cannot read {path}: {reason}"
+    zh-CN: "无法读取 {path}：{reason}"
+  hint:
+    en-US: "Check the path and its permissions; relative paths start from the current directory."
+    zh-CN: "检查路径及其权限；相对路径从当前目录开始。"
+
+- code: PF-CONF-0009
+  name: SERVER_NOT_INSTALLED
+  message:
+    en-US: "The server is not installed: no server jar in {searched}"
+    zh-CN: "没有安装服务端：在 {searched} 中找不到服务端 jar"
+  hint:
+    en-US: "Use the full package, which contains lib/server, pass --server-jar, or build the server in a source checkout and use --dev."
+    zh-CN: "使用包含 lib/server 的完整包、通过 --server-jar 指定，或者在源码仓库中构建服务端后使用 --dev。"

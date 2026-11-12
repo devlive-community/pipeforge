@@ -27,6 +27,7 @@ const functionsFile = join(root, "generated", "functions.json");
 const apiFile = join(root, "generated", "api.json");
 const metricsFile = join(root, "generated", "metrics.json");
 const pluginsFile = join(root, "generated", "plugins.json");
+const cliFile = join(root, "generated", "cli.json");
 const api = existsSync(apiFile) ? JSON.parse(readFileSync(apiFile, "utf8")) : { operations: [], schemas: [] };
 const generatedAnchors = {
   errors: existsSync(errorsFile) ? JSON.parse(readFileSync(errorsFile, "utf8")).map((e) => e.code.toLowerCase()) : [],
@@ -35,6 +36,9 @@ const generatedAnchors = {
     : [],
   metrics: existsSync(metricsFile)
     ? JSON.parse(readFileSync(metricsFile, "utf8")).map((m) => `${m.scope}-${m.name}`.toLowerCase())
+    : [],
+  cli: existsSync(cliFile)
+    ? ["exit-codes", "global-options", ...JSON.parse(readFileSync(cliFile, "utf8")).commands.map((c) => c.anchor)]
     : [],
   api: [...api.operations.map((o) => o.id.toLowerCase()), ...api.schemas.map((s) => `schema-${s.name.toLowerCase()}`)],
 };

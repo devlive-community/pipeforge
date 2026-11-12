@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Starts the pipeforge command. JAVA_HOME selects the Java runtime (21 or later), JAVA_OPTS adds
+# JVM options. The first run writes a class data sharing archive that makes later starts faster.
+
+set -e
+
+# The installation directory, following symbolic links to this script.
+script="$0"
+while [ -h "$script" ]; do
+  link=$(ls -ld "$script" | sed 's/.*-> //')
+  case "$link" in
+    /*) script="$link" ;;
+    *) script="$(dirname "$script")/$link" ;;
+  esac
+done
+PIPEFORGE_HOME=$(cd "$(dirname "$script")/.." && pwd)
+
+if [ -n "$JAVA_HOME" ]; then
+  java="$JAVA_HOME/bin/java"
+else
+  java=java
+fi
+
+# The archive lives next to the libraries when the installation is writable, otherwise in the
+# user's cache directory; a changed class path makes the JVM write a new one.
+archive="$PIPEFORGE_HOME/lib/pipeforge.jsa"
+if ! [ -w "$PIPEFORGE_HOME/lib" ]; then
+  cache="${XDG_CACHE_HOME:-$HOME/.cache}/pipeforge"
+  mkdir -p "$cache" 2>/dev/null || true
+  archive="$cache/$(basename "$PIPEFORGE_HOME").jsa"
+fi
+
+exec "$java" \
+  -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile="$archive" -Xlog:cds=off -Xlog:cds+dynamic=off \
+  $JAVA_OPTS \
+  -Dpipeforge.home="$PIPEFORGE_HOME" \
+  -cp "$PIPEFORGE_HOME/lib/*" \
+  org.devlive.pipeforge.cli.Main "$@"

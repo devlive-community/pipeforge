@@ -73,6 +73,8 @@
   docs: ["operations/server"]
 - paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]
   docs: ["reference/api"]
+- paths: ["pipeforge-cli/**"]
+  docs: ["reference/cli", "getting-started/quickstart"]
 - paths: ["pipeforge-client-ts/**"]
   docs: ["reference/api"]
 # The Web UI: every page has a guide in guides/; the component library and the tooling are

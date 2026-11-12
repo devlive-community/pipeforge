@@ -1,0 +1,416 @@
+{
+  "name" : "pipeforge",
+  "description" : {
+    "en-US" : "Validate, explain and run PipeForge jobs on this machine, evaluate expressions and start the Web UI.",
+    "zh-CN" : "在本机校验、解释和运行 PipeForge 作业，计算表达式，启动 Web UI。"
+  },
+  "globalOptions" : [ {
+    "names" : [ "-o", "--output" ],
+    "label" : "<format>",
+    "default" : "table",
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "Output format: table (default), json or yaml. json and yaml have the fields of the REST API.",
+      "zh-CN" : "输出格式：table（默认）、json 或 yaml。json 和 yaml 的字段与 REST API 一致。"
+    }
+  }, {
+    "names" : [ "--lang" ],
+    "label" : "<language>",
+    "default" : null,
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "Language of messages and errors: en-US or zh-CN. Defaults to PIPEFORGE_LANG, then the system language.",
+      "zh-CN" : "提示和错误的语言：en-US 或 zh-CN。默认取 PIPEFORGE_LANG，其次是系统语言。"
+    }
+  }, {
+    "names" : [ "--no-color" ],
+    "label" : null,
+    "default" : null,
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "Never use colours; also when NO_COLOR is set or the output is not a terminal.",
+      "zh-CN" : "不使用颜色；设置了 NO_COLOR 或输出不是终端时也不使用。"
+    }
+  }, {
+    "names" : [ "-q", "--quiet" ],
+    "label" : null,
+    "default" : null,
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "Print results only, no progress or notes.",
+      "zh-CN" : "只输出结果，不输出进度和提示。"
+    }
+  }, {
+    "names" : [ "-v", "--verbose" ],
+    "label" : null,
+    "default" : null,
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "Print engine and plugin logs and the full cause of errors.",
+      "zh-CN" : "输出引擎和插件的日志，以及错误的完整原因。"
+    }
+  }, {
+    "names" : [ "--plugin-path" ],
+    "label" : "<dir>",
+    "default" : null,
+    "repeatable" : true,
+    "description" : {
+      "en-US" : "Directory with plugin packages; repeat it or separate directories with the path separator. Defaults to PIPEFORGE_PLUGIN_PATH, then plugins/ of the installation.",
+      "zh-CN" : "存放插件包的目录；可以重复使用，或用路径分隔符分隔多个目录。默认取 PIPEFORGE_PLUGIN_PATH，其次是安装目录下的 plugins/。"
+    }
+  }, {
+    "names" : [ "--dev" ],
+    "label" : "[<root>]",
+    "default" : null,
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "Also load the plugin modules of the source checkout at <root>, or of the one around the current directory, from their build output.",
+      "zh-CN" : "额外加载 <root> 处（或当前目录所在）源码仓库中的插件模块，直接使用它们的构建输出。"
+    }
+  } ],
+  "commands" : [ {
+    "name" : "validate",
+    "anchor" : "cmd-validate",
+    "synopsis" : "pipeforge validate [options] <file>...",
+    "description" : {
+      "en-US" : "Check job files without running them: syntax, variables, plugins, options, graph and schemas.",
+      "zh-CN" : "校验作业文件但不运行：语法、变量、插件、选项、图和 Schema。"
+    },
+    "arguments" : [ {
+      "label" : "<file>",
+      "repeatable" : true,
+      "required" : true,
+      "description" : {
+        "en-US" : "Job files, or directories whose .yaml, .yml and .json files are checked.",
+        "zh-CN" : "作业文件，或目录（校验其中的 .yaml、.yml 和 .json 文件）。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--var" ],
+      "label" : "<name=value>",
+      "default" : null,
+      "repeatable" : true,
+      "description" : {
+        "en-US" : "A job variable, as name=value; repeat it for more. Wins over env.variables of the job.",
+        "zh-CN" : "作业变量，写成 name=value，可以重复使用；优先于作业的 env.variables。"
+      }
+    }, {
+      "names" : [ "--scheduled-time" ],
+      "label" : "<time>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The planned time of the run, the base of null, as an ISO-8601 time such as 2026-11-07T00:00:00Z. Defaults to now.",
+        "zh-CN" : "本次运行的计划时间，即 null 的基准，写成 ISO-8601 时间，例如 2026-11-07T00:00:00Z。默认为当前时间。"
+      }
+    } ]
+  }, {
+    "name" : "explain",
+    "anchor" : "cmd-explain",
+    "synopsis" : "pipeforge explain [options] <file>",
+    "description" : {
+      "en-US" : "Show the plan of a job: settings, variables, nodes, options with their origin, schemas and warnings.",
+      "zh-CN" : "显示作业的计划：设置、变量、节点、带来源的选项、Schema 和警告。"
+    },
+    "arguments" : [ {
+      "label" : "<file>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The job file.",
+        "zh-CN" : "作业文件。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--var" ],
+      "label" : "<name=value>",
+      "default" : null,
+      "repeatable" : true,
+      "description" : {
+        "en-US" : "A job variable, as name=value; repeat it for more. Wins over env.variables of the job.",
+        "zh-CN" : "作业变量，写成 name=value，可以重复使用；优先于作业的 env.variables。"
+      }
+    }, {
+      "names" : [ "--scheduled-time" ],
+      "label" : "<time>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The planned time of the run, the base of null, as an ISO-8601 time such as 2026-11-07T00:00:00Z. Defaults to now.",
+        "zh-CN" : "本次运行的计划时间，即 null 的基准，写成 ISO-8601 时间，例如 2026-11-07T00:00:00Z。默认为当前时间。"
+      }
+    } ]
+  }, {
+    "name" : "run",
+    "anchor" : "cmd-run",
+    "synopsis" : "pipeforge run [options] <file>",
+    "description" : {
+      "en-US" : "Run a job file on this machine and wait until it ends. Ctrl-C cancels it.",
+      "zh-CN" : "在本机运行作业文件并等待它结束。按 Ctrl-C 取消。"
+    },
+    "arguments" : [ {
+      "label" : "<file>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The job file.",
+        "zh-CN" : "作业文件。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--local" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Run in this process. Required in this version; running on a cluster comes with the distributed runtime.",
+        "zh-CN" : "在当前进程中运行。本版本必须指定；在集群上运行随分布式运行时提供。"
+      }
+    }, {
+      "names" : [ "--dry-run" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Plan the job and print its plan, without running it.",
+        "zh-CN" : "只生成并输出作业的计划，不运行。"
+      }
+    }, {
+      "names" : [ "--analyze" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "After the run, print the run analysis: nodes, rates, wait times and the reconciliation.",
+        "zh-CN" : "运行结束后输出运行分析：节点、速率、等待时间和对账结果。"
+      }
+    }, {
+      "names" : [ "--timeout" ],
+      "label" : "<duration>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The run was cancelled after the timeout of {0}.",
+        "zh-CN" : "运行超过了 {0} 的超时时间，已被取消。"
+      }
+    }, {
+      "names" : [ "--var" ],
+      "label" : "<name=value>",
+      "default" : null,
+      "repeatable" : true,
+      "description" : {
+        "en-US" : "A job variable, as name=value; repeat it for more. Wins over env.variables of the job.",
+        "zh-CN" : "作业变量，写成 name=value，可以重复使用；优先于作业的 env.variables。"
+      }
+    }, {
+      "names" : [ "--scheduled-time" ],
+      "label" : "<time>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The planned time of the run, the base of null, as an ISO-8601 time such as 2026-11-07T00:00:00Z. Defaults to now.",
+        "zh-CN" : "本次运行的计划时间，即 null 的基准，写成 ISO-8601 时间，例如 2026-11-07T00:00:00Z。默认为当前时间。"
+      }
+    } ]
+  }, {
+    "name" : "expr",
+    "anchor" : "cmd-expr",
+    "synopsis" : "pipeforge expr <command>",
+    "description" : {
+      "en-US" : "Work with the expression language.",
+      "zh-CN" : "使用表达式语言。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "expr eval",
+    "anchor" : "cmd-expr-eval",
+    "synopsis" : "pipeforge expr eval [options] <expression>",
+    "description" : {
+      "en-US" : "Evaluate an expression on one row and show the result and its type.",
+      "zh-CN" : "用一行数据计算表达式，显示结果和结果类型。"
+    },
+    "arguments" : [ {
+      "label" : "<expression>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The expression, in quotes.",
+        "zh-CN" : "表达式，用引号括起来。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--row" ],
+      "label" : "<json>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The row as a JSON object, e.g. {\"amount\": 1200, \"city\": \"Hangzhou\"}.",
+        "zh-CN" : "一行数据，写成 JSON 对象，例如 {\"amount\": 1200, \"city\": \"杭州\"}。"
+      }
+    }, {
+      "names" : [ "--column" ],
+      "label" : "<name TYPE>",
+      "default" : null,
+      "repeatable" : true,
+      "description" : {
+        "en-US" : "The type of a column, as name TYPE, e.g. \"amount DECIMAL(10, 2)\"; columns without one get the type of their JSON value.",
+        "zh-CN" : "列的类型，写成 name TYPE，例如 \"amount DECIMAL(10, 2)\"；没有声明类型的列使用其 JSON 值的类型。"
+      }
+    }, {
+      "names" : [ "--timezone" ],
+      "label" : "<zone>",
+      "default" : "UTC",
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The time zone of dates and times.",
+        "zh-CN" : "日期和时间使用的时区。"
+      }
+    } ]
+  }, {
+    "name" : "ui",
+    "anchor" : "cmd-ui",
+    "synopsis" : "pipeforge ui [options]",
+    "description" : {
+      "en-US" : "Start the server on 127.0.0.1 with the plugins of this command and open the Web UI. Ctrl-C stops it.",
+      "zh-CN" : "在 127.0.0.1 上用本命令的插件启动服务端，并打开 Web UI。按 Ctrl-C 停止。"
+    },
+    "arguments" : [ ],
+    "options" : [ {
+      "names" : [ "--port" ],
+      "label" : "<port>",
+      "default" : "8080",
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The port of the server.",
+        "zh-CN" : "服务端的端口。"
+      }
+    }, {
+      "names" : [ "--no-browser" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Do not open the browser.",
+        "zh-CN" : "不打开浏览器。"
+      }
+    }, {
+      "names" : [ "--server-jar" ],
+      "label" : "<jar>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The server jar to start, instead of the one of the installation.",
+        "zh-CN" : "要启动的服务端 jar，代替安装目录中的那个。"
+      }
+    }, {
+      "names" : [ "--start-timeout" ],
+      "label" : "<seconds>",
+      "default" : "90",
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "How many seconds the server may take to start.",
+        "zh-CN" : "服务端启动最多等待的秒数。"
+      }
+    } ]
+  }, {
+    "name" : "version",
+    "anchor" : "cmd-version",
+    "synopsis" : "pipeforge version [options]",
+    "description" : {
+      "en-US" : "Show the versions of the command, the connector API and Java.",
+      "zh-CN" : "显示命令、连接器 API 和 Java 的版本。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "doctor",
+    "anchor" : "cmd-doctor",
+    "synopsis" : "pipeforge doctor [options]",
+    "description" : {
+      "en-US" : "Check this machine: Java, the installation, plugins, the server, Docker and the terminal encoding.",
+      "zh-CN" : "检查本机环境：Java、安装目录、插件、服务端、Docker 和终端编码。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "completion",
+    "anchor" : "cmd-completion",
+    "synopsis" : "pipeforge completion [options] <shell>",
+    "description" : {
+      "en-US" : "Print the completion script of a shell; load it with source <(pipeforge completion bash).",
+      "zh-CN" : "输出 Shell 的补全脚本；用 source <(pipeforge completion bash) 加载。"
+    },
+    "arguments" : [ {
+      "label" : "<shell>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "bash or zsh.",
+        "zh-CN" : "bash 或 zsh。"
+      }
+    } ],
+    "options" : [ ]
+  } ],
+  "exitCodes" : [ {
+    "code" : 0,
+    "description" : {
+      "en-US" : "Success.",
+      "zh-CN" : "成功。"
+    }
+  }, {
+    "code" : 1,
+    "description" : {
+      "en-US" : "An error, such as a server that did not start, or an unexpected error.",
+      "zh-CN" : "错误，例如服务端没有启动，或者意外错误。"
+    }
+  }, {
+    "code" : 2,
+    "description" : {
+      "en-US" : "The command was used wrongly: an unknown option, a missing argument or a malformed value.",
+      "zh-CN" : "命令用法有误：未知选项、缺少参数或取值格式不对。"
+    }
+  }, {
+    "code" : 3,
+    "description" : {
+      "en-US" : "A job, an option or an expression is invalid.",
+      "zh-CN" : "作业、选项或表达式不合法。"
+    }
+  }, {
+    "code" : 4,
+    "description" : {
+      "en-US" : "The run failed.",
+      "zh-CN" : "运行失败。"
+    }
+  }, {
+    "code" : 5,
+    "description" : {
+      "en-US" : "The run was cancelled after --timeout.",
+      "zh-CN" : "运行因 --timeout 超时被取消。"
+    }
+  }, {
+    "code" : 6,
+    "description" : {
+      "en-US" : "A file or an object does not exist.",
+      "zh-CN" : "文件或对象不存在。"
+    }
+  }, {
+    "code" : 7,
+    "description" : {
+      "en-US" : "Authentication failed or a permission is missing (with a server, in a later version).",
+      "zh-CN" : "认证失败或缺少权限（连接服务端时，后续版本提供）。"
+    }
+  }, {
+    "code" : 8,
+    "description" : {
+      "en-US" : "The run was cancelled.",
+      "zh-CN" : "运行被取消。"
+    }
+  }, {
+    "code" : 9,
+    "description" : {
+      "en-US" : "The run succeeded, but its row counters do not reconcile.",
+      "zh-CN" : "运行成功，但行数计数不能对账。"
+    }
+  } ]
+}

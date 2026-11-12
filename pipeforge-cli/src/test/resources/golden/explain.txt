@@ -1,0 +1,25 @@
+Job users  mode=batch (derived)  delivery=at-least-once  engine=native  parallelism=1  timezone=UTC
+Variables  unused=1
+
+Nodes (3, in topological order)
+  [src]   source     fake          fake@<version>          parallelism=1  bounded
+  [tidy]  transform  field-mapper  field-mapper@<version>  parallelism=1  inputs=src (implied)
+  [out]   sink       blackhole     blackhole@<version>     parallelism=1  inputs=tidy (implied)
+
+Options (defaults omitted)
+  [src]   table=crm.users                                                   node
+          columns=[id INT64 NOT NULL, email STRING(24)]                     node
+          primary-key=[id]                                                  node
+          rows=3                                                            node
+  [tidy]  mapping=[{from=id, to=user_id}, {from=email, expr=LOWER(email)}]  node
+  [out]   none
+
+Schema
+  [src] -> crm.users  primary key (id)
+      id     INT64 NOT NULL
+      email  STRING(24)
+  [tidy] -> crm.users  primary key (user_id)  (+user_id, email STRING(24) -> STRING, -id)
+      user_id  INT64 NOT NULL
+      email    STRING
+
+Warnings  none

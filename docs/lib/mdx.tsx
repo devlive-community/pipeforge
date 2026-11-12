@@ -13,6 +13,7 @@ import remarkGfm from "remark-gfm";
 import { Callout } from "@/components/mdx/Callout";
 import { CodeBlock } from "@/components/mdx/CodeBlock";
 import { ApiList } from "@/components/mdx/ApiList";
+import { CliReference } from "@/components/mdx/CliReference";
 import { ErrorList } from "@/components/mdx/ErrorList";
 import { FunctionList } from "@/components/mdx/FunctionList";
 import { MetricList } from "@/components/mdx/MetricList";
@@ -95,6 +96,7 @@ function components(context: Context) {
     ),
     Callout: (props: ComponentProps<typeof Callout>) => <Callout {...props} lang={context.lang} />,
     ApiList: () => <ApiList lang={context.lang} />,
+    CliReference: () => <CliReference lang={context.lang} />,
     ErrorList: () => <ErrorList lang={context.lang} />,
     FunctionList: () => <FunctionList lang={context.lang} />,
     MetricList: () => <MetricList lang={context.lang} />,

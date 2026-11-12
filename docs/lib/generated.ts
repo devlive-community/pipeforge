@@ -67,6 +67,42 @@ export function apiReference(): { operations: ApiOperation[]; schemas: ApiSchema
   return read("api.json", { operations: [], schemas: [] });
 }
 
+export interface CliOption {
+  names: string[];
+  label: string | null;
+  default: string | null;
+  repeatable: boolean;
+  description: Record<string, string>;
+}
+
+export interface CliCommand {
+  name: string;
+  anchor: string;
+  synopsis: string;
+  description: Record<string, string>;
+  arguments: { label: string; repeatable: boolean; required: boolean; description: Record<string, string> }[];
+  options: CliOption[];
+}
+
+export interface CliReferenceData {
+  name: string;
+  description: Record<string, string>;
+  globalOptions: CliOption[];
+  commands: CliCommand[];
+  exitCodes: { code: number; description: Record<string, string> }[];
+}
+
+/** The commands of the CLI, exported by `pnpm generate` from pipeforge-cli/cli.json. */
+export function cliReference(): CliReferenceData {
+  return read<CliReferenceData>("cli.json", {
+    name: "pipeforge",
+    description: {},
+    globalOptions: [],
+    commands: [],
+    exitCodes: [],
+  });
+}
+
 export interface MetricEntry {
   name: string;
   scope: "job" | "node";

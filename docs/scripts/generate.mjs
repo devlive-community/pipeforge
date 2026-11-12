@@ -8,7 +8,8 @@
 // Collects the generated data the site needs before it is built: the search documents for
 // each language (public/search/<lang>.json) and the reference data read from the code
 // (generated/errors.json from the error registry, generated/functions.json from the function
-// catalog, generated/api.json from the server's OpenAPI document). Data exported by Maven builds (plugins,
+// catalog, generated/api.json from the server's OpenAPI document, generated/cli.json from the CLI
+// reference). Data exported by Maven builds (plugins,
 // functions, metrics, CLI) is added to docs/generated/ by the build steps of those modules.
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -16,6 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LANGUAGES, loadPages } from "../lib/content-core.mjs";
 import { collectApi } from "./api-data.mjs";
+import { collectCli } from "./cli-data.mjs";
 import { collectErrors } from "./errors-data.mjs";
 import { collectFunctions } from "./functions-data.mjs";
 import { collectMetrics } from "./metrics-data.mjs";
@@ -43,6 +45,10 @@ console.log(`metric catalog: ${metrics.length} metric(s)`);
 const plugins = collectPlugins(join(root, ".."));
 writeFileSync(join(root, "generated", "plugins.json"), JSON.stringify(plugins, null, 2));
 console.log(`plugin docs: ${plugins.length} plugin(s)`);
+
+const cli = collectCli(join(root, ".."));
+writeFileSync(join(root, "generated", "cli.json"), JSON.stringify(cli, null, 2));
+console.log(`CLI: ${cli.commands.length} command(s)`);
 
 const api = collectApi(join(root, ".."));
 writeFileSync(join(root, "generated", "api.json"), JSON.stringify(api, null, 2));

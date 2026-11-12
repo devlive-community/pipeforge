@@ -1,0 +1,101 @@
+---
+title: 快速开始
+description: 构建 pipeforge 命令，用 fake Source、字段映射和 console Sink 写出第一个作业，并校验、解释和运行它。
+order: 20
+---
+
+## 构建命令
+
+需要 Java 21 或更高版本。在仓库的源码目录中：
+
+```bash
+./mvnw -B -pl pipeforge-cli -am package -DskipTests
+export PATH="$PWD/pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin:$PATH"
+pipeforge doctor
+```
+
+`doctor` 检查 Java、安装目录、随安装提供的插件（`fake`、`field-mapper`、`console` 和 `blackhole`）、Web UI 使用的服务端、
+Docker 和终端编码。Docker 显示 `WARN` 没有关系：只有开发环境需要它。
+
+## 编写作业
+
+把下面的内容保存为 `users.yaml`。它生成五个用户，重命名 `id`，把邮箱转为小写，添加姓名的首字母，去掉注册时间，并打印结果：
+
+```yaml
+version: 1
+name: users-demo
+source:
+  - id: users
+    type: fake
+    table: crm.users
+    columns:
+      - id INT64 NOT NULL
+      - name STRING(12)
+      - email STRING(20)
+      - signed_up TIMESTAMP(0)
+    primary-key: [id]
+    rows: 5
+transform:
+  - id: tidy
+    type: field-mapper
+    mapping:
+      - { from: id, to: user_id }
+      - { from: email, expr: "LOWER(email)" }
+      - { expr: "UPPER(SUBSTRING(name, 1, 1))", to: initial }
+    drop: [signed_up]
+sink:
+  - { id: out, type: console }
+```
+
+[fake Source](../plugins/source/fake) 每次运行都产出相同的行，因此你会看到与下面相同的名字。
+
+## 校验
+
+```bash
+pipeforge validate users.yaml
+```
+
+```text
+OK  users.yaml  users-demo
+1 个有效，0 个无效
+```
+
+校验会解析作业、解析变量、加载插件，并检查每个选项、图和 Schema，但不读取任何数据。有误时会给出[错误码](../reference/errors)
+和排查建议，命令以 3 退出：把 `rows: 5` 改成 `rows: -5` 再试一次。提示的语言跟随系统语言，用 `--lang en-US` 或 `--lang zh-CN` 可以指定。
+
+## 运行
+
+```bash
+pipeforge run --local users.yaml
+```
+
+```text
+crm.users
++----+---------+-------------+------------------+---------+
+| op | user_id | name        | email            | initial |
++----+---------+-------------+------------------+---------+
+| +I |       0 | qhccquh     | sqxivxekbaht     | Q       |
+| +I |       1 | bnwg        | hcy              | B       |
+| +I |       2 | pakfjmriqus | fmacvob          | P       |
+| +I |       3 | orwe        | xfvoijencjqxuauj | O       |
+| +I |       4 | uhwy        | qtypgffknick     | U       |
++----+---------+-------------+------------------+---------+
+作业 users-demo SUCCESS，用时 0.1s：读取 5 行，写入 5 行（40 行/秒）
+```
+
+表格来自 [console Sink](../plugins/sink/console)，最后一行来自命令本身；用时和速率每次都会不同。`--local` 在当前进程中运行作业；
+`--analyze` 会加上运行分析，显示每个节点的速率和等待时间；`-o json` 输出供脚本使用的结果。
+
+## 查看计划
+
+```bash
+pipeforge explain users.yaml
+```
+
+[计划](../concepts/plan-and-explain)列出各节点及其插件、每个选项及其来源，以及每个节点之后的 Schema，例如 `user_id` 成为新的主键。
+
+## 下一步
+
+- 把表达式写进映射之前，先用一行数据试算：`pipeforge expr eval "UPPER(SUBSTRING(name, 1, 1))" --row '{"name": "ada"}'`。
+- 用相同的插件启动 Web UI：`pipeforge ui`。
+- 阅读[作业 DSL](../reference/job-dsl)、[字段映射](../plugins/transform/field-mapper)，以及 [CLI 参考](../reference/cli)中的全部命令。

@@ -1,0 +1,4 @@
+FAIL  jobs/broken.yaml  PF-CONF-0002 Option 'rows' of node 'src' has the invalid value '-1': must be at least 0
+OK    jobs/users.yaml   users
+jobs/broken.yaml: Check the type and the allowed range of 'rows' on the plugin page.
+1 valid, 1 invalid

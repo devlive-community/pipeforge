@@ -1,0 +1,111 @@
+---
+title: Quick start
+description: Build the pipeforge command, write a first job with the fake source, the field mapper and the console sink, and validate, explain and run it.
+order: 20
+---
+
+## Build the command
+
+You need Java 21 or later. In a checkout of the repository:
+
+```bash
+./mvnw -B -pl pipeforge-cli -am package -DskipTests
+export PATH="$PWD/pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin:$PATH"
+pipeforge doctor
+```
+
+`doctor` checks Java, the installation, the plugins that come with it (`fake`, `field-mapper`,
+`console` and `blackhole`), the server for the Web UI, Docker and the terminal encoding. A `WARN`
+for Docker is fine: it is only needed for the development environment.
+
+## Write a job
+
+Save this as `users.yaml`. It generates five users, renames `id`, lower-cases the e-mail address,
+adds the initial of the name, drops the sign-up time and prints the result:
+
+```yaml
+version: 1
+name: users-demo
+source:
+  - id: users
+    type: fake
+    table: crm.users
+    columns:
+      - id INT64 NOT NULL
+      - name STRING(12)
+      - email STRING(20)
+      - signed_up TIMESTAMP(0)
+    primary-key: [id]
+    rows: 5
+transform:
+  - id: tidy
+    type: field-mapper
+    mapping:
+      - { from: id, to: user_id }
+      - { from: email, expr: "LOWER(email)" }
+      - { expr: "UPPER(SUBSTRING(name, 1, 1))", to: initial }
+    drop: [signed_up]
+sink:
+  - { id: out, type: console }
+```
+
+The [fake source](../plugins/source/fake) produces the same rows on every run, so you will see the
+same names below.
+
+## Validate it
+
+```bash
+pipeforge validate users.yaml
+```
+
+```text
+OK  users.yaml  users-demo
+1 valid, 0 invalid
+```
+
+Validation parses the job, resolves its variables, loads the plugins and checks every option, the
+graph and the schemas, without reading any data. A mistake is reported with its
+[error code](../reference/errors) and a hint, and the command exits with 3: change `rows: 5` to
+`rows: -5` and try again. Messages follow the language of the system; `--lang en-US` or
+`--lang zh-CN` chooses one.
+
+## Run it
+
+```bash
+pipeforge run --local users.yaml
+```
+
+```text
+crm.users
++----+---------+-------------+------------------+---------+
+| op | user_id | name        | email            | initial |
++----+---------+-------------+------------------+---------+
+| +I |       0 | qhccquh     | sqxivxekbaht     | Q       |
+| +I |       1 | bnwg        | hcy              | B       |
+| +I |       2 | pakfjmriqus | fmacvob          | P       |
+| +I |       3 | orwe        | xfvoijencjqxuauj | O       |
+| +I |       4 | uhwy        | qtypgffknick     | U       |
++----+---------+-------------+------------------+---------+
+Job users-demo SUCCESS in 0.2s: read 5 rows, wrote 5 rows (22 rows/s)
+```
+
+The table comes from the [console sink](../plugins/sink/console), the last line from the command;
+the time and the rate vary. `--local` runs the job in this process; `--analyze` adds the run
+analysis with the rates and wait times of every node, and `-o json` prints the result for scripts.
+
+## Look at the plan
+
+```bash
+pipeforge explain users.yaml
+```
+
+The [plan](../concepts/plan-and-explain) shows the nodes with their plugins, every option with its
+origin and the schema after each node, for example that `user_id` is the new primary key.
+
+## Next steps
+
+- Try an expression on one row before you put it in a mapping:
+  `pipeforge expr eval "UPPER(SUBSTRING(name, 1, 1))" --row '{"name": "ada"}'`.
+- Start the Web UI with the same plugins: `pipeforge ui`.
+- Read about the [job DSL](../reference/job-dsl), the [field mapper](../plugins/transform/field-mapper)
+  and every command in the [CLI reference](../reference/cli).

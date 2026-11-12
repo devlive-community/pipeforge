@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Cluster and process errors.
+
+- code: PF-CLUS-0002
+  name: SERVER_START_FAILED
+  message:
+    en-US: "The server did not start: {reason} (log: {log})"
+    zh-CN: "服务端没有启动：{reason}（日志：{log}）"
+  hint:
+    en-US: "Read the end of the server log for the cause; a port that is in use or a Java version below 21 are common."
+    zh-CN: "原因见服务端日志的末尾；常见原因是端口被占用或 Java 版本低于 21。"

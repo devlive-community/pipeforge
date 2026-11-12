@@ -37,6 +37,8 @@ public final class ErrorCode {
     public static final ErrorCode SECRET_NOT_FOUND = define("PF-CONF-0005", "SECRET_NOT_FOUND", "secret");
     public static final ErrorCode JOB_INVALID = define("PF-CONF-0006", "JOB_INVALID", "location", "reason");
     public static final ErrorCode REQUEST_INVALID = define("PF-CONF-0007", "REQUEST_INVALID", "reason");
+    public static final ErrorCode FILE_NOT_READABLE = define("PF-CONF-0008", "FILE_NOT_READABLE", "path", "reason");
+    public static final ErrorCode SERVER_NOT_INSTALLED = define("PF-CONF-0009", "SERVER_NOT_INSTALLED", "searched");
 
     // Planning
     public static final ErrorCode DAG_CYCLE = define("PF-PLAN-0001", "DAG_CYCLE", "path");
@@ -87,6 +89,10 @@ public final class ErrorCode {
     // Resources
     public static final ErrorCode CANCEL_TIMEOUT =
             define("PF-RES-0005", "CANCEL_TIMEOUT", "node", "subtask", "timeoutMs");
+    public static final ErrorCode PORT_IN_USE = define("PF-RES-0006", "PORT_IN_USE", "port");
+
+    // Cluster and processes
+    public static final ErrorCode SERVER_START_FAILED = define("PF-CLUS-0002", "SERVER_START_FAILED", "reason", "log");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

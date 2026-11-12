@@ -1,0 +1,6 @@
+OK    java      <java>
+WARN  home      not started from an installation (bin/pipeforge); plugins come from --plugin-path, PIPEFORGE_PLUGIN_PATH or ./plugins
+OK    plugins   4 plugin(s) in <plugins>
+WARN  server    no server jar; pipeforge ui needs the full package or --server-jar
+WARN  docker    Docker is not available; it is only needed for the development environment
+OK    encoding  UTF-8

@@ -14,3 +14,12 @@
   hint:
     en-US: "The connector is blocked in a call that ignores cancellation and interrupts, often a network read without a timeout. Configure a socket or query timeout on the connector."
     zh-CN: "连接器阻塞在一个不响应取消和中断的调用中，通常是没有设置超时的网络读取。请为连接器配置连接或查询超时。"
+
+- code: PF-RES-0006
+  name: PORT_IN_USE
+  message:
+    en-US: "Port {port} is already in use"
+    zh-CN: "端口 {port} 已被占用"
+  hint:
+    en-US: "Stop the process that uses it, or choose another port with --port."
+    zh-CN: "停止占用该端口的进程，或者用 --port 选择其他端口。"

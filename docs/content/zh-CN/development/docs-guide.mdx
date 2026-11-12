@@ -113,6 +113,7 @@ Observability、Performance and tuning、Troubleshooting、Limitations 和 Versi
 | `<FunctionList />` | 由函数目录生成的全部内置函数，包括签名、NULL 行为和示例，支持搜索和按类别筛选；页面在 frontmatter 中声明 `data: functions`，指向 `#substring` 这类锚点的链接因此也会被校验 |
 | `<ApiList />` | 由 `pipeforge-server/openapi.json` 生成的全部 REST API 接口，包括参数、请求和响应结构；页面在 frontmatter 中声明 `data: api`，指向 `#validatejob`、`#schema-errorinfo` 这类锚点的链接因此也会被校验 |
 | `<MetricList />` | 由指标目录 `pipeforge-engine/engine-api/src/main/resources/metrics/catalog.yaml` 生成的全部引擎指标，包括类型、单位和含义，作业级和节点级指标各一张表；页面在 frontmatter 中声明 `data: metrics`，指向 `#job-rowsread` 这类锚点的链接因此也会被校验 |
+| `<CliReference />` | 由 `pipeforge-cli/cli.json` 生成的 `pipeforge` 全部命令及其参数和选项、全局选项和退出码（CLI 的测试保证该文件与命令定义一致）；每个命令的锚点为 `cmd-<名称>` |
 | `<Screenshot name="overview" alt="..." />` | 页面语言对应的 Web UI 截图，浅色或深色跟随站点主题；图片由 `pnpm --filter @pipeforge/ui screenshots` 生成到 `public/screenshots/ui/`，缺少图片时构建失败 |
 
 ```mdx title="example.mdx"

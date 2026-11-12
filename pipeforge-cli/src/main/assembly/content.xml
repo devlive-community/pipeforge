@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<!--
+  The content of the app directory and of its tar.gz:
+    bin/pipeforge, bin/pipeforge.cmd   launchers
+    lib/                               the CLI and its libraries
+    lib/server/                        the server, started by `pipeforge ui`
+    plugins/                           the plugins that come with the distribution
+-->
+<component xmlns="http://maven.apache.org/ASSEMBLY-COMPONENT/2.2.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://maven.apache.org/ASSEMBLY-COMPONENT/2.2.0 https://maven.apache.org/xsd/assembly-component-2.2.0.xsd">
+    <fileSets>
+        <fileSet>
+            <directory>src/main/dist/bin</directory>
+            <outputDirectory>bin</outputDirectory>
+            <fileMode>0755</fileMode>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/..</directory>
+            <outputDirectory></outputDirectory>
+            <includes>
+                <include>LICENSE</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+    <dependencySets>
+        <dependencySet>
+            <outputDirectory>lib</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <scope>runtime</scope>
+            <includes>
+                <include>*:*:jar</include>
+            </includes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>lib/server</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <scope>provided</scope>
+            <includes>
+                <include>org.devlive.pipeforge:pipeforge-server:jar:exec</include>
+            </includes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>plugins</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <scope>provided</scope>
+            <includes>
+                <include>*:*:zip</include>
+            </includes>
+        </dependencySet>
+    </dependencySets>
+</component>
