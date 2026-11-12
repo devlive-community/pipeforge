@@ -19,6 +19,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProjectHelper;
+import org.devlive.pipeforge.plugin.check.PluginDocs;
 
 /**
  * Builds the plugin package {@code <artifactId>-<version>.zip} with plugin.yaml, lib/, docs/,

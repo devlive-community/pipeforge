@@ -14,6 +14,7 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.devlive.pipeforge.plugin.check.PluginDocs;
 
 /**
  * Exports the documentation data of a plugin (options, rules, capabilities, data source

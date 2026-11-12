@@ -4,7 +4,7 @@
  * Licensed under the MIT License. See the LICENSE file in the
  * project root for full license text.
  */
-package org.devlive.pipeforge.maven;
+package org.devlive.pipeforge.plugin.check;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;

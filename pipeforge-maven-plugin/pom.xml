@@ -34,6 +34,12 @@
             <artifactId>pipeforge-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- The checks and the documentation model shared with the pipeforge command. -->
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-plugin</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

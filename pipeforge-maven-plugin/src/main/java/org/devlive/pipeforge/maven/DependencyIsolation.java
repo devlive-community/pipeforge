@@ -8,18 +8,11 @@ package org.devlive.pipeforge.maven;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import org.devlive.pipeforge.plugin.check.ClassCheck;
 
 /**
  * Isolation rules for plugin dependencies:
@@ -38,9 +31,6 @@ public final class DependencyIsolation {
     public static final Set<String> PROVIDED_MODULES = Set.of("pipeforge-api", "pipeforge-common");
 
     static final String GROUP = "org.devlive.pipeforge";
-
-    private static final List<String> FORBIDDEN_PACKAGES =
-            List.of("org/devlive/pipeforge/api/", "org/devlive/pipeforge/common/", "org/devlive/pipeforge/engine/");
 
     /** A resolved dependency. */
     public record Dependency(String groupId, String artifactId, String version, String scope, File file) {
@@ -84,51 +74,12 @@ public final class DependencyIsolation {
      * classes and duplicates.
      */
     public static List<String> checkClasses(Path classesDir, List<Dependency> shipped) throws IOException {
-        Map<String, List<String>> owners = new TreeMap<>();
-        List<String> problems = new ArrayList<>();
-        if (Files.isDirectory(classesDir)) {
-            try (Stream<Path> files = Files.walk(classesDir)) {
-                files.filter(p -> p.toString().endsWith(".class"))
-                        .map(p -> classesDir.relativize(p).toString().replace(File.separatorChar, '/'))
-                        .forEach(name -> owners.computeIfAbsent(name, k -> new ArrayList<>())
-                                .add("plugin classes"));
-            }
-        }
+        List<ClassCheck.Source> sources = new ArrayList<>();
+        sources.add(new ClassCheck.Source("plugin classes", classesDir));
         for (Dependency dependency : shipped) {
-            if (!dependency.file().isFile()) {
-                continue;
-            }
-            boolean reported = false;
-            try (ZipFile zip = new ZipFile(dependency.file())) {
-                Enumeration<? extends ZipEntry> entries = zip.entries();
-                while (entries.hasMoreElements()) {
-                    String name = entries.nextElement().getName();
-                    if (!name.endsWith(".class")
-                            || name.startsWith("META-INF/")
-                            || name.endsWith("module-info.class")) {
-                        continue;
-                    }
-                    if (!reported && FORBIDDEN_PACKAGES.stream().anyMatch(name::startsWith)) {
-                        problems.add(dependency.coordinate() + " contains PipeForge classes (" + name + ")");
-                        reported = true;
-                    }
-                    owners.computeIfAbsent(name, k -> new ArrayList<>()).add(dependency.coordinate());
-                }
-            }
+            sources.add(new ClassCheck.Source(
+                    dependency.coordinate(), dependency.file().toPath()));
         }
-        Map<String, List<String>> duplicates = new LinkedHashMap<>();
-        owners.forEach((name, sources) -> {
-            if (sources.size() > 1) {
-                duplicates.put(name, sources);
-            }
-        });
-        if (!duplicates.isEmpty()) {
-            List<String> examples = duplicates.entrySet().stream()
-                    .limit(5)
-                    .map(e -> e.getKey().replace('/', '.').replaceAll("\\.class$", "") + " in " + e.getValue())
-                    .toList();
-            problems.add(duplicates.size() + " duplicate class(es), e.g. " + String.join("; ", examples));
-        }
-        return problems;
+        return ClassCheck.check(sources);
     }
 }

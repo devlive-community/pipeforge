@@ -26,6 +26,11 @@
             <artifactId>pipeforge-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Writes the documentation data of plugins. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>

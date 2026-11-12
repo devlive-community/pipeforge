@@ -24,6 +24,8 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.devlive.pipeforge.common.plugin.PluginDescriptor;
+import org.devlive.pipeforge.plugin.check.PluginDocs;
+import org.devlive.pipeforge.plugin.check.PluginInspector;
 
 /** Shared steps of the plugin goals: read plugin.yaml, check the plugin, build the docs model. */
 abstract class AbstractPluginMojo extends AbstractMojo {

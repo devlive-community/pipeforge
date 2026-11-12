@@ -4,19 +4,19 @@
  * Licensed under the MIT License. See the LICENSE file in the
  * project root for full license text.
  */
-package org.devlive.pipeforge.maven;
+package org.devlive.pipeforge.plugin.check;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.devlive.pipeforge.common.plugin.PluginDescriptor;
 import org.devlive.pipeforge.common.plugin.PluginType;
-import org.devlive.pipeforge.maven.fixture.Fixtures;
+import org.devlive.pipeforge.plugin.check.fixture.Fixtures;
 import org.junit.jupiter.api.Test;
 
 class PluginInspectorTest {
 
-    static final String FIXTURES = "org.devlive.pipeforge.maven.fixture.Fixtures$";
+    static final String FIXTURES = "org.devlive.pipeforge.plugin.check.fixture.Fixtures$";
 
     static PluginDescriptor descriptor(String provides) {
         return PluginDescriptor.parse(

@@ -117,7 +117,7 @@ public final class PluginRepository {
     }
 
     /** Extracts a plugin zip into the cache and returns the directory. */
-    Path extract(Path zip) throws IOException {
+    public Path extract(Path zip) throws IOException {
         Path target = cacheDir.resolve(hash(zip));
         if (Files.isRegularFile(target.resolve(PluginDescriptor.FILE_NAME))) {
             return target;
