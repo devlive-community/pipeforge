@@ -33,9 +33,9 @@ env:
   variables:
     biz_date: "${date:yyyy-MM-dd,-1d}"
     region: cn
-    path: /data/${var:region}/${var:biz_date}
+    table: ${var:region}.orders_${var:biz_date}
 source:
-  - { id: files, type: fake, path: "${var:path}" }
+  - { id: orders, type: fake, table: "${var:table}" }
 sink:
   - { id: print, type: console }
 ```

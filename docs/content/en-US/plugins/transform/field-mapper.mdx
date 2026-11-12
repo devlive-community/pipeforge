@@ -130,7 +130,7 @@ transform:
     mapping:
       - { from: email, comment: "lower-cased", expr: "LOWER(email)" }
       - { from: id, to: user_id }
-      - { from: age, type: INT16 }
+      - { from: age, type: INT64 }
     others: drop
     order: mapping
 sink:
