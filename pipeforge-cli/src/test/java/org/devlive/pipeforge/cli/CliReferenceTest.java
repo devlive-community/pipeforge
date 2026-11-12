@@ -46,7 +46,19 @@ class CliReferenceTest {
         assertThat(commands)
                 .extracting(c -> c.get("name"))
                 .containsExactly(
-                        "validate", "explain", "run", "expr", "expr eval", "ui", "version", "doctor", "completion");
+                        "validate",
+                        "explain",
+                        "run",
+                        "expr",
+                        "expr eval",
+                        "ui",
+                        "version",
+                        "doctor",
+                        "completion",
+                        "plugin",
+                        "plugin validate",
+                        "plugin test",
+                        "plugin docs");
         for (Map<String, Object> command : commands) {
             Map<String, String> description = (Map<String, String>) command.get("description");
             assertThat(description.get("en-US")).as("%s", command.get("name")).isNotBlank();

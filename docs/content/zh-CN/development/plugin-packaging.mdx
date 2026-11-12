@@ -122,6 +122,20 @@ PipeForge 的 Source、Transform 和 Sink 插件是 `pipeforge-connectors` 的�
   - source 'greeting': org.example.greeting.GreetingSourceFactory.identifier() returns 'hello' but plugin.yaml declares 'greeting'
 ```
 
+## 检查构建好的插件包
+
+`pipeforge plugin validate <zip>` 不经过 Maven，按引擎加载插件包的方式检查它，并列出所有问题：
+
+| 检查项 | 失败条件 |
+|---|---|
+| `descriptor` | `plugin.yaml` 格式有误、没有声明 `license`，或者是为其他 API 主版本构建的 |
+| `isolation` | `lib/` 中没有 jar、某个 jar 包含 PipeForge API、common 或引擎的类，或者同一个类出现两次 |
+| `forbidden-calls` | 某个类调用了 `System.exit` 这类影响整个 JVM 的方法（见[插件](../concepts/plugins#禁止的调用)），或者类文件无法读取 |
+| `components` | 组件类不存在、没有实现其工厂接口，或者返回了另一个标识 |
+| `docs` | `docs/<id>.json` 不存在，或者与组件导出的内容不同 |
+
+有插件包未通过时命令以 3 退出；[编写插件](./plugin-guide)展示了它在完整插件开发过程中的用法。
+
 ## 文档数据
 
 `pipeforge:docs` 导出插件文档页中由代码生成、不允许手写的部分：每个选项的类型、默认值、要求（`required`、`optional`、

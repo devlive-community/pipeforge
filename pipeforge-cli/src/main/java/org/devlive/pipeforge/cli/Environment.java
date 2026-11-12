@@ -33,12 +33,28 @@ public record Environment(
         Path workingDirectory,
         Path userHome,
         boolean interactive,
-        ProcessRunner runner) {
+        ProcessRunner runner,
+        Launcher launcher) {
 
     /** Runs a program and returns its standard output, or empty when it is missing or fails. */
     @FunctionalInterface
     public interface ProcessRunner {
         Optional<String> run(List<String> command, Duration timeout);
+    }
+
+    /**
+     * Runs a program in a directory and hands every line it prints to {@code output}; returns its
+     * exit code. The program sees the environment of this process.
+     */
+    @FunctionalInterface
+    public interface Launcher {
+        int launch(List<String> command, Path directory, java.util.function.Consumer<String> output)
+                throws IOException, InterruptedException;
+    }
+
+    /** An environment with the same values and another launcher. */
+    public Environment withLauncher(Launcher value) {
+        return new Environment(out, err, variables, properties, workingDirectory, userHome, interactive, runner, value);
     }
 
     public Environment {
@@ -58,7 +74,8 @@ public record Environment(
                 Path.of("").toAbsolutePath(),
                 Path.of(System.getProperty("user.home")),
                 terminal(),
-                Environment::runProcess);
+                Environment::runProcess,
+                Environment::launchProcess);
     }
 
     public @Nullable String variable(String name) {
@@ -100,6 +117,27 @@ public record Environment(
         } catch (ReflectiveOperationException e) {
             return true;
         }
+    }
+
+    static int launchProcess(List<String> command, Path directory, java.util.function.Consumer<String> output)
+            throws IOException, InterruptedException {
+        Process process = new ProcessBuilder(command)
+                .directory(directory.toFile())
+                .redirectErrorStream(true)
+                .start();
+        process.getOutputStream().close();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.accept(line);
+            }
+        } finally {
+            if (process.isAlive() && Thread.currentThread().isInterrupted()) {
+                process.destroy();
+            }
+        }
+        return process.waitFor();
     }
 
     static Optional<String> runProcess(List<String> command, Duration timeout) {

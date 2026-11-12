@@ -38,7 +38,8 @@ import picocli.CommandLine.ScopeType;
             UiCommand.class,
             VersionCommand.class,
             DoctorCommand.class,
-            CompletionCommand.class
+            CompletionCommand.class,
+            org.devlive.pipeforge.cli.command.PluginCommand.class
         })
 public final class Root implements java.util.concurrent.Callable<Integer> {
 

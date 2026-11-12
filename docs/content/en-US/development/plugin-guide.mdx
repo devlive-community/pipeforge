@@ -1,0 +1,185 @@
+---
+title: Writing a plugin
+description: From an empty module to a merged plugin — project layout, descriptor, factory, contract test, documentation data, package check and commit, with the pipeforge plugin commands.
+order: 45
+---
+
+## What a plugin is
+
+A plugin is a jar with factories for sources, transforms or sinks, described by `plugin.yaml`, and
+packaged with its libraries into a zip that the engine loads in its own class loader. It depends on
+[`pipeforge-api`](./api-overview) only. This guide builds a source plugin `greeting` inside this
+repository; a plugin of your own project follows the same steps with its own coordinates.
+
+## The project
+
+Plugins of this repository are modules of `pipeforge-connectors`, which sets up the API, the
+[testkit](./testkit) and the [Maven plugin](./plugin-packaging) once:
+
+```text
+pipeforge-connectors/connector-greeting/
+├── pom.xml
+├── src/main/java/org/devlive/pipeforge/connector/greeting/GreetingSourceFactory.java
+├── src/main/plugin/plugin.yaml                  the descriptor
+├── src/generated/plugin-docs/greeting.json      documentation data, written by pipeforge plugin docs
+└── src/test/java/org/devlive/pipeforge/connector/greeting/GreetingSourceContractTest.java
+```
+
+The pom only names the module and lists the Maven plugin; add the module to the `<modules>` of
+`pipeforge-connectors/pom.xml`:
+
+```xml
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.devlive.pipeforge</groupId>
+        <artifactId>pipeforge-connectors</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>connector-greeting</artifactId>
+    <name>PipeForge Connector Greeting</name>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.devlive.pipeforge</groupId>
+                <artifactId>pipeforge-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+Libraries the plugin needs are ordinary compile dependencies; they go into `lib/` of the package
+and are isolated from other plugins.
+
+## The descriptor
+
+```yaml
+id: greeting
+name: Greeting
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Produces greeting rows.
+provides:
+  - { type: source, identifier: greeting, class: org.devlive.pipeforge.connector.greeting.GreetingSourceFactory }
+```
+
+The version equals the project version, `api-version` the major version of `pipeforge-api`, and
+every class implements the factory interface of its type and reports the identifier as
+`identifier()`; the build checks all of it.
+
+## The factory
+
+A factory declares its options in an `OptionRule` and creates the component from validated
+options. The [connector API overview](./api-overview) describes sources, transforms and sinks;
+[fake](https://github.com/devlive-community/pipeforge/tree/dev/pipeforge-connectors/connector-fake)
+is a complete source to read.
+
+```java
+public final class GreetingSourceFactory implements SourceFactory {
+
+    static final Option<String> NAME = Options.key("name")
+            .stringType()
+            .defaultValue("world")
+            .withDescription("Who is greeted.");
+
+    @Override
+    public String identifier() {
+        return "greeting";
+    }
+
+    @Override
+    public OptionRule optionRule() {
+        return OptionRule.builder().optional(NAME).build();
+    }
+
+    @Override
+    public Source<?, ?> createSource(FactoryContext context) {
+        return new GreetingSource(context.options().get(NAME));
+    }
+}
+```
+
+## Test it
+
+Every plugin runs the contract tests of its kind ([testkit](./testkit)) next to its own unit
+tests. Run them through Maven, or only the groups you are working on:
+
+```bash
+pipeforge plugin test pipeforge-connectors/connector-greeting
+pipeforge plugin test pipeforge-connectors/connector-greeting --groups options,types
+```
+
+The command uses the nearest `mvnw` of the project (or `mvn`, or `--maven`), prints the Maven
+output to the standard error and ends with a summary such as `Tests passed: 47 run, 0 failed, 0
+errors, 0 skipped`. It exits with 4 when a test fails or the project does not build. A group name
+that is not a group of the component fails, so a typo never passes.
+
+## Document it
+
+The plugin page has generated sections (options, capabilities, versions) that come from the
+documentation data of the plugin. Write it, and check later that it is current:
+
+```bash
+pipeforge plugin docs pipeforge-connectors/connector-greeting
+pipeforge plugin docs pipeforge-connectors/connector-greeting --check
+```
+
+The data goes to `src/generated/plugin-docs/greeting.json`, and the command lists the options of
+every component. Commit the file with the code; the build fails when it is stale. Then write the
+page `plugins/source/greeting.mdx` in both languages with the plugin template of the
+[documentation guide](./docs-guide), and register the module in `docs-map.yaml`.
+
+## Check the package
+
+`./mvnw package` builds `target/connector-greeting-0.1.0-SNAPSHOT.zip`. Check it the way the engine
+will load it:
+
+```bash
+pipeforge plugin validate pipeforge-connectors/connector-greeting/target/connector-greeting-0.1.0-SNAPSHOT.zip
+```
+
+```text
+greeting@0.1.0-SNAPSHOT  pipeforge-connectors/connector-greeting/target/connector-greeting-0.1.0-SNAPSHOT.zip
+  OK  descriptor
+  OK  isolation
+  OK  forbidden-calls
+  OK  components
+  OK  docs
+  source greeting, capabilities: -
+1 package(s) passed, 0 failed
+```
+
+The checks are listed in [packaging plugins](./plugin-packaging#checking-a-built-package); every
+problem is printed, and the command exits with 3 when one is found.
+
+## Try it in a job
+
+The command and the server load the plugin modules of a checkout from their build output with
+`--dev`, so there is nothing to install:
+
+```bash
+./mvnw compile -pl pipeforge-connectors/connector-greeting -am
+pipeforge --dev run --local greeting.yaml
+```
+
+The [server's development mode](../operations/server) does the same for the Web UI.
+
+## Commit it
+
+A plugin is one commit with its code, its tests, the documentation data, the pages in both
+languages and the `docs-map.yaml` entry; framework changes it needs come in a commit before it.
+The message is an English Conventional Commit with the module as scope, and lists the verified
+versions and the tests:
+
+```text
+feat(connector-greeting): add greeting source
+
+Verified versions: none (no external system)
+Tests: 52 unit and testkit (options, types, batch)
+```
+
+See [contributing](./contributing) for the review and the checks of a pull request.

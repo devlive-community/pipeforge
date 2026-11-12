@@ -26,6 +26,9 @@ pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge version
 需要生成作业计划的命令从 `--plugin-path` 加载插件，其次是 `PIPEFORGE_PLUGIN_PATH` 中的目录，再次是安装目录下的 `plugins/`。
 `--dev` 会像[服务端的开发模式](../operations/server)一样，额外从构建输出加载源码仓库中的插件模块，因此在 IDE 中修改的插件不打包就能试用。
 
+[`pipeforge plugin`](#cmd-plugin) 命令用于在编写插件的过程中检查、测试插件并生成文档数据；[编写插件](../development/plugin-guide)
+从第一个模块到提交都会用到它们。
+
 ## 输出与错误
 
 - `-o table`（默认）适合人阅读；`-o json` 和 `-o yaml` 的字段与 [REST API](./api) 一致，同一个主版本内只增不改。

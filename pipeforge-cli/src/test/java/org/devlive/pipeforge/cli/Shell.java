@@ -36,6 +36,15 @@ final class Shell {
     final List<List<String>> commands = new ArrayList<>();
     Optional<String> docker = Optional.empty();
 
+    /** What the stubbed launcher prints and returns for the programs the command starts. */
+    String launch = "";
+
+    int launchExit = 0;
+
+    boolean launchFails;
+
+    final List<Path> launched = new ArrayList<>();
+
     Shell(Path directory) throws IOException {
         this.directory = Files.createDirectories(directory);
         variables.put("PIPEFORGE_LANG", "en-US");
@@ -53,9 +62,25 @@ final class Shell {
 
     Environment environment(PrintStream out, PrintStream err) {
         return new Environment(
-                out, err, variables, properties, directory, directory.resolve("home"), false, (command, timeout) -> {
+                out,
+                err,
+                variables,
+                properties,
+                directory,
+                directory.resolve("home"),
+                false,
+                (command, timeout) -> {
                     commands.add(command);
                     return command.get(0).equals("docker") ? docker : Optional.empty();
+                },
+                (command, workingDirectory, output) -> {
+                    if (launchFails) {
+                        throw new IOException("Cannot run program \"" + command.get(0) + "\"");
+                    }
+                    commands.add(command);
+                    launched.add(workingDirectory);
+                    launch.lines().forEach(output);
+                    return launchExit;
                 });
     }
 

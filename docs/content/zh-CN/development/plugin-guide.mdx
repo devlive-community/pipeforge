@@ -1,0 +1,167 @@
+---
+title: 编写插件
+description: 从空模块到合入的插件：工程结构、描述文件、工厂、契约测试、文档数据、插件包检查和提交，使用 pipeforge plugin 命令。
+order: 45
+---
+
+## 插件是什么
+
+插件是一个 jar，包含 Source、Transform 或 Sink 的工厂，由 `plugin.yaml` 描述，并与其依赖库一起打包成 zip，由引擎在独立的类加载器中加载。
+它只依赖 [`pipeforge-api`](./api-overview)。本指南在本仓库中构建一个 Source 插件 `greeting`；自己工程中的插件步骤相同，只是坐标不同。
+
+## 工程
+
+本仓库的插件是 `pipeforge-connectors` 的子模块，由它统一配置 API、[testkit](./testkit) 和 [Maven 插件](./plugin-packaging)：
+
+```text
+pipeforge-connectors/connector-greeting/
+├── pom.xml
+├── src/main/java/org/devlive/pipeforge/connector/greeting/GreetingSourceFactory.java
+├── src/main/plugin/plugin.yaml                  描述文件
+├── src/generated/plugin-docs/greeting.json      文档数据，由 pipeforge plugin docs 写入
+└── src/test/java/org/devlive/pipeforge/connector/greeting/GreetingSourceContractTest.java
+```
+
+pom 只需要写模块名并列出 Maven 插件；再把模块加入 `pipeforge-connectors/pom.xml` 的 `<modules>`：
+
+```xml
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.devlive.pipeforge</groupId>
+        <artifactId>pipeforge-connectors</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>connector-greeting</artifactId>
+    <name>PipeForge Connector Greeting</name>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.devlive.pipeforge</groupId>
+                <artifactId>pipeforge-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+插件需要的库写成普通的 compile 依赖；它们进入插件包的 `lib/`，并与其他插件隔离。
+
+## 描述文件
+
+```yaml
+id: greeting
+name: Greeting
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Produces greeting rows.
+provides:
+  - { type: source, identifier: greeting, class: org.devlive.pipeforge.connector.greeting.GreetingSourceFactory }
+```
+
+version 与工程版本一致，`api-version` 是 `pipeforge-api` 的主版本，每个类都实现其类型的工厂接口，并在 `identifier()` 中返回所写的标识；
+这些都由构建检查。
+
+## 工厂
+
+工厂在 `OptionRule` 中声明选项，并用校验后的选项创建组件。Source、Transform 和 Sink 的写法见[连接器 API 概览](./api-overview)；
+[fake](https://github.com/devlive-community/pipeforge/tree/dev/pipeforge-connectors/connector-fake) 是一个可以参考的完整 Source。
+
+```java
+public final class GreetingSourceFactory implements SourceFactory {
+
+    static final Option<String> NAME = Options.key("name")
+            .stringType()
+            .defaultValue("world")
+            .withDescription("Who is greeted.");
+
+    @Override
+    public String identifier() {
+        return "greeting";
+    }
+
+    @Override
+    public OptionRule optionRule() {
+        return OptionRule.builder().optional(NAME).build();
+    }
+
+    @Override
+    public Source<?, ?> createSource(FactoryContext context) {
+        return new GreetingSource(context.options().get(NAME));
+    }
+}
+```
+
+## 测试
+
+每个插件除了自己的单元测试，还要运行其类型的契约测试（[testkit](./testkit)）。通过 Maven 运行全部测试，或者只运行正在处理的用例组：
+
+```bash
+pipeforge plugin test pipeforge-connectors/connector-greeting
+pipeforge plugin test pipeforge-connectors/connector-greeting --groups options,types
+```
+
+命令使用工程或其上级目录中最近的 `mvnw`（其次是 `mvn`，或者 `--maven` 指定的命令），把 Maven 输出写到标准错误，最后输出汇总，
+例如 `Tests passed: 47 run, 0 failed, 0 errors, 0 skipped`。有测试失败或工程无法构建时以 4 退出。写了不是该组件用例组的名称时测试失败，
+因此拼写错误不会悄悄通过。
+
+## 文档
+
+插件页中的生成章节（选项、能力、版本）来自插件的文档数据。生成它，之后再检查它是否最新：
+
+```bash
+pipeforge plugin docs pipeforge-connectors/connector-greeting
+pipeforge plugin docs pipeforge-connectors/connector-greeting --check
+```
+
+数据写入 `src/generated/plugin-docs/greeting.json`，命令会列出每个组件的选项。把该文件与代码一起提交；文件过期时构建失败。
+然后按[文档编写指南](./docs-guide)中的插件模板写中英文页面 `plugins/source/greeting.mdx`，并在 `docs-map.yaml` 中登记该模块。
+
+## 检查插件包
+
+`./mvnw package` 生成 `target/connector-greeting-0.1.0-SNAPSHOT.zip`。按引擎加载它的方式检查：
+
+```bash
+pipeforge plugin validate pipeforge-connectors/connector-greeting/target/connector-greeting-0.1.0-SNAPSHOT.zip
+```
+
+```text
+greeting@0.1.0-SNAPSHOT  pipeforge-connectors/connector-greeting/target/connector-greeting-0.1.0-SNAPSHOT.zip
+  OK  descriptor
+  OK  isolation
+  OK  forbidden-calls
+  OK  components
+  OK  docs
+  source greeting, capabilities: -
+1 个插件包通过，0 个未通过
+```
+
+各项检查见[插件打包](./plugin-packaging#检查构建好的插件包)；所有问题都会列出，发现问题时命令以 3 退出。
+
+## 在作业中试用
+
+命令和服务端都可以用 `--dev` 从构建输出加载源码仓库中的插件模块，因此不需要安装：
+
+```bash
+./mvnw compile -pl pipeforge-connectors/connector-greeting -am
+pipeforge --dev run --local greeting.yaml
+```
+
+[服务端的开发模式](../operations/server)为 Web UI 做同样的事。
+
+## 提交
+
+一个插件是一个提交，包含代码、测试、文档数据、中英文页面和 `docs-map.yaml` 条目；它需要的框架改动在它之前单独提交。
+提交信息使用英文 Conventional Commits，范围是模块名，正文列出已验证版本和测试：
+
+```text
+feat(connector-greeting): add greeting source
+
+Verified versions: none (no external system)
+Tests: 52 unit and testkit (options, types, batch)
+```
+
+评审和拉取请求的检查见[参与贡献](./contributing)。

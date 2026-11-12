@@ -196,7 +196,8 @@ as skipped:
 
 Names are separated by commas. A name that is not a group of the component under test fails, so
 `-Dpipeforge.testkit.groups=resume` on a sink without the `resume` group does not pass silently.
-Groups declared in `skipped-testkit-groups` stay skipped with their reason.
+Groups declared in `skipped-testkit-groups` stay skipped with their reason. `pipeforge plugin test
+<project> --groups options,types` does the same for a whole plugin project.
 
 ## Writing other tests
 

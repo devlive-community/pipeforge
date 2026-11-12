@@ -130,6 +130,22 @@ All problems are reported at once:
   - source 'greeting': org.example.greeting.GreetingSourceFactory.identifier() returns 'hello' but plugin.yaml declares 'greeting'
 ```
 
+## Checking a built package
+
+`pipeforge plugin validate <zip>` checks a package the way the engine loads it, without Maven, and
+lists every problem:
+
+| Check | Fails when |
+|---|---|
+| `descriptor` | `plugin.yaml` is malformed, declares no `license`, or was built for another API major version |
+| `isolation` | `lib/` has no jar, a jar contains PipeForge API, common or engine classes, or a class exists twice |
+| `forbidden-calls` | A class calls a JVM-wide operation such as `System.exit` (see [plugins](../concepts/plugins#forbidden-calls)), or a class file cannot be read |
+| `components` | A component class is missing, does not implement its factory interface or reports another identifier |
+| `docs` | `docs/<id>.json` is missing or differs from what the components export |
+
+The command exits with 3 when a package fails; [writing a plugin](./plugin-guide) shows it in the
+course of a whole plugin.
+
 ## Documentation data
 
 `pipeforge:docs` exports what the plugin page generates instead of hand-writing: every option with

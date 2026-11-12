@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+id: upper
+name: Upper
+version: 1.0.0
+api-version: "0.x"
+vendor: Example
+license: MIT
+description: Upper-cases a text column.
+provides:
+  - { type: transform, identifier: upper, class: org.example.upper.UpperFactory }

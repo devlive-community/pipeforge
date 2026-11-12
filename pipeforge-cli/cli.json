@@ -351,6 +351,124 @@
       }
     } ],
     "options" : [ ]
+  }, {
+    "name" : "plugin",
+    "anchor" : "cmd-plugin",
+    "synopsis" : "pipeforge plugin <command>",
+    "description" : {
+      "en-US" : "Check, test and document plugins while they are developed.",
+      "zh-CN" : "在开发过程中校验、测试插件并生成文档数据。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "plugin validate",
+    "anchor" : "cmd-plugin-validate",
+    "synopsis" : "pipeforge plugin validate [options] <package>...",
+    "description" : {
+      "en-US" : "Check built plugin packages the way the engine uses them: descriptor, isolation, forbidden calls, components and documentation data.",
+      "zh-CN" : "按引擎使用插件的方式检查构建好的插件包：描述文件、隔离、禁止调用、组件和文档数据。"
+    },
+    "arguments" : [ {
+      "label" : "<package>",
+      "repeatable" : true,
+      "required" : true,
+      "description" : {
+        "en-US" : "Plugin packages: zip files, or directories they were extracted to.",
+        "zh-CN" : "插件包：zip 文件，或解压后的目录。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "plugin test",
+    "anchor" : "cmd-plugin-test",
+    "synopsis" : "pipeforge plugin test [options] <project>",
+    "description" : {
+      "en-US" : "Run the tests of a plugin project with Maven, the testkit contract among them.",
+      "zh-CN" : "用 Maven 运行插件工程的测试，包括 testkit 契约测试。"
+    },
+    "arguments" : [ {
+      "label" : "<project>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The plugin project: a directory with pom.xml and src/main/plugin/plugin.yaml.",
+        "zh-CN" : "插件工程：包含 pom.xml 和 src/main/plugin/plugin.yaml 的目录。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--groups" ],
+      "label" : "<group>",
+      "default" : null,
+      "repeatable" : true,
+      "description" : {
+        "en-US" : "Only these testkit groups, separated by commas, e.g. options,types; the others are skipped.",
+        "zh-CN" : "只运行这些 testkit 用例组，用逗号分隔，例如 options,types；其他用例组跳过。"
+      }
+    }, {
+      "names" : [ "--test" ],
+      "label" : "<pattern>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Only the test classes that match, as Maven's -Dtest, e.g. *ContractTest.",
+        "zh-CN" : "只运行匹配的测试类，同 Maven 的 -Dtest，例如 *ContractTest。"
+      }
+    }, {
+      "names" : [ "--maven" ],
+      "label" : "<command>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The Maven command to use; defaults to the nearest mvnw of the project, else mvn.",
+        "zh-CN" : "使用的 Maven 命令；默认取工程或其上级目录中最近的 mvnw，否则使用 mvn。"
+      }
+    } ]
+  }, {
+    "name" : "plugin docs",
+    "anchor" : "cmd-plugin-docs",
+    "synopsis" : "pipeforge plugin docs [options] <project>",
+    "description" : {
+      "en-US" : "Write the documentation data of a plugin project with Maven and show the options of its components, or check that it is current.",
+      "zh-CN" : "用 Maven 生成插件工程的文档数据并显示各组件的选项，或者检查文档数据是否最新。"
+    },
+    "arguments" : [ {
+      "label" : "<project>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The plugin project: a directory with pom.xml and src/main/plugin/plugin.yaml.",
+        "zh-CN" : "插件工程：包含 pom.xml 和 src/main/plugin/plugin.yaml 的目录。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--output-dir" ],
+      "label" : "<dir>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Where the documentation data is written; defaults to src/generated/plugin-docs of the project.",
+        "zh-CN" : "文档数据的写入位置；默认为工程的 src/generated/plugin-docs。"
+      }
+    }, {
+      "names" : [ "--check" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Compare the documentation data with what the components export instead of writing it; exit with 3 when it is stale.",
+        "zh-CN" : "不写入，而是把文档数据与组件导出的内容比较；过期时以 3 退出。"
+      }
+    }, {
+      "names" : [ "--maven" ],
+      "label" : "<command>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The Maven command to use; defaults to the nearest mvnw of the project, else mvn.",
+        "zh-CN" : "使用的 Maven 命令；默认取工程或其上级目录中最近的 mvnw，否则使用 mvn。"
+      }
+    } ]
   } ],
   "exitCodes" : [ {
     "code" : 0,
