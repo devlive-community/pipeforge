@@ -133,6 +133,8 @@ check "CI workflow runs everything" "java build-checks dev-env web docs" "$(comp
 check "CI scripts run everything" "java build-checks dev-env web docs" "$(components_for .ci/maven-modules.sh)"
 check "Dependabot config runs nothing" "" "$(components_for .github/dependabot.yml)"
 check "dev environment runs dev-env only" "dev-env" "$(components_for dev/docker-compose.yaml)"
+check "dev command runs java, dev-env and docs" "java dev-env docs" \
+    "$(components_for pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/DevCommand.java)"
 check "community files run nothing" "" \
     "$(components_for .github/CODEOWNERS .github/ISSUE_TEMPLATE/bug_report.yml .github/labels.yml)"
 

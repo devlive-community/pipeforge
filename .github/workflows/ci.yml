@@ -123,20 +123,33 @@ jobs:
       - run: pnpm --filter @pipeforge/ui exec playwright install --with-deps chromium
       - run: pnpm --filter @pipeforge/ui e2e
 
-  # Starts the docker compose environment (including MinIO) and checks every service.
+  # Starts the docker compose environment (including MinIO) with pipeforge dev, checks every
+  # service and stops it again; the scripts in dev/ do the same without the command.
   dev-env:
     needs: changes
     if: needs.changes.outputs.dev-env == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - run: dev/up.sh --s3
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+          cache: maven
+      - run: ./mvnw -B -ntp package -pl pipeforge-cli -am -DskipTests -Djacoco.skip=true -Dinvoker.skip=true
+      - run: echo "PIPEFORGE=$(echo "$PWD"/pipeforge-cli/target/pipeforge-*/bin/pipeforge)" >> "$GITHUB_ENV"
+      - run: $PIPEFORGE dev up --s3
       - run: dev/check.sh
+      - run: $PIPEFORGE dev status
       - if: failure()
         run: docker compose -f dev/docker-compose.yaml --profile s3 logs --no-color --tail 200
       - if: always()
-        run: dev/down.sh --volumes
+        run: $PIPEFORGE dev down --volumes
+      - if: always()
+        run: |
+          # down must leave nothing running: status exits with 1 and says so.
+          if $PIPEFORGE dev status; then exit 1; fi
 
   ci-ok:
     if: always()

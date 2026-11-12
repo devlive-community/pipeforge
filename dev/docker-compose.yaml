@@ -4,7 +4,8 @@
 # Licensed under the MIT License. See the LICENSE file in the
 # project root for full license text.
 #
-# Local development environment. Start it with dev/up.sh and stop it with dev/down.sh.
+# Local development environment. Start it with pipeforge dev up (or dev/up.sh) and stop it
+# with pipeforge dev down (or dev/down.sh).
 # Every port can be changed through an environment variable (see dev/.env.example).
 # Credentials here are for local development only.
 #
@@ -89,7 +90,8 @@ services:
       timeout: 5s
       retries: 30
 
-  # Creates the buckets used by examples and checkpoints, then exits.
+  # Creates the buckets used by examples and checkpoints, then exits. One-off services end in
+  # "-init": pipeforge dev status counts them as completed when they exit with 0.
   minio-init:
     image: ${PIPEFORGE_MINIO_IMAGE:-pgsty/minio:RELEASE.2026-08-04T00-00-00Z}
     profiles: [s3]

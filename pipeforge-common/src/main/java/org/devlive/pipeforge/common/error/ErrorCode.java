@@ -93,6 +93,9 @@ public final class ErrorCode {
 
     // Cluster and processes
     public static final ErrorCode SERVER_START_FAILED = define("PF-CLUS-0002", "SERVER_START_FAILED", "reason", "log");
+    public static final ErrorCode DOCKER_NOT_AVAILABLE = define("PF-CLUS-0003", "DOCKER_NOT_AVAILABLE", "detail");
+    public static final ErrorCode DEV_ENVIRONMENT_FAILED =
+            define("PF-CLUS-0004", "DEV_ENVIRONMENT_FAILED", "action", "exit");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

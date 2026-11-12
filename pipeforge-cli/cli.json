@@ -469,6 +469,108 @@
         "zh-CN" : "使用的 Maven 命令；默认取工程或其上级目录中最近的 mvnw，否则使用 mvn。"
       }
     } ]
+  }, {
+    "name" : "dev",
+    "anchor" : "cmd-dev",
+    "synopsis" : "pipeforge dev <command>",
+    "description" : {
+      "en-US" : "Start, stop and show the local development environment: the docker compose project in dev/ with databases ready for CDC, a fault-injection proxy and monitoring.",
+      "zh-CN" : "启动、停止和查看本地开发环境：dev/ 中的 docker compose 工程，包括已为 CDC 准备好的数据库、故障注入代理和监控。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "dev up",
+    "anchor" : "cmd-dev-up",
+    "synopsis" : "pipeforge dev up [options] [<service>...]",
+    "description" : {
+      "en-US" : "Start the development environment and wait until every service is healthy, then show its status.",
+      "zh-CN" : "启动开发环境，等待所有服务健康后显示其状态。"
+    },
+    "arguments" : [ {
+      "label" : "<service>",
+      "repeatable" : true,
+      "required" : false,
+      "description" : {
+        "en-US" : "Start only these services and what they depend on, e.g. mysql. Defaults to all services.",
+        "zh-CN" : "只启动这些服务及其依赖，例如 mysql。默认启动全部服务。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--s3" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Also start the services of the s3 profile: MinIO with its buckets.",
+        "zh-CN" : "同时启动 s3 profile 中的服务：MinIO 及其存储桶。"
+      }
+    }, {
+      "names" : [ "--timeout" ],
+      "label" : "<duration>",
+      "default" : "5m",
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "How long to wait for the services to become healthy, e.g. 90s or 5m.",
+        "zh-CN" : "等待服务变为健康的最长时间，例如 90s 或 5m。"
+      }
+    }, {
+      "names" : [ "--dir" ],
+      "label" : "<dir>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The directory of the environment, with its docker-compose.yaml. Defaults to dev/ of the source checkout around the current directory, then dev/ of the installation.",
+        "zh-CN" : "开发环境所在的目录，其中有 docker-compose.yaml。默认取当前目录所在源码仓库的 dev/，其次是安装目录的 dev/。"
+      }
+    } ]
+  }, {
+    "name" : "dev down",
+    "anchor" : "cmd-dev-down",
+    "synopsis" : "pipeforge dev down [options]",
+    "description" : {
+      "en-US" : "Stop the development environment, the optional services included.",
+      "zh-CN" : "停止开发环境，包括可选服务。"
+    },
+    "arguments" : [ ],
+    "options" : [ {
+      "names" : [ "--volumes" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Also delete the data volumes; the sample data is created again on the next start.",
+        "zh-CN" : "同时删除数据卷；下次启动时重新创建示例数据。"
+      }
+    }, {
+      "names" : [ "--dir" ],
+      "label" : "<dir>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The directory of the environment, with its docker-compose.yaml. Defaults to dev/ of the source checkout around the current directory, then dev/ of the installation.",
+        "zh-CN" : "开发环境所在的目录，其中有 docker-compose.yaml。默认取当前目录所在源码仓库的 dev/，其次是安装目录的 dev/。"
+      }
+    } ]
+  }, {
+    "name" : "dev status",
+    "anchor" : "cmd-dev-status",
+    "synopsis" : "pipeforge dev status [options]",
+    "description" : {
+      "en-US" : "Show the state, health and ports of every service; exits with 1 when nothing runs or a service is not healthy.",
+      "zh-CN" : "显示每个服务的状态、健康情况和端口；没有服务运行或有服务不健康时以 1 退出。"
+    },
+    "arguments" : [ ],
+    "options" : [ {
+      "names" : [ "--dir" ],
+      "label" : "<dir>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The directory of the environment, with its docker-compose.yaml. Defaults to dev/ of the source checkout around the current directory, then dev/ of the installation.",
+        "zh-CN" : "开发环境所在的目录，其中有 docker-compose.yaml。默认取当前目录所在源码仓库的 dev/，其次是安装目录的 dev/。"
+      }
+    } ]
   } ],
   "exitCodes" : [ {
     "code" : 0,

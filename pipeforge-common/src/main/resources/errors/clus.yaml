@@ -14,3 +14,21 @@
   hint:
     en-US: "Read the end of the server log for the cause; a port that is in use or a Java version below 21 are common."
     zh-CN: "原因见服务端日志的末尾；常见原因是端口被占用或 Java 版本低于 21。"
+
+- code: PF-CLUS-0003
+  name: DOCKER_NOT_AVAILABLE
+  message:
+    en-US: "Docker is not available: {detail}"
+    zh-CN: "Docker 不可用：{detail}"
+  hint:
+    en-US: "Install Docker with Compose v2 and start it; docker version and docker compose version must both work."
+    zh-CN: "安装带 Compose v2 的 Docker 并启动它；docker version 和 docker compose version 都需要能正常运行。"
+
+- code: PF-CLUS-0004
+  name: DEV_ENVIRONMENT_FAILED
+  message:
+    en-US: "docker compose {action} failed with exit code {exit}"
+    zh-CN: "docker compose {action} 失败，退出码为 {exit}"
+  hint:
+    en-US: "The docker compose output above names the service; pipeforge dev status shows the state of every service, and docker compose logs <service> its log."
+    zh-CN: "上面的 docker compose 输出给出了出错的服务；pipeforge dev status 显示每个服务的状态，docker compose logs <服务> 显示它的日志。"

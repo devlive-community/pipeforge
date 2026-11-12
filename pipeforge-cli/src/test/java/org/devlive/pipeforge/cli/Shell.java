@@ -36,6 +36,9 @@ final class Shell {
     final List<List<String>> commands = new ArrayList<>();
     Optional<String> docker = Optional.empty();
 
+    /** What the stubbed runner returns, when set; else {@link #docker} for docker commands. */
+    java.util.function.@org.jspecify.annotations.Nullable Function<List<String>, Optional<String>> answer;
+
     /** What the stubbed launcher prints and returns for the programs the command starts. */
     String launch = "";
 
@@ -71,6 +74,9 @@ final class Shell {
                 false,
                 (command, timeout) -> {
                     commands.add(command);
+                    if (answer != null) {
+                        return answer.apply(command);
+                    }
                     return command.get(0).equals("docker") ? docker : Optional.empty();
                 },
                 (command, workingDirectory, output) -> {

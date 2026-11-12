@@ -1,6 +1,6 @@
 ---
 title: 本地开发环境
-description: 一条命令在本地拉起 MySQL、PostgreSQL、对象存储、故障注入代理和监控。
+description: 用 pipeforge dev up 在本地拉起 MySQL、PostgreSQL、对象存储、故障注入代理和监控。
 order: 20
 template: feature
 omit:
@@ -21,12 +21,38 @@ omit:
 需要安装带 Compose v2 的 Docker。
 
 ```bash
-./dev/up.sh          # 启动全部服务，并等待它们全部健康
-./dev/check.sh       # 检查 binlog、逻辑解码、代理和监控
-./dev/down.sh        # 停止；加 --volumes 同时删除数据
+pipeforge dev up         # 启动全部服务，并等待它们全部健康
+./dev/check.sh           # 检查 binlog、逻辑解码、代理和监控
+pipeforge dev status     # 每个服务的状态、健康情况和端口
+pipeforge dev down       # 停止；加 --volumes 同时删除数据
 ```
 
-用 `./dev/up.sh --s3` 同时启动对象存储，用 `./dev/up.sh mysql` 只启动一个服务。
+用 `pipeforge dev up --s3` 同时启动对象存储，用 `pipeforge dev up mysql` 只启动一个服务及其依赖。
+
+```text
+开发环境：dev
+SERVICE     STATE    HEALTH   PORTS
+grafana     running  healthy  33000->3000
+mysql       running  healthy  33306->3306
+postgres    running  healthy  35432->5432
+prometheus  running  healthy  39090->9090
+toxiproxy   running  healthy  38474->8474, 43306->23306, 45432->25432
+5 个服务，全部健康
+```
+
+### dev 命令
+
+| 命令 | 作用 |
+|---|---|
+| `pipeforge dev up [--s3] [--timeout 5m] [<服务>...]` | 启动服务并等待它们变为健康，然后显示状态。docker compose 的输出写到标准错误。 |
+| `pipeforge dev status` | 显示每个服务。全部健康时以 0 退出；没有服务运行或有服务不健康时以 1 退出，脚本可以据此等待。 |
+| `pipeforge dev down [--volumes]` | 停止所有服务，包括 `s3` profile 中的服务。 |
+
+这些命令都支持 `-o json` 和 `--dir <目录>`。不指定 `--dir` 时，使用当前目录所在源码仓库的 `dev/`，其次是安装目录的
+`dev/`：发行包中带有同样的环境，插件作者不需要源码仓库也能使用。名称以 `-init` 结尾的一次性服务（例如 `minio-init`）
+以 0 退出后视为健康。
+
+不使用命令时，脚本的作用相同：`./dev/up.sh [--s3] [<服务>...]`、`./dev/down.sh [--volumes]`。
 
 ## 配置
 
@@ -75,9 +101,11 @@ curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":true}'
 | 问题 | 处理方法 |
 |---|---|
 | `port is already allocated` | 端口被其他进程占用，在 `dev/.env` 中修改端口。 |
-| 某个服务一直不健康 | 运行 `docker compose -f dev/docker-compose.yaml logs <服务名>` 查看日志。 |
-| 缺少示例数据 | 初始化脚本只在数据卷为空时执行：先运行 `./dev/down.sh --volumes`，再重新启动。 |
-| `dev/up.sh --s3` 无法拉取 MinIO 镜像 | 在 `dev/.env` 中把 `PIPEFORGE_MINIO_IMAGE` 设置为可以拉取的镜像。 |
+| 某个服务一直不健康 | `pipeforge dev status` 会列出它；运行 `docker compose -f dev/docker-compose.yaml logs <服务名>` 查看日志。 |
+| `PF-CLUS-0003` Docker 不可用 | 启动 Docker；`docker version` 和 `docker compose version` 都需要能正常运行。 |
+| `PF-CONF-0008` … `请使用 --dir` | 命令没有找到开发环境：在源码仓库中或从安装目录运行，或者使用 `--dir`。 |
+| 缺少示例数据 | 初始化脚本只在数据卷为空时执行：先运行 `pipeforge dev down --volumes`，再重新启动。 |
+| `pipeforge dev up --s3` 无法拉取 MinIO 镜像 | 在 `dev/.env` 中把 `PIPEFORGE_MINIO_IMAGE` 设置为可以拉取的镜像。 |
 
 ## 限制
 

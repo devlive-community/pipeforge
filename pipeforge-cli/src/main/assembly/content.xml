@@ -11,6 +11,7 @@
     lib/                               the CLI and its libraries
     lib/server/                        the server, started by `pipeforge ui`
     plugins/                           the plugins that come with the distribution
+    dev/                               the development environment, for `pipeforge dev`
 -->
 <component xmlns="http://maven.apache.org/ASSEMBLY-COMPONENT/2.2.0"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -20,6 +21,24 @@
             <directory>src/main/dist/bin</directory>
             <outputDirectory>bin</outputDirectory>
             <fileMode>0755</fileMode>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../dev</directory>
+            <outputDirectory>dev</outputDirectory>
+            <includes>
+                <include>*.sh</include>
+            </includes>
+            <fileMode>0755</fileMode>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../dev</directory>
+            <outputDirectory>dev</outputDirectory>
+            <excludes>
+                <exclude>*.sh</exclude>
+                <exclude>.env</exclude>
+            </excludes>
             <lineEnding>keep</lineEnding>
         </fileSet>
         <fileSet>

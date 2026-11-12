@@ -1,6 +1,6 @@
 ---
 title: Local development environment
-description: Start MySQL, PostgreSQL, object storage, a fault-injection proxy and monitoring locally with one command.
+description: Start MySQL, PostgreSQL, object storage, a fault-injection proxy and monitoring locally with pipeforge dev up.
 order: 20
 template: feature
 omit:
@@ -22,13 +22,41 @@ connector or run tests against real services. It is not meant for production or 
 Requirements: Docker with Compose v2.
 
 ```bash
-./dev/up.sh          # start everything and wait until all services are healthy
-./dev/check.sh       # verify binlog, logical decoding, proxies and monitoring
-./dev/down.sh        # stop; add --volumes to delete the data as well
+pipeforge dev up         # start everything and wait until all services are healthy
+./dev/check.sh           # verify binlog, logical decoding, proxies and monitoring
+pipeforge dev status     # state, health and ports of every service
+pipeforge dev down       # stop; add --volumes to delete the data as well
 ```
 
-Start object storage as well with `./dev/up.sh --s3`, or a single service with
-`./dev/up.sh mysql`.
+Start object storage as well with `pipeforge dev up --s3`, or a single service and what it
+depends on with `pipeforge dev up mysql`.
+
+```text
+Development environment: dev
+SERVICE     STATE    HEALTH   PORTS
+grafana     running  healthy  33000->3000
+mysql       running  healthy  33306->3306
+postgres    running  healthy  35432->5432
+prometheus  running  healthy  39090->9090
+toxiproxy   running  healthy  38474->8474, 43306->23306, 45432->25432
+5 service(s), all healthy
+```
+
+### The dev commands
+
+| Command | What it does |
+|---|---|
+| `pipeforge dev up [--s3] [--timeout 5m] [<service>...]` | Starts the services and waits until they are healthy, then shows the status. The output of docker compose goes to the standard error. |
+| `pipeforge dev status` | Shows every service. Exits with 0 when all of them are healthy, and with 1 when nothing runs or a service is not healthy, so scripts can wait for it. |
+| `pipeforge dev down [--volumes]` | Stops every service, those of the `s3` profile included. |
+
+All of them accept `-o json` and `--dir <dir>`. Without `--dir`, the command uses `dev/` of the
+source checkout around the current directory, then `dev/` of the installation: the distribution
+contains the same environment, so plugin authors can use it without a checkout. A one-off service
+whose name ends in `-init`, such as `minio-init`, counts as healthy once it has exited with 0.
+
+Without the command, the scripts do the same: `./dev/up.sh [--s3] [<service>...]`,
+`./dev/down.sh [--volumes]`.
 
 ## Configuration
 
@@ -78,9 +106,11 @@ curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":true}'
 | Problem | Solution |
 |---|---|
 | `port is already allocated` | Another process uses the port. Change it in `dev/.env`. |
-| A service never becomes healthy | Run `docker compose -f dev/docker-compose.yaml logs <service>`. |
-| Sample data is missing | Init scripts only run on an empty volume: `./dev/down.sh --volumes`, then start again. |
-| `dev/up.sh --s3` cannot pull the MinIO image | Set `PIPEFORGE_MINIO_IMAGE` in `dev/.env` to an image you can pull. |
+| A service never becomes healthy | `pipeforge dev status` names it; run `docker compose -f dev/docker-compose.yaml logs <service>`. |
+| `PF-CLUS-0003` Docker is not available | Start Docker; `docker version` and `docker compose version` must both work. |
+| `PF-CONF-0008` … `pass --dir` | The command found no environment: run it inside the source checkout, from an installation, or pass `--dir`. |
+| Sample data is missing | Init scripts only run on an empty volume: `pipeforge dev down --volumes`, then start again. |
+| `pipeforge dev up --s3` cannot pull the MinIO image | Set `PIPEFORGE_MINIO_IMAGE` in `dev/.env` to an image you can pull. |
 
 ## Limitations
 

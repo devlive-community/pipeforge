@@ -17,7 +17,7 @@ pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge version
 
 应用目录包含 `bin/pipeforge`（Windows 上是 `bin/pipeforge.cmd`）、`lib/` 中的库、`lib/server/` 中供
 [`pipeforge ui`](#cmd-ui) 使用的服务端，以及 `plugins/` 中随发行包提供的插件：`fake`、`field-mapper`、`console` 和
-`blackhole`。运行需要 Java 21 或更高版本；`JAVA_HOME` 指定运行时，`JAVA_OPTS` 添加 JVM 选项。
+`blackhole`，还有 `dev/` 中供 [`pipeforge dev`](#cmd-dev) 使用的[开发环境](../development/local-environment)。运行需要 Java 21 或更高版本；`JAVA_HOME` 指定运行时，`JAVA_OPTS` 添加 JVM 选项。
 
 首次运行会把类数据共享归档写入 `lib/pipeforge.jsa`（安装目录不可写时写入用户的缓存目录）；之后的命令大约 200 毫秒即可启动。
 

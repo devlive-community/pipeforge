@@ -77,6 +77,8 @@
   docs: ["reference/cli"]
 - paths: ["pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/PluginCommand.java", "pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/Maven.java", "pipeforge-cli/src/it/**"]
   docs: ["development/plugin-guide"]
+- paths: ["pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/DevCommand.java"]
+  docs: ["development/local-environment"]
 - paths: ["pipeforge-client-ts/**"]
   docs: ["reference/api"]
 # The Web UI: every page has a guide in guides/; the component library and the tooling are

@@ -58,7 +58,11 @@ class CliReferenceTest {
                         "plugin",
                         "plugin validate",
                         "plugin test",
-                        "plugin docs");
+                        "plugin docs",
+                        "dev",
+                        "dev up",
+                        "dev down",
+                        "dev status");
         for (Map<String, Object> command : commands) {
             Map<String, String> description = (Map<String, String>) command.get("description");
             assertThat(description.get("en-US")).as("%s", command.get("name")).isNotBlank();
