@@ -1,0 +1,72 @@
+---
+title: Field mapping editor
+description: Editing the columns of a field mapper in the job editor by dragging input columns onto output columns, with types and compatibility, written back into the YAML.
+order: 25
+---
+
+The field mapping editor shows a [field mapper](../plugins/transform/field-mapper) of the job as two
+lists: the columns that reach the node on the left, the columns it produces on the right, joined by
+lines. What you change is written back into the job's YAML with small edits, so your comments and
+formatting stay as they are, and the plan shows the new output schema a moment later.
+
+<Screenshot name="field-mapping" alt="The field mapping editor with input columns, output columns and the details of a computed column" />
+
+## Opening the editor
+
+In the [job editor](./job-editor), open the **Mapping** tab, or choose a field mapper node in the
+graph. The tab is there as soon as the job has a `field-mapper` transform; with several, a switch at
+the top chooses one.
+
+The columns come from the plan, so the editor needs the job to be valid once. While the job has
+problems, it keeps showing the columns of its last valid version and says so.
+
+## Connecting columns
+
+- Drag an input column onto an output column: the output column takes its value from that column. An
+  expression or constant it had is replaced; its name stays.
+- Drag an input column onto **New column** to add an output column with its value. A column that was
+  only kept becomes an entry of `mapping` you can rename and retype.
+- The trash button next to an input column adds it to `drop`; the same button brings it back.
+- **Add a column** adds a constant column, which you can turn into an expression.
+
+Each output column says where its value comes from: kept unchanged, an **Expression** or a
+**Constant**, and a column whose `from` names a missing input column is marked in red.
+
+## Editing a column
+
+Choose an output column to see its fields. A field is saved when you press **Enter** or leave it.
+
+| Field | Written as |
+|---|---|
+| Name | `to` |
+| Source: Column, Expression or Constant | `from`, `expr` or `value` |
+| Type | `type`; empty keeps the type of the column or expression shown in the field |
+| NULL: Derived, Allowed, NOT NULL | `nullable` left out, `true` or `false` |
+| Default | `default`, the value that replaces NULL |
+| Comment | `comment` |
+
+**Remove the column** deletes the entry; for a kept column, **Drop the column** adds it to `drop`.
+
+## Types
+
+When a column is converted to another type, a badge says what that means for its values:
+
+| Badge | Meaning |
+|---|---|
+| widens | Every value fits, for example `INT32` to `INT64` or `DECIMAL(10, 2)` to `DECIMAL(14, 2)` |
+| may lose data | Values can be cut, rounded or out of range, for example `INT64` to `INT16` or `STRING` to `STRING(10)` |
+| converted at run time | The value is converted while the job runs and may fail, for example text to a number; failures follow `on-error` |
+
+## Other columns, names and order
+
+The bar above the lists sets the options of the whole node: **Other columns** (`others`), **Names**
+(`name-case`) and **Order** (`order`). Choosing the default removes the option from the YAML. See
+[column mapping](../reference/mapping) for the exact rules.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "The mapping editor needs the plan" | Fix the problems of the job until it is valid once; the columns come from the plan |
+| An output column is marked `no column …` | Its `from` names a column the input does not have: drag the right input column onto it |
+| The types look outdated | The job has problems; the badge at the top says the columns are from the last valid version |

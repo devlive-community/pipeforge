@@ -214,5 +214,74 @@
     "deprecated": "deprecated",
     "hint": "Hint",
     "params": "Parameters"
+  },
+  "mapping": {
+    "tab": "Mapping",
+    "node": "Field mapper",
+    "table": "Input table",
+    "inputs": "Input columns",
+    "outputs": "Output columns",
+    "others": "Other columns",
+    "othersKeep": "Keep",
+    "othersDrop": "Drop",
+    "nameCase": "Names",
+    "cases": {
+      "keep": "As written",
+      "lower": "lower",
+      "upper": "UPPER",
+      "snake": "snake_case",
+      "camel": "camelCase"
+    },
+    "order": "Order",
+    "orders": {
+      "source": "Input order",
+      "mapping": "Mapping order"
+    },
+    "needsPlan": "The mapping editor needs the plan: it appears once the job is valid.",
+    "stale": "The job has problems; columns and types are from its last valid version",
+    "noTables": "The field mapper receives no table.",
+    "states": {
+      "kept": "kept",
+      "mapped": "mapped",
+      "dropped": "dropped",
+      "unused": "not used"
+    },
+    "drop": "Drop {column}",
+    "restore": "Keep {column}",
+    "dragHint": "Drag an input column onto an output column to take its value from there, or onto New column to add one.",
+    "newColumn": "New column",
+    "addColumn": "Add a column",
+    "sources": {
+      "column": "Column",
+      "expression": "Expression",
+      "constant": "Constant"
+    },
+    "missing": "no column {column}",
+    "chooseRow": "Choose an output column to edit it.",
+    "details": "Column {name}",
+    "name": "Name",
+    "source": "Source",
+    "inputColumn": "Input column",
+    "expression": "Expression",
+    "value": "Value",
+    "type": "Type",
+    "typeHint": "keep {type}",
+    "nullable": "NULL",
+    "nullability": {
+      "derived": "Derived",
+      "yes": "Allowed",
+      "no": "NOT NULL"
+    },
+    "default": "Default",
+    "comment": "Comment",
+    "remove": "Remove the column",
+    "dropColumn": "Drop the column",
+    "compat": {
+      "same": "same type",
+      "widens": "widens",
+      "narrows": "may lose data",
+      "converts": "converted at run time"
+    },
+    "rowLabel": "{name}, {type}"
   }
 }

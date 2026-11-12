@@ -24,6 +24,7 @@ export { IconButton } from "./IconButton";
 export { Input } from "./Input";
 export { OptionForm, type OptionField, type OptionFormLabels } from "./OptionForm";
 export { PageHeader } from "./PageHeader";
+export { RowButton } from "./RowButton";
 export { SegmentedControl, type Segment } from "./SegmentedControl";
 export { Skeleton } from "./Skeleton";
 export { Spinner } from "./Spinner";

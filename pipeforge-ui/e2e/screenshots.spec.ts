@@ -12,6 +12,7 @@
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { EXAMPLE_JOB } from "../src/features/job-editor/example";
+import { MAPPED_SHOT } from "./jobs";
 import { mockServer } from "./mocks";
 
 const OUT = fileURLToPath(new URL("../../docs/public/screenshots/ui/", import.meta.url));
@@ -25,8 +26,8 @@ interface Shot {
   draft?: string;
   /** A tab to open before the screenshot, per language. */
   tab?: Record<"en-US" | "zh-CN", string>;
-  /** A button to press before the screenshot, per language. */
-  click?: Record<"en-US" | "zh-CN", string>;
+  /** A button to press before the screenshot, per language, and text to wait for afterwards. */
+  click?: { button: Record<"en-US" | "zh-CN", string>; then?: string };
 }
 
 const PAGES: Shot[] = [
@@ -47,9 +48,17 @@ const PAGES: Shot[] = [
     name: "functions",
     path: "/functions",
     ready: { "en-US": "88 functions", "zh-CN": "88 个函数" },
-    click: { "en-US": "Evaluate", "zh-CN": "求值" },
+    click: { button: { "en-US": "Evaluate", "zh-CN": "求值" }, then: "PIPEFORGE pays 25.00" },
   },
   { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
+  {
+    name: "field-mapping",
+    path: "/editor",
+    ready: { "en-US": "Valid", "zh-CN": "合法" },
+    draft: MAPPED_SHOT,
+    tab: { "en-US": "Mapping", "zh-CN": "映射" },
+    click: { button: { "en-US": "amount_cents, DECIMAL(14, 2)", "zh-CN": "amount_cents，DECIMAL(14, 2)" } },
+  },
   {
     name: "job-editor-problem",
     path: "/editor",
@@ -75,8 +84,8 @@ for (const shot of PAGES) {
         await expect(page.getByText(shot.ready[language], { exact: true })).toBeVisible();
         if (shot.tab) await page.getByRole("tab", { name: shot.tab[language] }).click();
         if (shot.click) {
-          await page.getByRole("button", { name: shot.click[language], exact: true }).click();
-          await expect(page.getByText("PIPEFORGE pays 25.00")).toBeVisible();
+          await page.getByRole("button", { name: shot.click.button[language], exact: true }).click();
+          if (shot.click.then) await expect(page.getByText(shot.click.then)).toBeVisible();
         }
         await page.mouse.move(0, 0);
         await page.screenshot({ path: `${OUT}${shot.name}-${theme}-${language}.png`, animations: "disabled" });

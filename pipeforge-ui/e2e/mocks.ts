@@ -6,6 +6,8 @@
  */
 
 import type { Page } from "@playwright/test";
+import { deriveRows, findColumn } from "../src/features/field-mapping/model";
+import { readMapper } from "../src/features/field-mapping/yamlEdit";
 import { JOB_SCHEMA } from "../test/features/job-editor/schema-fixture";
 // The function and error code catalogs as the server answers them, in both languages.
 import ERRORS_EN from "./fixtures/errors.en-US.json" with { type: "json" };
@@ -46,6 +48,7 @@ export const PLAN = {
             columns: [
               { name: "id", type: "INT64", nullable: false },
               { name: "name", type: "STRING(20)", nullable: true },
+              { name: "amount", type: "DECIMAL(10, 2)", nullable: true },
             ],
             primaryKey: ["id"],
             partitionKeys: [],
@@ -81,6 +84,35 @@ export const PLAN = {
   },
   text: "Job orders-daily  mode=batch (derived)  delivery=at-least-once  engine=native  parallelism=2  timezone=UTC\n",
 };
+
+/**
+ * The plan of a job: the example plan, with the output of the field mapper rename derived from
+ * its options in the definition the way the plugin derives it (names, order, types of entries).
+ */
+function explain(body: string) {
+  const definition = (JSON.parse(body) as { definition: string }).definition;
+  const plan = structuredClone(PLAN);
+  const [orders, rename, print] = plan.plan.nodes;
+  const input = orders?.outputTables[0];
+  const options = readMapper(definition, "rename");
+  if (!input || !rename || !print || !options) return plan;
+  const columns = input.columns.map((c) => ({ name: c.name, type: c.type, nullable: c.nullable }));
+  const output = {
+    ...input,
+    primaryKey: [],
+    columns: deriveRows(options, columns).map((row) => ({
+      name: row.name,
+      type:
+        row.type ??
+        (row.source === "column" && row.input ? (findColumn(columns, row.input)?.type ?? "STRING") : "STRING"),
+      nullable: true,
+    })),
+  };
+  (rename as { inputTables: unknown[] }).inputTables = [input];
+  (rename as { outputTables: unknown[] }).outputTables = [output];
+  (print as { inputTables: unknown[] }).inputTables = [output];
+  return plan;
+}
 
 /** Validation like the server's: a kafka sink fails at the node print, in the requested language. */
 function validate(body: string, language: string) {
@@ -240,7 +272,7 @@ export const SERVER: Record<string, unknown> = {
   "/api/v1/expressions/evaluate": evaluate,
   "/api/v1/jobs/schema": JOB_SCHEMA,
   "/api/v1/jobs/validate": validate,
-  "/api/v1/explain": PLAN,
+  "/api/v1/explain": explain,
 };
 
 /**

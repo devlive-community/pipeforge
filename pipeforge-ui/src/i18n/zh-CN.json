@@ -214,5 +214,74 @@
     "deprecated": "已弃用",
     "hint": "提示",
     "params": "参数"
+  },
+  "mapping": {
+    "tab": "映射",
+    "node": "字段映射",
+    "table": "输入表",
+    "inputs": "输入列",
+    "outputs": "输出列",
+    "others": "其他列",
+    "othersKeep": "保留",
+    "othersDrop": "删除",
+    "nameCase": "列名",
+    "cases": {
+      "keep": "原样",
+      "lower": "小写",
+      "upper": "大写",
+      "snake": "snake_case",
+      "camel": "camelCase"
+    },
+    "order": "顺序",
+    "orders": {
+      "source": "按输入顺序",
+      "mapping": "按映射顺序"
+    },
+    "needsPlan": "映射编辑器需要作业的计划：作业合法后才会显示。",
+    "stale": "作业有问题；列和类型来自最近一次合法的版本",
+    "noTables": "字段映射没有收到任何表。",
+    "states": {
+      "kept": "保留",
+      "mapped": "已映射",
+      "dropped": "已删除",
+      "unused": "未使用"
+    },
+    "drop": "删除 {column}",
+    "restore": "保留 {column}",
+    "dragHint": "把输入列拖到输出列上，输出列就取这一列的值；拖到“新列”上则新增一列。",
+    "newColumn": "新列",
+    "addColumn": "添加列",
+    "sources": {
+      "column": "列",
+      "expression": "表达式",
+      "constant": "常量"
+    },
+    "missing": "没有列 {column}",
+    "chooseRow": "选择一个输出列进行编辑。",
+    "details": "列 {name}",
+    "name": "名称",
+    "source": "来源",
+    "inputColumn": "输入列",
+    "expression": "表达式",
+    "value": "取值",
+    "type": "类型",
+    "typeHint": "沿用 {type}",
+    "nullable": "NULL",
+    "nullability": {
+      "derived": "推导",
+      "yes": "允许",
+      "no": "非空"
+    },
+    "default": "默认值",
+    "comment": "注释",
+    "remove": "移除该列",
+    "dropColumn": "删除该列",
+    "compat": {
+      "same": "类型相同",
+      "widens": "放宽",
+      "narrows": "可能丢失数据",
+      "converts": "运行时转换"
+    },
+    "rowLabel": "{name}，{type}"
   }
 }

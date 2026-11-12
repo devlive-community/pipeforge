@@ -5,7 +5,8 @@
  * project root for full license text.
  */
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MappingEditor } from "@/features/field-mapping/MappingEditor";
 import { useJobSchema } from "@/api/queries";
 import { useT } from "@/i18n";
 import { CodeEditor } from "@/ui/CodeEditor";
@@ -14,9 +15,11 @@ import {
   Badge,
   Button,
   Card,
+  cx,
   DagCanvas,
   FileButton,
   PageHeader,
+  SegmentedControl,
   Spinner,
   Splitter,
   Tabs,
@@ -51,6 +54,14 @@ export function JobEditorPage() {
   const editor = useRef<CodeEditorHandle>(null);
   const schema = useJobSchema();
   const { checking, validation, plan } = useJobCheck(definition);
+  const [tab, setTab] = useState("problems");
+
+  // the mapping editor keeps showing the last valid plan while the job is being changed
+  const current = plan?.data?.plan;
+  const [lastPlan, setLastPlan] = useState(current);
+  useEffect(() => {
+    if (current) setLastPlan(current);
+  }, [current]);
 
   const structure = useMemo(() => readStructure(definition), [definition]);
   const problems = useMemo(() => problemsOf(validation.data, structure), [validation.data, structure]);
@@ -81,6 +92,11 @@ export function JobEditorPage() {
       label: t(error ? "editor.nodeError" : "editor.nodeLabel", { id: node.id, kind, type: node.type }),
     };
   });
+
+  const mappers = structure.filter((n) => n.kind === "transform" && n.type === "field-mapper");
+  const [chosenMapper, setChosenMapper] = useState<string | null>(null);
+  const mapper = mappers.find((n) => n.id === chosenMapper) ?? mappers[0];
+  const activeTab = tab === "mapping" && !mapper ? "problems" : tab;
 
   const errorCount = problems.filter((p) => p.severity === "error").length;
   const status =
@@ -120,7 +136,7 @@ export function JobEditorPage() {
       />
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
         <Splitter
-          className="min-h-0 flex-[3]"
+          className={cx("min-h-0 overflow-hidden", activeTab === "mapping" ? "flex-[2]" : "flex-[3]")}
           label={t("editor.splitter")}
           initial={55}
           first={
@@ -139,15 +155,21 @@ export function JobEditorPage() {
               label={t("editor.graphLabel")}
               labels={{ zoomIn: t("editor.zoomIn"), zoomOut: t("editor.zoomOut"), fit: t("editor.fit") }}
               onSelect={(id) => {
-                const line = structure.find((n) => n.id === id)?.line;
-                if (line) goTo(line);
+                const selected = structure.find((n) => n.id === id);
+                if (selected?.type === "field-mapper") {
+                  setChosenMapper(id);
+                  setTab("mapping");
+                }
+                if (selected?.line) goTo(selected.line);
               }}
             />
           }
         />
         <Tabs
-          className="min-h-0 flex-[2] border-t border-border"
+          className={cx("min-h-0 border-t border-border", activeTab === "mapping" ? "flex-[5]" : "flex-[2]")}
           label={t("editor.panels")}
+          value={activeTab}
+          onChange={setTab}
           tabs={[
             {
               id: "problems",
@@ -180,6 +202,37 @@ export function JobEditorPage() {
                 <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
               ),
             },
+            ...(mapper
+              ? [
+                  {
+                    id: "mapping",
+                    label: t("mapping.tab"),
+                    content: (
+                      <div className="flex h-full min-h-0 flex-col">
+                        {mappers.length > 1 ? (
+                          <div className="border-b border-border px-4 py-2">
+                            <SegmentedControl
+                              label={t("mapping.node")}
+                              value={mapper.id}
+                              onChange={setChosenMapper}
+                              segments={mappers.map((n) => ({ id: n.id, label: n.id }))}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="min-h-0 flex-1">
+                          <MappingEditor
+                            source={definition}
+                            nodeId={mapper.id}
+                            node={lastPlan?.nodes?.find((n) => n.id === mapper.id)}
+                            stale={!current}
+                            onChange={setDefinition}
+                          />
+                        </div>
+                      </div>
+                    ),
+                  },
+                ]
+              : []),
             {
               id: "text",
               label: t("editor.text"),
