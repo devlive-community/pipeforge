@@ -74,7 +74,7 @@ and each plugin gets its own class loader, so libraries in different versions ne
 
 ### Plugins in this repository
 
-Source and sink plugins of PipeForge are modules of `pipeforge-connectors`, which sets the
+Source, transform and sink plugins of PipeForge are modules of `pipeforge-connectors`, which sets the
 conventions once: `pipeforge-api` with provided scope, the [testkit](./testkit) with test scope, and
 `pipeforge-maven-plugin` under `pluginManagement` with three executions: `dev-classpath`, which lets
 a [server in development mode](../operations/server) load the module
@@ -91,6 +91,11 @@ lists the Maven plugin to get them:
     </plugins>
 </build>
 ```
+
+A plugin may use other plugins of the repository as test dependencies, for example to run the
+examples of its documentation page end to end: the console sink runs every example that uses only
+`fake`, `field-mapper` and `console`. Packages never contain other plugins, and at run time each
+plugin sees only its own class loader.
 
 ## Goals
 

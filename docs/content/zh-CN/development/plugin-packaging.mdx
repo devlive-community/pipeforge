@@ -71,7 +71,7 @@ greeting-plugin-1.0.0.zip
 
 ### 本仓库中的插件
 
-PipeForge 的 Source 和 Sink 插件是 `pipeforge-connectors` 的子模块，由它统一设置约定：`pipeforge-api` 为 provided 范围，
+PipeForge 的 Source、Transform 和 Sink 插件是 `pipeforge-connectors` 的子模块，由它统一设置约定：`pipeforge-api` 为 provided 范围，
 [testkit](./testkit) 为 test 范围，`pipeforge-maven-plugin` 放在 `pluginManagement` 中，带三个执行：`dev-classpath`（让[开发模式的服务端](../operations/server)
 在 `./mvnw compile` 之后就能加载该模块）、`package`，以及 `verify` 阶段的文档数据检查。插件模块只需要列出该 Maven 插件即可获得这些执行：
 
@@ -85,6 +85,9 @@ PipeForge 的 Source 和 Sink 插件是 `pipeforge-connectors` 的子模块，�
     </plugins>
 </build>
 ```
+
+插件可以把本仓库的其他插件作为测试依赖，例如端到端运行其文档页中的示例：console Sink 会运行所有只使用 `fake`、`field-mapper`
+和 `console` 的示例。插件包从不包含其他插件，运行时每个插件也只能看到自己的类加载器。
 
 ## 目标
 

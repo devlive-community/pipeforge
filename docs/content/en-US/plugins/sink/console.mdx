@@ -1,0 +1,206 @@
+---
+title: Console sink
+description: Print the rows a pipeline produces as aligned tables or JSON lines, with a row limit — for trying pipelines and debugging.
+order: 10
+template: plugin
+---
+
+## Introduction
+
+The console sink (`type: console`) prints the rows it receives to the standard output of the
+process that runs the job: as aligned tables, or as one JSON object per line. It accepts every
+table, every logical type and every row kind, and keeps no state.
+
+Use it to see what a pipeline produces while you build it, to check a transform on a few rows, to
+follow a stream, or to feed JSON lines to tools such as `jq`. It is not a delivery target: printed
+rows are not committed anywhere, and large outputs slow the job down to the speed of the terminal.
+
+## Capabilities
+
+<PluginCapabilities plugin="console" component="sink" />
+
+## Verified versions
+
+<PluginVersions plugin="console" />
+
+## Quick start
+
+Print three generated rows:
+
+```yaml
+version: 1
+name: console-demo
+source:
+  - { id: src, type: fake, rows: 3 }
+sink:
+  - { id: out, type: console }
+```
+
+```text
+fake.rows
++----+----+-----------------+-------------+-------------------------+
+| op | id | name            | amount      | created_at              |
++----+----+-----------------+-------------+-------------------------+
+| +I |  0 | qhccquhvjsqxi   | 28162027.16 | 2026-12-21 14:05:54.890 |
+| +I |  1 | bnwghlhcyvpdquj | 71666677.29 | 2025-01-15 19:04:47.248 |
+| +I |  2 | pakfj           | 94681414.50 | NULL                    |
++----+----+-----------------+-------------+-------------------------+
+```
+
+The title is the table, `op` is the row kind (`+I` insert, `-U` and `+U` the two halves of an
+update, `-D` delete), numbers are right-aligned and NULL is printed as `NULL`.
+
+### How values are printed
+
+Values are printed the same way in both formats, except where JSON has a type of its own:
+
+| Logical type | Table | JSON |
+|---|---|---|
+| `BOOLEAN`, integers, `FLOAT32`, `FLOAT64` | `true`, `42`, `1.5` | number or boolean; `NaN` and infinities as strings |
+| `DECIMAL` | plain notation, all digits: `12.50` | number with the same digits |
+| `STRING` | the text, line breaks and tabs as `\n` and `\t` | string |
+| `JSON` | the JSON text | embedded as JSON |
+| `BYTES` | hex: `0x000fff` | Base64 string |
+| `DATE` | `2026-11-07` | string |
+| `TIME(p)`, `TIMESTAMP(p)` | `12:30:00.123`, `2026-11-07 12:30:00.123`, with `p` fractional digits | string |
+| `TIMESTAMP_LTZ(p)` | in the job time zone with its offset: `2026-11-07 12:30:00.123+08:00` | string |
+| `ARRAY`, `MAP`, `ROW` | compact JSON | array, object (maps with `STRING` keys) or array of `[key, value]` pairs, object by field name |
+
+## Prerequisites
+
+None: the plugin is part of the distribution. The output goes to the standard output of the
+process that runs the job — the terminal of a local run, or the log of a worker.
+
+## Data source configuration
+
+The console sink has no data source: it writes to the process's standard output or standard
+error, so there are no connection options, native configuration or configuration files.
+
+## Node options
+
+<PluginOptions plugin="console" component="sink" />
+
+## Native options
+
+<PluginNativeOptions plugin="console" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="console" />
+
+## Splits and parallelism
+
+- Every parallel instance prints its own rows; with a parallelism above 1, table titles name the
+  instance (`fake.rows [subtask 2/4]`). A table, a JSON line or a notice is always printed in one
+  piece, so the output of instances never mixes within one.
+- Tables are buffered per input table and printed when they reach `batch-size` rows, at every
+  checkpoint and at the end of the input. JSON lines are printed at once.
+- `limit` applies to each instance: with parallelism 4 and `limit: 10`, up to 40 rows are printed.
+
+## Consistency
+
+The console sink prints, it does not deliver: rows are printed as they arrive and nothing is
+committed. After a failure the job restarts from its last checkpoint and the rows since then are
+printed again. Use a real sink when the output must be complete and free of duplicates.
+
+## Examples
+
+### JSON lines for other tools
+
+```yaml
+version: 1
+name: orders-json
+source:
+  - { id: src, type: fake, rows: 2 }
+sink:
+  - { id: out, type: console, format: json }
+```
+
+```text
+{"table":"fake.rows","kind":"+I","row":{"id":0,"name":"qhccquhvjsqxi","amount":28162027.16,"created_at":"2026-12-21 14:05:54.890"}}
+{"table":"fake.rows","kind":"+I","row":{"id":1,"name":"bnwghlhcyvpdquj","amount":71666677.29,"created_at":"2025-01-15 19:04:47.248"}}
+```
+
+Every line is a JSON object with the `table`, the row `kind` and the `row` by column name, so
+`jq -c '.row'` gives the plain rows. Messages about the output itself are objects with a `notice`,
+and schema changes objects with a `schema-change`; every line stays valid JSON.
+
+### A look at the first rows of a large table
+
+```yaml
+version: 1
+name: peek
+source:
+  - { id: src, type: fake, rows: 1000000 }
+sink:
+  - { id: out, type: console, limit: 5, print-kind: false }
+```
+
+Five rows are printed, followed by `-- limit of 5 row(s) reached; further rows are counted but
+not printed` and, at the end, `-- 999995 row(s) not printed (limit 5)`. The job still reads every
+row, so its row counters and the reconciliation are those of the full table.
+
+### Following a transform
+
+```yaml
+version: 1
+name: check-mapping
+source:
+  - { id: src, type: fake, table: crm.users, columns: [id INT64 NOT NULL, email STRING], rows: 10 }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: email, expr: "LOWER(email)" }
+sink:
+  - { id: out, type: console, batch-size: 5, max-width: 24 }
+```
+
+Two tables of five rows are printed, and e-mail addresses longer than 24 characters end with `…`.
+
+### Output on standard error
+
+```yaml
+version: 1
+name: stderr-demo
+source:
+  - { id: src, type: fake, rows: 3 }
+sink:
+  - { id: out, type: console, target: stderr }
+```
+
+The rows go to the standard error, for example to keep them apart from the logs of the process.
+
+## Metrics
+
+The console sink reports the standard sink metrics: `rowsWritten` and the write rate. Rows left out
+by `limit` are written and counted like the others, so the counters always reconcile with the source.
+A `readerWaitMs` that grows means the terminal or the log cannot keep up with the source.
+
+## Performance and tuning
+
+- Printing is much slower than the engine, and a terminal slower still than a redirected output. Use
+  `limit` for large inputs; for benchmarks, use a sink that discards rows.
+- The JSON format is cheaper than tables, which measure every value of a batch before printing.
+- A smaller `batch-size` shows rows of a slow stream sooner; a larger one gives fewer, wider tables.
+
+## Errors and troubleshooting
+
+| Problem | Cause and fix |
+|---|---|
+| `PF-CONF-0002` … `format` / `target` | The value is not one of the listed choices: `table` or `json`, `stdout` or `stderr` |
+| `PF-CONF-0002` … `batch-size` / `max-width` / `limit` | The value is outside its range; see the options above |
+| Rows of a stream appear late | Tables wait for `batch-size` rows or the next checkpoint; lower `batch-size`, or use `format: json` |
+| Garbled characters | The terminal does not use UTF-8; set it to UTF-8, or use `format: json` and read the file with a tool that does |
+| Columns are misaligned | Some emoji and combined characters take a width the terminal measures differently; the values are still complete |
+
+## Known limitations
+
+- `limit` counts per parallel instance, not for the whole sink.
+- The output cannot go to a file other than through the process's standard output or error.
+- Widths are measured for common East Asian wide characters and emoji; other characters may be
+  measured differently by some terminals.
+
+## Changelog
+
+<PluginChangelog plugin="console" />

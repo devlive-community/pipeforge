@@ -1,0 +1,193 @@
+---
+title: Console Sink
+description: 把管道产出的行打印为对齐的表格或 JSON 行，可限制行数，用于试跑管道和排查问题。
+order: 10
+template: plugin
+---
+
+## 简介
+
+console Sink（`type: console`）把收到的行打印到运行作业的进程的标准输出：打印为对齐的表格，或者每行一个 JSON 对象。
+它接受任意表、任意逻辑类型和任意行类型，不保存状态。
+
+适用场景：搭建管道时查看它的产出；用几行数据检查一个 Transform；跟踪一个流；把 JSON 行交给 `jq` 等工具处理。
+它不是投递目标：打印的行不会提交到任何地方，输出量大时作业会被拖慢到终端的速度。
+
+## 能力
+
+<PluginCapabilities plugin="console" component="sink" />
+
+## 已验证版本
+
+<PluginVersions plugin="console" />
+
+## 快速开始
+
+打印三行生成的数据：
+
+```yaml
+version: 1
+name: console-demo
+source:
+  - { id: src, type: fake, rows: 3 }
+sink:
+  - { id: out, type: console }
+```
+
+```text
+fake.rows
++----+----+-----------------+-------------+-------------------------+
+| op | id | name            | amount      | created_at              |
++----+----+-----------------+-------------+-------------------------+
+| +I |  0 | qhccquhvjsqxi   | 28162027.16 | 2026-12-21 14:05:54.890 |
+| +I |  1 | bnwghlhcyvpdquj | 71666677.29 | 2025-01-15 19:04:47.248 |
+| +I |  2 | pakfj           | 94681414.50 | NULL                    |
++----+----+-----------------+-------------+-------------------------+
+```
+
+标题是表名；`op` 是行类型（`+I` 插入，`-U` 和 `+U` 是更新的前后两半，`-D` 删除）；数字右对齐，NULL 打印为 `NULL`。
+
+### 值的打印方式
+
+两种格式中的值写法相同，只有 JSON 自身有对应类型时例外：
+
+| 逻辑类型 | 表格 | JSON |
+|---|---|---|
+| `BOOLEAN`、整数、`FLOAT32`、`FLOAT64` | `true`、`42`、`1.5` | 数字或布尔值；`NaN` 和无穷大写成字符串 |
+| `DECIMAL` | 普通记数法，保留全部位数：`12.50` | 位数相同的数字 |
+| `STRING` | 原文，换行和制表符写成 `\n` 和 `\t` | 字符串 |
+| `JSON` | JSON 文本 | 作为 JSON 嵌入 |
+| `BYTES` | 十六进制：`0x000fff` | Base64 字符串 |
+| `DATE` | `2026-11-07` | 字符串 |
+| `TIME(p)`、`TIMESTAMP(p)` | `12:30:00.123`、`2026-11-07 12:30:00.123`，带 `p` 位小数秒 | 字符串 |
+| `TIMESTAMP_LTZ(p)` | 按作业时区并带偏移：`2026-11-07 12:30:00.123+08:00` | 字符串 |
+| `ARRAY`、`MAP`、`ROW` | 紧凑的 JSON | 数组；对象（键为 `STRING` 的 Map）或 `[键, 值]` 对的数组；按字段名的对象 |
+
+## 前置条件
+
+无：该插件随发行包提供。输出写到运行作业的进程的标准输出：本地运行时是终端，在 Worker 上运行时是它的日志。
+
+## 数据源配置
+
+console Sink 没有数据源：它写到进程的标准输出或标准错误，因此没有连接选项、原生配置，也没有需要导入的配置文件。
+
+## 节点选项
+
+<PluginOptions plugin="console" component="sink" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="console" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="console" />
+
+## 分片与并行
+
+- 每个并行实例打印自己的行；并行度大于 1 时，表格标题会写明实例（`fake.rows [subtask 2/4]`）。一张表格、一行 JSON
+  或一条提示总是一次打印完，因此不同实例的输出不会在其中交错。
+- 表格按输入表缓冲，攒够 `batch-size` 行、遇到 checkpoint 或输入结束时打印；JSON 行立即打印。
+- `limit` 对每个实例分别生效：并行度为 4、`limit: 10` 时最多打印 40 行。
+
+## 一致性语义
+
+console Sink 只打印、不投递：行到达即打印，不提交任何内容。失败后作业从最近的 checkpoint 重启，此后的行会再打印一次。
+需要完整且不重复的输出时，请使用真正的 Sink。
+
+## 示例
+
+### 供其他工具使用的 JSON 行
+
+```yaml
+version: 1
+name: orders-json
+source:
+  - { id: src, type: fake, rows: 2 }
+sink:
+  - { id: out, type: console, format: json }
+```
+
+```text
+{"table":"fake.rows","kind":"+I","row":{"id":0,"name":"qhccquhvjsqxi","amount":28162027.16,"created_at":"2026-12-21 14:05:54.890"}}
+{"table":"fake.rows","kind":"+I","row":{"id":1,"name":"bnwghlhcyvpdquj","amount":71666677.29,"created_at":"2025-01-15 19:04:47.248"}}
+```
+
+每一行都是一个 JSON 对象，包含 `table`、行类型 `kind` 和按列名组织的 `row`，因此 `jq -c '.row'` 就能得到纯粹的行。
+关于输出本身的消息是带 `notice` 的对象，Schema 变更是带 `schema-change` 的对象；每一行都保持为合法的 JSON。
+
+### 查看大表的前几行
+
+```yaml
+version: 1
+name: peek
+source:
+  - { id: src, type: fake, rows: 1000000 }
+sink:
+  - { id: out, type: console, limit: 5, print-kind: false }
+```
+
+打印五行，随后是 `-- limit of 5 row(s) reached; further rows are counted but not printed`，结束时还有
+`-- 999995 row(s) not printed (limit 5)`。作业仍然读取全部行，因此行数指标和对账结果都对应整张表。
+
+### 检查 Transform 的结果
+
+```yaml
+version: 1
+name: check-mapping
+source:
+  - { id: src, type: fake, table: crm.users, columns: [id INT64 NOT NULL, email STRING], rows: 10 }
+transform:
+  - id: map
+    type: field-mapper
+    mapping:
+      - { from: email, expr: "LOWER(email)" }
+sink:
+  - { id: out, type: console, batch-size: 5, max-width: 24 }
+```
+
+打印两张各五行的表格，超过 24 个字符的邮箱地址以 `…` 结尾。
+
+### 输出到标准错误
+
+```yaml
+version: 1
+name: stderr-demo
+source:
+  - { id: src, type: fake, rows: 3 }
+sink:
+  - { id: out, type: console, target: stderr }
+```
+
+行写到标准错误，例如用来与进程的日志分开。
+
+## 指标
+
+console Sink 报告标准的 Sink 指标：`rowsWritten` 和写入速率。被 `limit` 略去的行与其他行一样写入并计数，
+因此计数总能与 Source 对账。`readerWaitMs` 持续增长说明终端或日志跟不上 Source。
+
+## 性能与调优
+
+- 打印比引擎慢得多，输出到终端又比重定向到文件更慢。输入量大时使用 `limit`；做基准测试时使用丢弃数据的 Sink。
+- JSON 格式比表格开销小，表格在打印前要测量一批中的每个值。
+- `batch-size` 越小，慢速流中的行出现得越早；越大，表格越少、越宽。
+
+## 错误码与排障
+
+| 问题 | 原因与处理 |
+|---|---|
+| `PF-CONF-0002` … `format` / `target` | 取值不在可选值中：`table` 或 `json`，`stdout` 或 `stderr` |
+| `PF-CONF-0002` … `batch-size` / `max-width` / `limit` | 取值超出范围，见上面的选项 |
+| 流中的行出现得晚 | 表格要等够 `batch-size` 行或下一次 checkpoint；调小 `batch-size`，或者使用 `format: json` |
+| 字符乱码 | 终端没有使用 UTF-8；把终端设为 UTF-8，或者使用 `format: json` 并用支持 UTF-8 的工具读取 |
+| 列没有对齐 | 某些 emoji 和组合字符的宽度在终端中的测量方式不同；值本身仍然完整 |
+
+## 已知限制
+
+- `limit` 按并行实例计数，而不是整个 Sink。
+- 输出只能经由进程的标准输出或标准错误，不能直接写入文件。
+- 宽度按常见的东亚宽字符和 emoji 测量；其他字符在某些终端中的测量结果可能不同。
+
+## 变更记录
+
+<PluginChangelog plugin="console" />

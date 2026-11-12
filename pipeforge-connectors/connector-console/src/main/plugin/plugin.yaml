@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+id: console
+name: Console
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Prints the rows it receives to the standard output, as tables or JSON lines, with a row limit. For trying pipelines and debugging.
+provides:
+  - { type: sink, identifier: console, class: org.devlive.pipeforge.connector.console.ConsoleSinkFactory }

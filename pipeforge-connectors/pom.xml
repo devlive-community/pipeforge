@@ -23,6 +23,7 @@
 
     <modules>
         <module>connector-fake</module>
+        <module>connector-console</module>
         <module>transform-field-mapper</module>
     </modules>
 
