@@ -8,6 +8,7 @@ package org.devlive.pipeforge.expressions.function;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -19,29 +20,40 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.devlive.pipeforge.api.function.FunctionContext;
+import org.devlive.pipeforge.api.function.Param;
+import org.devlive.pipeforge.api.function.Returns;
+import org.devlive.pipeforge.api.function.ScalarFunction;
 import org.devlive.pipeforge.api.type.DataType;
 import org.devlive.pipeforge.api.type.DataTypes;
 import org.devlive.pipeforge.api.type.TypeRoot;
-import org.devlive.pipeforge.expressions.EvaluationContext;
 import org.devlive.pipeforge.expressions.function.FunctionDefinition.ReturnType;
 import org.devlive.pipeforge.expressions.function.FunctionDefinition.Signature;
 
-/** Builds {@link FunctionDefinition}s from classes whose static methods carry {@link Scalar}. */
+/**
+ * Builds {@link FunctionDefinition}s from classes whose public methods carry {@link ScalarFunction},
+ * with {@link Returns} and {@link Param} for logical types the Java types cannot express.
+ */
 public final class ScalarFunctions {
 
     private ScalarFunctions() {}
 
-    /** Registers every {@link Scalar} method of the classes, grouped into functions by name. */
-    public static FunctionRegistry register(FunctionRegistry registry, Class<?>... classes) {
+    /** Registers every {@link ScalarFunction} method of the provider's classes, grouped into functions by name. */
+    public static FunctionRegistry register(FunctionRegistry registry, FunctionProvider provider) {
         Map<String, List<Method>> byName = new LinkedHashMap<>();
-        for (Class<?> type : classes) {
+        for (Class<?> type : provider.classes()) {
             Method[] methods = type.getMethods();
             Arrays.sort(methods, Comparator.comparing(Method::getName).thenComparing(Method::toGenericString));
             for (Method method : methods) {
-                Scalar scalar = method.getAnnotation(Scalar.class);
+                ScalarFunction scalar = method.getAnnotation(ScalarFunction.class);
                 if (scalar != null) {
-                    byName.computeIfAbsent(scalar.name(), k -> new ArrayList<>())
+                    byName.computeIfAbsent(provider.qualify(scalar.name()), k -> new ArrayList<>())
                             .add(method);
+                }
+            }
+            for (Method method : type.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(ScalarFunction.class) && !Modifier.isPublic(method.getModifiers())) {
+                    throw new IllegalArgumentException(method + " carries @ScalarFunction but is not public");
                 }
             }
         }
@@ -52,26 +64,19 @@ public final class ScalarFunctions {
     }
 
     static FunctionDefinition define(String name, List<Method> methods) {
+        ScalarFunction first = methods.get(0).getAnnotation(ScalarFunction.class);
         List<Signature> signatures = new ArrayList<>();
         boolean deterministic = true;
-        boolean nullOnNull = true;
         for (Method method : methods) {
-            if (!Modifier.isStatic(method.getModifiers())) {
-                throw new IllegalArgumentException(method + " must be static");
-            }
-            Scalar scalar = method.getAnnotation(Scalar.class);
+            ScalarFunction scalar = method.getAnnotation(ScalarFunction.class);
             deterministic &= scalar.deterministic();
-            nullOnNull &= scalar.nullOnNull();
+            if (scalar.nullOnNull() != first.nullOnNull()) {
+                throw new IllegalArgumentException("All overloads of " + name + " must agree on nullOnNull");
+            }
             signatures.add(signature(method, scalar));
         }
-        if (methods.stream()
-                .map(m -> m.getAnnotation(Scalar.class))
-                .anyMatch(s -> s.nullOnNull()
-                        != methods.get(0).getAnnotation(Scalar.class).nullOnNull())) {
-            throw new IllegalArgumentException("All overloads of " + name + " must agree on nullOnNull");
-        }
         signatures.sort(Comparator.comparingInt(ScalarFunctions::rank));
-        return new FunctionDefinition(name, signatures, deterministic, nullOnNull);
+        return new FunctionDefinition(name, signatures, deterministic, first.nullOnNull());
     }
 
     /** Narrower parameter types first, so that INT32 arguments pick an INT32 overload over INT64. */
@@ -95,26 +100,50 @@ public final class ScalarFunctions {
         return rank;
     }
 
-    private static Signature signature(Method method, Scalar scalar) {
-        Class<?>[] params = method.getParameterTypes();
-        int offset = params.length > 0 && params[0] == EvaluationContext.class ? 1 : 0;
-        List<DataType> parameters = new ArrayList<>();
-        for (int i = offset; i < params.length; i++) {
-            Class<?> type = method.isVarArgs() && i == params.length - 1 ? params[i].getComponentType() : params[i];
-            parameters.add(logical(type, method));
-        }
-        ReturnType returns = returnType(scalar.returns(), method);
-        return new Signature(parameters, method.isVarArgs(), returns, method);
+    /** Whether a function implementation takes the context as first parameter. */
+    public static boolean takesContext(Method method) {
+        return method.getParameterCount() > 0 && method.getParameterTypes()[0] == FunctionContext.class;
     }
 
-    private static ReturnType returnType(String spec, Method method) {
+    private static Signature signature(Method method, ScalarFunction scalar) {
+        Class<?>[] params = method.getParameterTypes();
+        Parameter[] declared = method.getParameters();
+        int offset = takesContext(method) ? 1 : 0;
+        List<DataType> parameters = new ArrayList<>();
+        List<Boolean> exact = new ArrayList<>();
+        for (int i = offset; i < params.length; i++) {
+            Class<?> type = method.isVarArgs() && i == params.length - 1 ? params[i].getComponentType() : params[i];
+            if (!scalar.nullOnNull() && type.isPrimitive()) {
+                throw new IllegalArgumentException(
+                        method + " receives NULL arguments (nullOnNull = false), so parameter " + (i - offset)
+                                + " needs a reference type instead of " + type.getName());
+            }
+            Param param = declared[i].getAnnotation(Param.class);
+            parameters.add(param != null ? parse(param.value(), method) : logical(type, method));
+            exact.add(param != null);
+        }
+        Returns returns = method.getAnnotation(Returns.class);
+        ReturnType result = returnType(returns == null ? "" : returns.value(), method, parameters.size());
+        return new Signature(parameters, method.isVarArgs(), result, method, exact);
+    }
+
+    private static ReturnType returnType(String spec, Method method, int arity) {
         if (spec.isEmpty()) {
             return ReturnType.fixed(logical(method.getReturnType(), method));
         }
         if (spec.startsWith("$")) {
             String[] parts = spec.substring(1).split(":", 2);
-            int index = Integer.parseInt(parts[0]);
-            boolean integral = parts.length > 1 && parts[1].equals("integral");
+            int index;
+            try {
+                index = Integer.parseInt(parts[0]);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid @Returns(\"" + spec + "\") on " + method, e);
+            }
+            if (index < 0 || index >= arity || (parts.length > 1 && !parts[1].equals("integral"))) {
+                throw new IllegalArgumentException("Invalid @Returns(\"" + spec + "\") on " + method
+                        + ": use $n with n below " + arity + ", optionally followed by :integral");
+            }
+            boolean integral = parts.length > 1;
             return arguments -> {
                 DataType type = arguments.get(index).nullable();
                 if (integral && type.root() == TypeRoot.DECIMAL) {
@@ -124,8 +153,15 @@ public final class ScalarFunctions {
                 return type;
             };
         }
-        DataType fixed = DataTypes.parse(spec);
-        return ReturnType.fixed(fixed);
+        return ReturnType.fixed(parse(spec, method));
+    }
+
+    private static DataType parse(String type, Method method) {
+        try {
+            return DataTypes.parse(type);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Invalid logical type '" + type + "' on " + method, e);
+        }
     }
 
     /** The logical type that a Java parameter or result type stands for. */

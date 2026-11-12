@@ -11,7 +11,8 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
-import org.devlive.pipeforge.expressions.function.Scalar;
+import org.devlive.pipeforge.api.function.Returns;
+import org.devlive.pipeforge.api.function.ScalarFunction;
 import org.devlive.pipeforge.expressions.runtime.ExprError;
 
 /** Numeric functions. Results that do not fit their type are errors, never wrapped values. */
@@ -21,7 +22,7 @@ public final class NumericFunctions {
 
     // ------------------------------------------------------------------ ABS, SIGN
 
-    @Scalar(name = "ABS")
+    @ScalarFunction(name = "ABS")
     public static int abs(int value) {
         if (value == Integer.MIN_VALUE) {
             throw new ExprError("numeric overflow: ABS(" + value + ") does not fit into INT32");
@@ -29,7 +30,7 @@ public final class NumericFunctions {
         return Math.abs(value);
     }
 
-    @Scalar(name = "ABS")
+    @ScalarFunction(name = "ABS")
     public static long abs(long value) {
         if (value == Long.MIN_VALUE) {
             throw new ExprError("numeric overflow: ABS(" + value + ") does not fit into INT64");
@@ -37,70 +38,77 @@ public final class NumericFunctions {
         return Math.abs(value);
     }
 
-    @Scalar(name = "ABS", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "ABS")
     public static BigDecimal abs(BigDecimal value) {
         return value.abs();
     }
 
-    @Scalar(name = "ABS")
+    @ScalarFunction(name = "ABS")
     public static double abs(double value) {
         return Math.abs(value);
     }
 
-    @Scalar(name = "SIGN")
+    @ScalarFunction(name = "SIGN")
     public static int sign(long value) {
         return Long.signum(value);
     }
 
-    @Scalar(name = "SIGN")
+    @ScalarFunction(name = "SIGN")
     public static int sign(BigDecimal value) {
         return value.signum();
     }
 
-    @Scalar(name = "SIGN")
+    @ScalarFunction(name = "SIGN")
     public static int sign(double value) {
         return (int) Math.signum(value);
     }
 
     // ------------------------------------------------------------------ rounding
 
-    @Scalar(name = "CEIL", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "CEIL")
     public static long ceil(long value) {
         return value;
     }
 
-    @Scalar(name = "CEIL", returns = "$0:integral")
+    @Returns("$0:integral")
+    @ScalarFunction(name = "CEIL")
     public static BigDecimal ceil(BigDecimal value) {
         return value.setScale(0, RoundingMode.CEILING);
     }
 
-    @Scalar(name = "CEIL")
+    @ScalarFunction(name = "CEIL")
     public static double ceil(double value) {
         return Math.ceil(value);
     }
 
-    @Scalar(name = "FLOOR", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "FLOOR")
     public static long floor(long value) {
         return value;
     }
 
-    @Scalar(name = "FLOOR", returns = "$0:integral")
+    @Returns("$0:integral")
+    @ScalarFunction(name = "FLOOR")
     public static BigDecimal floor(BigDecimal value) {
         return value.setScale(0, RoundingMode.FLOOR);
     }
 
-    @Scalar(name = "FLOOR")
+    @ScalarFunction(name = "FLOOR")
     public static double floor(double value) {
         return Math.floor(value);
     }
 
-    @Scalar(name = "ROUND", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "ROUND")
     public static long round(long value) {
         return value;
     }
 
     /** Rounds half up to {@code digits} digits; negative digits round to tens, hundreds, ... */
-    @Scalar(name = "ROUND", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "ROUND")
     public static long round(long value, int digits) {
         if (digits >= 0) {
             return value;
@@ -113,23 +121,25 @@ public final class NumericFunctions {
         }
     }
 
-    @Scalar(name = "ROUND", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "ROUND")
     public static BigDecimal round(BigDecimal value) {
         return round(value, 0);
     }
 
     /** Rounds half up; the result keeps the scale of its type, e.g. ROUND(1.2345, 2) = 1.2300. */
-    @Scalar(name = "ROUND", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "ROUND")
     public static BigDecimal round(BigDecimal value, int digits) {
         return value.setScale(digits, RoundingMode.HALF_UP).setScale(value.scale(), RoundingMode.UNNECESSARY);
     }
 
-    @Scalar(name = "ROUND")
+    @ScalarFunction(name = "ROUND")
     public static double round(double value) {
         return round(value, 0);
     }
 
-    @Scalar(name = "ROUND")
+    @ScalarFunction(name = "ROUND")
     public static double round(double value, int digits) {
         if (Double.isNaN(value) || Double.isInfinite(value)) {
             return value;
@@ -137,12 +147,13 @@ public final class NumericFunctions {
         return BigDecimal.valueOf(value).setScale(digits, RoundingMode.HALF_UP).doubleValue();
     }
 
-    @Scalar(name = "TRUNCATE", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "TRUNCATE")
     public static BigDecimal truncate(BigDecimal value, int digits) {
         return value.setScale(digits, RoundingMode.DOWN).setScale(value.scale(), RoundingMode.UNNECESSARY);
     }
 
-    @Scalar(name = "TRUNCATE")
+    @ScalarFunction(name = "TRUNCATE")
     public static double truncate(double value, int digits) {
         if (Double.isNaN(value) || Double.isInfinite(value)) {
             return value;
@@ -153,7 +164,7 @@ public final class NumericFunctions {
     // ------------------------------------------------------------------ division
 
     /** Integer division truncating toward zero. */
-    @Scalar(name = "DIV")
+    @ScalarFunction(name = "DIV")
     public static long div(long dividend, long divisor) {
         if (divisor == 0) {
             throw new ExprError("division by zero");
@@ -164,7 +175,7 @@ public final class NumericFunctions {
         return dividend / divisor;
     }
 
-    @Scalar(name = "DIV")
+    @ScalarFunction(name = "DIV")
     public static long div(BigDecimal dividend, BigDecimal divisor) {
         if (divisor.signum() == 0) {
             throw new ExprError("division by zero");
@@ -178,12 +189,12 @@ public final class NumericFunctions {
 
     // ------------------------------------------------------------------ powers and logarithms
 
-    @Scalar(name = "POWER")
+    @ScalarFunction(name = "POWER")
     public static double power(double base, double exponent) {
         return finite(Math.pow(base, exponent), "POWER");
     }
 
-    @Scalar(name = "SQRT")
+    @ScalarFunction(name = "SQRT")
     public static double sqrt(double value) {
         if (value < 0) {
             throw new ExprError("SQRT of a negative number: " + value);
@@ -191,23 +202,23 @@ public final class NumericFunctions {
         return Math.sqrt(value);
     }
 
-    @Scalar(name = "EXP")
+    @ScalarFunction(name = "EXP")
     public static double exp(double value) {
         return finite(Math.exp(value), "EXP");
     }
 
-    @Scalar(name = "LN")
+    @ScalarFunction(name = "LN")
     public static double ln(double value) {
         return Math.log(positive(value, "LN"));
     }
 
     /** Natural logarithm with one argument; LOG(base, x) with two. */
-    @Scalar(name = "LOG")
+    @ScalarFunction(name = "LOG")
     public static double log(double value) {
         return ln(value);
     }
 
-    @Scalar(name = "LOG")
+    @ScalarFunction(name = "LOG")
     public static double log(double base, double value) {
         positive(base, "LOG");
         if (base == 1) {
@@ -216,7 +227,7 @@ public final class NumericFunctions {
         return Math.log(positive(value, "LOG")) / Math.log(base);
     }
 
-    @Scalar(name = "LOG10")
+    @ScalarFunction(name = "LOG10")
     public static double log10(double value) {
         return Math.log10(positive(value, "LOG10"));
     }
@@ -241,36 +252,36 @@ public final class NumericFunctions {
     // ------------------------------------------------------------------ random
 
     /** A random number in [0, 1); evaluated anew for every row. */
-    @Scalar(name = "RAND", deterministic = false)
+    @ScalarFunction(name = "RAND", deterministic = false)
     public static double rand() {
         return ThreadLocalRandom.current().nextDouble();
     }
 
     // ------------------------------------------------------------------ bases
 
-    @Scalar(name = "BIN")
+    @ScalarFunction(name = "BIN")
     public static String bin(long value) {
         return Long.toBinaryString(value);
     }
 
-    @Scalar(name = "HEX")
+    @ScalarFunction(name = "HEX")
     public static String hex(long value) {
         return Long.toHexString(value).toUpperCase(Locale.ROOT);
     }
 
     /** Hexadecimal digits of the UTF-8 bytes of a string. */
-    @Scalar(name = "HEX")
+    @ScalarFunction(name = "HEX")
     public static String hex(String value) {
         return hex(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
-    @Scalar(name = "HEX")
+    @ScalarFunction(name = "HEX")
     public static String hex(byte[] value) {
         return java.util.HexFormat.of().withUpperCase().formatHex(value);
     }
 
     /** Converts a number written in base {@code from} to base {@code to} (bases 2 to 36). */
-    @Scalar(name = "CONV")
+    @ScalarFunction(name = "CONV")
     public static String conv(String number, int from, int to) {
         checkBase(from);
         checkBase(to);

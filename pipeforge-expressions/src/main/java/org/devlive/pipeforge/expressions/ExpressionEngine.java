@@ -10,6 +10,7 @@ import java.util.List;
 import org.devlive.pipeforge.expressions.analysis.Analyzer;
 import org.devlive.pipeforge.expressions.ast.Node;
 import org.devlive.pipeforge.expressions.eval.CodeGenerator;
+import org.devlive.pipeforge.expressions.eval.FunctionInstances;
 import org.devlive.pipeforge.expressions.eval.Interpreter;
 import org.devlive.pipeforge.expressions.function.FunctionRegistry;
 
@@ -50,15 +51,27 @@ public final class ExpressionEngine {
         return new Expression(text, Analyzer.analyze(text, schema, functions));
     }
 
-    /** Compiles expressions to bytecode; shared subexpressions are evaluated once per row. */
+    /**
+     * Compiles expressions to bytecode; shared subexpressions are evaluated once per row. The
+     * objects of instance functions are created and opened now; close the evaluator to close them.
+     *
+     * @throws org.devlive.pipeforge.common.error.PipeForgeException {@code PF-PLUG-0007} when one cannot be opened
+     */
     public Evaluator compile(List<Expression> expressions, OnError onError, EvaluationContext context) {
         List<Node> roots = expressions.stream().map(Expression::root).toList();
-        return new Evaluator(expressions, CodeGenerator.compile(roots, context), onError);
+        FunctionInstances instances = FunctionInstances.open(roots, context);
+        try {
+            return new Evaluator(expressions, CodeGenerator.compile(roots, context, instances), onError, instances);
+        } catch (RuntimeException e) {
+            instances.close();
+            throw e;
+        }
     }
 
     /** Evaluates expressions by walking their trees (the reference semantics of {@link #compile}). */
     public Evaluator interpret(List<Expression> expressions, OnError onError, EvaluationContext context) {
         List<Node> roots = expressions.stream().map(Expression::root).toList();
-        return new Evaluator(expressions, new Interpreter(roots, context), onError);
+        FunctionInstances instances = FunctionInstances.open(roots, context);
+        return new Evaluator(expressions, new Interpreter(roots, context, instances), onError, instances);
     }
 }

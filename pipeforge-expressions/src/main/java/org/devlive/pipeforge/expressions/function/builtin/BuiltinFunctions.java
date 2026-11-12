@@ -7,8 +7,8 @@
 package org.devlive.pipeforge.expressions.function.builtin;
 
 import java.util.List;
+import org.devlive.pipeforge.expressions.function.FunctionProvider;
 import org.devlive.pipeforge.expressions.function.FunctionRegistry;
-import org.devlive.pipeforge.expressions.function.ScalarFunctions;
 
 /** The built-in function library. */
 public final class BuiltinFunctions {
@@ -34,13 +34,14 @@ public final class BuiltinFunctions {
 
     private BuiltinFunctions() {}
 
-    /** A new registry with every built-in function; function plugins may add to it. */
+    /** The built-in library as a function provider, without a namespace. */
+    public static final FunctionProvider PROVIDER = new FunctionProvider(
+            "builtin",
+            null,
+            List.of(ComparisonFunctions.class, NumericFunctions.class, StringFunctions.class, DateTimeFunctions.class));
+
+    /** A new registry with every built-in function. */
     public static FunctionRegistry registry() {
-        return ScalarFunctions.register(
-                FunctionRegistry.empty(),
-                ComparisonFunctions.class,
-                NumericFunctions.class,
-                StringFunctions.class,
-                DateTimeFunctions.class);
+        return FunctionRegistry.of(List.of(PROVIDER));
     }
 }

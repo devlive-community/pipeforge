@@ -59,12 +59,22 @@ public final class CodeGenerator {
     private final Map<String, Integer> occurrences = new HashMap<>();
     private final StringBuilder methods = new StringBuilder();
     private final List<Integer> memoized = new ArrayList<>();
+    /** Constant slots that hold the object of the instance functions of a class. */
+    private final Map<Class<?>, Integer> instanceSlots = new LinkedHashMap<>();
+
     private int nextId;
 
     private CodeGenerator() {}
 
     /** Compiles the expressions; {@code roots.get(i)} is evaluated by {@code eval(i, row)}. */
     public static RowFunctions compile(List<Node> roots, EvaluationContext context) {
+        return compile(roots, context, FunctionInstances.none());
+    }
+
+    /**
+     * Compiles the expressions; instance functions are called on the objects of {@code instances}.
+     */
+    public static RowFunctions compile(List<Node> roots, EvaluationContext context, FunctionInstances instances) {
         CodeGenerator generator = new CodeGenerator();
         for (Node root : roots) {
             generator.count(root);
@@ -81,10 +91,14 @@ public final class CodeGenerator {
             generated = cook(body, parent);
             CACHE.put(cacheKey, generated);
         }
+        Object[] constants = generator.constants.toArray();
+        for (Map.Entry<Class<?>, Integer> slot : generator.instanceSlots.entrySet()) {
+            constants[slot.getValue()] = instances.get(slot.getKey());
+        }
         try {
             return (RowFunctions) generated
                     .getConstructor(Object[].class, EvaluationContext.class, int.class)
-                    .newInstance(generator.constants.toArray(), context, roots.size());
+                    .newInstance(constants, context, roots.size());
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Cannot instantiate generated expressions", e);
         }
@@ -419,14 +433,25 @@ public final class CodeGenerator {
             }
             actual.add(array.append('}').toString());
         }
-        String invocation = method.getDeclaringClass().getCanonicalName() + "." + method.getName() + "("
-                + String.join(", ", actual) + ")";
+        String target = call.signature().instance()
+                ? "((" + method.getDeclaringClass().getCanonicalName() + ") c["
+                        + instanceSlot(method.getDeclaringClass()) + "])"
+                : method.getDeclaringClass().getCanonicalName();
+        String invocation = target + "." + method.getName() + "(" + String.join(", ", actual) + ")";
         String result = box(invocation, method.getReturnType());
         ret(
                 b,
                 node.type().root() == org.devlive.pipeforge.api.type.TypeRoot.DECIMAL
                         ? R + ".result(" + result + ", " + type(node) + ")"
                         : result);
+    }
+
+    /** The constant slot of the object for the instance functions of {@code type}; filled in by {@link #compile}. */
+    private int instanceSlot(Class<?> type) {
+        return instanceSlots.computeIfAbsent(type, t -> {
+            constants.add(t);
+            return constants.size() - 1;
+        });
     }
 
     private static String convert(String value, Class<?> type) {

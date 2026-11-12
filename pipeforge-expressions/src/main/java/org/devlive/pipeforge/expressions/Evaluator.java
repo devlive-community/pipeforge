@@ -11,6 +11,7 @@ import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorKind;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.expressions.eval.FunctionInstances;
 import org.devlive.pipeforge.expressions.eval.RowFunctions;
 import org.devlive.pipeforge.expressions.runtime.ExprError;
 
@@ -20,18 +21,23 @@ import org.devlive.pipeforge.expressions.runtime.ExprError;
  *
  * <p>Run-time failures follow {@link OnError}: {@code NULL} yields NULL and counts the error,
  * {@code DIRTY} and {@code FAIL} throw {@link ErrorCode#EXPRESSION_ERROR} of kind DATA or FATAL.
+ *
+ * <p>An evaluator owns the opened objects of the instance functions it calls ({@link
+ * org.devlive.pipeforge.api.function.FunctionLifecycle}); {@link #close()} closes them.
  */
-public final class Evaluator {
+public final class Evaluator implements AutoCloseable {
 
     private final List<Expression> expressions;
     private final RowFunctions functions;
     private final OnError onError;
+    private final FunctionInstances instances;
     private long errors;
 
-    Evaluator(List<Expression> expressions, RowFunctions functions, OnError onError) {
+    Evaluator(List<Expression> expressions, RowFunctions functions, OnError onError, FunctionInstances instances) {
         this.expressions = List.copyOf(expressions);
         this.functions = functions;
         this.onError = onError;
+        this.instances = instances;
     }
 
     public List<Expression> expressions() {
@@ -97,5 +103,15 @@ public final class Evaluator {
     /** Failures turned into NULL because of {@link OnError#NULL}. */
     public long errorCount() {
         return errors;
+    }
+
+    /**
+     * Closes the objects of the instance functions; does nothing when every function is static.
+     *
+     * @throws PipeForgeException {@link ErrorCode#PLUGIN_CALL_FAILED} when one fails to close
+     */
+    @Override
+    public void close() {
+        instances.close();
     }
 }

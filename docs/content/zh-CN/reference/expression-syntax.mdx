@@ -76,7 +76,10 @@ order: 30
 | `TIMESTAMPDIFF(unit, start, end)` | —（单位是 `MONTH` 这类关键字） |
 | `CURRENT_DATE`、`CURRENT_TIMESTAMP` | 时间戳等同于 `NOW()`；不写括号 |
 
-参数按与运算符相同的规则隐式转换为参数类型。函数有多个重载时使用最窄的匹配重载：`INT32` 列的 `ABS(i)` 结果仍为 `INT32`。
+参数按与运算符相同的规则隐式转换为参数类型。`DECIMAL` 或 `STRING` 参数原样接受任意精度或长度的参数，因此结果可以随之变化：
+`DECIMAL(10, 2)` 列的 `CEIL(d)` 结果为 `DECIMAL(9, 0)`。函数有多个重载时使用最窄的匹配重载：`INT32` 列的 `ABS(i)` 结果仍为 `INT32`。
+
+函数插件中的函数带有命名空间，调用时也要写上，例如 `acme.mask_card(card_no)`；内置函数没有命名空间。暂时还不能安装函数插件。
 
 ## 类型转换
 

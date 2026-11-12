@@ -80,8 +80,13 @@ Functions are called as `NAME(arguments)`; names are case-insensitive. The
 | `TIMESTAMPDIFF(unit, start, end)` | — (the unit is a keyword such as `MONTH`) |
 | `CURRENT_DATE`, `CURRENT_TIMESTAMP` | `NOW()` for the timestamp; written without parentheses |
 
-Arguments are converted implicitly to the parameter types under the same rules as operators. When a
-function is overloaded, the narrowest matching overload is used: `ABS(i)` on an `INT32` stays `INT32`.
+Arguments are converted implicitly to the parameter types under the same rules as operators. A
+`DECIMAL` or `STRING` parameter takes an argument of any precision or length as it is, so the result
+can follow it: `CEIL(d)` on a `DECIMAL(10, 2)` is a `DECIMAL(9, 0)`. When a function is overloaded,
+the narrowest matching overload is used: `ABS(i)` on an `INT32` stays `INT32`.
+
+Functions of function plugins have a namespace and are called with it, such as
+`acme.mask_card(card_no)`; built-in functions have none. Function plugins cannot be installed yet.
 
 ## Casts
 

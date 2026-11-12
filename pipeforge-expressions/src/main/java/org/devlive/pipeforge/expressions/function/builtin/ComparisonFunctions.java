@@ -9,7 +9,7 @@ package org.devlive.pipeforge.expressions.function.builtin;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import org.devlive.pipeforge.expressions.function.Scalar;
+import org.devlive.pipeforge.api.function.ScalarFunction;
 import org.devlive.pipeforge.expressions.runtime.R;
 
 /** Comparison and test functions. COALESCE, NULLIF, IFNULL and IF are part of the syntax. */
@@ -46,7 +46,7 @@ public final class ComparisonFunctions {
     }
 
     /** Whether the text is a number; FALSE for NULL. */
-    @Scalar(name = "IS_NUMERIC", nullOnNull = false)
+    @ScalarFunction(name = "IS_NUMERIC", nullOnNull = false)
     public static boolean isNumeric(String value) {
         if (value == null) {
             return false;
@@ -60,7 +60,7 @@ public final class ComparisonFunctions {
     }
 
     /** Whether the text is an ISO date (yyyy-MM-dd); FALSE for NULL. */
-    @Scalar(name = "IS_DATE", nullOnNull = false)
+    @ScalarFunction(name = "IS_DATE", nullOnNull = false)
     public static boolean isDate(String value) {
         if (value == null) {
             return false;

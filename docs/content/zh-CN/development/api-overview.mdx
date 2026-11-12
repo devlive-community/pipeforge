@@ -34,6 +34,7 @@ order: 40
 | `api.serialization` | 用于分片、待提交物和状态的 `VersionedSerializer` |
 | `api.capability` | 可选能力接口，例如 `SupportsFilterPushDown`、`SupportsUpsert` |
 | `api.expression` | `Predicate`，即交给 `SupportsFilterPushDown` 的过滤条件；`ExpressionCompiler`、`RowEvaluator`、`ExpressionInfo` 和 `OnError`，即供组件使用的表达式语言 |
+| `api.function` | `@ScalarFunction`、`@Returns`、`@Param`、`FunctionContext` 和 `FunctionLifecycle`，即函数的契约 |
 
 ## Source
 
@@ -82,6 +83,44 @@ evaluator.evaluate(row, values);
 - 一起编译的表达式共享公共子表达式。求值器不是线程安全的。
 - `OnError` 决定求值失败时的处理（`dirty`、`null` 或 `fail`），请把它作为组件的 `on-error` 选项提供给用户。
 - `RUN_START_TIME()` 在一次运行的所有 Task 中都相同，日期时间按作业的 `env.timezone` 计算。
+
+## 函数
+
+函数是带注解的 Java 方法。内置函数就是这样声明的，函数插件也将使用 `api.function` 中的同一套契约，因此插件只依赖
+`pipeforge-api`。安装函数插件的能力在后续版本中提供；下面是函数插件将要遵循的契约。
+
+```java
+public final class CardFunctions {
+
+    @ScalarFunction(name = "mask_card")                // 登记在插件的命名空间中：acme.mask_card
+    public static String maskCard(String cardNo) {     // 参数为 NULL 时直接返回 NULL，不调用方法
+        return "****" + cardNo.substring(Math.max(0, cardNo.length() - 4));
+    }
+
+    @ScalarFunction(name = "with_rate")
+    @Returns("DECIMAL(18, 2)")                         // Java 类型不够精确时声明逻辑类型
+    public static BigDecimal withRate(@Param("DECIMAL(16, 2)") BigDecimal amount, int rate) {
+        return amount.multiply(BigDecimal.valueOf(rate));
+    }
+
+    @ScalarFunction(name = "local_day")
+    public static LocalDate localDay(FunctionContext context, Instant at) {  // 由引擎注入上下文
+        return at.atZone(context.timeZone()).toLocalDate();
+    }
+}
+```
+
+| 契约 | 含义 |
+|---|---|
+| `@ScalarFunction(name, deterministic = true, nullOnNull = true)` | 标在公开方法上；同名的方法是重载。`nullOnNull` 为真时任一参数为 NULL 直接返回 NULL，不调用方法；为假时参数必须是引用类型。所有重载都确定时函数才是确定的 |
+| `@Returns("…")` | 结果类型：例如 `DECIMAL(18, 2)` 这样的类型；`$n` 表示与第 n 个参数（从 0 开始）同类型；`$n:integral` 表示该 DECIMAL 参数去掉小数位。不写时由 Java 返回类型推导 |
+| `@Param("…")` | 参数的类型；参数会被转换为恰好这个类型，放不下的参数在计划阶段被拒绝。不写时，`BigDecimal` 或 `String` 参数原样接受任意 DECIMAL 或 STRING |
+| `FunctionContext` | 作为第一个参数：作业时区、运行开始时间、处理时间、作业信息，以及作业为函数配置的参数 |
+| `FunctionLifecycle` | 实例方法需要实现它：每个并行实例创建一个对象，在第一行之前调用 `open(context)`，最后一行之后调用 `close()`；失败时报告 `PF-PLUG-0007` |
+
+Java 类型与逻辑类型的对应关系和行中一致：`String` → `STRING`、`int` → `INT32`、`long` → `INT64`、`double` → `FLOAT64`、
+`boolean` → `BOOLEAN`、`BigDecimal` → `DECIMAL`、`LocalDate` → `DATE`、`LocalTime` → `TIME`、`LocalDateTime` → `TIMESTAMP`、
+`Instant` → `TIMESTAMP_LTZ`、`byte[]` → `BYTES`。
 
 ## 选项
 

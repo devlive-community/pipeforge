@@ -35,6 +35,7 @@ same plugin can therefore run on the PipeForge engine and, later, on Flink or Sp
 | `api.serialization` | `VersionedSerializer` for splits, committables and state |
 | `api.capability` | Optional capabilities such as `SupportsFilterPushDown` and `SupportsUpsert` |
 | `api.expression` | `Predicate`, the filters handed to `SupportsFilterPushDown`; `ExpressionCompiler`, `RowEvaluator`, `ExpressionInfo` and `OnError`, the expression language for components |
+| `api.function` | `@ScalarFunction`, `@Returns`, `@Param`, `FunctionContext` and `FunctionLifecycle`, the contract of functions |
 
 ## Sources
 
@@ -93,6 +94,46 @@ evaluator.evaluate(row, values);
   the component's `on-error` option.
 - `RUN_START_TIME()` is the same in every task of a run, and dates and times follow the job's
   `env.timezone`.
+
+## Functions
+
+Functions are annotated Java methods. The built-in functions are declared this way, and function
+plugins will use the same contract from `api.function`, so a plugin depends on `pipeforge-api`
+only. Installing function plugins arrives in a later version; the contract below is what they will
+be written against.
+
+```java
+public final class CardFunctions {
+
+    @ScalarFunction(name = "mask_card")                // registered in the plugin's namespace: acme.mask_card
+    public static String maskCard(String cardNo) {     // a NULL argument returns NULL without a call
+        return "****" + cardNo.substring(Math.max(0, cardNo.length() - 4));
+    }
+
+    @ScalarFunction(name = "with_rate")
+    @Returns("DECIMAL(18, 2)")                         // the Java type is not precise enough
+    public static BigDecimal withRate(@Param("DECIMAL(16, 2)") BigDecimal amount, int rate) {
+        return amount.multiply(BigDecimal.valueOf(rate));
+    }
+
+    @ScalarFunction(name = "local_day")
+    public static LocalDate localDay(FunctionContext context, Instant at) {  // the context is injected
+        return at.atZone(context.timeZone()).toLocalDate();
+    }
+}
+```
+
+| Contract | Meaning |
+|---|---|
+| `@ScalarFunction(name, deterministic = true, nullOnNull = true)` | On a public method; methods with the same name are overloads. With `nullOnNull` a NULL argument gives NULL without calling the method; without it the parameters need reference types. A function is deterministic only when all its overloads are |
+| `@Returns("…")` | The result type: a type such as `DECIMAL(18, 2)`, `$n` for the type of argument `n` (from 0), `$n:integral` for a DECIMAL argument without fractional digits. Without it the type follows from the Java return type |
+| `@Param("…")` | The type of a parameter; arguments are cast to exactly this type, and arguments that do not fit are rejected while planning. Without it, a `BigDecimal` or `String` parameter accepts any DECIMAL or STRING as it is |
+| `FunctionContext` | As first parameter: the job time zone, the run start time, the processing time, the job and the function parameters configured for the job |
+| `FunctionLifecycle` | Needed for instance methods: every parallel instance creates one object, calls `open(context)` before the first row and `close()` after the last; a failure is reported as `PF-PLUG-0007` |
+
+Java types map to logical types as in rows: `String` → `STRING`, `int` → `INT32`, `long` → `INT64`,
+`double` → `FLOAT64`, `boolean` → `BOOLEAN`, `BigDecimal` → `DECIMAL`, `LocalDate` → `DATE`,
+`LocalTime` → `TIME`, `LocalDateTime` → `TIMESTAMP`, `Instant` → `TIMESTAMP_LTZ`, `byte[]` → `BYTES`.
 
 ## Options
 

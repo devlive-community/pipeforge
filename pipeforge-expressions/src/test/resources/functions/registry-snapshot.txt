@@ -1,0 +1,206 @@
+IS_DATE null-tolerant
+  (STRING) -> BOOLEAN  ComparisonFunctions.isDate(String) boolean
+IS_NUMERIC null-tolerant
+  (STRING) -> BOOLEAN  ComparisonFunctions.isNumeric(String) boolean
+ABS
+  (INT32) -> INT32  NumericFunctions.abs(int) int
+  (INT64) -> INT64  NumericFunctions.abs(long) long
+  (DECIMAL(38, 18)) -> DECIMAL(38, 18)  NumericFunctions.abs(BigDecimal) BigDecimal
+  (FLOAT64) -> FLOAT64  NumericFunctions.abs(double) double
+BIN
+  (INT64) -> STRING  NumericFunctions.bin(long) String
+CEIL
+  (INT64) -> INT64  NumericFunctions.ceil(long) long
+  (DECIMAL(38, 18)) -> DECIMAL(21, 0)  NumericFunctions.ceil(BigDecimal) BigDecimal
+  (FLOAT64) -> FLOAT64  NumericFunctions.ceil(double) double
+CONV
+  (STRING, INT32, INT32) -> STRING  NumericFunctions.conv(String, int, int) String
+DIV
+  (INT64, INT64) -> INT64  NumericFunctions.div(long, long) long
+  (DECIMAL(38, 18), DECIMAL(38, 18)) -> INT64  NumericFunctions.div(BigDecimal, BigDecimal) long
+EXP
+  (FLOAT64) -> FLOAT64  NumericFunctions.exp(double) double
+FLOOR
+  (INT64) -> INT64  NumericFunctions.floor(long) long
+  (DECIMAL(38, 18)) -> DECIMAL(21, 0)  NumericFunctions.floor(BigDecimal) BigDecimal
+  (FLOAT64) -> FLOAT64  NumericFunctions.floor(double) double
+HEX
+  (BYTES) -> STRING  NumericFunctions.hex(byte[]) String
+  (STRING) -> STRING  NumericFunctions.hex(String) String
+  (INT64) -> STRING  NumericFunctions.hex(long) String
+LN
+  (FLOAT64) -> FLOAT64  NumericFunctions.ln(double) double
+LOG
+  (FLOAT64) -> FLOAT64  NumericFunctions.log(double) double
+  (FLOAT64, FLOAT64) -> FLOAT64  NumericFunctions.log(double, double) double
+LOG10
+  (FLOAT64) -> FLOAT64  NumericFunctions.log10(double) double
+POWER
+  (FLOAT64, FLOAT64) -> FLOAT64  NumericFunctions.power(double, double) double
+RAND nondeterministic
+  () -> FLOAT64  NumericFunctions.rand() double
+ROUND
+  (INT64) -> INT64  NumericFunctions.round(long) long
+  (DECIMAL(38, 18)) -> DECIMAL(38, 18)  NumericFunctions.round(BigDecimal) BigDecimal
+  (FLOAT64) -> FLOAT64  NumericFunctions.round(double) double
+  (INT64, INT32) -> INT64  NumericFunctions.round(long, int) long
+  (DECIMAL(38, 18), INT32) -> DECIMAL(38, 18)  NumericFunctions.round(BigDecimal, int) BigDecimal
+  (FLOAT64, INT32) -> FLOAT64  NumericFunctions.round(double, int) double
+SIGN
+  (INT64) -> INT32  NumericFunctions.sign(long) int
+  (DECIMAL(38, 18)) -> INT32  NumericFunctions.sign(BigDecimal) int
+  (FLOAT64) -> INT32  NumericFunctions.sign(double) int
+SQRT
+  (FLOAT64) -> FLOAT64  NumericFunctions.sqrt(double) double
+TRUNCATE
+  (DECIMAL(38, 18), INT32) -> DECIMAL(38, 18)  NumericFunctions.truncate(BigDecimal, int) BigDecimal
+  (FLOAT64, INT32) -> FLOAT64  NumericFunctions.truncate(double, int) double
+ASCII
+  (STRING) -> INT32  StringFunctions.ascii(String) int
+CHAR_LENGTH
+  (STRING) -> INT32  StringFunctions.charLength(String) int
+CHR
+  (INT32) -> STRING  StringFunctions.chr(int) String
+CONCAT
+  (STRING...) -> STRING  StringFunctions.concat(String[]) String
+CONCAT_WS null-tolerant
+  (STRING, STRING...) -> STRING  StringFunctions.concatWs(String, String[]) String
+INITCAP
+  (STRING) -> STRING  StringFunctions.initcap(String) String
+INSTR
+  (STRING, STRING) -> INT32  StringFunctions.instr(String, String) int
+LEFT
+  (STRING, INT32) -> STRING  StringFunctions.left(String, int) String
+LENGTH
+  (BYTES) -> INT32  StringFunctions.length(byte[]) int
+  (STRING) -> INT32  StringFunctions.lengthOf(String) int
+LOWER
+  (STRING) -> STRING  StringFunctions.lower(String) String
+LPAD
+  (STRING, INT32) -> STRING  StringFunctions.lpad(String, int) String
+  (STRING, INT32, STRING) -> STRING  StringFunctions.lpad(String, int, String) String
+LTRIM
+  (STRING) -> STRING  StringFunctions.ltrim(String) String
+  (STRING, STRING) -> STRING  StringFunctions.ltrim(String, String) String
+OCTET_LENGTH
+  (STRING) -> INT32  StringFunctions.octetLength(String) int
+POSITION
+  (STRING, STRING) -> INT32  StringFunctions.position(String, String) int
+REGEXP_EXTRACT
+  (STRING, STRING) -> STRING  StringFunctions.regexpExtract(String, String) String
+  (STRING, STRING, INT32) -> STRING  StringFunctions.regexpExtract(String, String, int) String
+REGEXP_LIKE
+  (STRING, STRING) -> BOOLEAN  StringFunctions.regexpLike(String, String) boolean
+REGEXP_REPLACE
+  (STRING, STRING, STRING) -> STRING  StringFunctions.regexpReplace(String, String, String) String
+REPEAT
+  (STRING, INT32) -> STRING  StringFunctions.repeat(String, int) String
+REPLACE
+  (STRING, STRING, STRING) -> STRING  StringFunctions.replace(String, String, String) String
+REVERSE
+  (STRING) -> STRING  StringFunctions.reverse(String) String
+RIGHT
+  (STRING, INT32) -> STRING  StringFunctions.right(String, int) String
+RPAD
+  (STRING, INT32) -> STRING  StringFunctions.rpad(String, int) String
+  (STRING, INT32, STRING) -> STRING  StringFunctions.rpad(String, int, String) String
+RTRIM
+  (STRING) -> STRING  StringFunctions.rtrim(String) String
+  (STRING, STRING) -> STRING  StringFunctions.rtrim(String, String) String
+SPLIT
+  (STRING, STRING) -> ARRAY<STRING>  StringFunctions.split(String, String) List
+SPLIT_PART
+  (STRING, STRING, INT32) -> STRING  StringFunctions.splitPart(String, String, int) String
+SUBSTRING
+  (STRING, INT64) -> STRING  StringFunctions.substring(String, long) String
+  (STRING, INT64, INT64) -> STRING  StringFunctions.substring(String, long, long) String
+TRANSLATE
+  (STRING, STRING, STRING) -> STRING  StringFunctions.translate(String, String, String) String
+TRIM
+  (STRING) -> STRING  StringFunctions.trim(String) String
+  (STRING, STRING) -> STRING  StringFunctions.trim(String, String) String
+UPPER
+  (STRING) -> STRING  StringFunctions.upper(String) String
+CONVERT_TZ
+  (TIMESTAMP(6), STRING, STRING) -> TIMESTAMP(6)  DateTimeFunctions.convertTz(LocalDateTime, String, String) LocalDateTime
+CURRENT_DATE nondeterministic
+  () -> DATE  DateTimeFunctions.currentDate(context) LocalDate
+CURRENT_TIMESTAMP nondeterministic
+  () -> TIMESTAMP_LTZ(3)  DateTimeFunctions.currentTimestamp(context) Instant
+DATE_ADD
+  (DATE, INT64) -> DATE  DateTimeFunctions.dateAdd(LocalDate, long) LocalDate
+  (DATE, INT64, STRING) -> DATE  DateTimeFunctions.dateAdd(LocalDate, long, String) LocalDate
+  (TIMESTAMP(6), INT64, STRING) -> TIMESTAMP(6)  DateTimeFunctions.dateAdd(LocalDateTime, long, String) LocalDateTime
+  (TIMESTAMP_LTZ(6), INT64, STRING) -> TIMESTAMP_LTZ(6)  DateTimeFunctions.dateAdd(context, Instant, long, String) Instant
+DATEDIFF
+  (TIMESTAMP(6), TIMESTAMP(6)) -> INT64  DateTimeFunctions.dateDiff(LocalDateTime, LocalDateTime) long
+DATE_FORMAT
+  (DATE, STRING) -> STRING  DateTimeFunctions.dateFormat(LocalDate, String) String
+  (TIMESTAMP(6), STRING) -> STRING  DateTimeFunctions.dateFormat(LocalDateTime, String) String
+  (TIMESTAMP_LTZ(6), STRING) -> STRING  DateTimeFunctions.dateFormat(context, Instant, String) String
+DATE_SUB
+  (DATE, INT64) -> DATE  DateTimeFunctions.dateSub(LocalDate, long) LocalDate
+  (DATE, INT64, STRING) -> DATE  DateTimeFunctions.dateSub(LocalDate, long, String) LocalDate
+  (TIMESTAMP(6), INT64, STRING) -> TIMESTAMP(6)  DateTimeFunctions.dateSub(LocalDateTime, long, String) LocalDateTime
+  (TIMESTAMP_LTZ(6), INT64, STRING) -> TIMESTAMP_LTZ(6)  DateTimeFunctions.dateSub(context, Instant, long, String) Instant
+DATE_TRUNC
+  (STRING, DATE) -> DATE  DateTimeFunctions.dateTrunc(String, LocalDate) LocalDate
+  (STRING, TIMESTAMP(6)) -> TIMESTAMP(6)  DateTimeFunctions.dateTrunc(String, LocalDateTime) LocalDateTime
+  (STRING, TIMESTAMP_LTZ(6)) -> TIMESTAMP_LTZ(6)  DateTimeFunctions.dateTrunc(context, String, Instant) Instant
+DAYOFMONTH
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.dayOfMonth(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.dayOfMonth(context, Instant) int
+DAYOFWEEK
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.dayOfWeek(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.dayOfWeek(context, Instant) int
+DAYOFYEAR
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.dayOfYear(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.dayOfYear(context, Instant) int
+FROM_UNIXTIME
+  (INT64) -> TIMESTAMP_LTZ(0)  DateTimeFunctions.fromUnixtime(long) Instant
+HOUR
+  (TIME(0)) -> INT32  DateTimeFunctions.hour(LocalTime) int
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.hour(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.hour(context, Instant) int
+LAST_DAY
+  (TIMESTAMP(6)) -> DATE  DateTimeFunctions.lastDay(LocalDateTime) LocalDate
+MINUTE
+  (TIME(0)) -> INT32  DateTimeFunctions.minute(LocalTime) int
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.minute(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.minute(context, Instant) int
+MONTH
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.month(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.month(context, Instant) int
+NOW nondeterministic
+  () -> TIMESTAMP_LTZ(3)  DateTimeFunctions.now(context) Instant
+QUARTER
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.quarter(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.quarter(context, Instant) int
+RUN_START_TIME
+  () -> TIMESTAMP_LTZ(3)  DateTimeFunctions.runStartTime(context) Instant
+SECOND
+  (TIME(0)) -> INT32  DateTimeFunctions.second(LocalTime) int
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.second(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.second(context, Instant) int
+TIMESTAMPDIFF
+  (STRING, TIMESTAMP(6), TIMESTAMP(6)) -> INT64  DateTimeFunctions.timestampDiff(String, LocalDateTime, LocalDateTime) long
+  (STRING, TIMESTAMP_LTZ(6), TIMESTAMP_LTZ(6)) -> INT64  DateTimeFunctions.timestampDiff(context, String, Instant, Instant) long
+TO_DATE
+  (STRING) -> DATE  DateTimeFunctions.toDate(String) LocalDate
+  (STRING, STRING) -> DATE  DateTimeFunctions.toDate(String, String) LocalDate
+TO_TIMESTAMP
+  (STRING) -> TIMESTAMP(3)  DateTimeFunctions.toTimestamp(String) LocalDateTime
+  (STRING, STRING) -> TIMESTAMP(3)  DateTimeFunctions.toTimestamp(String, String) LocalDateTime
+TO_TIMESTAMP_LTZ
+  (STRING) -> TIMESTAMP_LTZ(3)  DateTimeFunctions.toTimestampLtz(context, String) Instant
+  (STRING, STRING) -> TIMESTAMP_LTZ(3)  DateTimeFunctions.toTimestampLtz(context, String, String) Instant
+UNIX_TIMESTAMP nondeterministic
+  () -> INT64  DateTimeFunctions.unixTimestamp(context) long
+  (TIMESTAMP(6)) -> INT64  DateTimeFunctions.unixTimestamp(context, LocalDateTime) long
+  (TIMESTAMP_LTZ(6)) -> INT64  DateTimeFunctions.unixTimestamp(Instant) long
+WEEK
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.week(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.week(context, Instant) int
+YEAR
+  (TIMESTAMP(6)) -> INT32  DateTimeFunctions.year(LocalDateTime) int
+  (TIMESTAMP_LTZ(6)) -> INT32  DateTimeFunctions.year(context, Instant) int

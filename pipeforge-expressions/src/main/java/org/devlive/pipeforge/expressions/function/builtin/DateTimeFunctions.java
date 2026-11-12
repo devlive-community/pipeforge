@@ -25,8 +25,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import org.devlive.pipeforge.expressions.EvaluationContext;
-import org.devlive.pipeforge.expressions.function.Scalar;
+import org.devlive.pipeforge.api.function.FunctionContext;
+import org.devlive.pipeforge.api.function.Returns;
+import org.devlive.pipeforge.api.function.ScalarFunction;
 import org.devlive.pipeforge.expressions.runtime.ExprError;
 import org.devlive.pipeforge.expressions.runtime.R;
 
@@ -69,7 +70,7 @@ public final class DateTimeFunctions {
         return formatter;
     }
 
-    private static LocalDateTime local(EvaluationContext ctx, Instant value) {
+    private static LocalDateTime local(FunctionContext ctx, Instant value) {
         return LocalDateTime.ofInstant(value, ctx.timeZone());
     }
 
@@ -97,42 +98,45 @@ public final class DateTimeFunctions {
 
     // ------------------------------------------------------------------ current time
 
-    @Scalar(name = "CURRENT_DATE", deterministic = false)
-    public static LocalDate currentDate(EvaluationContext ctx) {
+    @ScalarFunction(name = "CURRENT_DATE", deterministic = false)
+    public static LocalDate currentDate(FunctionContext ctx) {
         return LocalDate.ofInstant(ctx.now(), ctx.timeZone());
     }
 
     /** The processing time; evaluated for every row. */
-    @Scalar(name = "CURRENT_TIMESTAMP", returns = "TIMESTAMP_LTZ(3)", deterministic = false)
-    public static Instant currentTimestamp(EvaluationContext ctx) {
+    @Returns("TIMESTAMP_LTZ(3)")
+    @ScalarFunction(name = "CURRENT_TIMESTAMP", deterministic = false)
+    public static Instant currentTimestamp(FunctionContext ctx) {
         return ctx.now().truncatedTo(ChronoUnit.MILLIS);
     }
 
-    @Scalar(name = "NOW", returns = "TIMESTAMP_LTZ(3)", deterministic = false)
-    public static Instant now(EvaluationContext ctx) {
+    @Returns("TIMESTAMP_LTZ(3)")
+    @ScalarFunction(name = "NOW", deterministic = false)
+    public static Instant now(FunctionContext ctx) {
         return currentTimestamp(ctx);
     }
 
     /** Start time of the run; the same for every row, retry and restore of the run. */
-    @Scalar(name = "RUN_START_TIME", returns = "TIMESTAMP_LTZ(3)")
-    public static Instant runStartTime(EvaluationContext ctx) {
+    @Returns("TIMESTAMP_LTZ(3)")
+    @ScalarFunction(name = "RUN_START_TIME")
+    public static Instant runStartTime(FunctionContext ctx) {
         return ctx.runStartTime().truncatedTo(ChronoUnit.MILLIS);
     }
 
     // ------------------------------------------------------------------ formatting and parsing
 
-    @Scalar(name = "DATE_FORMAT")
+    @ScalarFunction(name = "DATE_FORMAT")
     public static String dateFormat(LocalDate value, String pattern) {
         return format(value.atStartOfDay(), pattern);
     }
 
-    @Scalar(name = "DATE_FORMAT")
+    @ScalarFunction(name = "DATE_FORMAT")
     public static String dateFormat(LocalDateTime value, String pattern) {
         return format(value, pattern);
     }
 
-    @Scalar(name = "DATE_FORMAT")
-    public static String dateFormat(EvaluationContext ctx, Instant value, String pattern) {
+    @ScalarFunction(name = "DATE_FORMAT")
+    public static String dateFormat(FunctionContext ctx, Instant value, String pattern) {
         try {
             return formatter(pattern).format(value.atZone(ctx.timeZone()));
         } catch (DateTimeException e) {
@@ -148,7 +152,7 @@ public final class DateTimeFunctions {
         }
     }
 
-    @Scalar(name = "TO_DATE")
+    @ScalarFunction(name = "TO_DATE")
     public static LocalDate toDate(String text) {
         try {
             return LocalDate.parse(text.trim());
@@ -157,7 +161,7 @@ public final class DateTimeFunctions {
         }
     }
 
-    @Scalar(name = "TO_DATE")
+    @ScalarFunction(name = "TO_DATE")
     public static LocalDate toDate(String text, String pattern) {
         try {
             return LocalDate.parse(text.trim(), formatter(pattern));
@@ -166,7 +170,8 @@ public final class DateTimeFunctions {
         }
     }
 
-    @Scalar(name = "TO_TIMESTAMP", returns = "TIMESTAMP(3)")
+    @Returns("TIMESTAMP(3)")
+    @ScalarFunction(name = "TO_TIMESTAMP")
     public static LocalDateTime toTimestamp(String text) {
         try {
             return R.parseTimestamp(text).truncatedTo(ChronoUnit.MILLIS);
@@ -175,7 +180,8 @@ public final class DateTimeFunctions {
         }
     }
 
-    @Scalar(name = "TO_TIMESTAMP", returns = "TIMESTAMP(3)")
+    @Returns("TIMESTAMP(3)")
+    @ScalarFunction(name = "TO_TIMESTAMP")
     public static LocalDateTime toTimestamp(String text, String pattern) {
         try {
             DateTimeFormatter formatter = formatter(pattern);
@@ -188,8 +194,9 @@ public final class DateTimeFunctions {
     }
 
     /** An instant; text without an offset is local time in the job time zone. */
-    @Scalar(name = "TO_TIMESTAMP_LTZ", returns = "TIMESTAMP_LTZ(3)")
-    public static Instant toTimestampLtz(EvaluationContext ctx, String text) {
+    @Returns("TIMESTAMP_LTZ(3)")
+    @ScalarFunction(name = "TO_TIMESTAMP_LTZ")
+    public static Instant toTimestampLtz(FunctionContext ctx, String text) {
         try {
             return R.parseInstant(text, ctx.timeZone()).truncatedTo(ChronoUnit.MILLIS);
         } catch (DateTimeParseException e) {
@@ -197,160 +204,162 @@ public final class DateTimeFunctions {
         }
     }
 
-    @Scalar(name = "TO_TIMESTAMP_LTZ", returns = "TIMESTAMP_LTZ(3)")
-    public static Instant toTimestampLtz(EvaluationContext ctx, String text, String pattern) {
+    @Returns("TIMESTAMP_LTZ(3)")
+    @ScalarFunction(name = "TO_TIMESTAMP_LTZ")
+    public static Instant toTimestampLtz(FunctionContext ctx, String text, String pattern) {
         return toTimestamp(text, pattern).atZone(ctx.timeZone()).toInstant();
     }
 
-    @Scalar(name = "FROM_UNIXTIME", returns = "TIMESTAMP_LTZ(0)")
+    @Returns("TIMESTAMP_LTZ(0)")
+    @ScalarFunction(name = "FROM_UNIXTIME")
     public static Instant fromUnixtime(long seconds) {
         return Instant.ofEpochSecond(seconds);
     }
 
-    @Scalar(name = "UNIX_TIMESTAMP", deterministic = false)
-    public static long unixTimestamp(EvaluationContext ctx) {
+    @ScalarFunction(name = "UNIX_TIMESTAMP", deterministic = false)
+    public static long unixTimestamp(FunctionContext ctx) {
         return ctx.now().getEpochSecond();
     }
 
-    @Scalar(name = "UNIX_TIMESTAMP")
-    public static long unixTimestamp(EvaluationContext ctx, LocalDateTime value) {
+    @ScalarFunction(name = "UNIX_TIMESTAMP")
+    public static long unixTimestamp(FunctionContext ctx, LocalDateTime value) {
         return value.atZone(ctx.timeZone()).toEpochSecond();
     }
 
-    @Scalar(name = "UNIX_TIMESTAMP")
+    @ScalarFunction(name = "UNIX_TIMESTAMP")
     public static long unixTimestamp(Instant value) {
         return value.getEpochSecond();
     }
 
     // ------------------------------------------------------------------ fields
 
-    @Scalar(name = "YEAR")
+    @ScalarFunction(name = "YEAR")
     public static int year(LocalDateTime value) {
         return value.getYear();
     }
 
-    @Scalar(name = "YEAR")
-    public static int year(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "YEAR")
+    public static int year(FunctionContext ctx, Instant value) {
         return year(local(ctx, value));
     }
 
-    @Scalar(name = "QUARTER")
+    @ScalarFunction(name = "QUARTER")
     public static int quarter(LocalDateTime value) {
         return (value.getMonthValue() - 1) / 3 + 1;
     }
 
-    @Scalar(name = "QUARTER")
-    public static int quarter(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "QUARTER")
+    public static int quarter(FunctionContext ctx, Instant value) {
         return quarter(local(ctx, value));
     }
 
-    @Scalar(name = "MONTH")
+    @ScalarFunction(name = "MONTH")
     public static int month(LocalDateTime value) {
         return value.getMonthValue();
     }
 
-    @Scalar(name = "MONTH")
-    public static int month(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "MONTH")
+    public static int month(FunctionContext ctx, Instant value) {
         return month(local(ctx, value));
     }
 
     /** ISO week of the year (weeks start on Monday). */
-    @Scalar(name = "WEEK")
+    @ScalarFunction(name = "WEEK")
     public static int week(LocalDateTime value) {
         return value.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
     }
 
-    @Scalar(name = "WEEK")
-    public static int week(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "WEEK")
+    public static int week(FunctionContext ctx, Instant value) {
         return week(local(ctx, value));
     }
 
     /** Day of the month; also written DAY(x). */
-    @Scalar(name = "DAYOFMONTH")
+    @ScalarFunction(name = "DAYOFMONTH")
     public static int dayOfMonth(LocalDateTime value) {
         return value.getDayOfMonth();
     }
 
-    @Scalar(name = "DAYOFMONTH")
-    public static int dayOfMonth(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "DAYOFMONTH")
+    public static int dayOfMonth(FunctionContext ctx, Instant value) {
         return dayOfMonth(local(ctx, value));
     }
 
     /** 1 = Sunday, 2 = Monday, ..., 7 = Saturday. */
-    @Scalar(name = "DAYOFWEEK")
+    @ScalarFunction(name = "DAYOFWEEK")
     public static int dayOfWeek(LocalDateTime value) {
         return value.getDayOfWeek().getValue() % 7 + 1;
     }
 
-    @Scalar(name = "DAYOFWEEK")
-    public static int dayOfWeek(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "DAYOFWEEK")
+    public static int dayOfWeek(FunctionContext ctx, Instant value) {
         return dayOfWeek(local(ctx, value));
     }
 
-    @Scalar(name = "DAYOFYEAR")
+    @ScalarFunction(name = "DAYOFYEAR")
     public static int dayOfYear(LocalDateTime value) {
         return value.getDayOfYear();
     }
 
-    @Scalar(name = "DAYOFYEAR")
-    public static int dayOfYear(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "DAYOFYEAR")
+    public static int dayOfYear(FunctionContext ctx, Instant value) {
         return dayOfYear(local(ctx, value));
     }
 
-    @Scalar(name = "HOUR")
+    @ScalarFunction(name = "HOUR")
     public static int hour(LocalTime value) {
         return value.getHour();
     }
 
-    @Scalar(name = "HOUR")
+    @ScalarFunction(name = "HOUR")
     public static int hour(LocalDateTime value) {
         return value.getHour();
     }
 
-    @Scalar(name = "HOUR")
-    public static int hour(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "HOUR")
+    public static int hour(FunctionContext ctx, Instant value) {
         return hour(local(ctx, value));
     }
 
-    @Scalar(name = "MINUTE")
+    @ScalarFunction(name = "MINUTE")
     public static int minute(LocalTime value) {
         return value.getMinute();
     }
 
-    @Scalar(name = "MINUTE")
+    @ScalarFunction(name = "MINUTE")
     public static int minute(LocalDateTime value) {
         return value.getMinute();
     }
 
-    @Scalar(name = "MINUTE")
-    public static int minute(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "MINUTE")
+    public static int minute(FunctionContext ctx, Instant value) {
         return minute(local(ctx, value));
     }
 
-    @Scalar(name = "SECOND")
+    @ScalarFunction(name = "SECOND")
     public static int second(LocalTime value) {
         return value.getSecond();
     }
 
-    @Scalar(name = "SECOND")
+    @ScalarFunction(name = "SECOND")
     public static int second(LocalDateTime value) {
         return value.getSecond();
     }
 
-    @Scalar(name = "SECOND")
-    public static int second(EvaluationContext ctx, Instant value) {
+    @ScalarFunction(name = "SECOND")
+    public static int second(FunctionContext ctx, Instant value) {
         return second(local(ctx, value));
     }
 
     // ------------------------------------------------------------------ arithmetic
 
-    @Scalar(name = "DATE_ADD")
+    @ScalarFunction(name = "DATE_ADD")
     public static LocalDate dateAdd(LocalDate value, long days) {
         return value.plusDays(days);
     }
 
     /** Adds {@code amount} units to a date; units smaller than a day are rejected. */
-    @Scalar(name = "DATE_ADD")
+    @ScalarFunction(name = "DATE_ADD")
     public static LocalDate dateAdd(LocalDate value, long amount, String unit) {
         ChronoUnit chrono = unit(unit);
         if (chrono.getDuration().compareTo(ChronoUnit.DAYS.getDuration()) < 0) {
@@ -359,44 +368,48 @@ public final class DateTimeFunctions {
         return isQuarter(unit) ? value.plusMonths(3 * amount) : value.plus(amount, chrono);
     }
 
-    @Scalar(name = "DATE_ADD", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "DATE_ADD")
     public static LocalDateTime dateAdd(LocalDateTime value, long amount, String unit) {
         return isQuarter(unit) ? value.plusMonths(3 * amount) : value.plus(amount, unit(unit));
     }
 
-    @Scalar(name = "DATE_ADD", returns = "$0")
-    public static Instant dateAdd(EvaluationContext ctx, Instant value, long amount, String unit) {
+    @Returns("$0")
+    @ScalarFunction(name = "DATE_ADD")
+    public static Instant dateAdd(FunctionContext ctx, Instant value, long amount, String unit) {
         return dateAdd(local(ctx, value), amount, unit).atZone(ctx.timeZone()).toInstant();
     }
 
-    @Scalar(name = "DATE_SUB")
+    @ScalarFunction(name = "DATE_SUB")
     public static LocalDate dateSub(LocalDate value, long days) {
         return value.minusDays(days);
     }
 
-    @Scalar(name = "DATE_SUB")
+    @ScalarFunction(name = "DATE_SUB")
     public static LocalDate dateSub(LocalDate value, long amount, String unit) {
         return dateAdd(value, Math.negateExact(amount), unit);
     }
 
-    @Scalar(name = "DATE_SUB", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "DATE_SUB")
     public static LocalDateTime dateSub(LocalDateTime value, long amount, String unit) {
         return dateAdd(value, Math.negateExact(amount), unit);
     }
 
-    @Scalar(name = "DATE_SUB", returns = "$0")
-    public static Instant dateSub(EvaluationContext ctx, Instant value, long amount, String unit) {
+    @Returns("$0")
+    @ScalarFunction(name = "DATE_SUB")
+    public static Instant dateSub(FunctionContext ctx, Instant value, long amount, String unit) {
         return dateAdd(ctx, value, Math.negateExact(amount), unit);
     }
 
     /** Days from {@code start} to {@code end} (calendar dates). */
-    @Scalar(name = "DATEDIFF")
+    @ScalarFunction(name = "DATEDIFF")
     public static long dateDiff(LocalDateTime end, LocalDateTime start) {
         return ChronoUnit.DAYS.between(start.toLocalDate(), end.toLocalDate());
     }
 
     /** Whole {@code unit}s from {@code start} to {@code end}. */
-    @Scalar(name = "TIMESTAMPDIFF")
+    @ScalarFunction(name = "TIMESTAMPDIFF")
     public static long timestampDiff(String unit, LocalDateTime start, LocalDateTime end) {
         if (isQuarter(unit)) {
             return ChronoUnit.MONTHS.between(start, end) / 3;
@@ -404,18 +417,19 @@ public final class DateTimeFunctions {
         return unit(unit).between(start, end);
     }
 
-    @Scalar(name = "TIMESTAMPDIFF")
-    public static long timestampDiff(EvaluationContext ctx, String unit, Instant start, Instant end) {
+    @ScalarFunction(name = "TIMESTAMPDIFF")
+    public static long timestampDiff(FunctionContext ctx, String unit, Instant start, Instant end) {
         return timestampDiff(unit, local(ctx, start), local(ctx, end));
     }
 
-    @Scalar(name = "DATE_TRUNC")
+    @ScalarFunction(name = "DATE_TRUNC")
     public static LocalDate dateTrunc(String unit, LocalDate value) {
         return dateTrunc(unit, value.atStartOfDay()).toLocalDate();
     }
 
     /** Truncates to the start of the year, quarter, month, week (Monday), day, hour, minute or second. */
-    @Scalar(name = "DATE_TRUNC", returns = "$1")
+    @Returns("$1")
+    @ScalarFunction(name = "DATE_TRUNC")
     public static LocalDateTime dateTrunc(String unit, LocalDateTime value) {
         String name = unit.trim().toUpperCase(Locale.ROOT).replaceAll("S$", "");
         LocalDateTime day = value.truncatedTo(ChronoUnit.DAYS);
@@ -430,18 +444,20 @@ public final class DateTimeFunctions {
         };
     }
 
-    @Scalar(name = "DATE_TRUNC", returns = "$1")
-    public static Instant dateTrunc(EvaluationContext ctx, String unit, Instant value) {
+    @Returns("$1")
+    @ScalarFunction(name = "DATE_TRUNC")
+    public static Instant dateTrunc(FunctionContext ctx, String unit, Instant value) {
         return dateTrunc(unit, local(ctx, value)).atZone(ctx.timeZone()).toInstant();
     }
 
-    @Scalar(name = "LAST_DAY")
+    @ScalarFunction(name = "LAST_DAY")
     public static LocalDate lastDay(LocalDateTime value) {
         return value.toLocalDate().with(TemporalAdjusters.lastDayOfMonth());
     }
 
     /** Converts a local time from one time zone to another. */
-    @Scalar(name = "CONVERT_TZ", returns = "$0")
+    @Returns("$0")
+    @ScalarFunction(name = "CONVERT_TZ")
     public static LocalDateTime convertTz(LocalDateTime value, String from, String to) {
         return value.atZone(zone(from)).withZoneSameInstant(zone(to)).toLocalDateTime();
     }

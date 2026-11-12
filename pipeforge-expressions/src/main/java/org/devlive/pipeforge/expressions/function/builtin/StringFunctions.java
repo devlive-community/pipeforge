@@ -13,7 +13,8 @@ import java.util.Collections;
 import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Locale;
-import org.devlive.pipeforge.expressions.function.Scalar;
+import org.devlive.pipeforge.api.function.Returns;
+import org.devlive.pipeforge.api.function.ScalarFunction;
 import org.devlive.pipeforge.expressions.runtime.ExprError;
 import org.devlive.pipeforge.expressions.runtime.R;
 
@@ -40,40 +41,40 @@ public final class StringFunctions {
 
     // ------------------------------------------------------------------ length and case
 
-    @Scalar(name = "LENGTH")
+    @ScalarFunction(name = "LENGTH")
     public static int length(byte[] value) {
         return value.length;
     }
 
     /** Number of characters. */
-    @Scalar(name = "LENGTH")
+    @ScalarFunction(name = "LENGTH")
     public static int lengthOf(String value) {
         return length(value);
     }
 
-    @Scalar(name = "CHAR_LENGTH")
+    @ScalarFunction(name = "CHAR_LENGTH")
     public static int charLength(String value) {
         return length(value);
     }
 
     /** Number of bytes in UTF-8. */
-    @Scalar(name = "OCTET_LENGTH")
+    @ScalarFunction(name = "OCTET_LENGTH")
     public static int octetLength(String value) {
         return value.getBytes(StandardCharsets.UTF_8).length;
     }
 
-    @Scalar(name = "LOWER")
+    @ScalarFunction(name = "LOWER")
     public static String lower(String value) {
         return value.toLowerCase(Locale.ROOT);
     }
 
-    @Scalar(name = "UPPER")
+    @ScalarFunction(name = "UPPER")
     public static String upper(String value) {
         return value.toUpperCase(Locale.ROOT);
     }
 
     /** Upper-cases the first letter of every word and lower-cases the rest. */
-    @Scalar(name = "INITCAP")
+    @ScalarFunction(name = "INITCAP")
     public static String initcap(String value) {
         StringBuilder out = new StringBuilder(value.length());
         boolean start = true;
@@ -88,23 +89,23 @@ public final class StringFunctions {
 
     // ------------------------------------------------------------------ trimming and padding
 
-    @Scalar(name = "TRIM")
+    @ScalarFunction(name = "TRIM")
     public static String trim(String value) {
         return value.strip();
     }
 
     /** Removes the characters in {@code characters} from both ends. */
-    @Scalar(name = "TRIM")
+    @ScalarFunction(name = "TRIM")
     public static String trim(String value, String characters) {
         return rtrim(ltrim(value, characters), characters);
     }
 
-    @Scalar(name = "LTRIM")
+    @ScalarFunction(name = "LTRIM")
     public static String ltrim(String value) {
         return value.stripLeading();
     }
 
-    @Scalar(name = "LTRIM")
+    @ScalarFunction(name = "LTRIM")
     public static String ltrim(String value, String characters) {
         int i = 0;
         while (i < value.length()) {
@@ -117,12 +118,12 @@ public final class StringFunctions {
         return value.substring(i);
     }
 
-    @Scalar(name = "RTRIM")
+    @ScalarFunction(name = "RTRIM")
     public static String rtrim(String value) {
         return value.stripTrailing();
     }
 
-    @Scalar(name = "RTRIM")
+    @ScalarFunction(name = "RTRIM")
     public static String rtrim(String value, String characters) {
         int end = value.length();
         while (end > 0) {
@@ -135,23 +136,23 @@ public final class StringFunctions {
         return value.substring(0, end);
     }
 
-    @Scalar(name = "LPAD")
+    @ScalarFunction(name = "LPAD")
     public static String lpad(String value, int length) {
         return lpad(value, length, " ");
     }
 
     /** Pads on the left with {@code pad} to {@code length} characters; longer values are cut. */
-    @Scalar(name = "LPAD")
+    @ScalarFunction(name = "LPAD")
     public static String lpad(String value, int length, String pad) {
         return pad(value, length, pad, true);
     }
 
-    @Scalar(name = "RPAD")
+    @ScalarFunction(name = "RPAD")
     public static String rpad(String value, int length) {
         return rpad(value, length, " ");
     }
 
-    @Scalar(name = "RPAD")
+    @ScalarFunction(name = "RPAD")
     public static String rpad(String value, int length, String pad) {
         return pad(value, length, pad, false);
     }
@@ -177,13 +178,13 @@ public final class StringFunctions {
 
     // ------------------------------------------------------------------ substrings
 
-    @Scalar(name = "SUBSTRING")
+    @ScalarFunction(name = "SUBSTRING")
     public static String substring(String value, long start) {
         return substring(value, start, Integer.MAX_VALUE);
     }
 
     /** {@code length} characters from position {@code start} (1-based). */
-    @Scalar(name = "SUBSTRING")
+    @ScalarFunction(name = "SUBSTRING")
     public static String substring(String value, long start, long length) {
         if (start < 1) {
             throw new ExprError("SUBSTRING start must be at least 1, got " + start);
@@ -196,7 +197,7 @@ public final class StringFunctions {
         return value.substring(from, to);
     }
 
-    @Scalar(name = "LEFT")
+    @ScalarFunction(name = "LEFT")
     public static String left(String value, int count) {
         if (count < 0) {
             throw new ExprError("LEFT needs a non-negative length, got " + count);
@@ -204,7 +205,7 @@ public final class StringFunctions {
         return value.substring(0, offset(value, count));
     }
 
-    @Scalar(name = "RIGHT")
+    @ScalarFunction(name = "RIGHT")
     public static String right(String value, int count) {
         if (count < 0) {
             throw new ExprError("RIGHT needs a non-negative length, got " + count);
@@ -214,26 +215,26 @@ public final class StringFunctions {
     }
 
     /** Position (1-based) of the first occurrence of {@code part} in {@code value}, 0 if absent. */
-    @Scalar(name = "POSITION")
+    @ScalarFunction(name = "POSITION")
     public static int position(String part, String value) {
         int index = value.indexOf(part);
         return index < 0 ? 0 : value.codePointCount(0, index) + 1;
     }
 
-    @Scalar(name = "INSTR")
+    @ScalarFunction(name = "INSTR")
     public static int instr(String value, String part) {
         return position(part, value);
     }
 
     // ------------------------------------------------------------------ replacing
 
-    @Scalar(name = "REPLACE")
+    @ScalarFunction(name = "REPLACE")
     public static String replace(String value, String search, String replacement) {
         return search.isEmpty() ? value : value.replace(search, replacement);
     }
 
     /** Replaces each character of {@code from} with the character at the same position in {@code to}; extra characters of {@code from} are removed. */
-    @Scalar(name = "TRANSLATE")
+    @ScalarFunction(name = "TRANSLATE")
     public static String translate(String value, String from, String to) {
         int[] source = from.codePoints().toArray();
         int[] target = to.codePoints().toArray();
@@ -255,7 +256,7 @@ public final class StringFunctions {
         return out.toString();
     }
 
-    @Scalar(name = "REVERSE")
+    @ScalarFunction(name = "REVERSE")
     public static String reverse(String value) {
         int[] points = value.codePoints().toArray();
         StringBuilder out = new StringBuilder(value.length());
@@ -265,7 +266,7 @@ public final class StringFunctions {
         return out.toString();
     }
 
-    @Scalar(name = "REPEAT")
+    @ScalarFunction(name = "REPEAT")
     public static String repeat(String value, int count) {
         if (count < 0) {
             throw new ExprError("REPEAT needs a non-negative count, got " + count);
@@ -278,13 +279,13 @@ public final class StringFunctions {
 
     // ------------------------------------------------------------------ concatenation and splitting
 
-    @Scalar(name = "CONCAT")
+    @ScalarFunction(name = "CONCAT")
     public static String concat(String... values) {
         return String.join("", values);
     }
 
     /** Joins the non-NULL values with {@code separator}; NULL values are skipped. */
-    @Scalar(name = "CONCAT_WS", nullOnNull = false)
+    @ScalarFunction(name = "CONCAT_WS", nullOnNull = false)
     public static String concatWs(String separator, String... values) {
         if (separator == null) {
             return null;
@@ -299,7 +300,7 @@ public final class StringFunctions {
     }
 
     /** Part {@code index} (1-based) of {@code value} split at {@code delimiter}; '' when there is no such part. */
-    @Scalar(name = "SPLIT_PART")
+    @ScalarFunction(name = "SPLIT_PART")
     public static String splitPart(String value, String delimiter, int index) {
         if (index < 1) {
             throw new ExprError("SPLIT_PART index must be at least 1, got " + index);
@@ -309,7 +310,8 @@ public final class StringFunctions {
     }
 
     /** Splits at every occurrence of {@code delimiter} (taken literally). */
-    @Scalar(name = "SPLIT", returns = "ARRAY<STRING>")
+    @Returns("ARRAY<STRING>")
+    @ScalarFunction(name = "SPLIT")
     public static List<String> split(String value, String delimiter) {
         List<String> parts = new ArrayList<>();
         if (delimiter.isEmpty()) {
@@ -328,18 +330,18 @@ public final class StringFunctions {
 
     // ------------------------------------------------------------------ regular expressions (RE2)
 
-    @Scalar(name = "REGEXP_LIKE")
+    @ScalarFunction(name = "REGEXP_LIKE")
     public static boolean regexpLike(String value, String regex) {
         return R.regex(regex).matcher(value).find();
     }
 
-    @Scalar(name = "REGEXP_EXTRACT")
+    @ScalarFunction(name = "REGEXP_EXTRACT")
     public static String regexpExtract(String value, String regex) {
         return regexpExtract(value, regex, 0);
     }
 
     /** Group {@code group} of the first match (0 = the whole match), NULL when nothing matches. */
-    @Scalar(name = "REGEXP_EXTRACT")
+    @ScalarFunction(name = "REGEXP_EXTRACT")
     public static String regexpExtract(String value, String regex, int group) {
         Matcher matcher = R.regex(regex).matcher(value);
         if (group < 0 || group > matcher.groupCount()) {
@@ -349,7 +351,7 @@ public final class StringFunctions {
     }
 
     /** Replaces every match; {@code $1} in the replacement refers to group 1. */
-    @Scalar(name = "REGEXP_REPLACE")
+    @ScalarFunction(name = "REGEXP_REPLACE")
     public static String regexpReplace(String value, String regex, String replacement) {
         try {
             return R.regex(regex).matcher(value).replaceAll(replacement);
@@ -361,12 +363,12 @@ public final class StringFunctions {
     // ------------------------------------------------------------------ characters and formatting
 
     /** Code point of the first character; 0 for ''. */
-    @Scalar(name = "ASCII")
+    @ScalarFunction(name = "ASCII")
     public static int ascii(String value) {
         return value.isEmpty() ? 0 : value.codePointAt(0);
     }
 
-    @Scalar(name = "CHR")
+    @ScalarFunction(name = "CHR")
     public static String chr(int codePoint) {
         if (!Character.isValidCodePoint(codePoint)) {
             throw new ExprError("CHR needs a valid code point, got " + codePoint);

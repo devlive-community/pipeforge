@@ -31,6 +31,12 @@ Plugins use the same language through the connector API (`context.expressions()`
 [API overview](../development/api-overview#expressions)), so an expression in a plugin option
 behaves exactly like one in the playground or in another plugin.
 
+Functions are a registry assembled from function providers. The built-in library is the first
+provider; function plugins will be further providers, each with its own namespace
+(`acme.mask_card`), written against the same annotations as the built-ins (see
+[functions in the API overview](../development/api-overview#functions)). A new function is an
+annotated method, with no change to the parser, the type rules or the compiler.
+
 An interpreter with exactly the same semantics exists as well; every build compares thousands of
 random expressions compiled and interpreted.
 
@@ -130,7 +136,8 @@ share one generated class, so many parallel instances do not compile repeatedly.
 ## Limitations
 
 - `INTERVAL` values are not supported; use `DATE_ADD`, `DATE_SUB` and `TIMESTAMPDIFF` for date arithmetic.
-- User-defined functions are not available yet.
+- Function plugins (user-defined functions) cannot be installed yet; only the built-in functions are
+  available.
 - Subqueries are not expressions; `IN` takes a list of values.
 - `BETWEEN SYMMETRIC` is not supported.
 

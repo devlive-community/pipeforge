@@ -916,7 +916,9 @@ public final class Analyzer {
             }
             boolean matches = true;
             for (int i = 0; i < args.size() && matches; i++) {
-                matches = accepts(parameters.get(i), args.get(i).type());
+                matches = signature.exact(i)
+                        ? TypeRules.implicitlyCastable(args.get(i).type(), parameters.get(i))
+                        : accepts(parameters.get(i), args.get(i).type());
             }
             if (!matches) {
                 continue;
@@ -925,7 +927,9 @@ public final class Analyzer {
             List<DataType> argTypes = new ArrayList<>();
             for (int i = 0; i < args.size(); i++) {
                 Node arg = args.get(i);
-                DataType target = sameFamily(parameters.get(i), arg.type()) ? arg.type() : parameters.get(i);
+                DataType target = !signature.exact(i) && sameFamily(parameters.get(i), arg.type())
+                        ? arg.type()
+                        : parameters.get(i);
                 Node converted = castTo(arg, target.withNullability(arg.type().isNullable()), at);
                 cast.add(converted);
                 argTypes.add(converted.type());

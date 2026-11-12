@@ -24,10 +24,18 @@ public final class Interpreter implements RowFunctions {
     private final List<Node> roots;
     private final ZoneId zone;
     private final EvaluationContext context;
+    private final FunctionInstances instances;
 
+    /** An interpreter for expressions without instance functions. */
     public Interpreter(List<Node> roots, EvaluationContext context) {
+        this(roots, context, FunctionInstances.none());
+    }
+
+    /** @param instances the opened objects of the instance functions the expressions call */
+    public Interpreter(List<Node> roots, EvaluationContext context, FunctionInstances instances) {
         this.roots = List.copyOf(roots);
         this.context = context;
+        this.instances = instances;
         this.zone = context.timeZone();
     }
 
@@ -143,7 +151,7 @@ public final class Interpreter implements RowFunctions {
                 for (int i = 0; i < values.length; i++) {
                     values[i] = eval(args.get(i), in);
                 }
-                yield R.result(Invocations.invoke((FunctionCall) node.payload(), values, context), type);
+                yield R.result(Invocations.invoke((FunctionCall) node.payload(), values, context, instances), type);
             }
         };
     }

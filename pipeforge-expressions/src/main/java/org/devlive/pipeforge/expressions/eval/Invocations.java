@@ -9,21 +9,23 @@ package org.devlive.pipeforge.expressions.eval;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import org.devlive.pipeforge.expressions.EvaluationContext;
+import org.devlive.pipeforge.api.function.FunctionContext;
 import org.devlive.pipeforge.expressions.function.FunctionCall;
+import org.devlive.pipeforge.expressions.function.ScalarFunctions;
 import org.devlive.pipeforge.expressions.runtime.ExprError;
+import org.jspecify.annotations.Nullable;
 
 /** Calls function implementations reflectively (used by the interpreter). */
 final class Invocations {
 
     private Invocations() {}
 
-    /** Whether a function implementation takes the evaluation context as first parameter. */
+    /** Whether a function implementation takes the context as first parameter. */
     static boolean takesContext(Method method) {
-        return method.getParameterCount() > 0 && method.getParameterTypes()[0] == EvaluationContext.class;
+        return ScalarFunctions.takesContext(method);
     }
 
-    static Object invoke(FunctionCall call, Object[] args, EvaluationContext context) {
+    static Object invoke(FunctionCall call, Object[] args, FunctionContext context, FunctionInstances instances) {
         if (call.definition().nullOnNull()) {
             for (Object arg : args) {
                 if (arg == null) {
@@ -34,7 +36,8 @@ final class Invocations {
         Method method = call.signature().method();
         Object[] actual = pack(method, args, takesContext(method) ? context : null);
         try {
-            return method.invoke(null, actual);
+            Object target = call.signature().instance() ? instances.get(method.getDeclaringClass()) : null;
+            return method.invoke(target, actual);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException runtime) {
@@ -47,7 +50,7 @@ final class Invocations {
     }
 
     /** Packs trailing arguments into the array parameter of a varargs method. */
-    static Object[] pack(Method method, Object[] args, EvaluationContext context) {
+    static Object[] pack(Method method, Object[] args, @Nullable FunctionContext context) {
         Class<?>[] types = method.getParameterTypes();
         int offset = context == null ? 0 : 1;
         Object[] actual = new Object[types.length];
