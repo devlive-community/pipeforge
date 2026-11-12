@@ -171,6 +171,17 @@ skipped-testkit-groups:
 
 写了不存在的用例组名称时契约测试失败，拼写错误因此会被发现。
 
+## 只运行部分用例组
+
+专注于插件的某一方面时，可以只运行测试它的用例组，其他用例组显示为跳过：
+
+```bash
+./mvnw test -Dtest=JdbcSourceContractTest -Dpipeforge.testkit.groups=options,types
+```
+
+名称之间用逗号分隔。名称不是被测组件的用例组时测试失败，因此对没有 `resume` 用例组的 Sink 写
+`-Dpipeforge.testkit.groups=resume` 不会悄悄通过。`skipped-testkit-groups` 中声明的用例组仍然按其原因跳过。
+
 ## 编写其他测试
 
 契约测试的组成部分也可以单独使用：

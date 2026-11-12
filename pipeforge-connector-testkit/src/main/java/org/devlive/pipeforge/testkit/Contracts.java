@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.security.CodeSource;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,7 +56,33 @@ final class Contracts {
 
     private Contracts() {}
 
+    /** The system property that selects the groups to run: names separated by commas. */
+    static final String SELECTED_PROPERTY = "pipeforge.testkit.groups";
+
     static Stream<DynamicNode> run(List<ContractGroup> groups, Map<String, String> skipped, TestkitEngine engine) {
+        return run(groups, skipped, selected(System.getProperty(SELECTED_PROPERTY)), engine);
+    }
+
+    /** The groups named in the property, or empty for all groups. */
+    static Set<String> selected(@Nullable String property) {
+        Set<String> names = new LinkedHashSet<>();
+        if (property != null) {
+            for (String name : property.split(",", -1)) {
+                if (!name.isBlank()) {
+                    names.add(name.trim());
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * The groups as dynamic tests. Skipped groups and, with a selection, the groups not selected are
+     * reported as skipped with the reason; an unknown skipped group and a selected name that is no
+     * group of this component fail, so typos are caught.
+     */
+    static Stream<DynamicNode> run(
+            List<ContractGroup> groups, Map<String, String> skipped, Set<String> selected, TestkitEngine engine) {
         Stream<DynamicNode> unknown = skipped.keySet().stream()
                 .filter(name -> !KNOWN.contains(name))
                 .map(name -> DynamicTest.dynamicTest("skipped group " + name, () -> {
@@ -63,17 +90,28 @@ final class Contracts {
                             "'" + name + "' in " + SKIPPED_KEY + " is not a testkit group; known: "
                                     + KNOWN.stream().sorted().toList());
                 }));
+        List<String> available = groups.stream().map(ContractGroup::name).toList();
+        Stream<DynamicNode> missing = selected.stream()
+                .filter(name -> !available.contains(name))
+                .map(name -> DynamicTest.dynamicTest("selected group " + name, () -> {
+                    throw new AssertionFailedError("'" + name + "' in " + SELECTED_PROPERTY
+                            + " is not a group of this component; its groups: " + available);
+                }));
         Stream<DynamicNode> run = groups.stream().map(group -> {
             String reason = skipped.get(group.name());
+            if (reason == null && !selected.isEmpty() && !selected.contains(group.name())) {
+                reason = "not selected by " + SELECTED_PROPERTY + "=" + String.join(",", selected);
+            }
             if (reason != null) {
+                String message = reason.startsWith("not selected") ? reason : "skipped: " + reason;
                 return DynamicTest.dynamicTest(group.name(), () -> {
-                    throw new TestAbortedException("skipped: " + reason);
+                    throw new TestAbortedException(message);
                 });
             }
             return DynamicContainer.dynamicContainer(
                     group.name(), Stream.of(group).flatMap(g -> g.cases(engine).stream()));
         });
-        return Stream.concat(unknown, run);
+        return Stream.concat(Stream.concat(unknown, missing), run);
     }
 
     /** Where plugin projects keep their descriptor, relative to the module directory tests run in. */
