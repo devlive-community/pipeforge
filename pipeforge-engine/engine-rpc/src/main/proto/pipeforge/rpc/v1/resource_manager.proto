@@ -1,0 +1,80 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+
+service ResourceManagerService {
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+  rpc Heartbeat(stream WorkerHeartbeat) returns (stream HeartbeatAck);
+  rpc OfferSlots(SlotReport) returns (Ack);
+}
+
+message ResourceProfile {
+  int32 cpu_cores = 1;
+  int64 task_heap_bytes = 2;
+  int64 network_bytes = 3;
+  int64 managed_bytes = 4;
+}
+
+message RegisterWorkerRequest {
+  Header header = 1;
+  string engine_version = 2;
+  string rpc_address = 3;             // host:port
+  string data_address = 4;            // host:port
+  ResourceProfile resources = 5;
+  int32 slots = 6;
+  map<string, string> labels = 7;
+  string resource_group = 8;
+  bytes public_key = 9;               // X25519，32 字节
+  string previous_worker_id = 10;     // 重新注册时填写
+}
+
+message RegisterWorkerResponse {
+  string worker_id = 1;
+  int64 leader_epoch = 2;
+  int64 heartbeat_interval_ms = 3;
+  int64 heartbeat_timeout_ms = 4;
+  string protocol_version = 5;        // 协商后的版本
+}
+
+message SlotStatus {
+  int32 index = 1;
+  bool allocated = 2;
+  string job_id = 3;
+  string allocation_id = 4;
+}
+
+message RunningTask {
+  ExecutionAttemptId id = 1;
+  TaskState state = 2;
+}
+
+message WorkerHeartbeat {
+  Header header = 1;                  // 只在流的第一条消息中
+  string worker_id = 2;
+  repeated SlotStatus slots = 3;
+  repeated RunningTask tasks = 4;
+}
+
+message HeartbeatAck {
+  int64 leader_epoch = 1;
+  bool reregister = 2;                // Master 不认识该 Worker 或已切换
+}
+
+message SlotReport {
+  Header header = 1;
+  string worker_id = 2;
+  repeated SlotStatus slots = 3;
+}

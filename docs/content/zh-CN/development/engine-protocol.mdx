@@ -1,0 +1,72 @@
+---
+title: 引擎协议
+description: Master、Worker 与 Server 之间交换的消息（协议 v1）、版本如何协商，以及如何在不破坏运行中集群的前提下修改协议。
+order: 70
+---
+
+## 协议的范围
+
+PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Task 的进程（Worker）；Server 把作业提交给 Master。
+它们之间使用**协议 v1** 通信，也就是 `pipeforge.rpc.v1` 包中的 gRPC 服务与 Protobuf 消息：
+
+| 服务 | 方向 | 内容 |
+|---|---|---|
+| `ResourceManagerService` | Worker → Master | 注册、心跳、Worker 提供的 Slot |
+| `TaskExecutorService` | Master → Worker | 申请 Slot、部署与取消 Task、分配分片、Task 日志 |
+| `JobMasterService` | Task → Master | Task 状态变化、请求分片、Task 指标 |
+| `DispatcherService` | Server → Master | 提交、取消作业，状态、指标、运行分析 |
+
+定义位于 `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`。构建时由它们生成 Java 消息与服务桩
+（包 `org.devlive.pipeforge.engine.rpc.proto`）；引擎内部使用自己的类型，`ProtoMapping` 在边界上负责两者之间的转换。
+
+当前版本中协议已经定义并受到检查；gRPC 传输、集群进程以及 Worker 之间的数据交换会在分布式运行时的后续提交中加入。
+本地运行（`pipeforge run --local`）在进程内使用同一组接口。
+
+## 约定
+
+- 每个请求都以 `Header` 开头：协议版本、Master 与作业的 epoch（新的 Master 或 JobMaster 的 epoch 一定更大，
+  更旧的请求会被拒绝）、使重试幂等的请求 ID，以及截止时间。
+- 由插件序列化的值（例如分片、Sink 准备提交的内容）以 `Versioned{version, data}` 传输，接收方用写入时的版本调用插件的序列化器。
+- 失败的 Task 上报 `ErrorInfo`：[错误码](../concepts/errors)、参数、出错位置（节点、子任务、表…）、类别和原因链。
+  Master 据此重建同样的错误对象，因此 CLI、REST API 和 Web UI 显示的与 Worker 上看到的一致。
+- 枚举值带有枚举名前缀（`TASK_STATE_RUNNING`、`RUN_STATE_RUNNING`），因为 Protobuf 中同一个包的枚举值共用一个命名空间。
+- 插件标为敏感的选项（例如密码）从不出现在 Task 描述中，而是为运行该 Task 的 Worker 单独加密下发。
+
+## 版本
+
+协议版本的格式为 `主.次`，当前版本为 `1.0`。
+
+- 两个进程建立连接时比较版本：主版本不同则不通信；主版本相同时双方使用较低的次版本。
+- **次版本**只做增加：新字段、新 RPC、新枚举值、新事件类型。旧进程会忽略不认识的字段，因此集群可以逐个进程升级。
+- **主版本**是一个新的包（`pipeforge.rpc.v2`），只有无法用“增加”表达的改动才需要它。
+
+## 兼容性检查
+
+`ProtoSnapshotTest` 把协议中的每个文件、消息、字段、枚举值、保留区间和 RPC 各列为一行，并与
+`pipeforge-engine/protocol-compat/rpc/descriptor-v1.txt` 比较。快照中的每一行都必须仍然存在，因此会破坏运行中集群的改动会让构建失败：
+
+| 改动 | 结果 |
+|---|---|
+| 新字段、新消息、新 RPC、新枚举值 | 接受；用 `-Dpipeforge.protocol.update=true` 扩充快照 |
+| 字段改名、改编号或改类型 | 构建失败 |
+| 一元 RPC 改为流式，或者请求、响应类型改变 | 构建失败 |
+| 删除字段 | 构建失败，除非它的编号和名称都已 `reserved` |
+
+```text
+ProtoSnapshotTest.theProtocolOnlyGrows
+protocol v1 elements removed or changed; add new fields, RPCs or enum values instead, or reserve
+the number and name of a removed field
+Expecting empty but was: ["field pipeforge.rpc.v1.Header 3 job_epoch int64"]
+```
+
+## 修改协议
+
+1. 先在协议规范中写明改动；协议的修改需要两位维护者评审。
+2. 在 `.proto` 文件中增加字段或 RPC；不要复用字段编号，删除字段时保留它的编号与名称。
+3. 先带 `-Dpipeforge.protocol.update=true` 运行 `engine-rpc` 的测试，再不带它运行一次：快照恰好增加你新增的那些行，评审时可以在 diff 中看到。
+4. 扩充 `ProtoMapping` 及其测试，确保新的值经过字节往返后保持不变。
+
+```bash
+./mvnw -pl pipeforge-engine/engine-rpc test -Dpipeforge.protocol.update=true
+./mvnw -pl pipeforge-engine/engine-rpc verify
+```

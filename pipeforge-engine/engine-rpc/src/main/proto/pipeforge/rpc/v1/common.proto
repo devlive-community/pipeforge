@@ -1,0 +1,107 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+message Header {
+  string protocol_version = 1;  // 主.次，例如 "1.0"
+  int64 leader_epoch = 2;
+  int64 job_epoch = 3;          // 与作业无关的请求为 0
+  string request_id = 4;        // 幂等与日志关联
+  int64 deadline_ms = 5;        // 截止时间，Unix 毫秒；0 表示用默认超时
+}
+
+message Ack {}
+
+// 插件序列化器编码的值：分片、Sink 提交物、自定义事件
+message Versioned {
+  int32 version = 1;
+  bytes data = 2;
+}
+
+// 被拒绝的请求（gRPC 状态详情）与 Task / 运行的失败原因
+message ErrorInfo {
+  string code = 1;                  // PF-XXXX-NNNN
+  map<string, string> params = 2;
+  string message = 3;               // 英文文本；界面按 code 与 params 本地化
+  repeated string causes = 4;       // 原因链，由外到内
+  string name = 5;                  // 符号名，例如 OPTION_INVALID
+  map<string, string> scope = 6;    // 出错位置：job、run、node、subtask、table、split、line、column、path
+  string kind = 7;                  // TRANSIENT / DATA / FATAL
+}
+
+message ExecutionAttemptId {
+  string run_id = 1;
+  string vertex_id = 2;             // [A-Za-z0-9_.-]
+  int32 subtask = 3;
+  int32 attempt = 4;
+}
+
+message PluginRef {
+  string id = 1;
+  string version = 2;
+  string sha256 = 3;                // 插件包内容哈希，Worker 从 BlobService 下载
+}
+
+message ResourceRef {               // 资源文件（M7 起使用）
+  string name = 1;
+  string sha256 = 2;
+}
+
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  TASK_STATE_DEPLOYING = 1;
+  TASK_STATE_RUNNING = 2;
+  TASK_STATE_FINISHED = 3;
+  TASK_STATE_FAILED = 4;
+  TASK_STATE_CANCELED = 5;
+}
+
+message TaskSettings {
+  bool async_write_buffer = 1;
+  int32 write_batch_size = 2;
+  int32 write_queue_capacity = 3;
+  int64 cancel_timeout_ms = 4;
+  int64 cancel_kill_timeout_ms = 5;
+  int64 metrics_interval_ms = 6;
+  int64 max_row_bytes = 7;
+}
+
+message OperatorMetrics {           // 累计值
+  string node_id = 1;
+  int64 rows_in = 2;
+  int64 rows_out = 3;
+  int64 rows_filtered = 4;
+  int64 rows_expanded = 5;
+  int64 rows_dirty = 6;
+  int64 self_time_nanos = 7;
+}
+
+message SplitProgress {
+  string split_id = 1;
+  int64 rows = 2;
+  bool finished = 3;
+}
+
+message TaskMetrics {               // 累计值：丢失或重复上报都不影响结果
+  repeated OperatorMetrics operators = 1;
+  int64 running_nanos = 2;
+  int64 idle_nanos = 3;
+  int64 reader_wait_nanos = 4;
+  int64 writer_wait_nanos = 5;
+  int64 back_pressured_nanos = 6;
+  int64 bytes_in = 7;
+  int64 bytes_out = 8;
+  int64 memory_bytes = 9;           // 当前记账的内存
+  repeated SplitProgress splits = 10;
+}

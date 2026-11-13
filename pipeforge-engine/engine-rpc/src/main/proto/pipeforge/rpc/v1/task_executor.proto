@@ -1,0 +1,128 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+import "pipeforge/rpc/v1/chain.proto";
+
+service TaskExecutorService {
+  rpc RequestSlot(SlotRequest) returns (Ack);
+  rpc DeployTask(TaskDeployment) returns (Ack);
+  rpc CancelTask(CancelTaskRequest) returns (Ack);
+  rpc SendOperatorEvent(OperatorEvent) returns (Ack);
+  rpc ReadLog(ReadLogRequest) returns (stream LogChunk);
+  rpc FreeSlot(FreeSlotRequest) returns (Ack);
+  // M2：TriggerCheckpoint、NotifyCheckpointComplete、AbortCheckpoint
+}
+
+message SlotRequest {
+  Header header = 1;
+  string job_id = 2;
+  string run_id = 3;
+  string allocation_id = 4;
+  int32 slot_index = 5;
+  string job_master_address = 6;      // Task 调用 JobMasterService 的地址
+}
+
+message ResultPartitionId {
+  ExecutionAttemptId producer = 1;
+  int32 output_index = 2;
+}
+
+message InputChannelDescriptor {
+  ResultPartitionId partition = 1;
+  int32 subpartition = 2;
+  string producer_data_address = 3;   // 同一 Worker 时走本地通道
+  bool local = 4;
+}
+
+message InputGateDescriptor {
+  int32 input_index = 1;
+  string upstream_vertex = 2;
+  repeated InputChannelDescriptor channels = 3;
+}
+
+message ResultPartitionDescriptor {
+  int32 output_index = 1;
+  int32 subpartitions = 2;
+  Partitioning partitioning = 3;
+}
+
+message TaskDeployment {
+  Header header = 1;
+  ExecutionAttemptId id = 2;
+  string allocation_id = 3;
+  bytes chain_descriptor = 4;         // 第 6 节的格式（magic + 版本 + 长度 + ChainDescriptor + crc）
+  repeated PluginRef plugins = 5;
+  repeated ResourceRef resources = 6;
+  repeated InputGateDescriptor inputs = 7;
+  repeated ResultPartitionDescriptor outputs = 8;
+  reserved 9, 10;                     // M2：restore_state、restore_checkpoint_id
+  bytes encrypted_secrets = 11;       // 见 2.7；没有敏感选项时为空
+  int32 parallelism = 12;
+  TaskSettings settings = 13;
+  string job_master_address = 14;
+}
+
+message CancelTaskRequest {
+  Header header = 1;
+  ExecutionAttemptId id = 2;
+  string reason = 3;
+}
+
+message AddSplits {
+  repeated Versioned splits = 1;
+}
+
+message NoMoreSplits {}
+
+message RateLimitQuota {
+  double rows_per_second = 1;         // 0 表示不限
+  double bytes_per_second = 2;
+}
+
+message OperatorEvent {
+  Header header = 1;
+  ExecutionAttemptId target = 2;
+  string node_id = 3;
+  int64 sequence = 4;
+  oneof event {
+    AddSplits add_splits = 5;
+    NoMoreSplits no_more_splits = 6;
+    RateLimitQuota rate_limit = 7;
+    Versioned custom = 8;
+  }
+}
+
+message ReadLogRequest {
+  Header header = 1;
+  ExecutionAttemptId task = 2;
+  int64 offset = 3;                   // 负数表示从末尾往前
+  int64 max_bytes = 4;
+  string contains = 5;                // 关键字过滤，空表示不过滤
+  string min_level = 6;               // TRACE / DEBUG / INFO / WARN / ERROR
+  bool follow = 7;                    // Task 运行中时持续推送
+}
+
+message LogChunk {
+  int64 offset = 1;
+  bytes data = 2;                     // UTF-8，按整行切分
+  bool eof = 3;
+}
+
+message FreeSlotRequest {
+  Header header = 1;
+  string allocation_id = 2;
+  string reason = 3;
+}

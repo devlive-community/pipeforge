@@ -1,0 +1,106 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+
+message ChainDescriptor {
+  string vertex_id = 1;
+  JobContext job = 2;
+  repeated NodeDescriptor nodes = 3;  // 按链中顺序：source、transform…、sink；或以输入边开头
+  repeated TableEntry tables = 4;     // 表目录
+  repeated OutputEdge outputs = 5;
+}
+
+message JobContext {
+  string job_name = 1;
+  string job_id = 2;
+  string run_id = 3;
+  string time_zone = 4;               // IANA 时区 ID
+  map<string, string> variables = 5;  // 解析后的变量
+  int64 run_start_ms = 6;
+  int64 scheduled_time_ms = 7;
+  string mode = 8;                    // batch / streaming
+  string delivery = 9;                // at-least-once / exactly-once
+  int32 parallelism = 10;             // 作业默认并行度
+}
+
+enum NodeKind {
+  NODE_KIND_UNSPECIFIED = 0;
+  NODE_KIND_SOURCE = 1;
+  NODE_KIND_TRANSFORM = 2;
+  NODE_KIND_SINK = 3;
+}
+
+message NodeDescriptor {
+  string node_id = 1;
+  NodeKind kind = 2;
+  string component = 3;               // 组件标识，例如 fake、field-mapper
+  PluginRef plugin = 4;
+  int32 parallelism = 5;
+  bool bounded = 6;                   // 只对 source 有意义
+  string options_json = 7;            // 合并后的选项；敏感项为 {"$secret": "<node>.<key>"}
+  repeated int32 input_tables = 8;    // 表目录中的编号
+  repeated int32 output_tables = 9;
+}
+
+message TableEntry {
+  int32 table_id = 1;
+  string catalog = 2;
+  string database = 3;
+  string schema = 4;
+  string table = 5;
+  repeated ColumnEntry columns = 6;
+  repeated string primary_key = 7;
+  repeated string partition_keys = 8;
+  map<string, string> options = 9;
+  string comment = 10;
+}
+
+message ColumnEntry {
+  string name = 1;
+  string type = 2;                    // DSL 类型文本，例如 DECIMAL(10, 2) NOT NULL
+  string comment = 3;
+  string default_value_json = 4;      // 空表示没有默认值
+  map<string, string> options = 5;
+}
+
+message Partitioning {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_FORWARD = 1;
+    KIND_REBALANCE = 2;
+    KIND_HASH = 3;
+    KIND_TABLE = 4;
+    KIND_BROADCAST = 5;
+  }
+  Kind kind = 1;
+  repeated string keys = 2;           // HASH 的键列；为空表示按表 + 主键
+}
+
+message OutputEdge {
+  int32 output_index = 1;
+  string target_vertex = 2;
+  Partitioning partitioning = 3;
+  int32 subpartitions = 4;            // 下游并行度
+}
+
+message SchemaChange {                // 数据通道中的 SchemaChangeEvent
+  int32 table_id = 1;
+  TableEntry table = 2;
+}
+
+message SecretBundle {                // 加密前的敏感选项，见 2.7
+  map<string, string> values = 1;     // <node>.<key> → 明文
+}

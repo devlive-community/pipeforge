@@ -1,0 +1,119 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+
+service DispatcherService {
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+  rpc CancelJob(JobRequest) returns (Ack);
+  rpc GetJobStatus(JobRequest) returns (JobStatus);
+  rpc GetJobMetrics(JobRequest) returns (JobMetrics);
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  rpc Analyze(JobRequest) returns (ExplainResult);
+  // M2：TriggerSavepoint、StopWithSavepoint
+}
+
+message SubmitJobRequest {
+  Header header = 1;
+  string job_id = 2;
+  string run_id = 3;                  // Server 生成；重复提交同一 run_id 幂等
+  string definition = 4;              // 作业定义文本
+  string definition_format = 5;       // yaml / json
+  map<string, string> variables = 6;  // 解析后的变量
+  int64 scheduled_time_ms = 7;
+  repeated PluginRef plugins = 8;     // Server 选定的插件版本，Master 按它计划
+  int64 timeout_ms = 9;               // 0 表示不限
+}
+
+message SubmitJobResponse {
+  string run_id = 1;
+}
+
+message JobRequest {
+  Header header = 1;
+  string run_id = 2;
+  string reason = 3;                  // CancelJob 时填写
+}
+
+enum RunState {
+  RUN_STATE_UNSPECIFIED = 0;
+  RUN_STATE_QUEUE = 1;
+  RUN_STATE_RUNNING = 2;
+  RUN_STATE_SUCCESS = 3;
+  RUN_STATE_FAILED = 4;
+  RUN_STATE_CANCELLING = 5;
+  RUN_STATE_CANCELLED = 6;
+  RUN_STATE_TIMEOUT = 7;
+  // M2 起：RUN_STATE_RESTARTING、_PAUSING、_PAUSED、_RETRY_WAIT、_ROLLING_BACK、_INTERRUPTED，按顺序追加
+}
+
+message TaskStatus {
+  ExecutionAttemptId id = 1;
+  TaskState state = 2;
+  string worker_id = 3;
+  ErrorInfo error = 4;
+}
+
+message JobStatus {
+  string run_id = 1;
+  string job_id = 2;
+  string job_name = 3;
+  RunState state = 4;
+  int64 start_ms = 5;
+  int64 end_ms = 6;                   // 未结束为 0
+  ErrorInfo error = 7;
+  repeated TaskStatus tasks = 8;
+}
+
+message NodeMetrics {
+  string node_id = 1;
+  int32 parallelism = 2;
+  int64 rows_in = 3;
+  int64 rows_out = 4;
+  int64 rows_filtered = 5;
+  int64 rows_expanded = 6;
+  int64 rows_dirty = 7;
+  int64 bytes_in = 8;
+  int64 bytes_out = 9;
+  int64 self_time_nanos = 10;
+  int64 reader_wait_nanos = 11;
+  int64 writer_wait_nanos = 12;
+  int64 back_pressured_nanos = 13;
+}
+
+message JobMetrics {
+  string run_id = 1;
+  int64 timestamp_ms = 2;
+  repeated NodeMetrics nodes = 3;
+  int32 splits_total = 4;
+  int32 splits_finished = 5;
+}
+
+message ListJobsRequest {
+  Header header = 1;
+  repeated RunState states = 2;       // 空表示全部
+  int32 limit = 3;
+  string page_token = 4;
+}
+
+message ListJobsResponse {
+  repeated JobStatus jobs = 1;
+  string next_page_token = 2;
+}
+
+message ExplainResult {
+  string schema_version = 1;
+  string json = 2;                    // 与 REST 运行分析接口相同的 JSON（见 29 章）
+}

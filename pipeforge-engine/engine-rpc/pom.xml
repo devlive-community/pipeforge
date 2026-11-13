@@ -18,13 +18,25 @@
 
     <artifactId>pipeforge-engine-rpc</artifactId>
     <name>PipeForge Engine RPC</name>
-    <description>Master and worker interfaces and their in-process implementation</description>
+    <description>Master and worker interfaces, the gRPC protocol (v1) and the in-process implementation</description>
 
     <dependencies>
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>
             <artifactId>pipeforge-core</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-protobuf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
         </dependency>
         <dependency>
             <groupId>com.github.spotbugs</groupId>
@@ -43,4 +55,42 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Generates the messages and service stubs of src/main/proto (protocol v1). -->
+            <plugin>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+                <configuration>
+                    <protoc>${protobuf-java.version}</protoc>
+                    <plugins>
+                        <plugin kind="binary-maven">
+                            <groupId>io.grpc</groupId>
+                            <artifactId>protoc-gen-grpc-java</artifactId>
+                            <version>${grpc.version}</version>
+                            <options>@generated=omit</options>
+                        </plugin>
+                    </plugins>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <!-- generated code; its use is covered through the mappings -->
+                    <excludes>
+                        <exclude>org/devlive/pipeforge/engine/rpc/proto/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

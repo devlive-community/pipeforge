@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+
+service JobMasterService {
+  rpc UpdateTaskState(TaskStateUpdate) returns (Ack);
+  rpc SendReaderEvent(ReaderEvent) returns (Ack);
+  rpc ReportMetrics(stream MetricsReport) returns (Ack);
+  // M2：AcknowledgeCheckpoint、DeclineCheckpoint
+}
+
+message TaskStateUpdate {
+  Header header = 1;
+  ExecutionAttemptId id = 2;
+  TaskState state = 3;
+  ErrorInfo error = 4;                // FAILED 时填写
+  repeated Versioned committables = 5;  // FINISHED 时：Sink 的提交物，交给全局提交
+  TaskMetrics final_metrics = 6;
+}
+
+message SplitRequest {}
+
+message ReaderEvent {
+  Header header = 1;
+  ExecutionAttemptId source = 2;
+  string node_id = 3;
+  int64 sequence = 4;
+  oneof event {
+    SplitRequest split_request = 5;
+    Versioned custom = 6;
+  }
+}
+
+message MetricsReport {
+  Header header = 1;                  // 只在流的第一条消息中
+  ExecutionAttemptId task = 2;
+  int64 timestamp_ms = 3;
+  TaskMetrics metrics = 4;
+}

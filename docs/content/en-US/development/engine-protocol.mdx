@@ -1,0 +1,90 @@
+---
+title: Engine protocol
+description: The messages the master, workers and server exchange (protocol v1), how versions are negotiated, and how to change the protocol without breaking a running cluster.
+order: 70
+---
+
+## What the protocol covers
+
+A PipeForge cluster has one process that schedules (the master) and many that run tasks (the
+workers); the server submits jobs to the master. They talk to each other in **protocol v1**, the
+gRPC services and Protobuf messages of the package `pipeforge.rpc.v1`:
+
+| Service | From → to | What it carries |
+|---|---|---|
+| `ResourceManagerService` | worker → master | registration, heartbeats, the slots a worker offers |
+| `TaskExecutorService` | master → worker | slot requests, task deployment and cancellation, split assignment, task logs |
+| `JobMasterService` | task → master | task state changes, split requests, task metrics |
+| `DispatcherService` | server → master | job submission, cancellation, status, metrics, run analysis |
+
+The definitions live in `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`. The build
+generates the Java messages and service stubs from them (package
+`org.devlive.pipeforge.engine.rpc.proto`); the engine itself works with its own types, and
+`ProtoMapping` converts between the two at the edge.
+
+In this version the protocol is defined and checked; the gRPC transport, the cluster processes and
+the data exchange between workers follow in the next commits of the distributed runtime. Local runs
+(`pipeforge run --local`) use the same interfaces in process.
+
+## Conventions
+
+- Every request starts with a `Header`: the protocol version, the master's and the job's epoch (a
+  newer master or job master always has a larger one, and older requests are refused), a request ID
+  that makes retries idempotent, and a deadline.
+- Values that a plugin serializes, such as splits or what a sink prepared to commit, travel as
+  `Versioned{version, data}`, so the receiving side calls the plugin's serializer with the version
+  that wrote them.
+- A task that fails reports an `ErrorInfo`: the [error code](../concepts/errors), its parameters,
+  where it happened (node, subtask, table…), its kind and the chain of causes. The master rebuilds
+  the same error object from it, so the CLI, the REST API and the Web UI show what the worker saw.
+- Enum values carry the name of their enum (`TASK_STATE_RUNNING`, `RUN_STATE_RUNNING`), because
+  Protobuf enum values share one namespace per package.
+- Options that a plugin marks as sensitive, such as passwords, are never part of a task's
+  description; they are encrypted for the worker that runs the task.
+
+## Versions
+
+A protocol version is `major.minor`, `1.0` in this release.
+
+- When two processes connect, they compare versions. Different major versions do not talk to each
+  other; with the same major version both use the lower minor version.
+- A **minor** version only adds: new fields, new RPCs, new enum values, new event types. An older
+  process ignores fields it does not know, so a cluster can be upgraded one process at a time.
+- A **major** version is a new package (`pipeforge.rpc.v2`); it is only needed for a change that
+  cannot be expressed as an addition.
+
+## Checking compatibility
+
+`ProtoSnapshotTest` lists every file, message, field, enum value, reserved range and RPC of the
+protocol as one line, and compares them with
+`pipeforge-engine/protocol-compat/rpc/descriptor-v1.txt`. Every line of that snapshot must still be
+there, so the build fails when a change would break a running cluster:
+
+| Change | Result |
+|---|---|
+| New field, message, RPC or enum value | Accepted; the snapshot is extended with `-Dpipeforge.protocol.update=true` |
+| Renamed, renumbered or retyped field | Build fails |
+| A unary RPC turned into a stream, or other request or response types | Build fails |
+| Removed field | Build fails, unless its number and name are `reserved` |
+
+```text
+ProtoSnapshotTest.theProtocolOnlyGrows
+protocol v1 elements removed or changed; add new fields, RPCs or enum values instead, or reserve
+the number and name of a removed field
+Expecting empty but was: ["field pipeforge.rpc.v1.Header 3 job_epoch int64"]
+```
+
+## Changing the protocol
+
+1. Describe the change in the protocol specification first; changes to the protocol need the
+   review of two maintainers.
+2. Add the fields or RPCs to the `.proto` files; never reuse a field number, and reserve the number
+   and name of a field you remove.
+3. Run the `engine-rpc` tests with `-Dpipeforge.protocol.update=true`, then without: the snapshot
+   grows by exactly the lines you added, which the review sees in the diff.
+4. Extend `ProtoMapping` and its tests, so the new values survive a trip through the bytes.
+
+```bash
+./mvnw -pl pipeforge-engine/engine-rpc test -Dpipeforge.protocol.update=true
+./mvnw -pl pipeforge-engine/engine-rpc verify
+```

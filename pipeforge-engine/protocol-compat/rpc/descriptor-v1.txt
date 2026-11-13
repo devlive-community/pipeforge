@@ -1,0 +1,397 @@
+# Protocol v1 (pipeforge.rpc.v1): every element, one per line. Lines are only ever added;
+# ProtoSnapshotTest fails when one disappears or changes. Regenerate with
+# -Dpipeforge.protocol.update=true after a compatible addition.
+enum pipeforge.rpc.v1.NodeKind
+enum pipeforge.rpc.v1.Partitioning.Kind
+enum pipeforge.rpc.v1.RunState
+enum pipeforge.rpc.v1.TaskState
+field pipeforge.rpc.v1.AddSplits 1 splits repeated pipeforge.rpc.v1.Versioned
+field pipeforge.rpc.v1.CancelTaskRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.CancelTaskRequest 2 id pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.CancelTaskRequest 3 reason string
+field pipeforge.rpc.v1.ChainDescriptor 1 vertex_id string
+field pipeforge.rpc.v1.ChainDescriptor 2 job pipeforge.rpc.v1.JobContext
+field pipeforge.rpc.v1.ChainDescriptor 3 nodes repeated pipeforge.rpc.v1.NodeDescriptor
+field pipeforge.rpc.v1.ChainDescriptor 4 tables repeated pipeforge.rpc.v1.TableEntry
+field pipeforge.rpc.v1.ChainDescriptor 5 outputs repeated pipeforge.rpc.v1.OutputEdge
+field pipeforge.rpc.v1.ColumnEntry 1 name string
+field pipeforge.rpc.v1.ColumnEntry 2 type string
+field pipeforge.rpc.v1.ColumnEntry 3 comment string
+field pipeforge.rpc.v1.ColumnEntry 4 default_value_json string
+field pipeforge.rpc.v1.ColumnEntry 5 options repeated pipeforge.rpc.v1.ColumnEntry.OptionsEntry
+field pipeforge.rpc.v1.ColumnEntry.OptionsEntry 1 key string
+field pipeforge.rpc.v1.ColumnEntry.OptionsEntry 2 value string
+field pipeforge.rpc.v1.ErrorInfo 1 code string
+field pipeforge.rpc.v1.ErrorInfo 2 params repeated pipeforge.rpc.v1.ErrorInfo.ParamsEntry
+field pipeforge.rpc.v1.ErrorInfo 3 message string
+field pipeforge.rpc.v1.ErrorInfo 4 causes repeated string
+field pipeforge.rpc.v1.ErrorInfo 5 name string
+field pipeforge.rpc.v1.ErrorInfo 6 scope repeated pipeforge.rpc.v1.ErrorInfo.ScopeEntry
+field pipeforge.rpc.v1.ErrorInfo 7 kind string
+field pipeforge.rpc.v1.ErrorInfo.ParamsEntry 1 key string
+field pipeforge.rpc.v1.ErrorInfo.ParamsEntry 2 value string
+field pipeforge.rpc.v1.ErrorInfo.ScopeEntry 1 key string
+field pipeforge.rpc.v1.ErrorInfo.ScopeEntry 2 value string
+field pipeforge.rpc.v1.ExecutionAttemptId 1 run_id string
+field pipeforge.rpc.v1.ExecutionAttemptId 2 vertex_id string
+field pipeforge.rpc.v1.ExecutionAttemptId 3 subtask int32
+field pipeforge.rpc.v1.ExecutionAttemptId 4 attempt int32
+field pipeforge.rpc.v1.ExplainResult 1 schema_version string
+field pipeforge.rpc.v1.ExplainResult 2 json string
+field pipeforge.rpc.v1.FreeSlotRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.FreeSlotRequest 2 allocation_id string
+field pipeforge.rpc.v1.FreeSlotRequest 3 reason string
+field pipeforge.rpc.v1.Header 1 protocol_version string
+field pipeforge.rpc.v1.Header 2 leader_epoch int64
+field pipeforge.rpc.v1.Header 3 job_epoch int64
+field pipeforge.rpc.v1.Header 4 request_id string
+field pipeforge.rpc.v1.Header 5 deadline_ms int64
+field pipeforge.rpc.v1.HeartbeatAck 1 leader_epoch int64
+field pipeforge.rpc.v1.HeartbeatAck 2 reregister bool
+field pipeforge.rpc.v1.InputChannelDescriptor 1 partition pipeforge.rpc.v1.ResultPartitionId
+field pipeforge.rpc.v1.InputChannelDescriptor 2 subpartition int32
+field pipeforge.rpc.v1.InputChannelDescriptor 3 producer_data_address string
+field pipeforge.rpc.v1.InputChannelDescriptor 4 local bool
+field pipeforge.rpc.v1.InputGateDescriptor 1 input_index int32
+field pipeforge.rpc.v1.InputGateDescriptor 2 upstream_vertex string
+field pipeforge.rpc.v1.InputGateDescriptor 3 channels repeated pipeforge.rpc.v1.InputChannelDescriptor
+field pipeforge.rpc.v1.JobContext 1 job_name string
+field pipeforge.rpc.v1.JobContext 10 parallelism int32
+field pipeforge.rpc.v1.JobContext 2 job_id string
+field pipeforge.rpc.v1.JobContext 3 run_id string
+field pipeforge.rpc.v1.JobContext 4 time_zone string
+field pipeforge.rpc.v1.JobContext 5 variables repeated pipeforge.rpc.v1.JobContext.VariablesEntry
+field pipeforge.rpc.v1.JobContext 6 run_start_ms int64
+field pipeforge.rpc.v1.JobContext 7 scheduled_time_ms int64
+field pipeforge.rpc.v1.JobContext 8 mode string
+field pipeforge.rpc.v1.JobContext 9 delivery string
+field pipeforge.rpc.v1.JobContext.VariablesEntry 1 key string
+field pipeforge.rpc.v1.JobContext.VariablesEntry 2 value string
+field pipeforge.rpc.v1.JobMetrics 1 run_id string
+field pipeforge.rpc.v1.JobMetrics 2 timestamp_ms int64
+field pipeforge.rpc.v1.JobMetrics 3 nodes repeated pipeforge.rpc.v1.NodeMetrics
+field pipeforge.rpc.v1.JobMetrics 4 splits_total int32
+field pipeforge.rpc.v1.JobMetrics 5 splits_finished int32
+field pipeforge.rpc.v1.JobRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.JobRequest 2 run_id string
+field pipeforge.rpc.v1.JobRequest 3 reason string
+field pipeforge.rpc.v1.JobStatus 1 run_id string
+field pipeforge.rpc.v1.JobStatus 2 job_id string
+field pipeforge.rpc.v1.JobStatus 3 job_name string
+field pipeforge.rpc.v1.JobStatus 4 state pipeforge.rpc.v1.RunState
+field pipeforge.rpc.v1.JobStatus 5 start_ms int64
+field pipeforge.rpc.v1.JobStatus 6 end_ms int64
+field pipeforge.rpc.v1.JobStatus 7 error pipeforge.rpc.v1.ErrorInfo
+field pipeforge.rpc.v1.JobStatus 8 tasks repeated pipeforge.rpc.v1.TaskStatus
+field pipeforge.rpc.v1.ListJobsRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.ListJobsRequest 2 states repeated pipeforge.rpc.v1.RunState
+field pipeforge.rpc.v1.ListJobsRequest 3 limit int32
+field pipeforge.rpc.v1.ListJobsRequest 4 page_token string
+field pipeforge.rpc.v1.ListJobsResponse 1 jobs repeated pipeforge.rpc.v1.JobStatus
+field pipeforge.rpc.v1.ListJobsResponse 2 next_page_token string
+field pipeforge.rpc.v1.LogChunk 1 offset int64
+field pipeforge.rpc.v1.LogChunk 2 data bytes
+field pipeforge.rpc.v1.LogChunk 3 eof bool
+field pipeforge.rpc.v1.MetricsReport 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.MetricsReport 2 task pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.MetricsReport 3 timestamp_ms int64
+field pipeforge.rpc.v1.MetricsReport 4 metrics pipeforge.rpc.v1.TaskMetrics
+field pipeforge.rpc.v1.NodeDescriptor 1 node_id string
+field pipeforge.rpc.v1.NodeDescriptor 2 kind pipeforge.rpc.v1.NodeKind
+field pipeforge.rpc.v1.NodeDescriptor 3 component string
+field pipeforge.rpc.v1.NodeDescriptor 4 plugin pipeforge.rpc.v1.PluginRef
+field pipeforge.rpc.v1.NodeDescriptor 5 parallelism int32
+field pipeforge.rpc.v1.NodeDescriptor 6 bounded bool
+field pipeforge.rpc.v1.NodeDescriptor 7 options_json string
+field pipeforge.rpc.v1.NodeDescriptor 8 input_tables repeated int32
+field pipeforge.rpc.v1.NodeDescriptor 9 output_tables repeated int32
+field pipeforge.rpc.v1.NodeMetrics 1 node_id string
+field pipeforge.rpc.v1.NodeMetrics 10 self_time_nanos int64
+field pipeforge.rpc.v1.NodeMetrics 11 reader_wait_nanos int64
+field pipeforge.rpc.v1.NodeMetrics 12 writer_wait_nanos int64
+field pipeforge.rpc.v1.NodeMetrics 13 back_pressured_nanos int64
+field pipeforge.rpc.v1.NodeMetrics 2 parallelism int32
+field pipeforge.rpc.v1.NodeMetrics 3 rows_in int64
+field pipeforge.rpc.v1.NodeMetrics 4 rows_out int64
+field pipeforge.rpc.v1.NodeMetrics 5 rows_filtered int64
+field pipeforge.rpc.v1.NodeMetrics 6 rows_expanded int64
+field pipeforge.rpc.v1.NodeMetrics 7 rows_dirty int64
+field pipeforge.rpc.v1.NodeMetrics 8 bytes_in int64
+field pipeforge.rpc.v1.NodeMetrics 9 bytes_out int64
+field pipeforge.rpc.v1.OperatorEvent 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.OperatorEvent 2 target pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.OperatorEvent 3 node_id string
+field pipeforge.rpc.v1.OperatorEvent 4 sequence int64
+field pipeforge.rpc.v1.OperatorEvent 5 add_splits pipeforge.rpc.v1.AddSplits oneof event
+field pipeforge.rpc.v1.OperatorEvent 6 no_more_splits pipeforge.rpc.v1.NoMoreSplits oneof event
+field pipeforge.rpc.v1.OperatorEvent 7 rate_limit pipeforge.rpc.v1.RateLimitQuota oneof event
+field pipeforge.rpc.v1.OperatorEvent 8 custom pipeforge.rpc.v1.Versioned oneof event
+field pipeforge.rpc.v1.OperatorMetrics 1 node_id string
+field pipeforge.rpc.v1.OperatorMetrics 2 rows_in int64
+field pipeforge.rpc.v1.OperatorMetrics 3 rows_out int64
+field pipeforge.rpc.v1.OperatorMetrics 4 rows_filtered int64
+field pipeforge.rpc.v1.OperatorMetrics 5 rows_expanded int64
+field pipeforge.rpc.v1.OperatorMetrics 6 rows_dirty int64
+field pipeforge.rpc.v1.OperatorMetrics 7 self_time_nanos int64
+field pipeforge.rpc.v1.OutputEdge 1 output_index int32
+field pipeforge.rpc.v1.OutputEdge 2 target_vertex string
+field pipeforge.rpc.v1.OutputEdge 3 partitioning pipeforge.rpc.v1.Partitioning
+field pipeforge.rpc.v1.OutputEdge 4 subpartitions int32
+field pipeforge.rpc.v1.Partitioning 1 kind pipeforge.rpc.v1.Partitioning.Kind
+field pipeforge.rpc.v1.Partitioning 2 keys repeated string
+field pipeforge.rpc.v1.PluginRef 1 id string
+field pipeforge.rpc.v1.PluginRef 2 version string
+field pipeforge.rpc.v1.PluginRef 3 sha256 string
+field pipeforge.rpc.v1.RateLimitQuota 1 rows_per_second double
+field pipeforge.rpc.v1.RateLimitQuota 2 bytes_per_second double
+field pipeforge.rpc.v1.ReadLogRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.ReadLogRequest 2 task pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.ReadLogRequest 3 offset int64
+field pipeforge.rpc.v1.ReadLogRequest 4 max_bytes int64
+field pipeforge.rpc.v1.ReadLogRequest 5 contains string
+field pipeforge.rpc.v1.ReadLogRequest 6 min_level string
+field pipeforge.rpc.v1.ReadLogRequest 7 follow bool
+field pipeforge.rpc.v1.ReaderEvent 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.ReaderEvent 2 source pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.ReaderEvent 3 node_id string
+field pipeforge.rpc.v1.ReaderEvent 4 sequence int64
+field pipeforge.rpc.v1.ReaderEvent 5 split_request pipeforge.rpc.v1.SplitRequest oneof event
+field pipeforge.rpc.v1.ReaderEvent 6 custom pipeforge.rpc.v1.Versioned oneof event
+field pipeforge.rpc.v1.RegisterWorkerRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.RegisterWorkerRequest 10 previous_worker_id string
+field pipeforge.rpc.v1.RegisterWorkerRequest 2 engine_version string
+field pipeforge.rpc.v1.RegisterWorkerRequest 3 rpc_address string
+field pipeforge.rpc.v1.RegisterWorkerRequest 4 data_address string
+field pipeforge.rpc.v1.RegisterWorkerRequest 5 resources pipeforge.rpc.v1.ResourceProfile
+field pipeforge.rpc.v1.RegisterWorkerRequest 6 slots int32
+field pipeforge.rpc.v1.RegisterWorkerRequest 7 labels repeated pipeforge.rpc.v1.RegisterWorkerRequest.LabelsEntry
+field pipeforge.rpc.v1.RegisterWorkerRequest 8 resource_group string
+field pipeforge.rpc.v1.RegisterWorkerRequest 9 public_key bytes
+field pipeforge.rpc.v1.RegisterWorkerRequest.LabelsEntry 1 key string
+field pipeforge.rpc.v1.RegisterWorkerRequest.LabelsEntry 2 value string
+field pipeforge.rpc.v1.RegisterWorkerResponse 1 worker_id string
+field pipeforge.rpc.v1.RegisterWorkerResponse 2 leader_epoch int64
+field pipeforge.rpc.v1.RegisterWorkerResponse 3 heartbeat_interval_ms int64
+field pipeforge.rpc.v1.RegisterWorkerResponse 4 heartbeat_timeout_ms int64
+field pipeforge.rpc.v1.RegisterWorkerResponse 5 protocol_version string
+field pipeforge.rpc.v1.ResourceProfile 1 cpu_cores int32
+field pipeforge.rpc.v1.ResourceProfile 2 task_heap_bytes int64
+field pipeforge.rpc.v1.ResourceProfile 3 network_bytes int64
+field pipeforge.rpc.v1.ResourceProfile 4 managed_bytes int64
+field pipeforge.rpc.v1.ResourceRef 1 name string
+field pipeforge.rpc.v1.ResourceRef 2 sha256 string
+field pipeforge.rpc.v1.ResultPartitionDescriptor 1 output_index int32
+field pipeforge.rpc.v1.ResultPartitionDescriptor 2 subpartitions int32
+field pipeforge.rpc.v1.ResultPartitionDescriptor 3 partitioning pipeforge.rpc.v1.Partitioning
+field pipeforge.rpc.v1.ResultPartitionId 1 producer pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.ResultPartitionId 2 output_index int32
+field pipeforge.rpc.v1.RunningTask 1 id pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.RunningTask 2 state pipeforge.rpc.v1.TaskState
+field pipeforge.rpc.v1.SchemaChange 1 table_id int32
+field pipeforge.rpc.v1.SchemaChange 2 table pipeforge.rpc.v1.TableEntry
+field pipeforge.rpc.v1.SecretBundle 1 values repeated pipeforge.rpc.v1.SecretBundle.ValuesEntry
+field pipeforge.rpc.v1.SecretBundle.ValuesEntry 1 key string
+field pipeforge.rpc.v1.SecretBundle.ValuesEntry 2 value string
+field pipeforge.rpc.v1.SlotReport 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.SlotReport 2 worker_id string
+field pipeforge.rpc.v1.SlotReport 3 slots repeated pipeforge.rpc.v1.SlotStatus
+field pipeforge.rpc.v1.SlotRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.SlotRequest 2 job_id string
+field pipeforge.rpc.v1.SlotRequest 3 run_id string
+field pipeforge.rpc.v1.SlotRequest 4 allocation_id string
+field pipeforge.rpc.v1.SlotRequest 5 slot_index int32
+field pipeforge.rpc.v1.SlotRequest 6 job_master_address string
+field pipeforge.rpc.v1.SlotStatus 1 index int32
+field pipeforge.rpc.v1.SlotStatus 2 allocated bool
+field pipeforge.rpc.v1.SlotStatus 3 job_id string
+field pipeforge.rpc.v1.SlotStatus 4 allocation_id string
+field pipeforge.rpc.v1.SplitProgress 1 split_id string
+field pipeforge.rpc.v1.SplitProgress 2 rows int64
+field pipeforge.rpc.v1.SplitProgress 3 finished bool
+field pipeforge.rpc.v1.SubmitJobRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.SubmitJobRequest 2 job_id string
+field pipeforge.rpc.v1.SubmitJobRequest 3 run_id string
+field pipeforge.rpc.v1.SubmitJobRequest 4 definition string
+field pipeforge.rpc.v1.SubmitJobRequest 5 definition_format string
+field pipeforge.rpc.v1.SubmitJobRequest 6 variables repeated pipeforge.rpc.v1.SubmitJobRequest.VariablesEntry
+field pipeforge.rpc.v1.SubmitJobRequest 7 scheduled_time_ms int64
+field pipeforge.rpc.v1.SubmitJobRequest 8 plugins repeated pipeforge.rpc.v1.PluginRef
+field pipeforge.rpc.v1.SubmitJobRequest 9 timeout_ms int64
+field pipeforge.rpc.v1.SubmitJobRequest.VariablesEntry 1 key string
+field pipeforge.rpc.v1.SubmitJobRequest.VariablesEntry 2 value string
+field pipeforge.rpc.v1.SubmitJobResponse 1 run_id string
+field pipeforge.rpc.v1.TableEntry 1 table_id int32
+field pipeforge.rpc.v1.TableEntry 10 comment string
+field pipeforge.rpc.v1.TableEntry 2 catalog string
+field pipeforge.rpc.v1.TableEntry 3 database string
+field pipeforge.rpc.v1.TableEntry 4 schema string
+field pipeforge.rpc.v1.TableEntry 5 table string
+field pipeforge.rpc.v1.TableEntry 6 columns repeated pipeforge.rpc.v1.ColumnEntry
+field pipeforge.rpc.v1.TableEntry 7 primary_key repeated string
+field pipeforge.rpc.v1.TableEntry 8 partition_keys repeated string
+field pipeforge.rpc.v1.TableEntry 9 options repeated pipeforge.rpc.v1.TableEntry.OptionsEntry
+field pipeforge.rpc.v1.TableEntry.OptionsEntry 1 key string
+field pipeforge.rpc.v1.TableEntry.OptionsEntry 2 value string
+field pipeforge.rpc.v1.TaskDeployment 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.TaskDeployment 11 encrypted_secrets bytes
+field pipeforge.rpc.v1.TaskDeployment 12 parallelism int32
+field pipeforge.rpc.v1.TaskDeployment 13 settings pipeforge.rpc.v1.TaskSettings
+field pipeforge.rpc.v1.TaskDeployment 14 job_master_address string
+field pipeforge.rpc.v1.TaskDeployment 2 id pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.TaskDeployment 3 allocation_id string
+field pipeforge.rpc.v1.TaskDeployment 4 chain_descriptor bytes
+field pipeforge.rpc.v1.TaskDeployment 5 plugins repeated pipeforge.rpc.v1.PluginRef
+field pipeforge.rpc.v1.TaskDeployment 6 resources repeated pipeforge.rpc.v1.ResourceRef
+field pipeforge.rpc.v1.TaskDeployment 7 inputs repeated pipeforge.rpc.v1.InputGateDescriptor
+field pipeforge.rpc.v1.TaskDeployment 8 outputs repeated pipeforge.rpc.v1.ResultPartitionDescriptor
+field pipeforge.rpc.v1.TaskMetrics 1 operators repeated pipeforge.rpc.v1.OperatorMetrics
+field pipeforge.rpc.v1.TaskMetrics 10 splits repeated pipeforge.rpc.v1.SplitProgress
+field pipeforge.rpc.v1.TaskMetrics 2 running_nanos int64
+field pipeforge.rpc.v1.TaskMetrics 3 idle_nanos int64
+field pipeforge.rpc.v1.TaskMetrics 4 reader_wait_nanos int64
+field pipeforge.rpc.v1.TaskMetrics 5 writer_wait_nanos int64
+field pipeforge.rpc.v1.TaskMetrics 6 back_pressured_nanos int64
+field pipeforge.rpc.v1.TaskMetrics 7 bytes_in int64
+field pipeforge.rpc.v1.TaskMetrics 8 bytes_out int64
+field pipeforge.rpc.v1.TaskMetrics 9 memory_bytes int64
+field pipeforge.rpc.v1.TaskSettings 1 async_write_buffer bool
+field pipeforge.rpc.v1.TaskSettings 2 write_batch_size int32
+field pipeforge.rpc.v1.TaskSettings 3 write_queue_capacity int32
+field pipeforge.rpc.v1.TaskSettings 4 cancel_timeout_ms int64
+field pipeforge.rpc.v1.TaskSettings 5 cancel_kill_timeout_ms int64
+field pipeforge.rpc.v1.TaskSettings 6 metrics_interval_ms int64
+field pipeforge.rpc.v1.TaskSettings 7 max_row_bytes int64
+field pipeforge.rpc.v1.TaskStateUpdate 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.TaskStateUpdate 2 id pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.TaskStateUpdate 3 state pipeforge.rpc.v1.TaskState
+field pipeforge.rpc.v1.TaskStateUpdate 4 error pipeforge.rpc.v1.ErrorInfo
+field pipeforge.rpc.v1.TaskStateUpdate 5 committables repeated pipeforge.rpc.v1.Versioned
+field pipeforge.rpc.v1.TaskStateUpdate 6 final_metrics pipeforge.rpc.v1.TaskMetrics
+field pipeforge.rpc.v1.TaskStatus 1 id pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.TaskStatus 2 state pipeforge.rpc.v1.TaskState
+field pipeforge.rpc.v1.TaskStatus 3 worker_id string
+field pipeforge.rpc.v1.TaskStatus 4 error pipeforge.rpc.v1.ErrorInfo
+field pipeforge.rpc.v1.Versioned 1 version int32
+field pipeforge.rpc.v1.Versioned 2 data bytes
+field pipeforge.rpc.v1.WorkerHeartbeat 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.WorkerHeartbeat 2 worker_id string
+field pipeforge.rpc.v1.WorkerHeartbeat 3 slots repeated pipeforge.rpc.v1.SlotStatus
+field pipeforge.rpc.v1.WorkerHeartbeat 4 tasks repeated pipeforge.rpc.v1.RunningTask
+file pipeforge/rpc/v1/chain.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+file pipeforge/rpc/v1/common.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+file pipeforge/rpc/v1/dispatcher.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+file pipeforge/rpc/v1/job_master.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+file pipeforge/rpc/v1/resource_manager.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+file pipeforge/rpc/v1/task_executor.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+message pipeforge.rpc.v1.Ack
+message pipeforge.rpc.v1.AddSplits
+message pipeforge.rpc.v1.CancelTaskRequest
+message pipeforge.rpc.v1.ChainDescriptor
+message pipeforge.rpc.v1.ColumnEntry
+message pipeforge.rpc.v1.ColumnEntry.OptionsEntry
+message pipeforge.rpc.v1.ErrorInfo
+message pipeforge.rpc.v1.ErrorInfo.ParamsEntry
+message pipeforge.rpc.v1.ErrorInfo.ScopeEntry
+message pipeforge.rpc.v1.ExecutionAttemptId
+message pipeforge.rpc.v1.ExplainResult
+message pipeforge.rpc.v1.FreeSlotRequest
+message pipeforge.rpc.v1.Header
+message pipeforge.rpc.v1.HeartbeatAck
+message pipeforge.rpc.v1.InputChannelDescriptor
+message pipeforge.rpc.v1.InputGateDescriptor
+message pipeforge.rpc.v1.JobContext
+message pipeforge.rpc.v1.JobContext.VariablesEntry
+message pipeforge.rpc.v1.JobMetrics
+message pipeforge.rpc.v1.JobRequest
+message pipeforge.rpc.v1.JobStatus
+message pipeforge.rpc.v1.ListJobsRequest
+message pipeforge.rpc.v1.ListJobsResponse
+message pipeforge.rpc.v1.LogChunk
+message pipeforge.rpc.v1.MetricsReport
+message pipeforge.rpc.v1.NoMoreSplits
+message pipeforge.rpc.v1.NodeDescriptor
+message pipeforge.rpc.v1.NodeMetrics
+message pipeforge.rpc.v1.OperatorEvent
+message pipeforge.rpc.v1.OperatorMetrics
+message pipeforge.rpc.v1.OutputEdge
+message pipeforge.rpc.v1.Partitioning
+message pipeforge.rpc.v1.PluginRef
+message pipeforge.rpc.v1.RateLimitQuota
+message pipeforge.rpc.v1.ReadLogRequest
+message pipeforge.rpc.v1.ReaderEvent
+message pipeforge.rpc.v1.RegisterWorkerRequest
+message pipeforge.rpc.v1.RegisterWorkerRequest.LabelsEntry
+message pipeforge.rpc.v1.RegisterWorkerResponse
+message pipeforge.rpc.v1.ResourceProfile
+message pipeforge.rpc.v1.ResourceRef
+message pipeforge.rpc.v1.ResultPartitionDescriptor
+message pipeforge.rpc.v1.ResultPartitionId
+message pipeforge.rpc.v1.RunningTask
+message pipeforge.rpc.v1.SchemaChange
+message pipeforge.rpc.v1.SecretBundle
+message pipeforge.rpc.v1.SecretBundle.ValuesEntry
+message pipeforge.rpc.v1.SlotReport
+message pipeforge.rpc.v1.SlotRequest
+message pipeforge.rpc.v1.SlotStatus
+message pipeforge.rpc.v1.SplitProgress
+message pipeforge.rpc.v1.SplitRequest
+message pipeforge.rpc.v1.SubmitJobRequest
+message pipeforge.rpc.v1.SubmitJobRequest.VariablesEntry
+message pipeforge.rpc.v1.SubmitJobResponse
+message pipeforge.rpc.v1.TableEntry
+message pipeforge.rpc.v1.TableEntry.OptionsEntry
+message pipeforge.rpc.v1.TaskDeployment
+message pipeforge.rpc.v1.TaskMetrics
+message pipeforge.rpc.v1.TaskSettings
+message pipeforge.rpc.v1.TaskStateUpdate
+message pipeforge.rpc.v1.TaskStatus
+message pipeforge.rpc.v1.Versioned
+message pipeforge.rpc.v1.WorkerHeartbeat
+reserved pipeforge.rpc.v1.TaskDeployment 10-10
+reserved pipeforge.rpc.v1.TaskDeployment 9-9
+rpc pipeforge.rpc.v1.DispatcherService.Analyze pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.ExplainResult
+rpc pipeforge.rpc.v1.DispatcherService.CancelJob pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.DispatcherService.GetJobMetrics pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobMetrics
+rpc pipeforge.rpc.v1.DispatcherService.GetJobStatus pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobStatus
+rpc pipeforge.rpc.v1.DispatcherService.ListJobs pipeforge.rpc.v1.ListJobsRequest -> pipeforge.rpc.v1.ListJobsResponse
+rpc pipeforge.rpc.v1.DispatcherService.SubmitJob pipeforge.rpc.v1.SubmitJobRequest -> pipeforge.rpc.v1.SubmitJobResponse
+rpc pipeforge.rpc.v1.JobMasterService.ReportMetrics stream pipeforge.rpc.v1.MetricsReport -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.JobMasterService.SendReaderEvent pipeforge.rpc.v1.ReaderEvent -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.JobMasterService.UpdateTaskState pipeforge.rpc.v1.TaskStateUpdate -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.ResourceManagerService.Heartbeat stream pipeforge.rpc.v1.WorkerHeartbeat -> stream pipeforge.rpc.v1.HeartbeatAck
+rpc pipeforge.rpc.v1.ResourceManagerService.OfferSlots pipeforge.rpc.v1.SlotReport -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.ResourceManagerService.RegisterWorker pipeforge.rpc.v1.RegisterWorkerRequest -> pipeforge.rpc.v1.RegisterWorkerResponse
+rpc pipeforge.rpc.v1.TaskExecutorService.CancelTask pipeforge.rpc.v1.CancelTaskRequest -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.TaskExecutorService.DeployTask pipeforge.rpc.v1.TaskDeployment -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.TaskExecutorService.FreeSlot pipeforge.rpc.v1.FreeSlotRequest -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.TaskExecutorService.ReadLog pipeforge.rpc.v1.ReadLogRequest -> stream pipeforge.rpc.v1.LogChunk
+rpc pipeforge.rpc.v1.TaskExecutorService.RequestSlot pipeforge.rpc.v1.SlotRequest -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.TaskExecutorService.SendOperatorEvent pipeforge.rpc.v1.OperatorEvent -> pipeforge.rpc.v1.Ack
+service pipeforge.rpc.v1.DispatcherService
+service pipeforge.rpc.v1.JobMasterService
+service pipeforge.rpc.v1.ResourceManagerService
+service pipeforge.rpc.v1.TaskExecutorService
+value pipeforge.rpc.v1.NodeKind 0 NODE_KIND_UNSPECIFIED
+value pipeforge.rpc.v1.NodeKind 1 NODE_KIND_SOURCE
+value pipeforge.rpc.v1.NodeKind 2 NODE_KIND_TRANSFORM
+value pipeforge.rpc.v1.NodeKind 3 NODE_KIND_SINK
+value pipeforge.rpc.v1.Partitioning.Kind 0 KIND_UNSPECIFIED
+value pipeforge.rpc.v1.Partitioning.Kind 1 KIND_FORWARD
+value pipeforge.rpc.v1.Partitioning.Kind 2 KIND_REBALANCE
+value pipeforge.rpc.v1.Partitioning.Kind 3 KIND_HASH
+value pipeforge.rpc.v1.Partitioning.Kind 4 KIND_TABLE
+value pipeforge.rpc.v1.Partitioning.Kind 5 KIND_BROADCAST
+value pipeforge.rpc.v1.RunState 0 RUN_STATE_UNSPECIFIED
+value pipeforge.rpc.v1.RunState 1 RUN_STATE_QUEUE
+value pipeforge.rpc.v1.RunState 2 RUN_STATE_RUNNING
+value pipeforge.rpc.v1.RunState 3 RUN_STATE_SUCCESS
+value pipeforge.rpc.v1.RunState 4 RUN_STATE_FAILED
+value pipeforge.rpc.v1.RunState 5 RUN_STATE_CANCELLING
+value pipeforge.rpc.v1.RunState 6 RUN_STATE_CANCELLED
+value pipeforge.rpc.v1.RunState 7 RUN_STATE_TIMEOUT
+value pipeforge.rpc.v1.TaskState 0 TASK_STATE_UNSPECIFIED
+value pipeforge.rpc.v1.TaskState 1 TASK_STATE_DEPLOYING
+value pipeforge.rpc.v1.TaskState 2 TASK_STATE_RUNNING
+value pipeforge.rpc.v1.TaskState 3 TASK_STATE_FINISHED
+value pipeforge.rpc.v1.TaskState 4 TASK_STATE_FAILED
+value pipeforge.rpc.v1.TaskState 5 TASK_STATE_CANCELED
