@@ -35,6 +35,8 @@ Worker                                   Master（ResourceManager）
   Master 不认识的 Worker 发来心跳时，会被要求重新注册——例如 Master 重启之后。
 - **Slot 账本**。Master 记录哪些 Slot 空闲、哪些正在运行哪个作业的 Task。调度器从账本中取空闲 Slot；
   作业可以通过标签要求只使用带有这些标签的 Worker，例如 `zone=east`。
+- **与 Master 失联**。在 Master 给出的超时时间内心跳都没有得到应答的 Worker，会认为自己已与 Master 断开：它取消自己的所有 Task
+  （只有当前的 Master 可以控制它们），并不断尝试重新注册，默认每秒一次。Master 再次应答后，Worker 用原来的 ID 注册并提供它的 Slot。
 - **Worker 失联**。30 秒没有发送心跳的 Worker 会被移出集群。Task 运行在它上面的 JobMaster 会收到
   [`PF-CLUS-0001`](../reference/errors#pf-clus-0001)，并让这些 Task 失败。
 
@@ -44,7 +46,8 @@ Worker                                   Master（ResourceManager）
 |---|---|---|
 | 心跳间隔 | 5 秒 | Worker 发送心跳的频率；Master 也按这个频率检查失联的 Worker |
 | 心跳超时 | 30 秒 | 多久没有心跳就认为 Worker 失联；必须大于心跳间隔 |
-| Slot | CPU 核数 | Worker 同时运行的 Task 实例数 |
+| Slot | CPU 核数 | Worker 同时运行的 Task 实例数（`worker.slots`） |
+| 注册重试 | 1 秒 | 未连接的 Worker 尝试注册的频率 |
 | 标签 | 无 | Worker 带有的键值对，例如 `zone=east`、`net=db-zone` |
 
 - 失联的 Worker 会被立即移除：在当前版本中，它上面的 Task 失败，作业随之失败，错误中包含该 Worker 以及没有心跳的时长。
@@ -55,6 +58,7 @@ Worker                                   Master（ResourceManager）
 ## 可观测性
 
 - Master 会记录每一次注册、重新注册和 Worker 失联；Worker 失联以警告级别记录，内容为 `PF-CLUS-0001` 的错误信息。
+- Worker 会记录它的注册，并以警告级别记录与 Master 失联以及没有应答的秒数。
 - 因 Worker 失联而失败的作业显示 `PF-CLUS-0001`，其中包含该 Worker、它的地址以及没有心跳的秒数。
 
 ## 性能与调优

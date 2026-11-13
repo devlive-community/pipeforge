@@ -145,7 +145,7 @@ handle.result().get().status();   // CANCELLED
 
 `cancel` returns at once. Each task is woken up, the reader's `cancel()` and an interrupt of the write
 thread stop blocking calls, and the job ends with `CANCELLED` once every task has stopped. Nothing is
-committed.
+committed. A worker that loses its [master](./cluster) cancels all its tasks in the same way.
 
 ## Behavior
 

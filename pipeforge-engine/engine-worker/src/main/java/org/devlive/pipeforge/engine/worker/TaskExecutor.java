@@ -36,7 +36,7 @@ import org.devlive.pipeforge.engine.rpc.TaskState;
  *       and its thread is left behind.
  * </ol>
  */
-public final class TaskExecutor implements TaskExecutorGateway, AutoCloseable {
+public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, AutoCloseable {
 
     private final JobMasterGateway master;
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
@@ -110,6 +110,19 @@ public final class TaskExecutor implements TaskExecutorGateway, AutoCloseable {
     /** The tasks that have not reported a final state yet. */
     public List<ExecutionAttemptId> runningTasks() {
         return List.copyOf(tasks.keySet());
+    }
+
+    @Override
+    public Map<ExecutionAttemptId, TaskState> taskStates() {
+        Map<ExecutionAttemptId, TaskState> states = new java.util.LinkedHashMap<>();
+        tasks.forEach((id, task) -> states.put(id, task.state()));
+        return states;
+    }
+
+    @Override
+    @SuppressWarnings("FutureReturnValueIgnored") // cancelling completes at once; the task reports its end
+    public void cancelAll() {
+        runningTasks().forEach(this::cancelTask);
     }
 
     /** Cancels the remaining tasks and stops the watchdog. */

@@ -129,7 +129,7 @@ handle.result().get().status();   // CANCELLED
 ```
 
 `cancel` 立即返回。每个 Task 被唤醒，Reader 的 `cancel()` 和对写线程的中断让阻塞中的调用返回；所有 Task 停止后，作业以 `CANCELLED` 结束，
-不提交任何内容。
+不提交任何内容。与 [Master](./cluster) 失联的 Worker 也以同样的方式取消它的所有 Task。
 
 ## 行为与语义
 

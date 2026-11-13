@@ -43,6 +43,10 @@ worker                                   master (resource manager)
 - **The slot ledger.** The master records which slots are free and which run a task of which job.
   The scheduler takes free slots from it; with labels, a job can ask for workers that carry them,
   for example `zone=east`.
+- **Losing the master.** A worker that gets no answer to its heartbeats for the timeout the master
+  gave considers itself cut off: it cancels all its tasks, because only the current master may
+  control them, and keeps trying to register — every second by default. When the master answers
+  again, the worker registers with its previous ID and offers its slots.
 - **Losing a worker.** A worker that sends no heartbeat for 30 seconds is removed from the cluster.
   The job masters whose tasks ran there learn about it with
   [`PF-CLUS-0001`](../reference/errors#pf-clus-0001) and fail those tasks.
@@ -53,7 +57,8 @@ worker                                   master (resource manager)
 |---|---|---|
 | Heartbeat interval | 5 s | How often a worker sends a heartbeat; the master also checks for lost workers this often |
 | Heartbeat timeout | 30 s | After how long without a heartbeat a worker counts as lost; it must be longer than the interval |
-| Slots | number of cores | How many task instances a worker runs at the same time |
+| Slots | number of cores | How many task instances a worker runs at the same time (`worker.slots`) |
+| Registration retry | 1 s | How often a worker that is not connected tries to register |
 | Labels | none | Key and value pairs a worker carries, such as `zone=east` or `net=db-zone` |
 
 - A lost worker is removed at once: in this version its tasks fail and so does the job, with the
@@ -68,6 +73,8 @@ worker                                   master (resource manager)
 
 - The master logs every registration, registration again and lost worker; a lost worker is logged
   as a warning with the message of `PF-CLUS-0001`.
+- A worker logs its registrations and, as a warning, the loss of its master with the seconds
+  without an answer.
 - A job that failed because a worker was lost shows `PF-CLUS-0001` with the worker, its address and
   the seconds without a heartbeat.
 

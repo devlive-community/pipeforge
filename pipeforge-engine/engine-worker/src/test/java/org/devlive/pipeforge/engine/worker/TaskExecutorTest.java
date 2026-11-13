@@ -265,6 +265,24 @@ class TaskExecutorTest {
     }
 
     @Test
+    void listsItsTasksAndCancelsThemAll() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "block: cancel", "", "", 1), ScriptedMaster.settings()))
+                    .get();
+            assertThat(Probe.get(probe).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(master.executor.taskStates()).containsEntry(master.id(), TaskState.RUNNING);
+
+            master.executor.cancelAll();
+
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
+            assertThat(master.executor.taskStates()).isEmpty();
+        }
+    }
+
+    @Test
     void interruptsATaskThatIgnoresItsCancelHook() throws Exception {
         String probe = Probe.create();
         TaskSettings quick =
