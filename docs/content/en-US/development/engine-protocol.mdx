@@ -22,8 +22,9 @@ generates the Java messages and service stubs from them (package
 `org.devlive.pipeforge.engine.rpc.proto`); the engine itself works with its own types, and
 `ProtoMapping` converts between the two at the edge.
 
-In this version the protocol is defined and checked; the gRPC transport, the cluster processes and
-the data exchange between workers follow in the next commits of the distributed runtime. Local runs
+In this version the protocol, its gRPC transport and the task descriptions are in place; the cluster
+processes (master, workers) and the data exchange between workers follow in the next steps of the
+distributed runtime. Local runs
 (`pipeforge run --local`) use the same interfaces in process.
 
 ## Conventions
@@ -70,6 +71,26 @@ the `ChainDescriptor` message inside an envelope that the worker checks before i
 
 Local runs write the description of every task and read it back before the task starts, so the
 whole test suite runs through this format.
+
+## Transport
+
+Processes call each other with gRPC over HTTP/2 (Netty). Every call is protected and made safe to
+repeat:
+
+| Concern | How |
+|---|---|
+| Who may call | Every call carries the cluster token in the metadata `pipeforge-cluster-token`; a server refuses others with [`PF-CLUS-0005`](../reference/errors#pf-clus-0005). |
+| Encryption | Optional TLS. The server presents the certificate of a PKCS#12 key store; clients trust the certificates of a PKCS#12 trust store and refuse any other server. |
+| Replaced masters | A worker remembers the largest leader and job epoch it has seen and refuses requests with a smaller one ([`PF-CLUS-0006`](../reference/errors#pf-clus-0006)), so only the current master controls its tasks. |
+| Versions | A request of another major protocol version is refused with [`PF-CLUS-0007`](../reference/errors#pf-clus-0007). |
+| Lost answers | A request that got no answer (unavailable, or past its deadline) is sent again up to three times, with exponential backoff and the same request ID. The receiver runs every request ID once and answers repeats with the first result for ten minutes. A refusal is never retried; after the last retry the caller fails with [`PF-CLUS-0008`](../reference/errors#pf-clus-0008). |
+| Order | Split assignments and split requests are numbered per task and node; the receiver hands them over in that order, once, even when they arrive out of order. |
+| Sensitive options | Encrypted for the worker that runs the task: an ephemeral X25519 key agreement with the public key the worker registered, HKDF-SHA256 and AES-256-GCM bound to the task attempt. A worker that restarted cannot read options sealed for its old key ([`PF-CLUS-0009`](../reference/errors#pf-clus-0009)). |
+| Metrics | Sent over one stream per worker and job master; every report holds the full counters, so a lost report changes nothing. |
+
+The deadlines are 60 seconds for deploying a task and 30 seconds for the other requests. Custom
+reader events, which a source can send to its split enumerator, stay within one process in this
+version; across processes they need a serializer from the source.
 
 ## Versions
 

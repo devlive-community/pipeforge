@@ -50,6 +50,7 @@ import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.ReaderMessage;
+import org.devlive.pipeforge.engine.rpc.RunContext;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
@@ -87,6 +88,8 @@ final class LocalJobMaster {
     /** What the tasks receive: {@link #chain} written and read in the task description format. */
     private final ChainDescriptor deployed;
 
+    private final RunContext run;
+
     private final int parallelism;
     private final TaskSettings settings;
     private final TaskExecutorGateway executor;
@@ -118,7 +121,15 @@ final class LocalJobMaster {
         this.parallelism = nodes.get(0).parallelism();
         this.chain = new ChainDescriptor(
                 nodes.get(0).id(), new JobContext(plan.name(), plan.parallelism(), plan.timeZone()), nodes);
-        this.deployed = described(chain, plan, id, runStartTime);
+        this.run = new RunContext(
+                id.value(),
+                id.value(),
+                plan.variables(),
+                runStartTime,
+                null,
+                plan.mode().id(),
+                plan.delivery().id());
+        this.deployed = described(chain, run);
         this.settings = new TaskSettings(
                 options.asyncWriteBuffer(),
                 options.writeBatchSize(),
@@ -202,8 +213,7 @@ final class LocalJobMaster {
         }
         for (int subtask = 0; subtask < parallelism; subtask++) {
             states.put(subtask, TaskState.DEPLOYING);
-            TaskDeployment deployment =
-                    new TaskDeployment(attempt(subtask), deployed, parallelism, settings, runStartTime);
+            TaskDeployment deployment = new TaskDeployment(attempt(subtask), deployed, parallelism, settings, run);
             executor.deployTask(deployment).whenComplete((ignored, error) -> {
                 if (error != null) {
                     post(() -> fail(PipeForgeException.wrap(error)));
@@ -521,17 +531,8 @@ final class LocalJobMaster {
      * with components resolved from the ones of the plan, as a worker resolves them from its
      * plugins. Local runs check the format this way.
      */
-    static ChainDescriptor described(ChainDescriptor chain, JobPlan plan, JobId id, Instant runStartTime) {
-        ChainCodec.Encoded encoded = ChainCodec.encode(
-                chain,
-                new ChainCodec.RunContext(
-                        id.value(),
-                        id.value(),
-                        plan.variables(),
-                        runStartTime,
-                        null,
-                        plan.mode().id(),
-                        plan.delivery().id()));
+    static ChainDescriptor described(ChainDescriptor chain, RunContext run) {
+        ChainCodec.Encoded encoded = ChainCodec.encode(chain, run);
         return ChainCodec.decode(encoded.descriptor(), encoded.secrets(), (kind, type, plugin) -> chain.nodes().stream()
                         .filter(n -> n.kind() == kind
                                 && n.type().equals(type)

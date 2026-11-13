@@ -16,19 +16,23 @@ import java.util.Objects;
  * @param chain the operators of the task
  * @param parallelism the number of parallel instances of the vertex
  * @param settings runtime settings
- * @param runStartTime when the run started; the same for every task of the run and across retries,
- *     it is what {@code RUN_START_TIME()} returns in expressions
+ * @param run the run the task belongs to
  */
 public record TaskDeployment(
-        ExecutionAttemptId id, ChainDescriptor chain, int parallelism, TaskSettings settings, Instant runStartTime) {
+        ExecutionAttemptId id, ChainDescriptor chain, int parallelism, TaskSettings settings, RunContext run) {
 
     public TaskDeployment {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(chain, "chain");
         Objects.requireNonNull(settings, "settings");
-        Objects.requireNonNull(runStartTime, "runStartTime");
+        Objects.requireNonNull(run, "run");
         if (id.subtask() >= parallelism) {
             throw new IllegalArgumentException("Subtask " + id.subtask() + " is outside parallelism " + parallelism);
         }
+    }
+
+    /** When the run started: what {@code RUN_START_TIME()} returns in expressions. */
+    public Instant runStartTime() {
+        return run.runStart();
     }
 }

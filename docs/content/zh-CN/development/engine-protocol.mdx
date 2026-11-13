@@ -19,7 +19,7 @@ PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Tas
 定义位于 `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`。构建时由它们生成 Java 消息与服务桩
 （包 `org.devlive.pipeforge.engine.rpc.proto`）；引擎内部使用自己的类型，`ProtoMapping` 在边界上负责两者之间的转换。
 
-当前版本中协议已经定义并受到检查；gRPC 传输、集群进程以及 Worker 之间的数据交换会在分布式运行时的后续提交中加入。
+当前版本中协议、它的 gRPC 传输以及 Task 描述都已就绪；集群进程（Master、Worker）以及 Worker 之间的数据交换会在分布式运行时的后续步骤中加入。
 本地运行（`pipeforge run --local`）在进程内使用同一组接口。
 
 ## 约定
@@ -53,6 +53,23 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
   每次构建都检查它仍能被读取，并且仍能逐字节地写出。
 
 本地运行会在每个 Task 启动前写出它的描述再读回，因此整个测试集都经过这个格式。
+
+## 传输
+
+进程之间通过基于 HTTP/2（Netty）的 gRPC 互相调用。每次调用都受到保护，并且可以安全地重复：
+
+| 关注点 | 做法 |
+|---|---|
+| 谁可以调用 | 每次调用都在元数据 `pipeforge-cluster-token` 中携带集群令牌；服务端拒绝其他调用，错误码为 [`PF-CLUS-0005`](../reference/errors#pf-clus-0005)。 |
+| 加密 | 可选 TLS。服务端出示 PKCS#12 密钥库中的证书；客户端只信任 PKCS#12 信任库中的证书，拒绝其他服务端。 |
+| 被替换的 Master | Worker 记住见过的最大 leader epoch 和 job epoch，拒绝更小 epoch 的请求（[`PF-CLUS-0006`](../reference/errors#pf-clus-0006)），因此只有当前的 Master 能控制它的 Task。 |
+| 版本 | 协议主版本不同的请求被拒绝，错误码为 [`PF-CLUS-0007`](../reference/errors#pf-clus-0007)。 |
+| 丢失的应答 | 没有得到应答（不可用或超过截止时间）的请求最多再发送三次，指数退避，请求 ID 不变。接收方对每个请求 ID 只执行一次，十分钟内对重复的请求返回第一次的结果。被拒绝的请求从不重试；最后一次重试仍失败时，调用方以 [`PF-CLUS-0008`](../reference/errors#pf-clus-0008) 失败。 |
+| 顺序 | 分片分配与分片请求按 Task 和节点编号；即使乱序到达，接收方也按编号顺序、只交付一次。 |
+| 敏感选项 | 为运行该 Task 的 Worker 加密：使用 Worker 注册时提供的公钥做一次临时 X25519 密钥协商，再经 HKDF-SHA256 和 AES-256-GCM 加密，并绑定到这次 Task 尝试。重启过的 Worker 无法读取为旧密钥加密的选项（[`PF-CLUS-0009`](../reference/errors#pf-clus-0009)）。 |
+| 指标 | 每个 Worker 与 JobMaster 之间一条流；每次上报都包含完整的计数，丢失一次上报不影响结果。 |
+
+部署 Task 的截止时间为 60 秒，其他请求为 30 秒。Source 发给分片分配器的自定义 Reader 事件在当前版本中只能在同一进程内传递；跨进程传递需要 Source 提供序列化器。
 
 ## 版本
 

@@ -96,6 +96,13 @@ public final class ErrorCode {
     public static final ErrorCode DOCKER_NOT_AVAILABLE = define("PF-CLUS-0003", "DOCKER_NOT_AVAILABLE", "detail");
     public static final ErrorCode DEV_ENVIRONMENT_FAILED =
             define("PF-CLUS-0004", "DEV_ENVIRONMENT_FAILED", "action", "exit");
+    public static final ErrorCode RPC_UNAUTHENTICATED = define("PF-CLUS-0005", "RPC_UNAUTHENTICATED", "peer");
+    public static final ErrorCode RPC_STALE_EPOCH =
+            define("PF-CLUS-0006", "RPC_STALE_EPOCH", "epoch", "received", "known");
+    public static final ErrorCode RPC_VERSION_MISMATCH =
+            define("PF-CLUS-0007", "RPC_VERSION_MISMATCH", "local", "remote");
+    public static final ErrorCode RPC_UNAVAILABLE = define("PF-CLUS-0008", "RPC_UNAVAILABLE", "target", "reason");
+    public static final ErrorCode SECRETS_UNREADABLE = define("PF-CLUS-0009", "SECRETS_UNREADABLE", "task", "reason");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

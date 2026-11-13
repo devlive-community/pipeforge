@@ -32,3 +32,48 @@
   hint:
     en-US: "The docker compose output above names the service; pipeforge dev status shows the state of every service, and docker compose logs <service> its log."
     zh-CN: "上面的 docker compose 输出给出了出错的服务；pipeforge dev status 显示每个服务的状态，docker compose logs <服务> 显示它的日志。"
+
+- code: PF-CLUS-0005
+  name: RPC_UNAUTHENTICATED
+  message:
+    en-US: "{peer} sent a request without the token of this cluster"
+    zh-CN: "{peer} 发来的请求没有携带本集群的令牌"
+  hint:
+    en-US: "Every master, worker and server of a cluster needs the same cluster.token; check the configuration of the process that sent it."
+    zh-CN: "同一集群中的 Master、Worker 和 Server 都需要相同的 cluster.token；请检查发出请求的进程的配置。"
+
+- code: PF-CLUS-0006
+  name: RPC_STALE_EPOCH
+  message:
+    en-US: "Refused a request of {epoch} epoch {received}; this process knows epoch {known}"
+    zh-CN: "拒绝了 {epoch} epoch 为 {received} 的请求；本进程已知的 epoch 为 {known}"
+  hint:
+    en-US: "The request comes from a master or job master that has been replaced. It is refused on purpose, so that only the current one controls the tasks; no action is needed."
+    zh-CN: "请求来自一个已被替换的 Master 或 JobMaster。拒绝是有意的，以保证只有当前的 Master 控制 Task；无需处理。"
+
+- code: PF-CLUS-0007
+  name: RPC_VERSION_MISMATCH
+  message:
+    en-US: "Protocol version {remote} of the other side does not work with version {local} of this process"
+    zh-CN: "对方的协议版本 {remote} 与本进程的版本 {local} 不兼容"
+  hint:
+    en-US: "Masters, workers and servers must have the same major protocol version; upgrade the cluster to one release."
+    zh-CN: "Master、Worker 和 Server 的协议主版本必须相同；请把集群升级到同一个发行版本。"
+
+- code: PF-CLUS-0008
+  name: RPC_UNAVAILABLE
+  message:
+    en-US: "{target} cannot be reached: {reason}"
+    zh-CN: "无法访问 {target}：{reason}"
+  hint:
+    en-US: "The process is down, overloaded or not reachable over the network. Requests are retried three times before this error; check that the process runs and that its port is open."
+    zh-CN: "该进程已停止、过载，或者网络不通。出现这个错误之前请求已经重试了三次；请检查该进程是否在运行、端口是否可达。"
+
+- code: PF-CLUS-0009
+  name: SECRETS_UNREADABLE
+  message:
+    en-US: "The sensitive options of task {task} cannot be decrypted: {reason}"
+    zh-CN: "无法解密 Task {task} 的敏感选项：{reason}"
+  hint:
+    en-US: "They were encrypted for another key of this worker, usually because the worker restarted after it registered; the task is deployed again once the worker has registered anew."
+    zh-CN: "它们是为该 Worker 的另一个密钥加密的，通常是因为 Worker 在注册后重启过；Worker 重新注册后 Task 会被再次部署。"

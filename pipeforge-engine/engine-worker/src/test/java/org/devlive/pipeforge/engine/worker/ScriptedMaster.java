@@ -61,7 +61,11 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
                 new org.devlive.pipeforge.api.factory.JobContext(plan.name(), 1, plan.timeZone()),
                 nodes);
         return new TaskDeployment(
-                new ExecutionAttemptId("run-1", nodes.get(0).id(), 0, 0), chain, 1, settings, Instant.EPOCH);
+                new ExecutionAttemptId("run-1", nodes.get(0).id(), 0, 0),
+                chain,
+                1,
+                settings,
+                org.devlive.pipeforge.engine.rpc.RunContext.of("run-1", Instant.EPOCH));
     }
 
     static TaskSettings settings() {

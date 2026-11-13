@@ -194,4 +194,98 @@ public final class ProtoMapping {
         }
         return builder.build();
     }
+
+    // ----------------------------------------------------------------------------- events
+
+    /** The payload of an operator event; the client adds header, target and sequence number. */
+    public static org.devlive.pipeforge.engine.rpc.proto.OperatorEvent.Builder toProto(OperatorEvent event) {
+        var builder = org.devlive.pipeforge.engine.rpc.proto.OperatorEvent.newBuilder()
+                .setNodeId(event.node());
+        return switch (event) {
+            case OperatorEvent.AddSplits add -> {
+                var splits = org.devlive.pipeforge.engine.rpc.proto.AddSplits.newBuilder();
+                add.splits().forEach(split -> splits.addSplits(toProto(split)));
+                yield builder.setAddSplits(splits);
+            }
+            case OperatorEvent.NoMoreSplits none -> builder.setNoMoreSplits(
+                    org.devlive.pipeforge.engine.rpc.proto.NoMoreSplits.getDefaultInstance());
+        };
+    }
+
+    /**
+     * The operator event of a message.
+     *
+     * @throws IllegalArgumentException for events this engine version does not handle yet
+     */
+    public static OperatorEvent fromProto(org.devlive.pipeforge.engine.rpc.proto.OperatorEvent event) {
+        return switch (event.getEventCase()) {
+            case ADD_SPLITS -> new OperatorEvent.AddSplits(
+                    event.getNodeId(),
+                    event.getAddSplits().getSplitsList().stream()
+                            .map(ProtoMapping::fromProto)
+                            .toList());
+            case NO_MORE_SPLITS -> new OperatorEvent.NoMoreSplits(event.getNodeId());
+            default -> throw new IllegalArgumentException(
+                    "Operator event " + event.getEventCase() + " is not handled by this engine version");
+        };
+    }
+
+    /**
+     * The payload of a reader message; the client adds header and sequence number.
+     *
+     * @throws IllegalArgumentException for custom reader events: they are plugin objects, and the
+     *     protocol carries them only once sources declare a serializer for them
+     */
+    public static org.devlive.pipeforge.engine.rpc.proto.ReaderEvent.Builder toProto(ReaderMessage message) {
+        var builder = org.devlive.pipeforge.engine.rpc.proto.ReaderEvent.newBuilder()
+                .setSource(toProto(message.task()))
+                .setNodeId(message.node());
+        return switch (message) {
+            case ReaderMessage.SplitRequest request -> builder.setSplitRequest(
+                    org.devlive.pipeforge.engine.rpc.proto.SplitRequest.getDefaultInstance());
+            case ReaderMessage.Custom custom -> throw new IllegalArgumentException("Custom reader events of node '"
+                    + custom.node() + "' cannot be sent to another process yet; they need a serializer of the source");
+        };
+    }
+
+    /**
+     * The reader message of an event.
+     *
+     * @throws IllegalArgumentException for custom events, see {@link #toProto(ReaderMessage)}
+     */
+    public static ReaderMessage fromProto(org.devlive.pipeforge.engine.rpc.proto.ReaderEvent event) {
+        if (event.getEventCase() == org.devlive.pipeforge.engine.rpc.proto.ReaderEvent.EventCase.SPLIT_REQUEST) {
+            return new ReaderMessage.SplitRequest(fromProto(event.getSource()), event.getNodeId());
+        }
+        throw new IllegalArgumentException(
+                "Reader event " + event.getEventCase() + " is not handled by this engine version");
+    }
+
+    // ----------------------------------------------------------------------------- task state
+
+    /** The update without its header. */
+    public static org.devlive.pipeforge.engine.rpc.proto.TaskStateUpdate.Builder toProto(TaskStateUpdate update) {
+        var builder = org.devlive.pipeforge.engine.rpc.proto.TaskStateUpdate.newBuilder()
+                .setId(toProto(update.id()))
+                .setState(toProto(update.state()));
+        if (update.error() != null) {
+            builder.setError(toProto(update.error()));
+        }
+        update.committables().forEach(c -> builder.addCommittables(toProto(c)));
+        if (update.metrics() != null) {
+            builder.setFinalMetrics(toProto(update.metrics()));
+        }
+        return builder;
+    }
+
+    public static TaskStateUpdate fromProto(org.devlive.pipeforge.engine.rpc.proto.TaskStateUpdate update) {
+        return new TaskStateUpdate(
+                fromProto(update.getId()),
+                fromProto(update.getState()),
+                update.hasError() ? fromProto(update.getError()) : null,
+                update.getCommittablesList().stream()
+                        .map(ProtoMapping::fromProto)
+                        .toList(),
+                update.hasFinalMetrics() ? fromProto(update.getFinalMetrics()) : null);
+    }
 }

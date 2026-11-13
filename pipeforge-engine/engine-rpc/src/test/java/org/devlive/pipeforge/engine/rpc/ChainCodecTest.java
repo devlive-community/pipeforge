@@ -41,12 +41,12 @@ import org.junit.jupiter.api.Test;
  * sensitive values travel apart, damage is detected, and the golden file of format 1 stays
  * readable.
  */
-class ChainCodecTest {
+public class ChainCodecTest {
 
     /** The golden description of format 1; written once when missing, then only ever read. */
     static final Path GOLDEN = Path.of("..", "protocol-compat", "chain", "v1", "sample.bin");
 
-    static final ChainCodec.RunContext RUN = new ChainCodec.RunContext(
+    public static final RunContext RUN = new RunContext(
             "job-1",
             "run-7",
             Map.of("date", "2026-11-13", "region", "east"),
@@ -55,7 +55,7 @@ class ChainCodecTest {
             "batch",
             "at-least-once");
 
-    record Fake(NodeKind kind, String type, String plugin) implements Component {
+    public record Fake(NodeKind kind, String type, String plugin) implements Component {
         @Override
         public Factory factory() {
             throw new UnsupportedOperationException();
@@ -122,7 +122,7 @@ class ChainCodecTest {
                 new Fake(kind, type, plugin));
     }
 
-    static ChainDescriptor sample() {
+    public static ChainDescriptor sample() {
         Map<String, Object> source = new LinkedHashMap<>();
         source.put("url", "jdbc:mysql://db:3306/crm");
         source.put("password", "s3cr3t!");

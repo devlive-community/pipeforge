@@ -97,9 +97,11 @@ class ChainDescriptorTest {
                 new ChainDescriptor("src", JOB, List.of(node("src", NodeKind.SOURCE), node("out", NodeKind.SINK)));
         ExecutionAttemptId second = new ExecutionAttemptId("run", "src", 1, 0);
 
-        assertThat(new TaskDeployment(second, chain, 2, TaskSettings.defaults(), Instant.EPOCH).parallelism())
+        assertThat(new TaskDeployment(second, chain, 2, TaskSettings.defaults(), RunContext.of("r", Instant.EPOCH))
+                        .parallelism())
                 .isEqualTo(2);
-        assertThatThrownBy(() -> new TaskDeployment(second, chain, 1, TaskSettings.defaults(), Instant.EPOCH))
+        assertThatThrownBy(() -> new TaskDeployment(
+                        second, chain, 1, TaskSettings.defaults(), RunContext.of("r", Instant.EPOCH)))
                 .hasMessageContaining("outside parallelism 1");
     }
 }

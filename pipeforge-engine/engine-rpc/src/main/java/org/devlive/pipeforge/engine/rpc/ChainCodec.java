@@ -23,7 +23,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.zip.CRC32C;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.option.ReadonlyConfig;
@@ -67,7 +66,6 @@ public final class ChainCodec {
 
     private static final int HEADER_BYTES = 12;
     private static final int TRAILER_BYTES = 4;
-    private static final String BUILTIN = "builtin";
     /** Object keys sorted, so that the same options always give the same bytes. */
     private static final ObjectMapper JSON =
             new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
@@ -76,33 +74,8 @@ public final class ChainCodec {
 
     private ChainCodec() {}
 
-    /**
-     * What a description says about the run beyond the chain itself.
-     *
-     * @param scheduledTime the planned time of the run, or {@code null}
-     * @param mode {@code batch} or {@code streaming}
-     * @param delivery {@code at-least-once} or {@code exactly-once}
-     */
-    public record RunContext(
-            String jobId,
-            String runId,
-            Map<String, String> variables,
-            Instant runStart,
-            @Nullable Instant scheduledTime,
-            String mode,
-            String delivery) {
-
-        public RunContext {
-            Objects.requireNonNull(jobId, "jobId");
-            Objects.requireNonNull(runId, "runId");
-            Objects.requireNonNull(runStart, "runStart");
-            Objects.requireNonNull(mode, "mode");
-            Objects.requireNonNull(delivery, "delivery");
-            variables = Map.copyOf(variables);
-        }
-    }
-
     /** A description and the sensitive values that were taken out of it. */
+    @SuppressWarnings("ArrayRecordComponent") // copied in and out, never shared
     public record Encoded(byte[] descriptor, Map<String, String> secrets) {
         public Encoded {
             descriptor = descriptor.clone();
@@ -122,6 +95,8 @@ public final class ChainCodec {
     @FunctionalInterface
     public interface ComponentResolver {
         /**
+         * The component of {@code type} in {@code plugin}.
+         *
          * @param plugin {@code id@version} of the plugin, or {@code builtin}
          */
         Component resolve(NodeKind kind, String type, String plugin);
@@ -184,7 +159,7 @@ public final class ChainCodec {
                 .setNodeId(node.id())
                 .setKind(kind(node.kind()))
                 .setComponent(node.type())
-                .setPlugin(plugin(node.plugin()))
+                .setPlugin(pluginRef(node.plugin()))
                 .setParallelism(node.parallelism())
                 .setBounded(node.boundedness() == Boundedness.BOUNDED)
                 .setOptionsJson(json);
@@ -201,7 +176,8 @@ public final class ChainCodec {
         };
     }
 
-    static PluginRef plugin(String coordinate) {
+    /** The reference of a plugin coordinate: {@code id@version}, or an ID such as {@code builtin}. */
+    public static PluginRef pluginRef(String coordinate) {
         int at = coordinate.lastIndexOf('@');
         return at < 0
                 ? PluginRef.newBuilder().setId(coordinate).build()
