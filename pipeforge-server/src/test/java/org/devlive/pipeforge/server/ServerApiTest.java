@@ -164,13 +164,24 @@ class ServerApiTest {
 
     @Test
     void listsErrorCodes() throws Exception {
-        mvc.perform(get("/api/v1/errors").header("Accept-Language", "zh-CN"))
+        String body = mvc.perform(get("/api/v1/errors").header("Accept-Language", "zh-CN"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].code").value("PF-CONF-0001"))
                 .andExpect(jsonPath("$[?(@.code == 'PF-CONF-0007')].message").value(hasItem("请求不合法：{reason}")))
                 .andExpect(jsonPath("$[?(@.code == 'PF-CONF-0007')].category").value(hasItem("CONF")))
                 .andExpect(jsonPath("$[?(@.code == 'PF-CONF-0007')].params[0]").value(hasItem("reason")))
-                .andExpect(jsonPath("$[?(@.code == 'PF-CONF-0007')].kind").value(hasItem("FATAL")));
+                .andExpect(jsonPath("$[?(@.code == 'PF-CONF-0007')].kind").value(hasItem("FATAL")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        // every registered code, in the order of the codes (the order does not follow categories)
+        java.util.List<String> codes = com.jayway.jsonpath.JsonPath.read(body, "$[*].code");
+        org.assertj.core.api.Assertions.assertThat(codes)
+                .isSorted()
+                .doesNotHaveDuplicates()
+                .contains("PF-CONF-0001", "PF-SYS-0001")
+                .hasSize(org.devlive.pipeforge.common.error.ErrorRegistry.global()
+                        .all()
+                        .size());
     }
 
     // ------------------------------------------------------------------ jobs
