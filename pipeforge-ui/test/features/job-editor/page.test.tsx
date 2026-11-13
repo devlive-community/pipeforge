@@ -105,7 +105,8 @@ describe("JobEditorPage", () => {
   it("starts with the example, validates it and shows the plan", async () => {
     const requests = server();
     await openEditor();
-    expect(screen.getByTestId("code-editor")).toHaveTextContent("name: orders-daily");
+    // the editor mounts after the page heading
+    await waitFor(() => expect(screen.getByTestId("code-editor")).toHaveTextContent("name: orders-daily"));
     expect(await screen.findByText("Valid", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(requests.some((r) => r.path === "/api/v1/jobs/validate")).toBe(true);
     expect(requests.some((r) => r.path === "/api/v1/jobs/schema")).toBe(true);

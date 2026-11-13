@@ -46,7 +46,7 @@ describe("FunctionsPage", () => {
     });
     const upper = screen.getByRole("heading", { level: 2, name: "UPPER" }).closest("article") as HTMLElement;
     await userEvent.click(within(upper).getByRole("button", { name: "Try" }));
-    expect(screen.getByTestId("code-editor")).toHaveTextContent("UPPER('pipe')");
+    await waitFor(() => expect(screen.getByTestId("code-editor")).toHaveTextContent("UPPER('pipe')"));
 
     const amount = screen.getByRole("group", { name: "Column 2" });
     await userEvent.clear(within(amount).getByRole("textbox", { name: "Value" }));

@@ -33,5 +33,7 @@ export default defineConfig({
     setupFiles: ["./test/setup.ts"],
     include: ["test/**/*.test.{ts,tsx}"],
     css: false,
+    // longer than the 5 s that findBy and waitFor may wait (test/setup.ts)
+    testTimeout: 15000,
   },
 });

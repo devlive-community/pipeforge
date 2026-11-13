@@ -6,7 +6,11 @@
  */
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
+
+// Pages with the code editor are loaded lazily, and a busy machine (a full build next to the tests)
+// can take well over the default second to render them; findBy and waitFor wait up to 5 seconds.
+configure({ asyncUtilTimeout: 5000 });
 
 /** jsdom has no matchMedia; tests switch the system theme through this flag. */
 export const systemTheme = { dark: false, listeners: new Set<() => void>() };
