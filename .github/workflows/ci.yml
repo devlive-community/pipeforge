@@ -14,7 +14,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, 'release-*']
+    branches: [dev, 'release-*']
   workflow_dispatch:
 
 permissions:

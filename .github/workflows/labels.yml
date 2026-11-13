@@ -11,7 +11,7 @@ name: Labels
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths: [.github/labels.yml]
   workflow_dispatch:
 

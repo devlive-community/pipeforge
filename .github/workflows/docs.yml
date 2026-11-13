@@ -5,7 +5,7 @@
 # project root for full license text.
 #
 # Documentation site: content checks, lint, component tests, static build and Lighthouse on
-# every change that can affect the site; deployment to GitHub Pages from main. Pull requests
+# every change that can affect the site; deployment to GitHub Pages from dev. Pull requests
 # get the built site as a downloadable preview and the documentation coverage check.
 # "docs-ok" is the required status check.
 
@@ -14,7 +14,7 @@ name: Docs
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [dev]
   workflow_dispatch:
 
 permissions:
@@ -86,7 +86,7 @@ jobs:
       - run: pnpm build
       - run: pnpm lint
       - run: pnpm lighthouse
-      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/out
@@ -99,7 +99,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
