@@ -138,12 +138,16 @@ class ClusterJobTest {
     }
 
     JobHandle submit(JobPlan plan, Duration slotTimeout) {
+        return start(plan, slotTimeout, SubmitOptions.defaults()).handle();
+    }
+
+    JobMaster start(JobPlan plan, Duration slotTimeout, SubmitOptions options) {
         JobId id = JobId.random();
         JobMaster job = new JobMaster(
                 id,
                 plan,
                 ChainTopology.chain(plan),
-                SubmitOptions.defaults(),
+                options,
                 Placement.cluster(
                         scheduler,
                         slot -> workers.get(slot.workerId()),
@@ -153,7 +157,7 @@ class ClusterJobTest {
                 () -> jobs.remove(id.value()));
         jobs.add(job);
         job.start();
-        return job.handle();
+        return job;
     }
 
     static JobResult end(JobHandle handle) throws Exception {
@@ -270,5 +274,53 @@ class ClusterJobTest {
             assertThat(w.deployed).hasValue(0);
             assertThat(w.idle()).isTrue();
         });
+    }
+
+    @Test
+    void readersPullTheirSplitsAndEveryOwnerIsRecorded() throws Exception {
+        String probe = Probe.create();
+        JobMaster job = start(
+                TestConnectors.job(probe, "rows: 3000, splits: 30", "", "", 3),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults());
+        assertThat(end(job.handle()).status()).isEqualTo(JobStatus.SUCCESS);
+
+        Map<Integer, java.util.Set<String>> owners = job.splitOwners();
+        assertThat(owners).containsOnlyKeys(0, 1, 2);
+        List<String> all =
+                owners.values().stream().flatMap(java.util.Set::stream).toList();
+        assertThat(all).hasSize(30).doesNotHaveDuplicates();
+        // every reader asked for splits and was given some
+        assertThat(owners.values()).allSatisfy(splits -> assertThat(splits).isNotEmpty());
+        assertThat(Probe.get(probe).splitsPerReader).containsExactlyInAnyOrder(0, 1, 2);
+        assertThat(Probe.get(probe).rows).hasSize(3000);
+    }
+
+    @Test
+    void aBlockedEnumeratorFailsTheRunInTime() throws Exception {
+        String probe = Probe.create();
+        long started = System.nanoTime();
+        JobMaster job = start(
+                TestConnectors.job(probe, "block-enumerator: start", null, "", 2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults().withEnumeratorTimeout(Duration.ofMillis(300)));
+        JobResult result = end(job.handle());
+
+        assertThat(result.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(result.error().code()).isEqualTo(ErrorCode.ENUMERATOR_TIMEOUT);
+        assertThat(result.error().params())
+                .containsEntry("node", "src")
+                .containsEntry("operation", "start the enumerator")
+                .containsEntry("timeoutMs", 300L);
+        assertThat(result.error().scope().node()).isEqualTo("src");
+        // the run ends soon after the timeout: the blocked enumerator is not waited for again
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(5));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!Probe.get(probe).events.contains("enumerator interrupted")) {
+            assertThat(System.nanoTime()).as("the blocked call is interrupted").isLessThan(deadline);
+            Thread.sleep(10);
+        }
+        assertThat(workers.values()).allSatisfy(w -> assertThat(w.deployed).hasValue(0));
+        awaitSlotsBack();
     }
 }

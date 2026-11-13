@@ -81,6 +81,8 @@ public final class ErrorCode {
 
     // Sources
     public static final ErrorCode SOURCE_FAILED = define("PF-SRC-0001", "SOURCE_FAILED", "node", "reason");
+    public static final ErrorCode ENUMERATOR_TIMEOUT =
+            define("PF-SRC-0004", "ENUMERATOR_TIMEOUT", "node", "operation", "timeoutMs");
 
     // Sinks
     public static final ErrorCode SINK_FAILED = define("PF-SINK-0001", "SINK_FAILED", "node", "reason");

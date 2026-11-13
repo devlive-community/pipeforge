@@ -6,6 +6,7 @@
  */
 package org.devlive.pipeforge.engine.master;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,6 +16,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -112,6 +115,14 @@ public final class JobMaster {
     private volatile JobMetrics published = JobMetrics.EMPTY;
     private @Nullable PipeForgeException failure;
     private @Nullable SplitEnumerator<SourceSplit, ?> enumerator;
+    /** Runs every call of the enumerator, one at a time, so that a blocked call can time out. */
+    private final ExecutorService enumeratorThread;
+
+    private final Duration enumeratorTimeout;
+    private volatile boolean enumeratorStuck;
+    /** The splits every reader was given; a restarted reader's splits go back to the enumerator (M2). */
+    private final Map<Integer, Set<String>> owners = new ConcurrentHashMap<>();
+
     private @Nullable Source<SourceSplit, ?> source;
 
     /**
@@ -154,6 +165,12 @@ public final class JobMaster {
             t.setDaemon(true);
             return t;
         });
+        this.enumeratorThread = Executors.newSingleThreadExecutor(runnable -> {
+            Thread t = new Thread(runnable, "enumerator-" + plan.name());
+            t.setDaemon(true);
+            return t;
+        });
+        this.enumeratorTimeout = options.enumeratorTimeout();
     }
 
     public JobHandle handle() {
@@ -258,13 +275,13 @@ public final class JobMaster {
         PlannedNode node = chain.source();
         try {
             SourceFactory factory = (SourceFactory) node.component().factory();
-            Source<SourceSplit, ?> created =
-                    (Source<SourceSplit, ?>) callSource("create the source", () -> factory.createSource(context(node)));
+            Source<SourceSplit, ?> created = (Source<SourceSplit, ?>)
+                    onEnumerator("create the source", () -> factory.createSource(context(node)));
             source = created;
             SplitEnumerator<SourceSplit, ?> opened =
-                    callSource("create the enumerator", () -> created.createEnumerator(new LocalEnumeratorContext()));
+                    onEnumerator("create the enumerator", () -> created.createEnumerator(new LocalEnumeratorContext()));
             enumerator = opened;
-            callSource("start the enumerator", () -> {
+            onEnumerator("start the enumerator", () -> {
                 opened.start();
                 return null;
             });
@@ -378,6 +395,7 @@ public final class JobMaster {
         placement.release();
         handle.result.complete(new JobResult(id, end, failure, last));
         thread.shutdown();
+        enumeratorThread.shutdownNow();
         onEnded.run();
     }
 
@@ -451,16 +469,47 @@ public final class JobMaster {
 
     private void callEnumerator(String operation, EnumeratorAction action) {
         SplitEnumerator<SourceSplit, ?> current = enumerator;
-        if (current == null) {
+        if (current == null || enumeratorStuck) {
             return;
         }
         try {
-            callSource(operation, () -> {
+            onEnumerator(operation, () -> {
                 action.run(current);
                 return null;
             });
         } catch (PipeForgeException e) {
             fail(e);
+        }
+    }
+
+    /**
+     * Runs an enumerator call on the enumerator thread and waits for it up to the enumerator
+     * timeout. A call that times out is interrupted and fails the job; the enumerator is not
+     * called again, since it may still be blocked.
+     */
+    private <T> T onEnumerator(String operation, PluginAction<T> action) {
+        java.util.concurrent.Future<T> call = enumeratorThread.submit(() -> callSource(operation, action));
+        try {
+            return call.get(enumeratorTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            call.cancel(true);
+            enumeratorStuck = true;
+            PlannedNode node = chain.source();
+            throw PipeForgeException.of(ErrorCode.ENUMERATOR_TIMEOUT)
+                    .param("node", node.id())
+                    .param("operation", operation)
+                    .param("timeoutMs", enumeratorTimeout.toMillis())
+                    .scope(scope(node))
+                    .build();
+        } catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException failure) {
+                throw failure;
+            }
+            throw PipeForgeException.wrap(e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            call.cancel(true);
+            throw PipeForgeException.wrap(e);
         }
     }
 
@@ -482,10 +531,13 @@ public final class JobMaster {
 
     private void closeEnumerator() {
         SplitEnumerator<SourceSplit, ?> current = enumerator;
-        if (current != null) {
+        if (enumeratorStuck) {
+            LOG.warn("The enumerator of job {} timed out before; it is not closed", plan.name());
+            enumerator = null;
+        } else if (current != null) {
             enumerator = null;
             try {
-                callSource("close the enumerator", () -> {
+                onEnumerator("close the enumerator", () -> {
                     current.close();
                     return null;
                 });
@@ -507,7 +559,9 @@ public final class JobMaster {
                         "Reader " + reader + " does not exist; parallelism is " + parallelism);
             }
             List<SerializedValue> values = new ArrayList<>(splits.size());
+            Set<String> owned = owners.computeIfAbsent(reader, r -> ConcurrentHashMap.newKeySet());
             for (SourceSplit split : splits) {
+                owned.add(split.splitId());
                 values.add(callSource(
                         "write split " + split.splitId(), () -> SerializedValue.of(owner.splitSerializer(), split)));
             }
@@ -612,6 +666,13 @@ public final class JobMaster {
                                 + type + " of " + plugin + ", which the plan does not use"))
                         .component())
                 .chain();
+    }
+
+    /** The splits every reader was given, by reader. */
+    public Map<Integer, Set<String>> splitOwners() {
+        Map<Integer, Set<String>> copy = new java.util.TreeMap<>();
+        owners.forEach((reader, splits) -> copy.put(reader, Set.copyOf(splits)));
+        return copy;
     }
 
     private TaskExecutorGateway gateway(int subtask) {

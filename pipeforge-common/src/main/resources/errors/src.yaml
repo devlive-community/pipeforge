@@ -14,3 +14,12 @@
   hint:
     en-US: "The connector raised an error it did not classify. Check the cause in the run log; it usually names the query, file or partition that failed."
     zh-CN: "连接器抛出了一个未分类的错误。请在运行日志中查看原因，通常会指出失败的查询、文件或分区。"
+
+- code: PF-SRC-0004
+  name: ENUMERATOR_TIMEOUT
+  message:
+    en-US: "The split enumerator of '{node}' did not {operation} within {timeoutMs} ms"
+    zh-CN: "'{node}' 的分片分配器在 {timeoutMs} 毫秒内没有完成操作：{operation}"
+  hint:
+    en-US: "The enumerator is blocked, often in a call to the source system without a timeout while it lists splits. Configure a timeout on the connector, or give it more time with the enumerator timeout of the job."
+    zh-CN: "分片分配器被阻塞，常见于列举分片时调用源端系统而没有设置超时。请为连接器配置超时，或者调大作业的分片分配器超时。"

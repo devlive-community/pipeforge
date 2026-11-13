@@ -131,6 +131,7 @@ try (Engine engine = new LocalEngine()) {
 | `writeBatchSize` | `1024` | 每批交给写线程的行数 |
 | `writeQueueCapacity` | `4` | 队列最多容纳的批数，满了之后 Task 线程阻塞 |
 | `cancelTimeout` | `30s` | 取消后 Task 停止的等待时间，超过后中断其线程；超过两倍时间后放弃该 Task |
+| `enumeratorTimeout` | `60s` | 分片分配器单次调用的最长时间；超过时作业以 `PF-SRC-0004` 失败 |
 | `metricsInterval` | `1s` | Task 上报指标、作业指标和速率刷新的周期 |
 
 每个 Task 的并行度来自作业：`env.parallelism` 或节点的 `parallelism`。

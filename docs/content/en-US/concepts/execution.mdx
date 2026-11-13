@@ -154,6 +154,7 @@ Engine settings are given per submission with `SubmitOptions`:
 | `writeBatchSize` | `1024` | Rows per batch handed to the write thread |
 | `writeQueueCapacity` | `4` | Batches the queue holds before the task thread blocks |
 | `cancelTimeout` | `30s` | Time a cancelled task gets before its thread is interrupted; after twice this time it is given up |
+| `enumeratorTimeout` | `60s` | Time one call of the split enumerator may take; longer fails the job with `PF-SRC-0004` |
 | `metricsInterval` | `1s` | How often tasks report their metrics and the job metrics and rates are refreshed |
 
 The parallelism of each task comes from the job: `env.parallelism` or the node's `parallelism`.

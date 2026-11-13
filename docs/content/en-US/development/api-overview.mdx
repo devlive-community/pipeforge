@@ -58,6 +58,24 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 The state of a split records the position already handed to the output, so a restored reader
 continues exactly there.
 
+### Where the enumerator runs
+
+The enumerator runs in the job master, not on the workers, under these rules:
+
+- **One call at a time.** Every method of the enumerator runs on the enumerator thread of the run,
+  never two at once. Call the `EnumeratorContext` only from inside those methods.
+- **Every call has a time limit.** A call that takes longer than the enumerator timeout of the job
+  (60 seconds by default) is interrupted and fails the job with
+  [`PF-SRC-0004`](../reference/errors#pf-src-0004); the enumerator is not called again. Give calls
+  to external systems their own timeouts, and list splits in steps rather than all at once when a
+  system is slow.
+- **Failures stay in the job.** An exception from the enumerator fails the job with its node; the
+  master and other jobs carry on.
+- **Plugin class loader.** Calls run with the class loader of the plugin as the context class
+  loader, as reader and writer calls do.
+- **Splits are recorded.** The job master records which reader each split went to; a reader that
+  is restarted gives its splits back through `addSplitsBack`.
+
 ## Transforms and sinks
 
 A `Transform` derives its output tables while planning (`transformSchema`) and processes rows one

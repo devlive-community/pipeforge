@@ -71,7 +71,8 @@ class LocalEngineTest {
         Probe seen = Probe.get(probe);
         assertThat(seen.rows).hasSize(100);
         assertThat(seen.rows.stream().map(r -> (Long) r.get(0)).distinct()).hasSize(100);
-        assertThat(seen.enumeratorThreads).containsExactly("jobmaster-test-job");
+        // one thread for every enumerator call, so that a blocked call can time out
+        assertThat(seen.enumeratorThreads).containsOnly("enumerator-test-job");
         assertThat(seen.readerThreads).containsExactly("task-src-0");
         assertThat(seen.events).contains("reader 0 registered true", "enumerator closed");
     }

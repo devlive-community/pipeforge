@@ -54,6 +54,20 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 没有数据时 `pollNext` 返回 `NOTHING_AVAILABLE` 而不是阻塞，由引擎负责退避后再次读取。分片状态记录已经交给下游的位置，
 因此恢复后的 Reader 能从这里精确继续。
 
+
+### Enumerator 在哪里运行
+
+Enumerator 在 JobMaster 中运行，而不是在 Worker 上，并遵守以下规则：
+
+- **一次一个调用**。Enumerator 的每个方法都在本次运行的 Enumerator 线程上执行，不会同时执行两个。只在这些方法内部调用
+  `EnumeratorContext`。
+- **每次调用都有时限**。调用时间超过作业的 Enumerator 超时（默认 60 秒）时会被中断，作业以
+  [`PF-SRC-0004`](../reference/errors#pf-src-0004) 失败，之后不再调用这个 Enumerator。请为对外部系统的调用设置各自的超时；
+  外部系统较慢时，分步列举分片，而不是一次列举全部。
+- **失败只影响本作业**。Enumerator 抛出的异常让作业以该节点的错误失败；Master 和其他作业照常运行。
+- **插件的类加载器**。与 Reader、Writer 的调用一样，调用时以插件的类加载器作为上下文类加载器。
+- **分片归属有记录**。JobMaster 记录每个分片分给了哪个 Reader；Reader 重启时，它的分片通过 `addSplitsBack` 交回。
+
 ## Transform 与 Sink
 
 `Transform` 在计划阶段推导输出表（`transformSchema`），运行时逐行处理（`process(row, out)`）；Schema 变更由

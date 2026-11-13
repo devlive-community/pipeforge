@@ -91,6 +91,10 @@ public final class TestConnectors {
     static final Option<String> BLOCK = Options.key("block").stringType().defaultValue("none");
     static final Option<Boolean> SCHEMA_CHANGE =
             Options.key("schema-change").booleanType().defaultValue(false);
+    /** {@code start} blocks the enumerator in start() until it is interrupted. */
+    static final Option<String> BLOCK_ENUMERATOR =
+            Options.key("block-enumerator").stringType().defaultValue("");
+
     static final Option<Boolean> FAIL_ENUMERATOR =
             Options.key("fail-enumerator").booleanType().defaultValue(false);
     static final Option<Boolean> DROP_ODD =
@@ -238,7 +242,7 @@ public final class TestConnectors {
         public OptionRule optionRule() {
             return OptionRule.builder()
                     .required(PROBE)
-                    .optional(ROWS, SPLITS, FAIL_AT, FAIL_WITH, BLOCK, SCHEMA_CHANGE, FAIL_ENUMERATOR)
+                    .optional(ROWS, SPLITS, FAIL_AT, FAIL_WITH, BLOCK, SCHEMA_CHANGE, FAIL_ENUMERATOR, BLOCK_ENUMERATOR)
                     .build();
         }
 
@@ -310,6 +314,15 @@ public final class TestConnectors {
             probe.enumeratorThreads.add(Thread.currentThread().getName());
             if (config.get(FAIL_ENUMERATOR)) {
                 throw new IllegalStateException("cannot list the splits");
+            }
+            if ("start".equals(config.get(BLOCK_ENUMERATOR))) {
+                try {
+                    Thread.sleep(Long.MAX_VALUE);
+                } catch (InterruptedException e) {
+                    probe.events.add("enumerator interrupted");
+                    Thread.currentThread().interrupt();
+                    return;
+                }
             }
             int rows = config.get(ROWS);
             int splits = config.get(SPLITS);
