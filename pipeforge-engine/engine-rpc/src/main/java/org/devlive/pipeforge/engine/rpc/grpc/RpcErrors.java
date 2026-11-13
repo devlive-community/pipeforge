@@ -41,6 +41,12 @@ public final class RpcErrors {
         if (code.equals(ErrorCode.RPC_STALE_EPOCH)) {
             return Status.Code.FAILED_PRECONDITION;
         }
+        if (code.equals(ErrorCode.RUN_NOT_FOUND)) {
+            return Status.Code.NOT_FOUND;
+        }
+        if (code.equals(ErrorCode.SLOTS_INSUFFICIENT)) {
+            return Status.Code.RESOURCE_EXHAUSTED;
+        }
         return Status.Code.INTERNAL;
     }
 

@@ -86,3 +86,12 @@
   hint:
     en-US: "Use the full package, which contains lib/server, pass --server-jar, or build the server in a source checkout and use --dev."
     zh-CN: "使用包含 lib/server 的完整包、通过 --server-jar 指定，或者在源码仓库中构建服务端后使用 --dev。"
+
+- code: PF-CONF-0010
+  name: RUN_NOT_FOUND
+  message:
+    en-US: "There is no run {run}"
+    zh-CN: "运行 {run} 不存在"
+  hint:
+    en-US: "Check the run ID. The master keeps the runs of the last hours only; older runs are in the run history of the server."
+    zh-CN: "请检查运行 ID。Master 只保留最近一段时间的运行，更早的运行请查看 Server 的运行记录。"

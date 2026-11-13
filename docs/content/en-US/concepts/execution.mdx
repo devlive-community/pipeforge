@@ -118,6 +118,22 @@ only then reports `SUCCESS`. A run without checkpoints commits once, as checkpoi
 | `FAILED` | A task, the enumerator or the commit failed; the result carries the error |
 | `CANCELLED` | Stopped on request |
 
+On a cluster the master's dispatcher accepts runs from the server and follows them through these
+states (the subset of this version):
+
+| From | To |
+|---|---|
+| `QUEUE` (waiting for slots) | `RUNNING`, `CANCELLING`, `FAILED` |
+| `RUNNING` | `SUCCESS`, `FAILED`, `CANCELLING` |
+| `CANCELLING` | `CANCELLED`, `FAILED`, `TIMEOUT` (cancelled for running past its timeout) |
+
+Every transition is checked and recorded with its time and reason; a transition that is not in
+the table is refused. Submitting a run ID that the master knows already returns that run, so a
+retried submission never starts a second run. The master plans the definition again with the
+plugin versions the server chose; a version it does not have fails the submission with
+[`PF-PLUG-0009`](../reference/errors#pf-plug-0009), and an unknown run ID is
+[`PF-CONF-0010`](../reference/errors#pf-conf-0010).
+
 Every run has a **job master** that drives it from start to end:
 
 1. It gets the slots of the run: on a cluster the [scheduler](./cluster) reserves them on the

@@ -112,6 +112,10 @@ public final class JobMaster {
     private final List<SerializedValue> committables = new ArrayList<>();
     private final Runnable onEnded;
     private volatile JobStatus status = JobStatus.CREATED;
+    private volatile java.util.function.Consumer<JobStatus> statusListener = s -> {};
+    /** The tasks as other threads see them, replaced on every change. */
+    private volatile List<TaskView> taskView = List.of();
+
     private volatile JobMetrics published = JobMetrics.EMPTY;
     private @Nullable PipeForgeException failure;
     private @Nullable SplitEnumerator<SourceSplit, ?> enumerator;
@@ -232,6 +236,7 @@ public final class JobMaster {
             error.params().forEach(scoped::param);
             fail(scoped.build());
             gone.forEach(subtask -> states.put(subtask, TaskState.FAILED));
+            refreshTasks();
             endIfDone();
         });
     }
@@ -261,7 +266,7 @@ public final class JobMaster {
                 return;
             }
             LOG.info("Cancelling job {} ({})", plan.name(), id);
-            status = JobStatus.CANCELLING;
+            status(JobStatus.CANCELLING);
             cancelTasks();
             endIfDone();
         });
@@ -300,7 +305,8 @@ public final class JobMaster {
                 }
             });
         }
-        status = JobStatus.RUNNING;
+        status(JobStatus.RUNNING);
+        refreshTasks();
         long interval = settings.metricsInterval().toMillis();
         thread.scheduleAtFixedRate(() -> run(this::publish), interval, interval, TimeUnit.MILLISECONDS);
         LOG.info("Job {} ({}) is running with {} task(s)", plan.name(), id, parallelism);
@@ -313,6 +319,7 @@ public final class JobMaster {
             return;
         }
         states.put(subtask, update.state());
+        refreshTasks();
         if (update.metrics() != null) {
             aggregator.update(subtask, update.metrics());
         }
@@ -390,7 +397,7 @@ public final class JobMaster {
                 0,
                 end == JobStatus.SUCCESS ? MetricsAggregator.Phase.SUCCEEDED : MetricsAggregator.Phase.STOPPED);
         published = last;
-        status = end;
+        status(end);
         LOG.info("Job {} ({}) ended: {}", plan.name(), id, end);
         placement.release();
         handle.result.complete(new JobResult(id, end, failure, last));
@@ -673,6 +680,48 @@ public final class JobMaster {
         Map<Integer, Set<String>> copy = new java.util.TreeMap<>();
         owners.forEach((reader, splits) -> copy.put(reader, Set.copyOf(splits)));
         return copy;
+    }
+
+    /**
+     * A task of the run.
+     *
+     * @param workerId where it runs, or {@code local}
+     */
+    public record TaskView(ExecutionAttemptId attempt, TaskState state, String workerId) {}
+
+    /** The error the run failed with, or {@code null}; read it on the job master thread. */
+    @Nullable
+    PipeForgeException failure() {
+        return failure;
+    }
+
+    /** The tasks of the run with their states; empty before they are deployed. */
+    public List<TaskView> tasks() {
+        return taskView;
+    }
+
+    /** Learns every change of the run's status, on the job master thread; set before {@link #start}. */
+    public void onStatus(java.util.function.Consumer<JobStatus> listener) {
+        this.statusListener = listener;
+    }
+
+    private void status(JobStatus next) {
+        status = next;
+        try {
+            statusListener.accept(next);
+        } catch (RuntimeException e) {
+            LOG.warn("A status listener of job {} failed", plan.name(), e);
+        }
+    }
+
+    private void refreshTasks() {
+        List<TaskView> view = new ArrayList<>();
+        states.forEach((subtask, state) -> view.add(new TaskView(
+                attempt(subtask),
+                state,
+                subtask < slots.size() ? slots.get(subtask).workerId() : "")));
+        view.sort(java.util.Comparator.comparingInt(t -> t.attempt().subtask()));
+        taskView = List.copyOf(view);
     }
 
     private TaskExecutorGateway gateway(int subtask) {

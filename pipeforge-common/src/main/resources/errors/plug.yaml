@@ -77,3 +77,12 @@
   hint:
     en-US: "Choose one with the plugin field of the node, for example plugin: {identifier}@1.0.0."
     zh-CN: "在节点的 plugin 字段中指定使用哪一个，例如 plugin: {identifier}@1.0.0。"
+
+- code: PF-PLUG-0009
+  name: PLUGIN_VERSION_MISMATCH
+  message:
+    en-US: "The run needs {plugin} {wanted}, but the master has {installed}"
+    zh-CN: "本次运行需要 {plugin} {wanted}，但 Master 上的版本是 {installed}"
+  hint:
+    en-US: "The server plans a job with the plugins it has and the master plans it again with the same versions. Install the same plugin versions on the server and the master."
+    zh-CN: "Server 用自己的插件规划作业，Master 用相同的版本重新规划。请在 Server 和 Master 上安装相同版本的插件。"

@@ -39,6 +39,7 @@ public final class ErrorCode {
     public static final ErrorCode REQUEST_INVALID = define("PF-CONF-0007", "REQUEST_INVALID", "reason");
     public static final ErrorCode FILE_NOT_READABLE = define("PF-CONF-0008", "FILE_NOT_READABLE", "path", "reason");
     public static final ErrorCode SERVER_NOT_INSTALLED = define("PF-CONF-0009", "SERVER_NOT_INSTALLED", "searched");
+    public static final ErrorCode RUN_NOT_FOUND = define("PF-CONF-0010", "RUN_NOT_FOUND", "run");
 
     // Planning
     public static final ErrorCode DAG_CYCLE = define("PF-PLAN-0001", "DAG_CYCLE", "path");
@@ -73,6 +74,8 @@ public final class ErrorCode {
             define("PF-PLUG-0007", "PLUGIN_CALL_FAILED", "plugin", "operation", "reason");
     public static final ErrorCode COMPONENT_AMBIGUOUS =
             define("PF-PLUG-0008", "COMPONENT_AMBIGUOUS", "type", "identifier", "plugins");
+    public static final ErrorCode PLUGIN_VERSION_MISMATCH =
+            define("PF-PLUG-0009", "PLUGIN_VERSION_MISMATCH", "plugin", "wanted", "installed");
 
     // Data
     public static final ErrorCode CONSTRAINT_VIOLATION =
