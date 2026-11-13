@@ -45,6 +45,7 @@ import org.devlive.pipeforge.engine.api.JobMetrics;
 import org.devlive.pipeforge.engine.api.JobResult;
 import org.devlive.pipeforge.engine.api.JobStatus;
 import org.devlive.pipeforge.engine.api.SubmitOptions;
+import org.devlive.pipeforge.engine.rpc.ChainCodec;
 import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
@@ -83,6 +84,9 @@ final class LocalJobMaster {
     private final JobId id;
     private final JobPlan plan;
     private final ChainDescriptor chain;
+    /** What the tasks receive: {@link #chain} written and read in the task description format. */
+    private final ChainDescriptor deployed;
+
     private final int parallelism;
     private final TaskSettings settings;
     private final TaskExecutorGateway executor;
@@ -114,6 +118,7 @@ final class LocalJobMaster {
         this.parallelism = nodes.get(0).parallelism();
         this.chain = new ChainDescriptor(
                 nodes.get(0).id(), new JobContext(plan.name(), plan.parallelism(), plan.timeZone()), nodes);
+        this.deployed = described(chain, plan, id, runStartTime);
         this.settings = new TaskSettings(
                 options.asyncWriteBuffer(),
                 options.writeBatchSize(),
@@ -198,7 +203,7 @@ final class LocalJobMaster {
         for (int subtask = 0; subtask < parallelism; subtask++) {
             states.put(subtask, TaskState.DEPLOYING);
             TaskDeployment deployment =
-                    new TaskDeployment(attempt(subtask), chain, parallelism, settings, runStartTime);
+                    new TaskDeployment(attempt(subtask), deployed, parallelism, settings, runStartTime);
             executor.deployTask(deployment).whenComplete((ignored, error) -> {
                 if (error != null) {
                     post(() -> fail(PipeForgeException.wrap(error)));
@@ -509,6 +514,33 @@ final class LocalJobMaster {
     private static String reason(Throwable error) {
         String message = error.getMessage();
         return error.getClass().getSimpleName() + (message == null ? "" : ": " + message);
+    }
+
+    /**
+     * The chain as a worker receives it: written in the task description format and read back,
+     * with components resolved from the ones of the plan, as a worker resolves them from its
+     * plugins. Local runs check the format this way.
+     */
+    static ChainDescriptor described(ChainDescriptor chain, JobPlan plan, JobId id, Instant runStartTime) {
+        ChainCodec.Encoded encoded = ChainCodec.encode(
+                chain,
+                new ChainCodec.RunContext(
+                        id.value(),
+                        id.value(),
+                        plan.variables(),
+                        runStartTime,
+                        null,
+                        plan.mode().id(),
+                        plan.delivery().id()));
+        return ChainCodec.decode(encoded.descriptor(), encoded.secrets(), (kind, type, plugin) -> chain.nodes().stream()
+                        .filter(n -> n.kind() == kind
+                                && n.type().equals(type)
+                                && n.plugin().equals(plugin))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException("The task description names " + kind.id() + " "
+                                + type + " of " + plugin + ", which the plan does not use"))
+                        .component())
+                .chain();
     }
 
     private ExecutionAttemptId attempt(int subtask) {

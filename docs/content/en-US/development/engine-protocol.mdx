@@ -42,6 +42,35 @@ the data exchange between workers follow in the next commits of the distributed 
 - Options that a plugin marks as sensitive, such as passwords, are never part of a task's
   description; they are encrypted for the worker that runs the task.
 
+## Task descriptions
+
+A task arrives with its **description**: the chain of nodes it runs, the options of each node, the
+tables between them and the context of the run (job, run, time zone, variables, start time). It is
+the `ChainDescriptor` message inside an envelope that the worker checks before it reads anything:
+
+```text
++---------+----------------+--------+---------------------------+---------+
+| "PFCH"  | format version | length | Protobuf ChainDescriptor  | CRC32C  |
+| 4 bytes | 4 bytes        | 4 bytes| length bytes              | 4 bytes |
++---------+----------------+--------+---------------------------+---------+
+```
+
+- A worker reads every format version up to its own and refuses newer ones, damaged or truncated
+  descriptions with a clear message, before it builds anything.
+- Nodes name their components by plugin and identifier (`fake`, `connector-mysql@1.2.0`); the
+  worker resolves them with its own plugins.
+- Every table appears once in a table directory, with its columns as DSL types
+  (`DECIMAL(10, 2) NOT NULL`); nodes and, later, rows refer to tables by their number there.
+- Options are JSON. Options a plugin marks as sensitive never enter the description: their values
+  are delivered separately, encrypted for the worker, and the description holds
+  `{"$secret": "<node>.<option>"}` in their place.
+- The same description always gives the same bytes. A sample of every released format version is
+  kept in `pipeforge-engine/protocol-compat/chain/`, and each build checks that it still reads it
+  and still writes it byte for byte.
+
+Local runs write the description of every task and read it back before the task starts, so the
+whole test suite runs through this format.
+
 ## Versions
 
 A protocol version is `major.minor`, `1.0` in this release.

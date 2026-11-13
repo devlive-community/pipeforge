@@ -13,7 +13,9 @@ writing overlap, how a job is cancelled and how failures are reported.
 
 The same runtime runs in local mode (one process) and on a cluster: local mode uses in-process
 implementations of the interfaces that a cluster implements with RPC, so a job behaves the same in
-both. In this version the engine runs in local mode.
+both. Tasks receive their description in the same binary format that a worker receives from the
+master, written and read back, so every local run also checks that format. In this version the
+engine runs in local mode.
 
 ## How it works
 
