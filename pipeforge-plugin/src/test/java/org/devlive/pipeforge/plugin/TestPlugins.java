@@ -24,17 +24,20 @@ import javax.tools.ToolProvider;
 import org.devlive.pipeforge.api.factory.SourceFactory;
 import org.devlive.pipeforge.common.error.ErrorCode;
 
-/** Builds real plugin directories in a temporary folder by compiling small sources. */
-final class TestPlugins {
+/**
+ * Builds real plugin directories in a temporary folder by compiling small sources; other modules
+ * use it through the test jar.
+ */
+public final class TestPlugins {
 
     private final Path root;
 
-    TestPlugins(Path root) {
+    public TestPlugins(Path root) {
         this.root = root;
     }
 
     /** A library jar whose class {@code com.example.lib.Greeting} reports {@code version}. */
-    Path library(String version) {
+    public Path library(String version) {
         return jar(
                 "lib-" + version,
                 Map.of(
@@ -54,7 +57,7 @@ final class TestPlugins {
      *
      * @param extraBody additional members of the factory class (e.g. a forbidden call)
      */
-    Path plugin(String id, String version, String identifier, Path library, String extraBody) {
+    public Path plugin(String id, String version, String identifier, Path library, String extraBody) {
         String pkg = pkg(id, version);
         Path pluginJar = jar(
                 id + "-" + version,

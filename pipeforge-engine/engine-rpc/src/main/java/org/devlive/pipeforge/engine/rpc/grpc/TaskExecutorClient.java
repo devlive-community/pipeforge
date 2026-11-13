@@ -46,6 +46,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
     private final Supplier<Headers.Epochs> epochs;
     private final Retry retry;
     private final Map<Stream, AtomicLong> sequences = new ConcurrentHashMap<>();
+    private final java.util.function.Function<String, org.devlive.pipeforge.engine.rpc.proto.PluginRef> plugins;
 
     /**
      * @param target how errors name the worker, e.g. its address
@@ -54,6 +55,21 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
      */
     public TaskExecutorClient(
             Channel channel, String target, byte[] publicKey, Supplier<Headers.Epochs> epochs, Retry retry) {
+        this(channel, target, publicKey, epochs, retry, ChainCodec::pluginRef);
+    }
+
+    /**
+     * @param plugins the reference of a plugin coordinate ({@code id@version}) with the SHA-256 of
+     *     the package the worker downloads
+     */
+    public TaskExecutorClient(
+            Channel channel,
+            String target,
+            byte[] publicKey,
+            Supplier<Headers.Epochs> epochs,
+            Retry retry,
+            java.util.function.Function<String, org.devlive.pipeforge.engine.rpc.proto.PluginRef> plugins) {
+        this.plugins = plugins;
         this.stub = TaskExecutorServiceGrpc.newFutureStub(channel);
         this.target = target;
         this.publicKey = publicKey.clone();
@@ -73,7 +89,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                     .setParallelism(deployment.parallelism())
                     .setSettings(ProtoMapping.toProto(deployment.settings()));
             for (PlannedNode node : deployment.chain().nodes()) {
-                request.addPlugins(ChainCodec.pluginRef(node.plugin()));
+                request.addPlugins(plugins.apply(node.plugin()));
             }
             if (!encoded.secrets().isEmpty()) {
                 byte[] bundle = SecretBundle.newBuilder()

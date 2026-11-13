@@ -86,3 +86,21 @@
   hint:
     en-US: "The server plans a job with the plugins it has and the master plans it again with the same versions. Install the same plugin versions on the server and the master."
     zh-CN: "Server 用自己的插件规划作业，Master 用相同的版本重新规划。请在 Server 和 Master 上安装相同版本的插件。"
+
+- code: PF-PLUG-0010
+  name: PLUGIN_PACKAGE_UNAVAILABLE
+  message:
+    en-US: "The package of plugin {plugin} cannot be fetched from the master: {reason}"
+    zh-CN: "无法从 Master 获取插件 {plugin} 的插件包：{reason}"
+  hint:
+    en-US: "The master serves the packages of the plugins it has. Check that the plugin is installed on the master and that the worker reaches it."
+    zh-CN: "Master 提供它已安装插件的插件包。请检查 Master 上是否安装了该插件，以及 Worker 能否访问 Master。"
+
+- code: PF-PLUG-0011
+  name: PLUGIN_PACKAGE_CORRUPT
+  message:
+    en-US: "The package of plugin {plugin} has SHA-256 {actual}, not {expected}"
+    zh-CN: "插件 {plugin} 的插件包 SHA-256 为 {actual}，而不是 {expected}"
+  hint:
+    en-US: "The download was changed or cut off; it was discarded and is fetched again with the next task. If this repeats, check the network between the worker and the master."
+    zh-CN: "下载的内容被改动或中断，已被丢弃，下一个 Task 会重新获取。如果反复出现，请检查 Worker 与 Master 之间的网络。"

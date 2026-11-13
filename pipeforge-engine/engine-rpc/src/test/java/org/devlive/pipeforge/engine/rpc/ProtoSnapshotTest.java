@@ -54,7 +54,9 @@ class ProtoSnapshotTest {
                 RegisterWorkerRequest.getDescriptor().getFile(),
                 TaskDeployment.getDescriptor().getFile(),
                 TaskStateUpdate.getDescriptor().getFile(),
-                SubmitJobRequest.getDescriptor().getFile());
+                SubmitJobRequest.getDescriptor().getFile(),
+                org.devlive.pipeforge.engine.rpc.proto.BlobRequest.getDescriptor()
+                        .getFile());
     }
 
     /** The protocol as sorted lines. */

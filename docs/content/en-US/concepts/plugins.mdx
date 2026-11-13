@@ -52,6 +52,11 @@ All users of a plugin version share one class loader. A job acquires a **lease**
 uses and releases it when it ends; when the last lease is released the class loader is closed and
 can be garbage collected, so long-running workers do not leak memory.
 
+On a cluster, workers receive plugins from the master as packages: `plugin.yaml` and the plugin's
+jars, built so that the same plugin always gives the same bytes and SHA-256. There each run gets its
+own class loader per plugin, closed when the run ends; see
+[plugin distribution](./cluster#plugin-distribution).
+
 ### The invocation boundary
 
 Calls into plugin code go through the plugin's invoker. It sets the plugin class loader as the

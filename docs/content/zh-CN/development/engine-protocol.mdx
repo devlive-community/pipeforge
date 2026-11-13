@@ -15,6 +15,7 @@ PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Tas
 | `TaskExecutorService` | Master → Worker | 申请 Slot、部署与取消 Task、分配分片、Task 日志 |
 | `JobMasterService` | Task → Master | Task 状态变化、请求分片、Task 指标 |
 | `DispatcherService` | Server → Master | 提交、取消作业，状态、指标、运行分析 |
+| `BlobService` | Worker → Master | 按 SHA-256 提供插件包，分块流式传输，可从某个偏移量续传（冻结后的兼容增加） |
 
 定义位于 `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`。构建时由它们生成 Java 消息与服务桩
 （包 `org.devlive.pipeforge.engine.rpc.proto`）；引擎内部使用自己的类型，`ProtoMapping` 在边界上负责两者之间的转换。

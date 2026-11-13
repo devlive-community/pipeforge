@@ -42,24 +42,36 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
 
     private final TaskExecutorGateway target;
     private final SecretBox keys;
-    private final ChainCodec.ComponentResolver resolver;
+    private final Resolvers resolvers;
     private final Fencing fencing;
     private final IdempotencyCache requests;
     private final Sequencer<Stream, OperatorEvent> events = new Sequencer<>();
 
+    /** Finds the components of a run among the plugins of the worker. */
+    @FunctionalInterface
+    public interface Resolvers {
+        /**
+         * The resolver of a run's components.
+         *
+         * @param plugins the plugins the deployment names, with the SHA-256 of their packages
+         */
+        ChainCodec.ComponentResolver forRun(
+                String runId, java.util.List<org.devlive.pipeforge.engine.rpc.proto.PluginRef> plugins);
+    }
+
     /**
      * @param keys the key pair whose public key the worker registered with
-     * @param resolver finds the components a task description names among the worker's plugins
+     * @param resolvers finds the components a task description names among the worker's plugins
      */
     public TaskExecutorService(
             TaskExecutorGateway target,
             SecretBox keys,
-            ChainCodec.ComponentResolver resolver,
+            Resolvers resolvers,
             Fencing fencing,
             IdempotencyCache requests) {
         this.target = target;
         this.keys = keys;
-        this.resolver = resolver;
+        this.resolvers = resolvers;
         this.fencing = fencing;
         this.requests = requests;
     }
@@ -84,8 +96,10 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
                         .build();
             }
         }
-        ChainCodec.Decoded decoded =
-                ChainCodec.decode(request.getChainDescriptor().toByteArray(), secrets, resolver);
+        ChainCodec.Decoded decoded = ChainCodec.decode(
+                request.getChainDescriptor().toByteArray(),
+                secrets,
+                resolvers.forRun(id.runId(), request.getPluginsList()));
         return new TaskDeployment(
                 id,
                 decoded.chain(),

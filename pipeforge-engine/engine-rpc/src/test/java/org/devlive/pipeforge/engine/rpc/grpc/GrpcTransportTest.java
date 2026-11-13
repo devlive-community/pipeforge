@@ -167,7 +167,11 @@ class GrpcTransportTest {
                 .intercept(TOKEN.server())
                 .addService(ServerInterceptors.intercept(
                         new TaskExecutorService(
-                                worker, keys, ChainCodecTest.Fake::new, fencing, new IdempotencyCache()),
+                                worker,
+                                keys,
+                                (run, plugins) -> ChainCodecTest.Fake::new,
+                                fencing,
+                                new IdempotencyCache()),
                         flaky))
                 .addService(new JobMasterService(master, new IdempotencyCache()))
                 .build()

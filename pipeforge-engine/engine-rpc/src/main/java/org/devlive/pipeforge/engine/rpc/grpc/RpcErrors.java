@@ -41,7 +41,7 @@ public final class RpcErrors {
         if (code.equals(ErrorCode.RPC_STALE_EPOCH)) {
             return Status.Code.FAILED_PRECONDITION;
         }
-        if (code.equals(ErrorCode.RUN_NOT_FOUND)) {
+        if (code.equals(ErrorCode.RUN_NOT_FOUND) || code.equals(ErrorCode.PLUGIN_PACKAGE_UNAVAILABLE)) {
             return Status.Code.NOT_FOUND;
         }
         if (code.equals(ErrorCode.SLOTS_INSUFFICIENT)) {

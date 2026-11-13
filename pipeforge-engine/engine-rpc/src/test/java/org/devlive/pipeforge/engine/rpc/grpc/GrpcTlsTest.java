@@ -127,7 +127,7 @@ class GrpcTlsTest {
                 List.of(new TaskExecutorService(
                         worker,
                         SecretBox.generate(),
-                        ChainCodecTest.Fake::new,
+                        (run, plugins) -> ChainCodecTest.Fake::new,
                         new Fencing(),
                         new IdempotencyCache())));
         closing.add(() -> server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS));

@@ -6,6 +6,12 @@ enum pipeforge.rpc.v1.Partitioning.Kind
 enum pipeforge.rpc.v1.RunState
 enum pipeforge.rpc.v1.TaskState
 field pipeforge.rpc.v1.AddSplits 1 splits repeated pipeforge.rpc.v1.Versioned
+field pipeforge.rpc.v1.BlobChunk 1 offset int64
+field pipeforge.rpc.v1.BlobChunk 2 data bytes
+field pipeforge.rpc.v1.BlobChunk 3 size int64
+field pipeforge.rpc.v1.BlobRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.BlobRequest 2 sha256 string
+field pipeforge.rpc.v1.BlobRequest 3 offset int64
 field pipeforge.rpc.v1.CancelTaskRequest 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.CancelTaskRequest 2 id pipeforge.rpc.v1.ExecutionAttemptId
 field pipeforge.rpc.v1.CancelTaskRequest 3 reason string
@@ -277,6 +283,7 @@ field pipeforge.rpc.v1.WorkerHeartbeat 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.WorkerHeartbeat 2 worker_id string
 field pipeforge.rpc.v1.WorkerHeartbeat 3 slots repeated pipeforge.rpc.v1.SlotStatus
 field pipeforge.rpc.v1.WorkerHeartbeat 4 tasks repeated pipeforge.rpc.v1.RunningTask
+file pipeforge/rpc/v1/blob.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/chain.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/common.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/dispatcher.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
@@ -285,6 +292,8 @@ file pipeforge/rpc/v1/resource_manager.proto package pipeforge.rpc.v1 java org.d
 file pipeforge/rpc/v1/task_executor.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 message pipeforge.rpc.v1.Ack
 message pipeforge.rpc.v1.AddSplits
+message pipeforge.rpc.v1.BlobChunk
+message pipeforge.rpc.v1.BlobRequest
 message pipeforge.rpc.v1.CancelTaskRequest
 message pipeforge.rpc.v1.ChainDescriptor
 message pipeforge.rpc.v1.ColumnEntry
@@ -349,6 +358,7 @@ message pipeforge.rpc.v1.Versioned
 message pipeforge.rpc.v1.WorkerHeartbeat
 reserved pipeforge.rpc.v1.TaskDeployment 10-10
 reserved pipeforge.rpc.v1.TaskDeployment 9-9
+rpc pipeforge.rpc.v1.BlobService.GetBlob pipeforge.rpc.v1.BlobRequest -> stream pipeforge.rpc.v1.BlobChunk
 rpc pipeforge.rpc.v1.DispatcherService.Analyze pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.ExplainResult
 rpc pipeforge.rpc.v1.DispatcherService.CancelJob pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.DispatcherService.GetJobMetrics pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobMetrics
@@ -367,6 +377,7 @@ rpc pipeforge.rpc.v1.TaskExecutorService.FreeSlot pipeforge.rpc.v1.FreeSlotReque
 rpc pipeforge.rpc.v1.TaskExecutorService.ReadLog pipeforge.rpc.v1.ReadLogRequest -> stream pipeforge.rpc.v1.LogChunk
 rpc pipeforge.rpc.v1.TaskExecutorService.RequestSlot pipeforge.rpc.v1.SlotRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.TaskExecutorService.SendOperatorEvent pipeforge.rpc.v1.OperatorEvent -> pipeforge.rpc.v1.Ack
+service pipeforge.rpc.v1.BlobService
 service pipeforge.rpc.v1.DispatcherService
 service pipeforge.rpc.v1.JobMasterService
 service pipeforge.rpc.v1.ResourceManagerService

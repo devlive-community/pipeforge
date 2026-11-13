@@ -45,6 +45,21 @@ Worker                                   Master（ResourceManager）
 - **Worker 失联**。30 秒没有发送心跳的 Worker 会被移出集群。Task 运行在它上面的 JobMaster 会收到
   [`PF-CLUS-0001`](../reference/errors#pf-clus-0001)，并让这些 Task 失败。
 
+### 插件分发
+
+插件只安装在 Master 上；Worker 按 Task 的需要获取插件。
+
+1. Master 部署 Task 时，列出 Task 用到的每个插件及其插件包的 SHA-256。某个已安装插件第一次被部署引用时，Master 将它打包，
+   并且每次都打包成相同的字节，因此哈希准确地标识了插件版本。
+2. 还没有该插件包的 Worker 会从 Master 分块下载。下载中断时，从已经收到的字节处继续，最多三次。
+3. Worker 校验下载内容的哈希。哈希不符的插件包会被丢弃，报 [`PF-PLUG-0011`](../reference/errors#pf-plug-0011)，
+   由下一个 Task 重新获取。
+4. 插件包保存在 Worker 的缓存目录中，之后的运行以及 Worker 重启后都直接使用，无需再次下载。
+5. 在一个 Worker 上，每次运行的每个插件都有自己的类加载器，该运行在这个 Worker 上的所有 Task 共用它。运行结束后，
+   它的类加载器被关闭并可以被垃圾回收。
+
+标记为 `builtin` 的组件随 Worker 提供，不需要插件包。
+
 ## 行为与语义
 
 | 设置 | 默认值 | 含义 |
@@ -82,6 +97,8 @@ Worker                                   Master（ResourceManager）
 | `PF-RES-0001` `SLOTS_INSUFFICIENT` | 带有作业所需标签的 Worker 上空闲 Slot 少于作业的需要。请增加 Worker 或 Slot、降低并行度、放宽标签，或者等待其他作业结束。 |
 | `PF-RES-0007` `SLOT_TAKEN` | 两个作业同时预留了同一个 Slot；调度器会自动改用其他 Slot。 |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | Worker 的集群令牌与 Master 不同。 |
+| `PF-PLUG-0010` `PLUGIN_PACKAGE_UNAVAILABLE` | Worker 无法获取插件包：Master 没有该插件、无法访问 Master，或者缓存目录无法写入。具体原因见错误信息。 |
+| `PF-PLUG-0011` `PLUGIN_PACKAGE_CORRUPT` | 下载的插件包与哈希不符，已被丢弃。如果反复出现，请检查 Worker 与 Master 之间的网络。 |
 | `PF-CLUS-0007` `RPC_VERSION_MISMATCH` | Worker 与 Master 的主版本不同；整个集群请使用同一个发行版本。 |
 
 ## 限制

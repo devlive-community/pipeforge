@@ -41,6 +41,13 @@
         </dependency>
 
         <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-plugin</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-inprocess</artifactId>
             <scope>test</scope>

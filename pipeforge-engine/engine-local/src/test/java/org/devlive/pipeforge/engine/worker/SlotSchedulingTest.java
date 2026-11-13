@@ -90,7 +90,11 @@ class SlotSchedulingTest {
         worker = InProcessServerBuilder.forName(workerName)
                 .intercept(TOKEN.server())
                 .addService(new TaskExecutorService(
-                        executor, keys, (kind, type, plugin) -> null, new Fencing(), new IdempotencyCache()))
+                        executor,
+                        keys,
+                        (run, plugins) -> (kind, type, plugin) -> null,
+                        new Fencing(),
+                        new IdempotencyCache()))
                 .build()
                 .start();
         toMaster = InProcessChannelBuilder.forName(masterName)

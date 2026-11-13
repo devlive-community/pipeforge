@@ -76,6 +76,10 @@ public final class ErrorCode {
             define("PF-PLUG-0008", "COMPONENT_AMBIGUOUS", "type", "identifier", "plugins");
     public static final ErrorCode PLUGIN_VERSION_MISMATCH =
             define("PF-PLUG-0009", "PLUGIN_VERSION_MISMATCH", "plugin", "wanted", "installed");
+    public static final ErrorCode PLUGIN_PACKAGE_UNAVAILABLE =
+            define("PF-PLUG-0010", "PLUGIN_PACKAGE_UNAVAILABLE", "plugin", "reason");
+    public static final ErrorCode PLUGIN_PACKAGE_CORRUPT =
+            define("PF-PLUG-0011", "PLUGIN_PACKAGE_CORRUPT", "plugin", "expected", "actual");
 
     // Data
     public static final ErrorCode CONSTRAINT_VIOLATION =

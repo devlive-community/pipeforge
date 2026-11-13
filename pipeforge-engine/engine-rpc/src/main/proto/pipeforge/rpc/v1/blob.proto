@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// Frozen as v1: copied verbatim from the protocol specification, appendix A. Only compatible
+// additions are allowed (new fields, RPCs and enum values); ProtoSnapshotTest checks it.
+
+syntax = "proto3";
+package pipeforge.rpc.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+
+// 按内容哈希提供插件包（以及以后的作业文件）；Worker 下载后校验哈希并缓存
+service BlobService {
+  rpc GetBlob(BlobRequest) returns (stream BlobChunk);
+}
+
+message BlobRequest {
+  Header header = 1;
+  string sha256 = 2;                  // 小写十六进制
+  int64 offset = 3;                   // 从这个字节开始，续传时大于 0
+}
+
+message BlobChunk {
+  int64 offset = 1;                   // 本块在整个 blob 中的位置
+  bytes data = 2;
+  int64 size = 3;                     // 整个 blob 的字节数
+}
