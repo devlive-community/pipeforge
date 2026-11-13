@@ -106,7 +106,9 @@ final class MetricsAggregator {
         long inFlight = 0;
         long failed = 0;
         switch (phase) {
-            case RUNNING -> inFlight = in[sink] - accepted;
+                // Everything read and not yet accepted by the sink, wherever it is: the identity holds for
+                // a snapshot taken while the task moves rows (see OperatorChain.snapshot).
+            case RUNNING -> inFlight = read + totalExpanded - totalFiltered - accepted;
             case SUCCEEDED -> inFlight = in[sink] - written;
             case STOPPED -> failed = Math.max(0, read + totalExpanded - totalFiltered - written);
         }

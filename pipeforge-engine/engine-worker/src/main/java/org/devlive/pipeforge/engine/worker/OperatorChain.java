@@ -104,13 +104,24 @@ final class OperatorChain {
         }
     }
 
-    /** The counters and self time of every operator, from the source to the sink; callable from any thread. */
+    /**
+     * The counters and self time of every operator, from the source to the sink; callable from any
+     * thread.
+     *
+     * <p>The task thread keeps moving rows while another thread reads the counters, so the counters
+     * are read from the sink back to the source: every row a downstream counter has seen was counted
+     * upstream before, and rows read but not yet accepted by the sink ({@code rowsRead + rowsExpanded
+     * - rowsFiltered - accepted}) are never negative.
+     */
     List<OperatorSnapshot> snapshot() {
-        List<OperatorSnapshot> operators = new ArrayList<>(transforms.size() + 2);
-        operators.add(sourceMetrics.snapshot(clock.selfNanos(0)));
-        transforms.forEach(t -> operators.add(t.metrics().snapshot(t.selfNanos())));
-        operators.add(sink.metrics().snapshot(sink.selfNanos()));
-        return operators;
+        OperatorSnapshot[] operators = new OperatorSnapshot[transforms.size() + 2];
+        operators[operators.length - 1] = sink.metrics().snapshot(sink.selfNanos());
+        for (int i = transforms.size() - 1; i >= 0; i--) {
+            TransformOperator transform = transforms.get(i);
+            operators[i + 1] = transform.metrics().snapshot(transform.selfNanos());
+        }
+        operators[0] = sourceMetrics.snapshot(clock.selfNanos(0));
+        return List.of(operators);
     }
 
     void handle(OperatorEvent event) {

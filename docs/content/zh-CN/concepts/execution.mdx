@@ -148,8 +148,8 @@ handle.result().get().status();   // CANCELLED
 - **采集。** 每个算子按行计数，每行每个计数器只做一次 `LongAdder` 自增。每个 Task 每隔 `metricsInterval` 把计数快照发给
   JobMaster，结束时随最终状态再发一次；JobMaster 按节点和作业汇总。
 - **行数。** `rowsRead` 是 Source 输出的行数，`rowsWritten` 是 Sink 写入的行数（两阶段提交的 Sink 为已提交的行数），`rowsFiltered`
-  和 `rowsExpanded` 是 Transform 丢弃和多出的行数，`rowsInFlight` 是仍在写队列中的行数。作业失败或被取消时，没有到达目标端的行计为
-  `rowsFailed`。这些计数始终满足对账恒等式：`rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed + rowsInFlight`。
+  和 `rowsExpanded` 是 Transform 丢弃和多出的行数，`rowsInFlight` 是已读取但还没有被 Sink 接收的行数，大多在写队列中。作业失败或被取消时，没有到达目标端的行计为
+  `rowsFailed`。这些计数始终满足对账恒等式，作业运行中也是如此：`rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed + rowsInFlight`。
 - **速率。** 读写速率每个周期采样一次：最近 5 秒的瞬时速率、全程平均速率和 1 秒内的峰值。
 - **自身耗时。** `selfTimeRatio` 是节点自身代码（不含其下游节点）占运行时间的比例。每 16 次读取测量一次，热路径上不必每行都读取时钟；
   开启写缓冲的 Sink 取写线程的忙碌时间。

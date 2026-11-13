@@ -172,8 +172,9 @@ runs, refreshed every `metricsInterval`.
   final one with its final state; the job master sums them per node and for the job.
 - **Rows.** `rowsRead` is what the source emitted, `rowsWritten` what the sink wrote (for sinks that
   commit in two phases: what was committed), `rowsFiltered` and `rowsExpanded` what transforms
-  dropped or added, `rowsInFlight` what is still in the write queue. A failed or cancelled job counts
-  the rows that never reached the target as `rowsFailed`. The counters always reconcile:
+  dropped or added, `rowsInFlight` what was read but not yet taken by the sink, mostly rows in the
+  write queue. A failed or cancelled job counts the rows that never reached the target as
+  `rowsFailed`. The counters always reconcile, also while the job runs:
   `rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsFailed + rowsInFlight`.
 - **Rates.** Read and write rates are sampled once per interval: the current rate over the last
   5 seconds, the average since the start and the peak over one second.
