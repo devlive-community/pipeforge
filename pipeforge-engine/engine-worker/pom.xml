@@ -41,12 +41,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.devlive.pipeforge</groupId>
-            <artifactId>pipeforge-engine-master</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-inprocess</artifactId>
             <scope>test</scope>

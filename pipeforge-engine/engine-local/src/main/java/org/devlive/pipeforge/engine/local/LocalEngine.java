@@ -7,9 +7,7 @@
 package org.devlive.pipeforge.engine.local;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -24,13 +22,13 @@ import org.devlive.pipeforge.engine.api.JobHandle;
 import org.devlive.pipeforge.engine.api.JobId;
 import org.devlive.pipeforge.engine.api.JobResult;
 import org.devlive.pipeforge.engine.api.SubmitOptions;
-import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
+import org.devlive.pipeforge.engine.master.ChainTopology;
+import org.devlive.pipeforge.engine.master.JobMaster;
+import org.devlive.pipeforge.engine.master.JobMasters;
+import org.devlive.pipeforge.engine.master.Placement;
 import org.devlive.pipeforge.engine.rpc.InProcessRpc;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
-import org.devlive.pipeforge.engine.rpc.ReaderMessage;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
-import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
-import org.devlive.pipeforge.engine.rpc.TaskStateUpdate;
 import org.devlive.pipeforge.engine.worker.TaskExecutor;
 
 /**
@@ -43,13 +41,13 @@ import org.devlive.pipeforge.engine.worker.TaskExecutor;
  */
 public final class LocalEngine implements Engine {
 
-    private final Map<String, LocalJobMaster> jobs = new ConcurrentHashMap<>();
+    private final JobMasters jobs = new JobMasters();
     private final InProcessRpc.Endpoint<JobMasterGateway> master;
     private final TaskExecutor taskExecutor;
     private final InProcessRpc.Endpoint<TaskExecutorGateway> worker;
 
     public LocalEngine() {
-        master = InProcessRpc.serve("master", new Router());
+        master = InProcessRpc.serve("master", jobs);
         taskExecutor = new TaskExecutor("local", master.gateway());
         worker = InProcessRpc.serve("worker", taskExecutor);
     }
@@ -66,11 +64,11 @@ public final class LocalEngine implements Engine {
 
     @Override
     public JobHandle submit(JobPlan plan, SubmitOptions options) {
-        List<PlannedNode> chain = LocalTopology.chain(plan);
+        List<PlannedNode> chain = ChainTopology.chain(plan);
         JobId id = JobId.random();
-        LocalJobMaster job =
-                new LocalJobMaster(id, plan, chain, options, worker.gateway(), () -> jobs.remove(id.value()));
-        jobs.put(job.runId(), job);
+        JobMaster job = new JobMaster(
+                id, plan, chain, options, Placement.local(worker.gateway()), () -> jobs.remove(id.value()));
+        jobs.add(job);
         job.start();
         return job.handle();
     }
@@ -83,7 +81,7 @@ public final class LocalEngine implements Engine {
     /** Cancels the running jobs, waits up to 10 seconds for them to end and stops the threads. */
     @Override
     public void close() {
-        List<CompletableFuture<JobResult>> ending = jobs.values().stream()
+        List<CompletableFuture<JobResult>> ending = jobs.running().stream()
                 .map(job -> {
                     job.cancel();
                     return job.handle().result();
@@ -99,35 +97,5 @@ public final class LocalEngine implements Engine {
         taskExecutor.close();
         worker.close();
         master.close();
-    }
-
-    /** The master endpoint: routes the messages of the tasks to the job master of their run. */
-    private final class Router implements JobMasterGateway {
-        @Override
-        public CompletableFuture<Void> updateTaskState(TaskStateUpdate update) {
-            LocalJobMaster job = jobs.get(update.id().runId());
-            if (job != null) {
-                job.onTaskState(update);
-            }
-            return CompletableFuture.completedFuture(null);
-        }
-
-        @Override
-        public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
-            LocalJobMaster job = jobs.get(task.runId());
-            if (job != null) {
-                job.onMetrics(task, metrics);
-            }
-            return CompletableFuture.completedFuture(null);
-        }
-
-        @Override
-        public CompletableFuture<Void> sendReaderMessage(ReaderMessage message) {
-            LocalJobMaster job = jobs.get(message.task().runId());
-            if (job != null) {
-                job.onReaderMessage(message);
-            }
-            return CompletableFuture.completedFuture(null);
-        }
     }
 }

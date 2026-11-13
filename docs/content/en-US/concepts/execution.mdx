@@ -111,12 +111,24 @@ only then reports `SUCCESS`. A run without checkpoints commits once, as checkpoi
 
 | Status | Meaning |
 |---|---|
-| `CREATED` | Accepted; tasks are being deployed |
+| `CREATED` | Accepted; waiting for slots, then deploying the tasks |
 | `RUNNING` | Tasks are running |
 | `CANCELLING` | A cancel was requested; tasks are stopping |
 | `SUCCESS` | Every source ended and every sink wrote and committed its data |
 | `FAILED` | A task, the enumerator or the commit failed; the result carries the error |
 | `CANCELLED` | Stopped on request |
+
+Every run has a **job master** that drives it from start to end:
+
+1. It gets the slots of the run: on a cluster the [scheduler](./cluster) reserves them on the
+   workers; in one process the local task executor runs every task.
+2. It starts the split enumerator and deploys one task per subtask into its slot.
+3. It follows the states the tasks report. The first failure cancels the other tasks and becomes
+   the error of the run; a [lost worker](./cluster) fails the run with `PF-CLUS-0001`, scoped to
+   the node and subtask that ran there.
+4. When every task has finished, it commits what the sinks prepared and the run succeeds.
+5. Whatever the end, it gives the slots back. A run cancelled while it waits for slots ends at once;
+   slots that arrive later go back too.
 
 ## Quick start
 

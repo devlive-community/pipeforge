@@ -4,7 +4,7 @@
  * Licensed under the MIT License. See the LICENSE file in the
  * project root for full license text.
  */
-package org.devlive.pipeforge.engine.local;
+package org.devlive.pipeforge.engine.master;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -63,9 +63,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The job master of one job in local mode: runs the split enumerator, deploys the tasks, follows
- * their states and decides how the job ends. Everything it does runs on its own thread, one event at
- * a time, so the enumerator and the job state are never touched concurrently.
+ * The job master of one run: gets the slots of the job from its {@link Placement}, runs the split
+ * enumerator, deploys the tasks into the slots, follows their states and decides how the run ends.
+ * Everything it does runs on its own thread, one event at a time, so the enumerator and the run
+ * state are never touched concurrently.
  *
  * <ul>
  *   <li>Readers pull splits: a split request from a task reaches {@code handleSplitRequest}, and
@@ -74,12 +75,15 @@ import org.slf4j.LoggerFactory;
  *   <li>When every task has finished, the committables of the sink are committed (by its
  *       committer, then its global committer) and the job ends with {@code SUCCESS}.
  *   <li>The first failure cancels the other tasks; the job ends with {@code FAILED} and that error.
- *       There is no restart in local mode.
+ *       There is no restart yet.
+ *   <li>A worker that is lost fails the run with {@code PF-CLUS-0001}, scoped to the first of its
+ *       tasks that was still running.
+ *   <li>The slots go back to the placement when the run ends.
  * </ul>
  */
-final class LocalJobMaster {
+public final class JobMaster {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LocalJobMaster.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JobMaster.class);
     private static final int COMMIT_ATTEMPTS = 3;
 
     private final JobId id;
@@ -92,7 +96,8 @@ final class LocalJobMaster {
 
     private final int parallelism;
     private final TaskSettings settings;
-    private final TaskExecutorGateway executor;
+    private final Placement placement;
+    private List<Placement.Slot> slots = List.of();
     private final ScheduledExecutorService thread;
     private final MetricsAggregator aggregator;
     private final Handle handle = new Handle();
@@ -109,12 +114,16 @@ final class LocalJobMaster {
     private @Nullable SplitEnumerator<SourceSplit, ?> enumerator;
     private @Nullable Source<SourceSplit, ?> source;
 
-    LocalJobMaster(
+    /**
+     * @param nodes the chain of the job, from {@link ChainTopology#chain}
+     * @param onEnded runs once the run has ended and its slots were given back
+     */
+    public JobMaster(
             JobId id,
             JobPlan plan,
             List<PlannedNode> nodes,
             SubmitOptions options,
-            TaskExecutorGateway executor,
+            Placement placement,
             Runnable onEnded) {
         this.id = id;
         this.plan = plan;
@@ -136,7 +145,7 @@ final class LocalJobMaster {
                 options.writeQueueCapacity(),
                 options.cancelTimeout(),
                 options.metricsInterval());
-        this.executor = executor;
+        this.placement = placement;
         this.onEnded = onEnded;
         this.expressions = EngineExpressions.forRun(plan.timeZone(), runStartTime);
         this.aggregator = new MetricsAggregator(chain, parallelism, started);
@@ -147,23 +156,74 @@ final class LocalJobMaster {
         });
     }
 
-    JobHandle handle() {
+    public JobHandle handle() {
         return handle;
     }
 
-    String runId() {
+    public String runId() {
         return id.value();
     }
 
-    void start() {
-        post(this::deploy);
+    /**
+     * Gets the slots, then starts the enumerator and deploys the tasks. Slots that arrive after the
+     * run ended (it was cancelled while it waited) are given back at once.
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // the callback posts to the job master thread
+    public void start() {
+        placement.acquire(id.value(), id.value(), parallelism).whenComplete((acquired, error) -> {
+            Runnable arrived = () -> {
+                if (status.isTerminal()) {
+                    placement.release();
+                } else if (error != null) {
+                    fail(PipeForgeException.wrap(
+                            error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                                    ? error.getCause()
+                                    : error));
+                } else {
+                    slots = acquired;
+                    deploy();
+                }
+            };
+            if (!tryPost(arrived)) {
+                placement.release();
+            }
+        });
     }
 
-    void onTaskState(TaskStateUpdate update) {
+    /**
+     * A worker was lost: the tasks that still ran there are gone, and the run fails with {@code
+     * error}, scoped to the first of them.
+     */
+    public void workerLost(String workerId, PipeForgeException error) {
+        post(() -> {
+            List<Integer> gone = new ArrayList<>();
+            for (Placement.Slot slot : slots) {
+                TaskState state = states.get(slot.index());
+                if (slot.workerId().equals(workerId) && state != null && !state.isTerminal()) {
+                    gone.add(slot.index());
+                }
+            }
+            if (gone.isEmpty()) {
+                return;
+            }
+            PipeForgeException.Builder scoped = PipeForgeException.of(error.code())
+                    .scope(ErrorScope.node(chain.vertexId())
+                            .withJob(plan.name())
+                            .withRun(id.value())
+                            .withSubtask(gone.get(0)))
+                    .kind(error.kind());
+            error.params().forEach(scoped::param);
+            fail(scoped.build());
+            gone.forEach(subtask -> states.put(subtask, TaskState.FAILED));
+            endIfDone();
+        });
+    }
+
+    public void onTaskState(TaskStateUpdate update) {
         post(() -> handleTaskState(update));
     }
 
-    void onMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
+    public void onMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
         post(() -> {
             int subtask = task.subtask();
             TaskState state = states.get(subtask);
@@ -174,11 +234,11 @@ final class LocalJobMaster {
         });
     }
 
-    void onReaderMessage(ReaderMessage message) {
+    public void onReaderMessage(ReaderMessage message) {
         post(() -> handleReaderMessage(message));
     }
 
-    void cancel() {
+    public void cancel() {
         post(() -> {
             if (status.isTerminal() || status == JobStatus.CANCELLING) {
                 return;
@@ -192,7 +252,8 @@ final class LocalJobMaster {
 
     // ------------------------------------------------------------------ lifecycle
 
-    @SuppressWarnings("unchecked")
+    // deployment failures post back; the metrics task runs until the thread stops
+    @SuppressWarnings({"unchecked", "FutureReturnValueIgnored"})
     private void deploy() {
         PlannedNode node = chain.source();
         try {
@@ -213,8 +274,10 @@ final class LocalJobMaster {
         }
         for (int subtask = 0; subtask < parallelism; subtask++) {
             states.put(subtask, TaskState.DEPLOYING);
-            TaskDeployment deployment = new TaskDeployment(attempt(subtask), deployed, parallelism, settings, run);
-            executor.deployTask(deployment).whenComplete((ignored, error) -> {
+            Placement.Slot slot = slots.get(subtask);
+            TaskDeployment deployment =
+                    new TaskDeployment(attempt(subtask), deployed, parallelism, settings, run, slot.allocationId());
+            slot.gateway().deployTask(deployment).whenComplete((ignored, error) -> {
                 if (error != null) {
                     post(() -> fail(PipeForgeException.wrap(error)));
                 }
@@ -281,10 +344,11 @@ final class LocalJobMaster {
         endIfDone();
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored") // each task reports its end itself
     private void cancelTasks() {
         states.forEach((subtask, state) -> {
             if (!state.isTerminal()) {
-                executor.cancelTask(attempt(subtask));
+                gateway(subtask).cancelTask(attempt(subtask));
             }
         });
     }
@@ -311,6 +375,7 @@ final class LocalJobMaster {
         published = last;
         status = end;
         LOG.info("Job {} ({}) ended: {}", plan.name(), id, end);
+        placement.release();
         handle.result.complete(new JobResult(id, end, failure, last));
         thread.shutdown();
         onEnded.run();
@@ -430,6 +495,7 @@ final class LocalJobMaster {
         }
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored") // a lost event fails its task, which reports it
     private void assign(Map<Integer, ? extends List<? extends SourceSplit>> assignment) {
         Source<SourceSplit, ?> owner = source;
         if (owner == null) {
@@ -445,8 +511,10 @@ final class LocalJobMaster {
                 values.add(callSource(
                         "write split " + split.splitId(), () -> SerializedValue.of(owner.splitSerializer(), split)));
             }
-            executor.sendOperatorEvent(
-                    attempt(reader), new OperatorEvent.AddSplits(chain.source().id(), values));
+            gateway(reader)
+                    .sendOperatorEvent(
+                            attempt(reader),
+                            new OperatorEvent.AddSplits(chain.source().id(), values));
         });
     }
 
@@ -473,10 +541,12 @@ final class LocalJobMaster {
         }
 
         @Override
+        @SuppressWarnings("FutureReturnValueIgnored") // a lost event fails its task, which reports it
         public void signalNoMoreSplits(int readerId) {
-            executor.sendOperatorEvent(
-                    attempt(readerId),
-                    new OperatorEvent.NoMoreSplits(chain.source().id()));
+            gateway(readerId)
+                    .sendOperatorEvent(
+                            attempt(readerId),
+                            new OperatorEvent.NoMoreSplits(chain.source().id()));
         }
     }
 
@@ -544,6 +614,10 @@ final class LocalJobMaster {
                 .chain();
     }
 
+    private TaskExecutorGateway gateway(int subtask) {
+        return slots.get(subtask).gateway();
+    }
+
     private ExecutionAttemptId attempt(int subtask) {
         return new ExecutionAttemptId(id.value(), chain.vertexId(), subtask, 0);
     }
@@ -563,10 +637,17 @@ final class LocalJobMaster {
     }
 
     private void post(Runnable action) {
+        tryPost(action);
+    }
+
+    /** Runs {@code action} on the job master thread; {@code false} when the run has ended. */
+    private boolean tryPost(Runnable action) {
         try {
             thread.execute(() -> run(action));
+            return true;
         } catch (RejectedExecutionException e) {
             // the job has ended; late messages are dropped
+            return false;
         }
     }
 
@@ -609,7 +690,7 @@ final class LocalJobMaster {
 
         @Override
         public JobMetrics metrics() {
-            return LocalJobMaster.this.metrics();
+            return JobMaster.this.metrics();
         }
 
         @Override
@@ -619,7 +700,7 @@ final class LocalJobMaster {
 
         @Override
         public void cancel() {
-            LocalJobMaster.this.cancel();
+            JobMaster.this.cancel();
         }
     }
 }

@@ -92,12 +92,21 @@ Task 线程：… → 攒批 ──► 有界队列 ──► 写线程：SinkWr
 
 | 状态 | 含义 |
 |---|---|
-| `CREATED` | 已接受，正在部署 Task |
+| `CREATED` | 已接受，正在等待 Slot，随后部署 Task |
 | `RUNNING` | Task 正在运行 |
 | `CANCELLING` | 收到取消请求，Task 正在停止 |
 | `SUCCESS` | 所有 Source 都已结束，所有 Sink 都已写完并提交 |
 | `FAILED` | 某个 Task、枚举器或提交失败；结果中带有错误 |
 | `CANCELLED` | 按请求停止 |
+
+每次运行都有一个 **JobMaster** 负责从开始到结束：
+
+1. 获取本次运行的 Slot：在集群上由[调度器](./cluster)在 Worker 上预留；在单个进程中由本地的 TaskExecutor 运行所有 Task。
+2. 启动分片分配器，为每个子任务把一个 Task 部署到它的 Slot 中。
+3. 跟踪 Task 上报的状态。第一个失败会取消其他 Task，并成为本次运行的错误；[Worker 失联](./cluster)时运行以
+   `PF-CLUS-0001` 失败，错误位置为在该 Worker 上运行的节点与子任务。
+4. 所有 Task 完成后，提交 Sink 准备好的内容，运行成功。
+5. 无论以何种方式结束，都会归还 Slot。在等待 Slot 时被取消的运行会立即结束；之后才到达的 Slot 同样会被归还。
 
 ## 快速上手
 

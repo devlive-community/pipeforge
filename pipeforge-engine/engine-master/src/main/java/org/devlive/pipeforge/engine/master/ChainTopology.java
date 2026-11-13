@@ -4,7 +4,7 @@
  * Licensed under the MIT License. See the LICENSE file in the
  * project root for full license text.
  */
-package org.devlive.pipeforge.engine.local;
+package org.devlive.pipeforge.engine.master;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,12 +20,12 @@ import org.devlive.pipeforge.core.plan.PlannedNode;
  * tasks, the job must be a straight line: one source, its transforms, one sink, each node reading
  * from the one before and all with the same parallelism.
  */
-final class LocalTopology {
+public final class ChainTopology {
 
-    private LocalTopology() {}
+    private ChainTopology() {}
 
     /** The nodes of the chain from the source to the sink, or {@code PF-PLAN-0012}. */
-    static List<PlannedNode> chain(JobPlan plan) {
+    public static List<PlannedNode> chain(JobPlan plan) {
         List<PlannedNode> sources = plan.nodes(NodeKind.SOURCE);
         if (sources.size() != 1) {
             String node = sources.isEmpty()

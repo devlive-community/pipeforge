@@ -18,9 +18,14 @@
 
     <artifactId>pipeforge-engine-master</artifactId>
     <name>PipeForge Engine Master</name>
-    <description>The master of a cluster: worker registration, heartbeats and the slot ledger</description>
+    <description>The master: worker registration, the slot ledger, scheduling and the job masters</description>
 
     <dependencies>
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-engine-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>
             <artifactId>pipeforge-engine-rpc</artifactId>
@@ -42,6 +47,19 @@
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs-annotations</artifactId>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-engine-worker</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-engine-worker</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>

@@ -64,7 +64,7 @@
   docs: ["development/engine-protocol"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ResourceManager*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Scheduler.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/SlotTable.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MasterConnection.java"]
   docs: ["concepts/cluster"]
-- paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/graph/**"]
+- paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/graph/**", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/JobMaster*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Placement.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ChainTopology.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/MetricsAggregator.java"]
   docs: ["concepts/execution"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
