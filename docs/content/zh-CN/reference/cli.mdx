@@ -13,7 +13,10 @@ data: cli
 ```bash
 ./mvnw -B -pl pipeforge-cli -am package -DskipTests
 pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge version
+pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge run --local examples/fake-to-console.yaml
 ```
+
+源码仓库 `examples/` 中的作业只需要发行包自带的插件；[快速上手](../getting-started/quickstart)详细介绍了第一个作业。
 
 应用目录包含 `bin/pipeforge`（Windows 上是 `bin/pipeforge.cmd`）、`lib/` 中的库、`lib/server/` 中供
 [`pipeforge ui`](#cmd-ui) 使用的服务端，以及 `plugins/` 中随发行包提供的插件：`fake`、`field-mapper`、`console` 和

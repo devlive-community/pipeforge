@@ -14,7 +14,11 @@ the Web UI. Build it in a checkout and run it from the app directory, or unpack
 ```bash
 ./mvnw -B -pl pipeforge-cli -am package -DskipTests
 pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge version
+pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge run --local examples/fake-to-console.yaml
 ```
+
+The jobs in `examples/` of the checkout need only the plugins of the distribution; the
+[quick start](../getting-started/quickstart) walks through the first one.
 
 The app directory holds `bin/pipeforge` (and `bin/pipeforge.cmd` on Windows), the libraries in
 `lib/`, the server in `lib/server/` for [`pipeforge ui`](#cmd-ui) and the plugins that come with the

@@ -22,6 +22,8 @@
 #     <modules> sections of the POMs, recursively, so fixtures and stray POMs are ignored);
 #   - the root POM, the wrapper, .mvn/, .java-version and shared build configuration under
 #     tools/spotbugs/ affect every module, so they select the full reactor;
+#   - files outside the modules that a module's tests read select that module: the example jobs
+#     in examples/ and the compose file of dev/ belong to pipeforge-cli;
 #   - root-level files that are not build inputs (README, docs, CI files) select nothing.
 #
 # Compatible with bash 3.2 (macOS). Needs only sed and grep.
@@ -87,9 +89,21 @@ is_global_input() {
 
 modules="$(reactor_modules .)"
 
+# Inputs outside the module directories that a module's tests read.
+test_input_owner() {
+    case "$1" in
+        examples/* | dev/docker-compose.yaml) echo "pipeforge-cli" ;;
+    esac
+}
+
 # Nearest enclosing reactor module of a path, or nothing.
 owner_of() {
     local f="$1" best="" m
+    best="$(test_input_owner "$f")"
+    if [ -n "$best" ]; then
+        echo "$best"
+        return
+    fi
     while IFS= read -r m; do
         [ -z "$m" ] && continue
         case "$f" in

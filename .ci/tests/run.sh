@@ -98,6 +98,10 @@ check "deleted file in a module still maps to the module" "maven_modules=pipefor
     "$(modules_for "$R" pipeforge-api/src/main/java/Removed.java)"
 check "similar prefix does not match another module" "maven_modules=" \
     "$(modules_for "$R" pipeforge-api-extra/src/X.java)"
+check "example jobs select the CLI" "maven_modules=pipeforge-cli" \
+    "$(modules_for "$R" examples/fake-to-console.yaml)"
+check "the dev compose file selects the CLI, the scripts nothing" "maven_modules=pipeforge-cli" \
+    "$(modules_for "$R" dev/docker-compose.yaml dev/up.sh)"
 check "empty change list selects nothing" "maven_modules=" "$(modules_for "$R" "")"
 
 GITHUB_OUTPUT="$WORK/gh-output"
@@ -132,7 +136,9 @@ check "Markdown only runs nothing" "" "$(components_for README.md CONTRIBUTING.z
 check "CI workflow runs everything" "java build-checks dev-env web docs" "$(components_for .github/workflows/ci.yml)"
 check "CI scripts run everything" "java build-checks dev-env web docs" "$(components_for .ci/maven-modules.sh)"
 check "Dependabot config runs nothing" "" "$(components_for .github/dependabot.yml)"
-check "dev environment runs dev-env only" "dev-env" "$(components_for dev/docker-compose.yaml)"
+check "dev compose file runs java and dev-env" "java dev-env" "$(components_for dev/docker-compose.yaml)"
+check "dev scripts run dev-env only" "dev-env" "$(components_for dev/up.sh)"
+check "example jobs run java" "java" "$(components_for examples/fake-to-console.yaml)"
 check "dev command runs java, dev-env and docs" "java dev-env docs" \
     "$(components_for pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/DevCommand.java)"
 check "community files run nothing" "" \

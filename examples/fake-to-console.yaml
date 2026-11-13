@@ -1,0 +1,37 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Generates five users with the fake source, renames id, lower-cases the e-mail address, adds
+# the initial of the name, drops the sign-up time and prints the rows with the console sink.
+# Needs only the plugins of the distribution:
+#
+#   pipeforge validate examples/fake-to-console.yaml
+#   pipeforge explain examples/fake-to-console.yaml
+#   pipeforge run --local examples/fake-to-console.yaml
+
+version: 1
+name: fake-to-console
+source:
+  - id: users
+    type: fake
+    table: crm.users
+    columns:
+      - id INT64 NOT NULL
+      - name STRING(12)
+      - email STRING(20)
+      - signed_up TIMESTAMP(0)
+    primary-key: [id]
+    rows: 5
+transform:
+  - id: tidy
+    type: field-mapper
+    mapping:
+      - { from: id, to: user_id }
+      - { from: email, expr: "LOWER(email)" }
+      - { expr: "UPPER(SUBSTRING(name, 1, 1))", to: initial }
+    drop: [signed_up]
+sink:
+  - { id: out, type: console }

@@ -15,6 +15,8 @@
 #
 # Entries are added together with the code they describe.
 
+- paths: ["examples/**"]
+  docs: ["getting-started/quickstart"]
 - paths: ["dev/**"]
   docs: ["development/local-environment"]
 - paths: ["docs/app/**", "docs/components/**", "docs/lib/**", "docs/styles/**", "docs/scripts/**"]
