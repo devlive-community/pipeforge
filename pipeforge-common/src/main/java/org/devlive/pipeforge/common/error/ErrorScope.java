@@ -84,6 +84,45 @@ public record ErrorScope(
                 pathValue.isEmpty() ? null : pathValue);
     }
 
+    /**
+     * The scope described by {@code map}, as {@link #toMap()} writes it; numbers may be given as
+     * text, and unknown keys are ignored.
+     *
+     * @throws IllegalArgumentException if subtask, line or column is not a number
+     */
+    public static ErrorScope fromMap(Map<String, ?> map) {
+        return new ErrorScope(
+                text(map, "job"),
+                text(map, "run"),
+                text(map, "node"),
+                number(map, "subtask"),
+                text(map, "table"),
+                text(map, "split"),
+                number(map, "line"),
+                number(map, "column"),
+                text(map, "path"));
+    }
+
+    private static @Nullable String text(Map<String, ?> map, String key) {
+        Object value = map.get(key);
+        return value == null ? null : value.toString();
+    }
+
+    private static @Nullable Integer number(Map<String, ?> map, String key) {
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.valueOf(value.toString().trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Scope " + key + " is not a number: " + value, e);
+        }
+    }
+
     /** The parts that are set, in order job, run, node, subtask, table, split, line, column, path. */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();

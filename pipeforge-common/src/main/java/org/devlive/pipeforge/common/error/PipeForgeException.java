@@ -153,13 +153,19 @@ public final class PipeForgeException extends RuntimeException {
                 causeChain(this));
     }
 
-    /** {@code Class: message} for every cause below {@code throwable}, without cycles. */
-    static List<String> causeChain(Throwable throwable) {
+    /**
+     * {@code Class: message} for every cause below {@code throwable}, without cycles; a {@link
+     * RemoteCause} contributes its text as it was reported.
+     */
+    public static List<String> causeChain(Throwable throwable) {
         List<String> chain = new ArrayList<>();
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Throwable current = throwable.getCause();
         while (current != null && seen.add(current)) {
-            chain.add(current.getClass().getName() + ": " + current.getMessage());
+            chain.add(
+                    current instanceof RemoteCause remote
+                            ? remote.text()
+                            : current.getClass().getName() + ": " + current.getMessage());
             current = current.getCause();
         }
         return chain;
