@@ -6,6 +6,15 @@
 #
 # Cluster and process errors.
 
+- code: PF-CLUS-0001
+  name: WORKER_LOST
+  message:
+    en-US: "Worker {worker} ({address}) sent no heartbeat for {seconds} s and was removed from the cluster"
+    zh-CN: "Worker {worker}（{address}）{seconds} 秒没有发送心跳，已从集群中移除"
+  hint:
+    en-US: "The worker stopped, is overloaded (long garbage collection pauses) or cannot reach the master over the network; its tasks fail. Read the end of the worker log."
+    zh-CN: "该 Worker 已停止、过载（长时间的垃圾回收停顿），或者与 Master 之间网络不通；它上面的 Task 会失败。请查看该 Worker 日志的末尾。"
+
 - code: PF-CLUS-0002
   name: SERVER_START_FAILED
   message:

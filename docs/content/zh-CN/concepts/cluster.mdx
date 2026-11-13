@@ -1,0 +1,82 @@
+---
+title: 集群
+description: PipeForge 集群的组成——一个 Master、多个带 Slot 的 Worker——以及 Master 如何知道哪些 Worker 存活、它们提供什么、何时失联。
+order: 70
+template: feature
+omit:
+  quickstart: Master 和 Worker 进程随集群发行包启动，发行包会在分布式运行时的后续步骤中提供；在此之前作业以本地模式运行。
+  configuration: 心跳间隔、超时、Slot 与标签在集群发行包的配置文件中设置；本页在“行为与语义”中列出它们的默认值。
+  examples: 当前版本还没有可以启动的集群；示例随发行包一起提供。
+---
+
+## 概述
+
+PipeForge 集群在多台机器上运行作业。集群中有一个负责调度的 **Master**，以及任意数量运行作业 Task 的 **Worker**。
+每个 Worker 提供固定数量的 **Slot**，一个 Slot 运行一个 Task 的一个并行实例。Server 把作业提交给 Master，并展示集群的运行情况。
+
+本页说明 Master 如何管理它的 Worker：Worker 如何加入、Master 如何知道它们存活、哪些 Slot 空闲，以及 Worker 消失时会发生什么。
+作业在 Task 内部如何运行见[执行](./execution)；进程之间的消息见[引擎协议](../development/engine-protocol)。
+
+## 原理
+
+```text
+Worker                                   Master（ResourceManager）
+  │── 注册：地址、Slot、标签、公钥 ──────────►│ 校验集群令牌与协议版本
+  │◄── Worker ID、心跳间隔、超时 ─────────────│
+  │── 心跳流 ────────────────────────────────►│ 每 5 秒：Slot 状态与运行中的 Task
+  │── 提供 Slot ─────────────────────────────►│ Slot 账本
+  │            …                              │
+  │   （30 秒没有心跳）                         │ Worker 失联：移除，其上的 Task 失败
+```
+
+- **注册**。Worker 注册时提供 Master 与其他 Worker 访问它的地址、资源、Slot 数量、标签，以及用于加密敏感选项的公钥。
+  Master 为它分配一个 ID；用原来的 ID 重新注册的 Worker 保留这个 ID，它的 Slot 重新变为空闲。
+- **心跳**。每个 Worker 与 Master 之间保持一条流，每 5 秒发送一次心跳，携带 Slot 状态和正在运行的 Task。
+  Master 不认识的 Worker 发来心跳时，会被要求重新注册——例如 Master 重启之后。
+- **Slot 账本**。Master 记录哪些 Slot 空闲、哪些正在运行哪个作业的 Task。调度器从账本中取空闲 Slot；
+  作业可以通过标签要求只使用带有这些标签的 Worker，例如 `zone=east`。
+- **Worker 失联**。30 秒没有发送心跳的 Worker 会被移出集群。Task 运行在它上面的 JobMaster 会收到
+  [`PF-CLUS-0001`](../reference/errors#pf-clus-0001)，并让这些 Task 失败。
+
+## 行为与语义
+
+| 设置 | 默认值 | 含义 |
+|---|---|---|
+| 心跳间隔 | 5 秒 | Worker 发送心跳的频率；Master 也按这个频率检查失联的 Worker |
+| 心跳超时 | 30 秒 | 多久没有心跳就认为 Worker 失联；必须大于心跳间隔 |
+| Slot | CPU 核数 | Worker 同时运行的 Task 实例数 |
+| 标签 | 无 | Worker 带有的键值对，例如 `zone=east`、`net=db-zone` |
+
+- 失联的 Worker 会被立即移除：在当前版本中，它上面的 Task 失败，作业随之失败，错误中包含该 Worker 以及没有心跳的时长。
+  在其他 Worker 上重新启动作业会随 checkpoint 与故障恢复一起提供。
+- 失联后又恢复的 Worker 会重新注册并提供空闲的 Slot；它仍在运行的 Task 属于已经失败的作业。
+- 只有当前的 Master 能控制 Worker：已被替换的 Master 发出的请求会被 Worker 拒绝。
+
+## 可观测性
+
+- Master 会记录每一次注册、重新注册和 Worker 失联；Worker 失联以警告级别记录，内容为 `PF-CLUS-0001` 的错误信息。
+- 因 Worker 失联而失败的作业显示 `PF-CLUS-0001`，其中包含该 Worker、它的地址以及没有心跳的秒数。
+
+## 性能与调优
+
+- 心跳是一条长期打开的流上的小消息；即使有上千个 Worker，Master 的开销也很小。
+- 超时越短，越早发现失联的 Worker，但较长的垃圾回收停顿或短暂的网络问题也可能让仍然存活的 Worker 被移除。超时应保持为间隔的数倍。
+
+## 排障
+
+| 错误 | 原因与处理 |
+|---|---|
+| `PF-CLUS-0001` `WORKER_LOST` | Worker 已停止、长时间停顿或网络中断。请查看 Worker 日志的末尾，检查它的内存和垃圾回收。 |
+| `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | Worker 的集群令牌与 Master 不同。 |
+| `PF-CLUS-0007` `RPC_VERSION_MISMATCH` | Worker 与 Master 的主版本不同；整个集群请使用同一个发行版本。 |
+
+## 限制
+
+- 作业目前仍以本地模式运行。本页关于 Worker 上 Task 与作业的描述，在作业运行于集群之后（分布式运行时的后续步骤）才适用。
+- 只有一个 Master；可以接管的备用 Master 随故障恢复一起提供。
+- 目前还没有命令能启动 Master 和 Worker 进程；当前版本提供的是集群发行包所使用的基础组件。
+- 资源组会被记录，但还没有用来限制一个组占用的 Slot 数量。
+
+## 版本
+
+自 0.1.0 起作为分布式运行时的一部分提供。

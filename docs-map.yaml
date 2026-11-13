@@ -57,11 +57,13 @@
   docs: ["development/api-overview", "concepts/expressions"]
 # The native engine. In local mode the runtime is described by the execution concept page; the
 # protocol between master, workers and server (engine-rpc) by the engine protocol page. New engine
-# modules register their own entry.
-- paths: ["pipeforge-engine/pom.xml", "pipeforge-engine/engine-api/**", "pipeforge-engine/engine-worker/**", "pipeforge-engine/engine-local/**"]
+# modules register their own entry; pipeforge-engine/pom.xml only lists the modules.
+- paths: ["pipeforge-engine/engine-api/**", "pipeforge-engine/engine-worker/**", "pipeforge-engine/engine-local/**"]
   docs: ["concepts/execution"]
 - paths: ["pipeforge-engine/engine-rpc/**", "pipeforge-engine/protocol-compat/**"]
   docs: ["development/engine-protocol"]
+- paths: ["pipeforge-engine/engine-master/**"]
+  docs: ["concepts/cluster"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
 # Plugins: every plugin module has its page; the conventions of plugin builds are part of packaging.

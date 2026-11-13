@@ -1,0 +1,101 @@
+---
+title: Cluster
+description: How a PipeForge cluster is organised — one master, many workers with slots — and how the master learns which workers live, what they offer and when one is lost.
+order: 70
+template: feature
+omit:
+  quickstart: The master and worker processes are started with the cluster distribution, which comes in a later step of the distributed runtime; jobs run in local mode until then.
+  configuration: The heartbeat interval, the timeout, slots and labels are set in the configuration files of the cluster distribution; this page lists their defaults under Behavior.
+  examples: There is no cluster to start in this version yet; examples follow with the distribution.
+---
+
+## Overview
+
+A PipeForge cluster runs jobs on several machines. It has one **master**, which schedules, and any
+number of **workers**, which run the tasks of jobs. Each worker offers a fixed number of **slots**;
+one slot runs one parallel instance of a task. The server submits jobs to the master and shows
+what the cluster does.
+
+This page explains how the master keeps track of its workers: how they join, how it knows that
+they are alive, which slots are free, and what happens when a worker disappears. How a job runs
+inside a task is described in [Execution](./execution); the messages between the processes are
+described in the [engine protocol](../development/engine-protocol).
+
+## How it works
+
+```text
+worker                                   master (resource manager)
+  │── register: address, slots, labels, key ──►│ checks the cluster token and the protocol version
+  │◄── worker ID, heartbeat interval, timeout ─│
+  │── heartbeat stream ───────────────────────►│ every 5 s: slots and running tasks
+  │── offer slots ────────────────────────────►│ slot ledger
+  │            …                               │
+  │   (no heartbeat for 30 s)                  │ worker lost: removed, its tasks fail
+```
+
+- **Registration.** A worker registers with the addresses where the master and other workers reach
+  it, its resources, the number of slots, its labels and the public key that sensitive options are
+  encrypted for. The master gives it an ID; a worker that registers again with its previous ID
+  keeps it, and its slots start free.
+- **Heartbeats.** Every worker keeps one stream to the master and sends a heartbeat every five
+  seconds with the state of its slots and the tasks it runs. A heartbeat from a worker the master
+  does not know asks the worker to register again — for example after the master restarted.
+- **The slot ledger.** The master records which slots are free and which run a task of which job.
+  The scheduler takes free slots from it; with labels, a job can ask for workers that carry them,
+  for example `zone=east`.
+- **Losing a worker.** A worker that sends no heartbeat for 30 seconds is removed from the cluster.
+  The job masters whose tasks ran there learn about it with
+  [`PF-CLUS-0001`](../reference/errors#pf-clus-0001) and fail those tasks.
+
+## Behavior
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Heartbeat interval | 5 s | How often a worker sends a heartbeat; the master also checks for lost workers this often |
+| Heartbeat timeout | 30 s | After how long without a heartbeat a worker counts as lost; it must be longer than the interval |
+| Slots | number of cores | How many task instances a worker runs at the same time |
+| Labels | none | Key and value pairs a worker carries, such as `zone=east` or `net=db-zone` |
+
+- A lost worker is removed at once: in this version its tasks fail and so does the job, with the
+  worker and the time without a heartbeat in the error. Restarting the job on other workers comes
+  with checkpoints and failover.
+- A worker that comes back after it was lost registers again and offers free slots; tasks that it
+  still runs belong to a job that has already failed.
+- Only the current master controls the workers: requests of a master that was replaced are refused
+  by the workers.
+
+## Observability
+
+- The master logs every registration, registration again and lost worker; a lost worker is logged
+  as a warning with the message of `PF-CLUS-0001`.
+- A job that failed because a worker was lost shows `PF-CLUS-0001` with the worker, its address and
+  the seconds without a heartbeat.
+
+## Performance and tuning
+
+- A heartbeat is a small message on a stream that stays open; thousands of workers cost the master
+  little.
+- A shorter timeout detects a lost worker sooner, but a long garbage collection pause or a short
+  network problem can then remove a worker that is still alive. Keep the timeout at several
+  intervals.
+
+## Troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-CLUS-0001` `WORKER_LOST` | The worker stopped, paused for a long time or lost the network. Read the end of the worker log; check its memory and garbage collection. |
+| `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | The worker has another cluster token than the master. |
+| `PF-CLUS-0007` `RPC_VERSION_MISMATCH` | The worker and the master are of different major versions; run one release in the whole cluster. |
+
+## Limitations
+
+- Jobs still run in local mode. What this page says about tasks and jobs on workers applies once
+  jobs run on the cluster, in a later step of the distributed runtime.
+- There is one master; a standby master that takes over comes with failover.
+- The master and worker processes are not yet started by any command; this version provides the
+  building blocks that the cluster distribution uses.
+- Resource groups are recorded but not yet used to limit how many slots a group takes.
+
+## Version history
+
+Available since 0.1.0 as part of the distributed runtime.

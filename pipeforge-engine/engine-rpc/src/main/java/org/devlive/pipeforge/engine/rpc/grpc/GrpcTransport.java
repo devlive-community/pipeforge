@@ -119,7 +119,7 @@ public final class GrpcTransport {
     // ----------------------------------------------------------------------------- call helpers
 
     /** {@code future} as a {@link CompletableFuture}. */
-    static <T> CompletableFuture<T> completable(ListenableFuture<T> future) {
+    public static <T> CompletableFuture<T> completable(ListenableFuture<T> future) {
         CompletableFuture<T> result = new CompletableFuture<>();
         Futures.addCallback(
                 future,
@@ -140,7 +140,7 @@ public final class GrpcTransport {
 
     /** Answers a unary call with an {@link Ack} once {@code work} is done, or with its error. */
     @SuppressWarnings("FutureReturnValueIgnored") // the callback completes another future
-    static void respond(StreamObserver<Ack> observer, CompletableFuture<?> work) {
+    public static void respond(StreamObserver<Ack> observer, CompletableFuture<?> work) {
         work.whenComplete((ignored, error) -> {
             if (error != null) {
                 observer.onError(RpcErrors.toStatus(error));

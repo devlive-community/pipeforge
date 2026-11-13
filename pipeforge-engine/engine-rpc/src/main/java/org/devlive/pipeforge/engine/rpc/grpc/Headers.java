@@ -28,7 +28,7 @@ public final class Headers {
     }
 
     /** A header with a new request ID and a deadline {@code timeout} from now. */
-    static Header create(Epochs epochs, Duration timeout, LongSupplier wallClockMillis) {
+    public static Header create(Epochs epochs, Duration timeout, LongSupplier wallClockMillis) {
         return Header.newBuilder()
                 .setProtocolVersion(ProtocolVersion.CURRENT.toString())
                 .setLeaderEpoch(epochs.leader())
@@ -43,7 +43,7 @@ public final class Headers {
      *
      * @throws PipeForgeException {@link ErrorCode#RPC_VERSION_MISMATCH} if it does not
      */
-    static void checkVersion(Header header) {
+    public static void checkVersion(Header header) {
         ProtocolVersion remote;
         try {
             remote = ProtocolVersion.parse(header.getProtocolVersion());

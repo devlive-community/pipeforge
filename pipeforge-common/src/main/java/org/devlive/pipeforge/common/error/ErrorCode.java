@@ -92,6 +92,7 @@ public final class ErrorCode {
     public static final ErrorCode PORT_IN_USE = define("PF-RES-0006", "PORT_IN_USE", "port");
 
     // Cluster and processes
+    public static final ErrorCode WORKER_LOST = define("PF-CLUS-0001", "WORKER_LOST", "worker", "address", "seconds");
     public static final ErrorCode SERVER_START_FAILED = define("PF-CLUS-0002", "SERVER_START_FAILED", "reason", "log");
     public static final ErrorCode DOCKER_NOT_AVAILABLE = define("PF-CLUS-0003", "DOCKER_NOT_AVAILABLE", "detail");
     public static final ErrorCode DEV_ENVIRONMENT_FAILED =
