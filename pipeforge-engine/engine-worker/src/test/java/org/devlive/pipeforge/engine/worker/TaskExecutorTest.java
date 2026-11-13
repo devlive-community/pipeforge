@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.worker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.List;
@@ -261,6 +262,43 @@ class TaskExecutorTest {
 
             assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
             assertThat(Probe.get(probe).events).contains("reader 0 closed");
+        }
+    }
+
+    @Test
+    void tasksRunInReservedSlots() throws Exception {
+        String probe = Probe.create();
+        SlotTable slots = new SlotTable("worker-1", 1);
+        try (ScriptedMaster master = ScriptedMaster.tenRows(slots)) {
+            TaskExecutor executor = master.executor;
+            var plan = TestConnectors.job(probe, "", "", "", 1);
+            var plain = ScriptedMaster.deployment(plan, ScriptedMaster.settings());
+            var unreserved = new org.devlive.pipeforge.engine.rpc.TaskDeployment(
+                    plain.id(), plain.chain(), 1, plain.settings(), plain.run(), "alloc-1");
+            assertThatThrownBy(() -> executor.deployTask(unreserved).get())
+                    .hasRootCauseMessage("No slot of worker worker-1 is reserved for allocation alloc-1");
+
+            executor.requestSlot(new org.devlive.pipeforge.engine.rpc.SlotRequest("job", "run", "alloc-1", 0))
+                    .get();
+            assertThatThrownBy(() -> executor.requestSlot(
+                                    new org.devlive.pipeforge.engine.rpc.SlotRequest("job", "run", "alloc-2", 0))
+                            .get())
+                    .hasRootCauseInstanceOf(org.devlive.pipeforge.common.error.PipeForgeException.class);
+            executor.deployTask(unreserved).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.FINISHED);
+            executor.freeSlot("alloc-1").get();
+            assertThat(slots.snapshot().get(0).allocated()).isFalse();
+        }
+    }
+
+    @Test
+    void anExecutorWithoutSlotsRefusesReservations() throws Exception {
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            assertThatThrownBy(() -> master.executor
+                            .requestSlot(new org.devlive.pipeforge.engine.rpc.SlotRequest("job", "run", "a", 0))
+                            .get())
+                    .hasRootCauseMessage("This task executor runs tasks without reserved slots");
+            master.executor.freeSlot("a").get();
         }
     }
 

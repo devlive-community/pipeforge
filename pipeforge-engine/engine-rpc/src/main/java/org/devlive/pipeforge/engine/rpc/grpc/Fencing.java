@@ -39,6 +39,18 @@ public final class Fencing {
         jobs.put(run, header.getJobEpoch());
     }
 
+    /**
+     * Accepts the leader epoch of a request that concerns no single run, such as releasing a slot.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RPC_STALE_EPOCH} if it is smaller than known
+     */
+    public synchronized void checkLeader(Header header) {
+        if (header.getLeaderEpoch() < leader) {
+            throw stale("leader", header.getLeaderEpoch(), leader);
+        }
+        leader = header.getLeaderEpoch();
+    }
+
     /** Forgets a run that ended. */
     public void forget(String run) {
         jobs.remove(run);

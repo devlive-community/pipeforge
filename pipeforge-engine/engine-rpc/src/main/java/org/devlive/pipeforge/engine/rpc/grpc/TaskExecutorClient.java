@@ -21,6 +21,7 @@ import org.devlive.pipeforge.engine.rpc.ChainCodec;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.ProtoMapping;
+import org.devlive.pipeforge.engine.rpc.SlotRequest;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
 import org.devlive.pipeforge.engine.rpc.proto.CancelTaskRequest;
@@ -68,6 +69,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
             request.setHeader(Headers.create(epochs.get(), DEPLOY_TIMEOUT, System::currentTimeMillis))
                     .setId(ProtoMapping.toProto(deployment.id()))
                     .setChainDescriptor(ByteString.copyFrom(encoded.descriptor()))
+                    .setAllocationId(deployment.allocationId() == null ? "" : deployment.allocationId())
                     .setParallelism(deployment.parallelism())
                     .setSettings(ProtoMapping.toProto(deployment.settings()));
             for (PlannedNode node : deployment.chain().nodes()) {
@@ -111,6 +113,29 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                 .build();
         return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
                 .sendOperatorEvent(request));
+    }
+
+    @Override
+    public CompletableFuture<Void> requestSlot(SlotRequest slot) {
+        var request = org.devlive.pipeforge.engine.rpc.proto.SlotRequest.newBuilder()
+                .setHeader(Headers.create(epochs.get(), TIMEOUT, System::currentTimeMillis))
+                .setJobId(slot.jobId())
+                .setRunId(slot.runId())
+                .setAllocationId(slot.allocationId())
+                .setSlotIndex(slot.slot())
+                .build();
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .requestSlot(request));
+    }
+
+    @Override
+    public CompletableFuture<Void> freeSlot(String allocationId) {
+        var request = org.devlive.pipeforge.engine.rpc.proto.FreeSlotRequest.newBuilder()
+                .setHeader(Headers.create(epochs.get(), TIMEOUT, System::currentTimeMillis))
+                .setAllocationId(allocationId)
+                .build();
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .freeSlot(request));
     }
 
     /** Forgets the event numbers of a task that ended. */

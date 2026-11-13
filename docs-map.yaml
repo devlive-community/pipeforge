@@ -62,7 +62,7 @@
   docs: ["concepts/execution"]
 - paths: ["pipeforge-engine/engine-rpc/**", "pipeforge-engine/protocol-compat/**"]
   docs: ["development/engine-protocol"]
-- paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ResourceManager*.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MasterConnection.java"]
+- paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ResourceManager*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Scheduler.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/SlotTable.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MasterConnection.java"]
   docs: ["concepts/cluster"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/graph/**"]
   docs: ["concepts/execution"]

@@ -44,14 +44,23 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
     final TaskExecutor executor;
 
     ScriptedMaster(List<SerializedValue> splits) {
+        this(splits, null);
+    }
+
+    ScriptedMaster(List<SerializedValue> splits, @org.jspecify.annotations.Nullable SlotTable slots) {
         this.splits.addAll(splits);
         endpoint = InProcessRpc.serve("test-master", this);
-        executor = new TaskExecutor("test", endpoint.gateway());
+        executor = new TaskExecutor("test", endpoint.gateway(), slots);
     }
 
     /** Ten rows in two splits. */
     static ScriptedMaster tenRows() {
-        return new ScriptedMaster(List.of(TestConnectors.split("a", 0, 5), TestConnectors.split("b", 5, 10)));
+        return tenRows(null);
+    }
+
+    /** Ten rows in two splits, for an executor with {@code slots}. */
+    static ScriptedMaster tenRows(@org.jspecify.annotations.Nullable SlotTable slots) {
+        return new ScriptedMaster(List.of(TestConnectors.split("a", 0, 5), TestConnectors.split("b", 5, 10)), slots);
     }
 
     static TaskDeployment deployment(JobPlan plan, TaskSettings settings) {

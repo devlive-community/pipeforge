@@ -40,6 +40,16 @@ public final class InProcessRpc {
             public CompletableFuture<Void> sendOperatorEvent(ExecutionAttemptId task, OperatorEvent event) {
                 return dispatcher.dispatch(() -> target.sendOperatorEvent(task, event));
             }
+
+            @Override
+            public CompletableFuture<Void> requestSlot(SlotRequest request) {
+                return dispatcher.dispatch(() -> target.requestSlot(request));
+            }
+
+            @Override
+            public CompletableFuture<Void> freeSlot(String allocationId) {
+                return dispatcher.dispatch(() -> target.freeSlot(allocationId));
+            }
         };
         return new Endpoint<>(proxy, dispatcher);
     }

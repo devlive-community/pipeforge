@@ -21,9 +21,11 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
+import org.devlive.pipeforge.engine.rpc.SlotRequest;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
 import org.devlive.pipeforge.engine.rpc.TaskState;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Runs the tasks of a worker. Each task has its own thread; the executor deploys them, routes
@@ -38,7 +40,10 @@ import org.devlive.pipeforge.engine.rpc.TaskState;
  */
 public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, AutoCloseable {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(TaskExecutor.class);
+
     private final JobMasterGateway master;
+    private final @Nullable SlotTable slots;
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService watchdog;
     private final Map<ExecutionAttemptId, ScheduledFuture<?>> reporters = new ConcurrentHashMap<>();
@@ -47,17 +52,73 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
      * @param name the worker name, used in thread names
      * @param master where the tasks report to
      */
+    /** Without slots: tasks run as they are deployed, as in local runs. */
     public TaskExecutor(String name, JobMasterGateway master) {
+        this(name, master, null);
+    }
+
+    /**
+     * With the slots of a worker: tasks run in slots that a job master reserved, and reservations
+     * that no task used are released after {@link SlotTable#UNUSED_TIMEOUT}.
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
+    public TaskExecutor(String name, JobMasterGateway master, @Nullable SlotTable slots) {
         this.master = master;
+        this.slots = slots;
         this.watchdog = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "task-watchdog-" + name);
             thread.setDaemon(true);
             return thread;
         });
+        if (slots != null) {
+            watchdog.scheduleWithFixedDelay(this::releaseUnusedSlots, 1, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    private void releaseUnusedSlots() {
+        SlotTable table = slots;
+        if (table != null) {
+            for (SlotRequest released : table.expire()) {
+                LOG.info(
+                        "Released slot {} of job {}: no task arrived within {} s",
+                        released.slot(),
+                        released.jobId(),
+                        SlotTable.UNUSED_TIMEOUT.toSeconds());
+            }
+        }
+    }
+
+    @Override
+    public CompletableFuture<Void> requestSlot(SlotRequest request) {
+        if (slots == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("This task executor runs tasks without reserved slots"));
+        }
+        try {
+            slots.reserve(request);
+            return CompletableFuture.completedFuture(null);
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Void> freeSlot(String allocationId) {
+        if (slots != null) {
+            slots.free(allocationId);
+        }
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<Void> deployTask(TaskDeployment deployment) {
+        if (slots != null && deployment.allocationId() != null) {
+            try {
+                slots.use(deployment.allocationId());
+            } catch (IllegalStateException e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        }
         Task task = new Task(deployment, master, this::terminated);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(

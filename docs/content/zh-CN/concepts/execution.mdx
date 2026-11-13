@@ -41,7 +41,7 @@ Task src-1：reader → map → writer        线程 task-src-1（+ writer-src-1
 | `table`、`broadcast` | 引擎认识它们，但目前还没有规则会选择它们 |
 
 **执行图**把每条链按并行度展开为 Task。通过边相连的 Task 组成一个 **Region**；互不交换数据的 Task 属于不同的 Region，
-一个 Region 失败不会影响其他 Region。各条链共享 Slot：每条链的实例 i 运行在 Slot i 中，因此作业需要的 Slot 数等于它的最大并行度。
+一个 Region 失败不会影响其他 Region。各条链共享 Slot：每条链的实例 i 运行在 Slot i 中，因此作业需要的 Slot 数等于它的最大并行度。在集群上，每个 Task 都运行在调度器为作业在其 Worker 上预留的 Slot 中。
 
 ```text
 cdc (p=1) → route (p=1) → doris (p=4)，含更新

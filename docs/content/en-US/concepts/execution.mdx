@@ -51,7 +51,8 @@ an edge decides how rows are distributed over the instances of the next chain:
 The **execution graph** expands every chain by its parallelism into tasks. Tasks connected by
 edges form a **region**; tasks that exchange no rows are in separate regions, so a failure of one
 does not touch the others. Chains share slots: instance i of every chain runs in slot i, so a job
-needs as many slots as its largest parallelism.
+needs as many slots as its largest parallelism. On a cluster, every task runs in a slot that the
+scheduler reserved for the job on its worker.
 
 ```text
 cdc (p=1) → route (p=1) → doris (p=4), with updates

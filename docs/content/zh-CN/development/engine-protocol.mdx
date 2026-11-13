@@ -62,7 +62,7 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
 |---|---|
 | 谁可以调用 | 每次调用都在元数据 `pipeforge-cluster-token` 中携带集群令牌；服务端拒绝其他调用，错误码为 [`PF-CLUS-0005`](../reference/errors#pf-clus-0005)。 |
 | 加密 | 可选 TLS。服务端出示 PKCS#12 密钥库中的证书；客户端只信任 PKCS#12 信任库中的证书，拒绝其他服务端。 |
-| 被替换的 Master | Worker 记住见过的最大 leader epoch 和 job epoch，拒绝更小 epoch 的请求（[`PF-CLUS-0006`](../reference/errors#pf-clus-0006)），因此只有当前的 Master 能控制它的 Task。 |
+| 被替换的 Master | Worker 记住见过的最大 leader epoch 和 job epoch，拒绝更小 epoch 的请求（[`PF-CLUS-0006`](../reference/errors#pf-clus-0006)），因此只有当前的 Master 能控制它的 Task。释放 Slot 不属于某一次运行，只校验 leader epoch。 |
 | 版本 | 协议主版本不同的请求被拒绝，错误码为 [`PF-CLUS-0007`](../reference/errors#pf-clus-0007)。 |
 | 丢失的应答 | 没有得到应答（不可用或超过截止时间）的请求最多再发送三次，指数退避，请求 ID 不变。接收方对每个请求 ID 只执行一次，十分钟内对重复的请求返回第一次的结果。被拒绝的请求从不重试；最后一次重试仍失败时，调用方以 [`PF-CLUS-0008`](../reference/errors#pf-clus-0008) 失败。 |
 | 顺序 | 分片分配与分片请求按 Task 和节点编号；即使乱序到达，接收方也按编号顺序、只交付一次。 |

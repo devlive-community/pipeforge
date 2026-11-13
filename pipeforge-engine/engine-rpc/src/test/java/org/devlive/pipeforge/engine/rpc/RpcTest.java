@@ -142,6 +142,16 @@ class RpcTest {
             public CompletableFuture<Void> sendOperatorEvent(ExecutionAttemptId task, OperatorEvent event) {
                 return CompletableFuture.completedFuture(null);
             }
+
+            @Override
+            public CompletableFuture<Void> requestSlot(SlotRequest request) {
+                return CompletableFuture.failedFuture(new IllegalStateException("slot " + request.slot() + " taken"));
+            }
+
+            @Override
+            public CompletableFuture<Void> freeSlot(String allocationId) {
+                return CompletableFuture.completedFuture(null);
+            }
         };
         InProcessRpc.Endpoint<TaskExecutorGateway> endpoint = InProcessRpc.serve("w", target);
         TaskExecutorGateway gateway = endpoint.gateway();
@@ -153,6 +163,11 @@ class RpcTest {
                 .hasRootCauseMessage("unknown");
         assertThat(gateway.sendOperatorEvent(TASK, new OperatorEvent.NoMoreSplits("src")))
                 .succeedsWithin(5, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> gateway.requestSlot(new SlotRequest("job", "run", "a1", 2))
+                        .get(5, TimeUnit.SECONDS))
+                .hasRootCauseMessage("slot 2 taken");
+        assertThat(gateway.freeSlot("a1")).succeedsWithin(5, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> new SlotRequest("job", "run", "a1", -1)).isInstanceOf(IllegalArgumentException.class);
         endpoint.close();
         assertThat(gateway.cancelTask(TASK)).isCompletedExceptionally();
     }

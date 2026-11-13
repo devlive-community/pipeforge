@@ -43,6 +43,14 @@ worker                                   master (resource manager)
 - **The slot ledger.** The master records which slots are free and which run a task of which job.
   The scheduler takes free slots from it; with labels, a job can ask for workers that carry them,
   for example `zone=east`.
+- **Scheduling.** A job needs as many slots as its largest parallelism (see
+  [Execution](./execution)). The scheduler reserves them all at once among the free slots of the
+  workers that carry the job's labels: `spread`, the default, takes one slot per worker in turn, so
+  the instances of a job run on as many workers as possible; `pack` fills one worker before the
+  next, for less network traffic. Each worker reserves its slot for the job; a reservation that no
+  task uses within 60 seconds is released by the worker. A job that finds too few free slots waits
+  and is tried again as slots become free; after `scheduler.slot-request-timeout` (5 minutes) it
+  fails with [`PF-RES-0001`](../reference/errors#pf-res-0001).
 - **Losing the master.** A worker that gets no answer to its heartbeats for the timeout the master
   gave considers itself cut off: it cancels all its tasks, because only the current master may
   control them, and keeps trying to register — every second by default. When the master answers
@@ -59,6 +67,9 @@ worker                                   master (resource manager)
 | Heartbeat timeout | 30 s | After how long without a heartbeat a worker counts as lost; it must be longer than the interval |
 | Slots | number of cores | How many task instances a worker runs at the same time (`worker.slots`) |
 | Registration retry | 1 s | How often a worker that is not connected tries to register |
+| Placement | `spread` | `spread` or `pack`, see Scheduling above |
+| Slot request timeout | 5 min | How long a job waits for free slots (`scheduler.slot-request-timeout`) |
+| Unused reservation | 60 s | After how long a worker releases a slot that no task used |
 | Labels | none | Key and value pairs a worker carries, such as `zone=east` or `net=db-zone` |
 
 - A lost worker is removed at once: in this version its tasks fail and so does the job, with the
@@ -91,6 +102,8 @@ worker                                   master (resource manager)
 | Error | Cause and fix |
 |---|---|
 | `PF-CLUS-0001` `WORKER_LOST` | The worker stopped, paused for a long time or lost the network. Read the end of the worker log; check its memory and garbage collection. |
+| `PF-RES-0001` `SLOTS_INSUFFICIENT` | Fewer free slots than the job needs, on workers with its labels. Add workers or slots, lower the parallelism, relax the labels or wait for other jobs. |
+| `PF-RES-0007` `SLOT_TAKEN` | Two jobs reserved the same slot at once; the scheduler takes another one by itself. |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | The worker has another cluster token than the master. |
 | `PF-CLUS-0007` `RPC_VERSION_MISMATCH` | The worker and the master are of different major versions; run one release in the whole cluster. |
 

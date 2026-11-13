@@ -96,6 +96,7 @@ public final class MasterConnection implements AutoCloseable {
     private final Config config;
     private final byte[] publicKey;
     private final LocalTasks tasks;
+    private final SlotTable slots;
     private final LongSupplier nanoTime;
 
     private State state = State.REGISTERING;
@@ -112,17 +113,29 @@ public final class MasterConnection implements AutoCloseable {
 
     /**
      * @param publicKey the X25519 key that sensitive options are sealed for
+     * @param slots the slots of the worker, as {@link TaskExecutor} reserves them
      */
-    public MasterConnection(Channel channel, Config config, byte[] publicKey, LocalTasks tasks) {
-        this(channel, config, publicKey, tasks, System::nanoTime);
+    public MasterConnection(Channel channel, Config config, byte[] publicKey, LocalTasks tasks, SlotTable slots) {
+        this(channel, config, publicKey, tasks, slots, System::nanoTime);
     }
 
-    MasterConnection(Channel channel, Config config, byte[] publicKey, LocalTasks tasks, LongSupplier nanoTime) {
+    MasterConnection(
+            Channel channel,
+            Config config,
+            byte[] publicKey,
+            LocalTasks tasks,
+            SlotTable slots,
+            LongSupplier nanoTime) {
+        if (slots.size() != config.slots()) {
+            throw new IllegalArgumentException(
+                    "The slot table has " + slots.size() + " slot(s), worker.slots says " + config.slots());
+        }
         this.calls = ResourceManagerServiceGrpc.newFutureStub(channel);
         this.streams = ResourceManagerServiceGrpc.newStub(channel);
         this.config = config;
         this.publicKey = publicKey.clone();
         this.tasks = tasks;
+        this.slots = slots;
         this.nanoTime = nanoTime;
     }
 
@@ -226,17 +239,13 @@ public final class MasterConnection implements AutoCloseable {
     @SuppressWarnings("FutureReturnValueIgnored") // a lost offer is repeated by every heartbeat
     private void offerSlots() {
         var report = SlotReport.newBuilder().setHeader(header()).setWorkerId(Objects.requireNonNull(workerId));
-        for (int i = 0; i < config.slots(); i++) {
-            report.addSlots(SlotStatus.newBuilder().setIndex(i));
-        }
+        report.addAllSlots(slotStates());
         calls.withDeadlineAfter(CALL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).offerSlots(report.build());
     }
 
     private void heartbeat(long now) {
         var beat = WorkerHeartbeat.newBuilder().setWorkerId(Objects.requireNonNull(workerId));
-        for (int i = 0; i < config.slots(); i++) {
-            beat.addSlots(SlotStatus.newBuilder().setIndex(i));
-        }
+        beat.addAllSlots(slotStates());
         tasks.taskStates()
                 .forEach((id, taskState) -> beat.addTasks(RunningTask.newBuilder()
                         .setId(ProtoMapping.toProto(id))
@@ -262,6 +271,19 @@ public final class MasterConnection implements AutoCloseable {
         }
         heartbeats.onNext(beat.build());
         lastSent = now;
+    }
+
+    private java.util.List<SlotStatus> slotStates() {
+        return slots.snapshot().stream()
+                .map(slot -> {
+                    var status = SlotStatus.newBuilder().setIndex(slot.index()).setAllocated(slot.allocated());
+                    if (slot.allocated()) {
+                        status.setJobId(Objects.requireNonNull(slot.jobId()))
+                                .setAllocationId(Objects.requireNonNull(slot.allocationId()));
+                    }
+                    return status.build();
+                })
+                .toList();
     }
 
     private synchronized void answered(HeartbeatAck ack) {

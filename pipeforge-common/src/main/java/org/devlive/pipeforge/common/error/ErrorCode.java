@@ -89,6 +89,9 @@ public final class ErrorCode {
     // Resources
     public static final ErrorCode CANCEL_TIMEOUT =
             define("PF-RES-0005", "CANCEL_TIMEOUT", "node", "subtask", "timeoutMs");
+    public static final ErrorCode SLOTS_INSUFFICIENT =
+            define("PF-RES-0001", "SLOTS_INSUFFICIENT", "job", "required", "available", "timeout");
+    public static final ErrorCode SLOT_TAKEN = define("PF-RES-0007", "SLOT_TAKEN", "worker", "slot", "holder");
     public static final ErrorCode PORT_IN_USE = define("PF-RES-0006", "PORT_IN_USE", "port");
 
     // Cluster and processes

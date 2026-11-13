@@ -137,10 +137,16 @@ public final class ResourceManager {
         void workerLost(WorkerLost lost);
     }
 
+    /** How long a reservation of the master waits for the worker to report it. */
+    static final Duration PENDING = Duration.ofSeconds(60);
+
     private static final class Entry {
         final String id;
         final WorkerSpec spec;
         List<Slot> slots;
+        /** Reservations of the master that the worker has not reported yet: index to deadline. */
+        final Map<Integer, Long> pending = new LinkedHashMap<>();
+
         List<RunningTask> tasks = List.of();
         long lastHeartbeat;
 
@@ -225,16 +231,74 @@ public final class ResourceManager {
         return true;
     }
 
-    /** The reported slots, limited to the slots the worker registered with. */
-    private static List<Slot> merge(Entry entry, List<Slot> reported) {
+    /**
+     * The reported slots, limited to the slots the worker registered with. A reservation of the
+     * master that the worker has not reported yet stays, until the worker reports it or the
+     * reservation is older than {@link #PENDING}: a report may have left the worker before the
+     * reservation arrived.
+     */
+    private List<Slot> merge(Entry entry, List<Slot> reported) {
+        long now = nanoTime.getAsLong();
         Map<Integer, Slot> byIndex = new LinkedHashMap<>();
         entry.slots.forEach(s -> byIndex.put(s.index(), s));
         for (Slot slot : reported) {
-            if (slot.index() >= 0 && slot.index() < entry.spec.slots()) {
-                byIndex.put(slot.index(), slot);
+            if (slot.index() < 0 || slot.index() >= entry.spec.slots()) {
+                continue;
             }
+            Long deadline = entry.pending.get(slot.index());
+            Slot known = byIndex.get(slot.index());
+            if (deadline != null) {
+                boolean confirmed = slot.allocated() && Objects.equals(slot.allocationId(), known.allocationId());
+                if (!confirmed && now - deadline < 0) {
+                    continue;
+                }
+                entry.pending.remove(slot.index());
+            }
+            byIndex.put(slot.index(), slot);
         }
         return List.copyOf(byIndex.values());
+    }
+
+    /**
+     * Records that the master reserved {@code slot} for a job, before the worker reports it;
+     * returns {@code false} when the slot is no longer free or the worker is gone.
+     */
+    public synchronized boolean reserve(FreeSlot slot, String jobId, String allocationId) {
+        Entry entry = workers.get(slot.workerId());
+        if (entry == null) {
+            return false;
+        }
+        List<Slot> slots = new ArrayList<>(entry.slots);
+        for (int i = 0; i < slots.size(); i++) {
+            Slot current = slots.get(i);
+            if (current.index() == slot.index()) {
+                if (current.allocated()) {
+                    return false;
+                }
+                slots.set(i, new Slot(slot.index(), true, jobId, allocationId));
+                entry.slots = List.copyOf(slots);
+                entry.pending.put(slot.index(), nanoTime.getAsLong() + PENDING.toNanos());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Frees the slot that {@code allocationId} holds on a worker, if it still does. */
+    public synchronized void release(String workerId, int index, String allocationId) {
+        Entry entry = workers.get(workerId);
+        if (entry == null) {
+            return;
+        }
+        List<Slot> slots = new ArrayList<>(entry.slots);
+        for (int i = 0; i < slots.size(); i++) {
+            Slot current = slots.get(i);
+            if (current.index() == index && allocationId.equals(current.allocationId())) {
+                slots.set(i, Slot.free(index));
+                entry.pending.remove(index);
+            }
+        }
+        entry.slots = List.copyOf(slots);
     }
 
     /**

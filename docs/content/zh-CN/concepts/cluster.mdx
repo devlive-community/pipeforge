@@ -35,6 +35,11 @@ Worker                                   Master（ResourceManager）
   Master 不认识的 Worker 发来心跳时，会被要求重新注册——例如 Master 重启之后。
 - **Slot 账本**。Master 记录哪些 Slot 空闲、哪些正在运行哪个作业的 Task。调度器从账本中取空闲 Slot；
   作业可以通过标签要求只使用带有这些标签的 Worker，例如 `zone=east`。
+- **调度**。作业需要的 Slot 数等于它的最大并行度（见[执行](./execution)）。调度器在带有作业所需标签的 Worker 的空闲 Slot 中
+  一次性预留全部 Slot：默认的 `spread` 轮流在每个 Worker 上取一个 Slot，让作业的实例分布在尽可能多的 Worker 上；`pack`
+  先占满一个 Worker 再用下一个，以减少网络传输。每个 Worker 为作业预留自己的 Slot；60 秒内没有 Task 使用的预留由 Worker 释放。
+  空闲 Slot 不足的作业会排队，Slot 空出时重新尝试；超过 `scheduler.slot-request-timeout`（5 分钟）后以
+  [`PF-RES-0001`](../reference/errors#pf-res-0001) 失败。
 - **与 Master 失联**。在 Master 给出的超时时间内心跳都没有得到应答的 Worker，会认为自己已与 Master 断开：它取消自己的所有 Task
   （只有当前的 Master 可以控制它们），并不断尝试重新注册，默认每秒一次。Master 再次应答后，Worker 用原来的 ID 注册并提供它的 Slot。
 - **Worker 失联**。30 秒没有发送心跳的 Worker 会被移出集群。Task 运行在它上面的 JobMaster 会收到
@@ -48,6 +53,9 @@ Worker                                   Master（ResourceManager）
 | 心跳超时 | 30 秒 | 多久没有心跳就认为 Worker 失联；必须大于心跳间隔 |
 | Slot | CPU 核数 | Worker 同时运行的 Task 实例数（`worker.slots`） |
 | 注册重试 | 1 秒 | 未连接的 Worker 尝试注册的频率 |
+| 放置策略 | `spread` | `spread` 或 `pack`，见上文“调度” |
+| Slot 等待超时 | 5 分钟 | 作业等待空闲 Slot 的最长时间（`scheduler.slot-request-timeout`） |
+| 未使用的预留 | 60 秒 | 没有 Task 使用的 Slot 预留多久后由 Worker 释放 |
 | 标签 | 无 | Worker 带有的键值对，例如 `zone=east`、`net=db-zone` |
 
 - 失联的 Worker 会被立即移除：在当前版本中，它上面的 Task 失败，作业随之失败，错误中包含该 Worker 以及没有心跳的时长。
@@ -71,6 +79,8 @@ Worker                                   Master（ResourceManager）
 | 错误 | 原因与处理 |
 |---|---|
 | `PF-CLUS-0001` `WORKER_LOST` | Worker 已停止、长时间停顿或网络中断。请查看 Worker 日志的末尾，检查它的内存和垃圾回收。 |
+| `PF-RES-0001` `SLOTS_INSUFFICIENT` | 带有作业所需标签的 Worker 上空闲 Slot 少于作业的需要。请增加 Worker 或 Slot、降低并行度、放宽标签，或者等待其他作业结束。 |
+| `PF-RES-0007` `SLOT_TAKEN` | 两个作业同时预留了同一个 Slot；调度器会自动改用其他 Slot。 |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | Worker 的集群令牌与 Master 不同。 |
 | `PF-CLUS-0007` `RPC_VERSION_MISMATCH` | Worker 与 Master 的主版本不同；整个集群请使用同一个发行版本。 |
 

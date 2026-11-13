@@ -81,7 +81,7 @@ repeat:
 |---|---|
 | Who may call | Every call carries the cluster token in the metadata `pipeforge-cluster-token`; a server refuses others with [`PF-CLUS-0005`](../reference/errors#pf-clus-0005). |
 | Encryption | Optional TLS. The server presents the certificate of a PKCS#12 key store; clients trust the certificates of a PKCS#12 trust store and refuse any other server. |
-| Replaced masters | A worker remembers the largest leader and job epoch it has seen and refuses requests with a smaller one ([`PF-CLUS-0006`](../reference/errors#pf-clus-0006)), so only the current master controls its tasks. |
+| Replaced masters | A worker remembers the largest leader and job epoch it has seen and refuses requests with a smaller one ([`PF-CLUS-0006`](../reference/errors#pf-clus-0006)), so only the current master controls its tasks. Releasing a slot concerns no single run and is checked against the leader epoch only. |
 | Versions | A request of another major protocol version is refused with [`PF-CLUS-0007`](../reference/errors#pf-clus-0007). |
 | Lost answers | A request that got no answer (unavailable, or past its deadline) is sent again up to three times, with exponential backoff and the same request ID. The receiver runs every request ID once and answers repeats with the first result for ten minutes. A refusal is never retried; after the last retry the caller fails with [`PF-CLUS-0008`](../reference/errors#pf-clus-0008). |
 | Order | Split assignments and split requests are numbered per task and node; the receiver hands them over in that order, once, even when they arrive out of order. |

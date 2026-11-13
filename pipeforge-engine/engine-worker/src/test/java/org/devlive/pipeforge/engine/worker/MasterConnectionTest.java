@@ -55,6 +55,7 @@ class MasterConnectionTest {
 
     final String name = "master-" + UUID.randomUUID();
     final Tasks tasks = new Tasks();
+    final SlotTable slots = new SlotTable("worker-1:6124", 3);
     final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     ResourceManager manager;
     Server server;
@@ -71,7 +72,8 @@ class MasterConnectionTest {
                 new MasterConnection.Config(
                         "worker-1:6124", "worker-1:6125", 3, Map.of("zone", "east"), "etl", Duration.ofMillis(20)),
                 new byte[32],
-                tasks);
+                tasks,
+                slots);
         connection.start(scheduler);
     }
 

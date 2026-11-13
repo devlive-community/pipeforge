@@ -20,6 +20,7 @@ import org.devlive.pipeforge.engine.rpc.ChainCodec;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.ProtoMapping;
+import org.devlive.pipeforge.engine.rpc.SlotRequest;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
 import org.devlive.pipeforge.engine.rpc.proto.Ack;
@@ -27,12 +28,13 @@ import org.devlive.pipeforge.engine.rpc.proto.CancelTaskRequest;
 import org.devlive.pipeforge.engine.rpc.proto.Header;
 import org.devlive.pipeforge.engine.rpc.proto.SecretBundle;
 import org.devlive.pipeforge.engine.rpc.proto.TaskExecutorServiceGrpc;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The gRPC side of a worker: checks the protocol version and the epochs of every request, runs each
  * request ID once, decrypts the sensitive options, rebuilds the task description with the worker's
  * plugins and hands operator events over in order, then calls the worker's {@link
- * TaskExecutorGateway}. RPCs of later steps (slots, logs) answer {@code UNIMPLEMENTED}.
+ * TaskExecutorGateway}. Reading task logs answers {@code UNIMPLEMENTED} until the log service.
  */
 public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecutorServiceImplBase {
 
@@ -89,7 +91,8 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
                 decoded.chain(),
                 request.getParallelism(),
                 ProtoMapping.fromProto(request.getSettings()),
-                decoded.run());
+                decoded.run(),
+                request.getAllocationId().isEmpty() ? null : request.getAllocationId());
     }
 
     @Override
@@ -117,11 +120,32 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
         });
     }
 
-    private void handle(StreamObserver<Ack> observer, Header header, String run, Supplier<CompletableFuture<?>> work) {
+    @Override
+    public void requestSlot(org.devlive.pipeforge.engine.rpc.proto.SlotRequest request, StreamObserver<Ack> observer) {
+        handle(
+                observer,
+                request.getHeader(),
+                request.getRunId(),
+                () -> target.requestSlot(new SlotRequest(
+                        request.getJobId(), request.getRunId(), request.getAllocationId(), request.getSlotIndex())));
+    }
+
+    @Override
+    public void freeSlot(org.devlive.pipeforge.engine.rpc.proto.FreeSlotRequest request, StreamObserver<Ack> observer) {
+        // a release carries no run: it is checked against the leader epoch only
+        handle(observer, request.getHeader(), null, () -> target.freeSlot(request.getAllocationId()));
+    }
+
+    private void handle(
+            StreamObserver<Ack> observer, Header header, @Nullable String run, Supplier<CompletableFuture<?>> work) {
         CompletableFuture<?> result;
         try {
             Headers.checkVersion(header);
-            fencing.check(header, run);
+            if (run == null) {
+                fencing.checkLeader(header);
+            } else {
+                fencing.check(header, run);
+            }
             result = requests.run(header.getRequestId(), () -> {
                 try {
                     return work.get().thenApply(ignored -> null);

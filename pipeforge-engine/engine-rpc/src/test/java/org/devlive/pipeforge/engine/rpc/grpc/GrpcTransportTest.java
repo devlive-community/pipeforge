@@ -40,6 +40,7 @@ import org.devlive.pipeforge.engine.rpc.OperatorSnapshot;
 import org.devlive.pipeforge.engine.rpc.ProtoMapping;
 import org.devlive.pipeforge.engine.rpc.ReaderMessage;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
+import org.devlive.pipeforge.engine.rpc.SlotRequest;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
 import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
@@ -81,6 +82,28 @@ class GrpcTransportTest {
         @Override
         public CompletableFuture<Void> sendOperatorEvent(ExecutionAttemptId task, OperatorEvent event) {
             events.add(event);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        final List<SlotRequest> reserved = new CopyOnWriteArrayList<>();
+        final List<String> freed = new CopyOnWriteArrayList<>();
+
+        @Override
+        public CompletableFuture<Void> requestSlot(SlotRequest request) {
+            if (request.slot() == 9) {
+                return CompletableFuture.failedFuture(PipeForgeException.of(ErrorCode.SLOT_TAKEN)
+                        .param("worker", "worker-1")
+                        .param("slot", 9)
+                        .param("holder", "other")
+                        .build());
+            }
+            reserved.add(request);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> freeSlot(String allocationId) {
+            freed.add(allocationId);
             return CompletableFuture.completedFuture(null);
         }
     }
@@ -342,6 +365,37 @@ class GrpcTransportTest {
                     new ReaderMessage.Custom(TASK, "src", new org.devlive.pipeforge.api.source.ReaderEvent() {})));
             assertThat(custom.getMessage()).contains("Custom reader events of node 'src'");
         }
+    }
+
+    @Test
+    void slotsAreReservedAndFreed() {
+        TaskExecutorClient client = executor(Headers.Epochs.FIRST);
+        client.requestSlot(new SlotRequest("job-1", "run-7", "alloc-1", 0)).join();
+        assertThat(worker.reserved).containsExactly(new SlotRequest("job-1", "run-7", "alloc-1", 0));
+
+        PipeForgeException taken = failure(client.requestSlot(new SlotRequest("job-1", "run-7", "alloc-2", 9)));
+        assertThat(taken.code()).isEqualTo(ErrorCode.SLOT_TAKEN);
+        assertThat(taken.params()).containsEntry("holder", "other");
+
+        client.freeSlot("alloc-1").join();
+        assertThat(worker.freed).containsExactly("alloc-1");
+
+        TaskDeployment inSlot = new TaskDeployment(
+                TASK, ChainCodecTest.sample(), 2, TaskSettings.defaults(), ChainCodecTest.RUN, "alloc-1");
+        client.deployTask(inSlot).join();
+        assertThat(worker.deployed.get(0).allocationId()).isEqualTo("alloc-1");
+    }
+
+    @Test
+    void releasesAreFencedByTheLeaderEpochOnly() {
+        executor(new Headers.Epochs(2, 5))
+                .requestSlot(new SlotRequest("job-1", "run-1", "a", 0))
+                .join();
+        // another job with a smaller job epoch may free its slot, an old master may not
+        executor(new Headers.Epochs(2, 1)).freeSlot("b").join();
+        assertThat(failure(executor(new Headers.Epochs(1, 9)).freeSlot("c")).code())
+                .isEqualTo(ErrorCode.RPC_STALE_EPOCH);
+        assertThat(worker.freed).containsExactly("b");
     }
 
     @Test

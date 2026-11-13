@@ -157,6 +157,42 @@ class ResourceManagerTest {
     }
 
     @Test
+    void aReservationOfTheMasterOutlivesOlderReportsOfTheWorker() {
+        String id = manager.register(spec("a:6124", 2, Map.of(), null)).workerId();
+        FreeSlot slot = new FreeSlot(id, "a:6124", 1);
+        assertThat(manager.reserve(slot, "job", "alloc")).isTrue();
+        assertThat(manager.reserve(slot, "other", "alloc-2")).as("taken").isFalse();
+        assertThat(manager.reserve(new FreeSlot("gone", "x:1", 0), "job", "a")).isFalse();
+        assertThat(manager.reserve(new FreeSlot(id, "a:6124", 7), "job", "a")).isFalse();
+
+        // a heartbeat that left the worker before the reservation arrived
+        manager.heartbeat(id, List.of(Slot.free(0), Slot.free(1)), List.of());
+        assertThat(manager.freeSlots(Map.of())).extracting(FreeSlot::index).containsExactly(0);
+
+        // the worker confirms; afterwards its reports count again
+        manager.heartbeat(id, List.of(new Slot(1, true, "job", "alloc")), List.of());
+        manager.heartbeat(id, List.of(Slot.free(1)), List.of());
+        assertThat(manager.freeSlots(Map.of())).extracting(FreeSlot::index).containsExactly(0, 1);
+
+        // an unconfirmed reservation gives way after the pending time
+        assertThat(manager.reserve(slot, "job", "alloc-3")).isTrue();
+        advance(ResourceManager.PENDING);
+        manager.heartbeat(id, List.of(Slot.free(1)), List.of());
+        assertThat(manager.freeSlots(Map.of())).hasSize(2);
+    }
+
+    @Test
+    void releasesOnlyTheSlotOfTheAllocation() {
+        String id = manager.register(spec("a:6124", 1, Map.of(), null)).workerId();
+        manager.reserve(new FreeSlot(id, "a:6124", 0), "job", "alloc");
+        manager.release(id, 0, "someone-else");
+        assertThat(manager.freeSlots(Map.of())).isEmpty();
+        manager.release(id, 0, "alloc");
+        manager.release("gone", 0, "alloc");
+        assertThat(manager.freeSlots(Map.of())).hasSize(1);
+    }
+
+    @Test
     void checksRunOnAScheduler() throws Exception {
         ResourceManager fast =
                 new ResourceManager(new ResourceManager.Settings(Duration.ofMillis(10), Duration.ofMillis(40), 1));

@@ -6,6 +6,15 @@
 #
 # Resource errors.
 
+- code: PF-RES-0001
+  name: SLOTS_INSUFFICIENT
+  message:
+    en-US: "Job {job} needs {required} slot(s) but found {available} free within {timeout}"
+    zh-CN: "作业 {job} 需要 {required} 个 Slot，但在 {timeout} 内只找到 {available} 个空闲 Slot"
+  hint:
+    en-US: "Add workers or slots (worker.slots), lower the parallelism of the job, relax its placement labels, or wait for other jobs to end; scheduler.slot-request-timeout sets how long a job waits."
+    zh-CN: "增加 Worker 或 Slot（worker.slots）、降低作业的并行度、放宽放置标签，或者等待其他作业结束；作业等待的时间由 scheduler.slot-request-timeout 设置。"
+
 - code: PF-RES-0005
   name: CANCEL_TIMEOUT
   message:
@@ -23,3 +32,12 @@
   hint:
     en-US: "Stop the process that uses it, or choose another port with --port."
     zh-CN: "停止占用该端口的进程，或者用 --port 选择其他端口。"
+
+- code: PF-RES-0007
+  name: SLOT_TAKEN
+  message:
+    en-US: "Slot {slot} of worker {worker} is reserved by allocation {holder}"
+    zh-CN: "Worker {worker} 的 Slot {slot} 已被分配 {holder} 预留"
+  hint:
+    en-US: "Another job reserved the slot first; the scheduler takes another one. If this repeats, the master and the worker disagree about the slots: the next heartbeat brings them together."
+    zh-CN: "另一个作业先预留了这个 Slot；调度器会改用其他 Slot。如果反复出现，说明 Master 与 Worker 对 Slot 的记录不一致，下一次心跳会使两者一致。"
