@@ -19,6 +19,8 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.rpc.ChainCodec;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
+import org.devlive.pipeforge.engine.rpc.LogChunk;
+import org.devlive.pipeforge.engine.rpc.LogQuery;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.ProtoMapping;
 import org.devlive.pipeforge.engine.rpc.SlotRequest;
@@ -41,6 +43,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
     private record Stream(ExecutionAttemptId task, String node) {}
 
     private final TaskExecutorServiceGrpc.TaskExecutorServiceFutureStub stub;
+    private final TaskExecutorServiceGrpc.TaskExecutorServiceStub streams;
     private final String target;
     private final byte[] publicKey;
     private final Supplier<Headers.Epochs> epochs;
@@ -71,6 +74,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
             java.util.function.Function<String, org.devlive.pipeforge.engine.rpc.proto.PluginRef> plugins) {
         this.plugins = plugins;
         this.stub = TaskExecutorServiceGrpc.newFutureStub(channel);
+        this.streams = TaskExecutorServiceGrpc.newStub(channel);
         this.target = target;
         this.publicKey = publicKey.clone();
         this.epochs = epochs;
@@ -154,6 +158,57 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                 .build();
         return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
                 .freeSlot(request));
+    }
+
+    @Override
+    public CompletableFuture<Void> readLog(
+            ExecutionAttemptId task, LogQuery query, java.util.function.Consumer<LogChunk> chunks) {
+        var request = org.devlive.pipeforge.engine.rpc.proto.ReadLogRequest.newBuilder()
+                .setHeader(Headers.create(epochs.get(), TIMEOUT, System::currentTimeMillis))
+                .setTask(ProtoMapping.toProto(task))
+                .setOffset(query.offset())
+                .setMaxBytes(query.maxBytes())
+                .setContains(query.contains())
+                .setMinLevel(query.minLevel() == null ? "" : query.minLevel())
+                .setFollow(query.follow())
+                .build();
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        // following has no deadline: it lasts as long as the task runs
+        var stub = query.follow() ? streams : streams.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        stub.readLog(
+                request,
+                new io.grpc.stub.ClientResponseObserver<
+                        org.devlive.pipeforge.engine.rpc.proto.ReadLogRequest,
+                        org.devlive.pipeforge.engine.rpc.proto.LogChunk>() {
+                    @Override
+                    public void beforeStart(
+                            io.grpc.stub.ClientCallStreamObserver<org.devlive.pipeforge.engine.rpc.proto.ReadLogRequest>
+                                    call) {
+                        result.whenComplete((ignored, error) -> {
+                            if (result.isCancelled()) {
+                                call.cancel("the reader stopped", null);
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onNext(org.devlive.pipeforge.engine.rpc.proto.LogChunk chunk) {
+                        if (!result.isDone()) {
+                            chunks.accept(ProtoMapping.fromProto(chunk));
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable error) {
+                        result.completeExceptionally(RpcErrors.fromStatus(error, target));
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        result.complete(null);
+                    }
+                });
+        return result;
     }
 
     /** Forgets the event numbers of a task that ended. */

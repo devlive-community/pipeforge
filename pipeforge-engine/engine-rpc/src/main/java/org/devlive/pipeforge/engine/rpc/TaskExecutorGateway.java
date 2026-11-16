@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.rpc;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * What a job master can ask of a worker's task executor. Calls are asynchronous: the future
@@ -31,4 +32,15 @@ public interface TaskExecutorGateway {
 
     /** Releases the slot of an allocation; unknown allocations are ignored. */
     CompletableFuture<Void> freeSlot(String allocationId);
+
+    /**
+     * Reads the log of a task, also after the task has ended. Without {@link LogQuery#follow()} one
+     * chunk arrives; with it, chunks arrive as the task writes until it ends. The future completes
+     * after the last chunk; cancelling it stops following. Fails with {@code PF-CLUS-0012} when the
+     * worker has no log of the task.
+     */
+    default CompletableFuture<Void> readLog(ExecutionAttemptId task, LogQuery query, Consumer<LogChunk> chunks) {
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException("this task executor keeps no task logs"));
+    }
 }

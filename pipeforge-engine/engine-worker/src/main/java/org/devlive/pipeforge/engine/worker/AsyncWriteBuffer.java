@@ -57,6 +57,9 @@ final class AsyncWriteBuffer implements AutoCloseable {
     private final int batchSize;
     private final BlockingQueue<Element> queue;
     private final Thread thread;
+    /** The log tags of the task, so that the write thread logs into the task's log. */
+    private final java.util.@Nullable Map<String, String> logContext = org.slf4j.MDC.getCopyOfContextMap();
+
     private final AtomicLong producerWaitNanos = new AtomicLong();
     private final AtomicLong writerWaitNanos = new AtomicLong();
     private final AtomicLong busyNanos = new AtomicLong();
@@ -193,6 +196,9 @@ final class AsyncWriteBuffer implements AutoCloseable {
     }
 
     private void loop() {
+        if (logContext != null) {
+            org.slf4j.MDC.setContextMap(logContext);
+        }
         try {
             while (true) {
                 Element element = queue.poll();

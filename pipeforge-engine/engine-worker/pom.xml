@@ -44,6 +44,13 @@
             <artifactId>spotbugs-annotations</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- TaskLogAppender: used only where logback is the logging backend, as in the distribution. -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>provided</scope>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>
@@ -80,6 +87,12 @@
                         <goals>
                             <goal>test-jar</goal>
                         </goals>
+                        <configuration>
+                            <!-- the logging of these tests only: modules that use the test jar log their own way -->
+                            <excludes>
+                                <exclude>logback-test.xml</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -56,9 +56,18 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
             List<SerializedValue> splits,
             @org.jspecify.annotations.Nullable SlotTable slots,
             org.devlive.pipeforge.engine.network.@org.jspecify.annotations.Nullable NetworkEnvironment network) {
+        this(splits, slots, network, null);
+    }
+
+    /** With task logs. */
+    ScriptedMaster(
+            List<SerializedValue> splits,
+            @org.jspecify.annotations.Nullable SlotTable slots,
+            org.devlive.pipeforge.engine.network.@org.jspecify.annotations.Nullable NetworkEnvironment network,
+            org.devlive.pipeforge.engine.worker.log.@org.jspecify.annotations.Nullable LogService logs) {
         this.splits.addAll(splits);
         endpoint = InProcessRpc.serve("test-master", this);
-        executor = new TaskExecutor("test", endpoint.gateway(), slots, network);
+        executor = new TaskExecutor("test", endpoint.gateway(), slots, network, logs);
     }
 
     /** Ten rows in two splits. */

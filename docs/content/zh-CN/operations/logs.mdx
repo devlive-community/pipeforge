@@ -1,0 +1,82 @@
+---
+title: 日志
+description: 集群进程和每个 Task 把日志写在哪里，Task 日志如何滚动和过期，以及如何带过滤条件读取。
+order: 30
+---
+
+集群写两类日志：每个**进程**（Master、Worker）写一份日志，每个 **Task** 在它运行的 Worker 上写一份自己的日志。
+Task 结束后它的日志仍保留在 Worker 上，便于事后排查这次运行。
+
+## 进程日志
+
+`logs/pipeforge-<role>.log` 包含进程记录的全部内容（见[部署](./deployment)）。在 Worker 上，Task 写的日志行会在线程名之后标出
+Task：`run/vertex/subtask/attempt`，例如
+
+```text
+2026-11-16 10:12:03.114 INFO  [task-src-0] 3f2c…/src/0/0 o.d.p.e.worker.Task - Task 3f2c…/src/0/0 is running
+```
+
+## Task 日志
+
+Task 的每次尝试写入一个单独的文件：
+
+```text
+logs/tasks/<作业名>/<run>/<vertex>-<subtask>-<attempt>.log
+```
+
+作业名来自作业定义（`name:`）；字母、数字、`_`、`.`、`-` 以外的字符会替换为 `_`。重试的 Task 用下一个尝试编号写一个新文件。
+
+Task 日志包含：
+
+- Task 线程上记录的全部内容，包括其 Source、Transform 和 Sink 的代码，以及引擎关于这个 Task 的日志：`is running`、
+  `finished`、带堆栈的 `failed`、`was cancelled`；
+- 写线程上记录的全部内容；开启写缓冲时由写线程写入目标端。
+
+连接器自己启动的线程没有这些标记，它们的日志只在 Worker 日志中。标记位于 MDC 的 `pipeforge.job`、`pipeforge.run` 和
+`pipeforge.task` 中；`logback.xml` 的格式可以用 `%X{pipeforge.task}` 显示它们。
+
+### 滚动与保留
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `worker.log.dir` | `logs/tasks` | 目录，相对于安装目录 |
+| `worker.log.max-file-size` | `64MB` | 文件将超过这个大小时滚动 |
+| `worker.log.max-files` | `5` | 每个 Task 保留的文件数，包括当前文件 |
+| `worker.log.retention` | `7d` | 一次运行的日志在最后一次写入后保留多久 |
+
+滚动后的文件以它的起始偏移量命名，例如 `src-0-0.log.67108864`，因此文件滚动后，Task 日志中的偏移量仍指向同一行。Worker
+每小时清理一次超过保留期的运行，仍有 Task 在写日志的运行不会被清理。全部配置项见[配置参考](../reference/configuration)。
+
+### Appender
+
+`conf/logback.xml` 用 `TASKS` appender 写 Task 日志：
+
+```xml
+<appender name="TASKS" class="org.devlive.pipeforge.engine.worker.log.TaskLogAppender">
+    <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+</appender>
+```
+
+格式可以修改，但每行开头要保留时间戳和紧随其后的级别：按级别读取以及让堆栈留在所属条目中都依赖它。日志配置中没有这个 appender
+时，Task 不会写自己的日志。
+
+## 读取 Task 日志
+
+Master 通过[引擎协议](../development/engine-protocol)的 `ReadLog` 调用从 Worker 读取 Task 日志；服务端和 Web UI 经由它读取。
+一次读取包含：
+
+| 字段 | 含义 |
+|---|---|
+| `offset` | 起始位置；负数表示从末尾往前数，并从下一个完整行开始 |
+| `max_bytes` | 一个分块覆盖的日志长度：为 0 时是 64KB，最多 4MB |
+| `contains` | 只保留包含这段文本的条目 |
+| `min_level` | 只保留这个级别及以上的条目：`TRACE`、`DEBUG`、`INFO`、`WARN`、`ERROR` |
+| `follow` | 持续发送 Task 新写的内容，直到它结束 |
+
+一个条目是以时间戳开头的一行，加上它下面不以时间戳开头的行，例如堆栈：过滤条件整条保留或丢弃条目。每个分块只包含完整的行，
+并带有下一次读取继续的偏移量，过滤掉部分行时也是如此；读到已结束 Task 的日志末尾的分块会设置 `eof`。跟随一个已经结束的
+Task 时，读到末尾即停止。
+
+Worker 上没有这个 Task 的日志时返回 [`PF-CLUS-0012`](../reference/errors#pf-clus-0012)：Task 运行在另一个 Worker 上，或者它的日志已超过保留期。

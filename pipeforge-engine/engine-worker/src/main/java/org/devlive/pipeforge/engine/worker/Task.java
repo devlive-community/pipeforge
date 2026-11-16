@@ -70,18 +70,32 @@ final class Task implements Runnable {
     private volatile long runningSince;
     private volatile long endedAt;
     private final AtomicLong idleNanos = new AtomicLong();
+    private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
         this(deployment, master, null, onTerminated);
     }
 
-    /** @param network the data exchange of the worker, or {@code null} for tasks that need none */
     Task(
             TaskDeployment deployment,
             JobMasterGateway master,
             @Nullable NetworkEnvironment network,
             Consumer<Task> onTerminated) {
+        this(deployment, master, network, null, onTerminated);
+    }
+
+    /**
+     * @param network the data exchange of the worker, or {@code null} for tasks that need none
+     * @param logs where the task writes its own log, or {@code null} for none
+     */
+    Task(
+            TaskDeployment deployment,
+            JobMasterGateway master,
+            @Nullable NetworkEnvironment network,
+            org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs,
+            Consumer<Task> onTerminated) {
         this.network = network;
+        this.logs = logs;
         this.deployment = deployment;
         this.master = master;
         this.onTerminated = onTerminated;
@@ -113,6 +127,32 @@ final class Task implements Runnable {
 
     @Override
     public void run() {
+        org.devlive.pipeforge.engine.worker.log.LogService.Scope log = openLog();
+        try {
+            runLogged();
+        } finally {
+            if (log != null) {
+                log.close();
+            }
+        }
+    }
+
+    private org.devlive.pipeforge.engine.worker.log.LogService.@Nullable Scope openLog() {
+        org.devlive.pipeforge.engine.worker.log.LogService service = logs;
+        if (service == null) {
+            return null;
+        }
+        try {
+            // named after the job as its definition names it; the run keeps the path unique
+            return service.open(deployment.chain().job().jobName(), deployment.id());
+        } catch (java.io.UncheckedIOException e) {
+            // the task runs without a log of its own; the worker's log still has its lines
+            LOG.warn("Task {} cannot write its own log", deployment.id(), e);
+            return null;
+        }
+    }
+
+    private void runLogged() {
         OperatorChain operators = null;
         try {
             operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled);
@@ -130,6 +170,7 @@ final class Task implements Runnable {
             OperatorChain closing = operators;
             operators = null;
             closing.close();
+            LOG.info("Task {} finished", deployment.id());
             report(TaskStateUpdate.finished(
                     deployment.id(), committable.map(List::of).orElse(List.of())));
         } catch (Throwable error) {
@@ -137,6 +178,7 @@ final class Task implements Runnable {
                 closeQuietly(operators);
             }
             if (cancelled) {
+                LOG.info("Task {} was cancelled", deployment.id());
                 report(TaskStateUpdate.of(deployment.id(), TaskState.CANCELED));
             } else {
                 if (error instanceof VirtualMachineError fatal) {

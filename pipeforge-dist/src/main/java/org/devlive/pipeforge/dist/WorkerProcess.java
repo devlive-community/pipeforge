@@ -14,9 +14,11 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.ComponentProvider;
@@ -36,6 +38,7 @@ import org.devlive.pipeforge.engine.worker.MasterConnection;
 import org.devlive.pipeforge.engine.worker.PluginCache;
 import org.devlive.pipeforge.engine.worker.SlotTable;
 import org.devlive.pipeforge.engine.worker.TaskExecutor;
+import org.devlive.pipeforge.engine.worker.log.LogService;
 import org.devlive.pipeforge.plugin.PluginManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +60,7 @@ public final class WorkerProcess implements AutoCloseable {
     private final NetworkEnvironment network;
     private final ManagedChannel toMaster;
     private final TaskExecutor executor;
+    private final LogService logs;
     private final PluginCache plugins;
     private final Server server;
     private final MasterConnection connection;
@@ -83,7 +87,15 @@ public final class WorkerProcess implements AutoCloseable {
             throw new IllegalStateException("cannot reach the master: " + e.getMessage(), e);
         }
         Retry retry = new Retry(threads, Duration.ofMillis(200));
-        executor = new TaskExecutor(name, new JobMasterClient(toMaster, "the master", retry), table, network);
+        logs = new LogService(
+                name,
+                new LogService.Settings(
+                        home.resolve(config.string(Settings.WORKER_LOG_DIR)),
+                        config.size(Settings.WORKER_LOG_MAX_FILE_SIZE),
+                        config.integer(Settings.WORKER_LOG_MAX_FILES),
+                        config.duration(Settings.WORKER_LOG_RETENTION)));
+        threads.scheduleWithFixedDelay(this::cleanLogs, 1, 60, TimeUnit.MINUTES);
+        executor = new TaskExecutor(name, new JobMasterClient(toMaster, "the master", retry), table, network, logs);
         plugins = new PluginCache(
                 new BlobClient(toMaster)::fetch,
                 home.resolve(config.string(Settings.WORKER_DIR)).resolve("plugins"),
@@ -162,6 +174,20 @@ public final class WorkerProcess implements AutoCloseable {
         };
     }
 
+    private void cleanLogs() {
+        try {
+            int removed = logs.cleanup(Instant.now());
+            if (removed > 0) {
+                LOG.info(
+                        "Removed the task logs of {} runs older than {}",
+                        removed,
+                        logs.settings().retention());
+            }
+        } catch (RuntimeException e) {
+            LOG.warn("Removing old task logs failed", e);
+        }
+    }
+
     /** The state of the connection to the master. */
     public MasterConnection.State state() {
         return connection.state();
@@ -171,6 +197,7 @@ public final class WorkerProcess implements AutoCloseable {
     public void close() {
         connection.close();
         executor.close();
+        logs.close();
         server.shutdownNow();
         plugins.close();
         network.close();

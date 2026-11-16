@@ -27,6 +27,13 @@ public final class InProcessRpc {
         Dispatcher dispatcher = new Dispatcher(name);
         TaskExecutorGateway proxy = new TaskExecutorGateway() {
             @Override
+            public CompletableFuture<Void> readLog(
+                    ExecutionAttemptId task, LogQuery query, java.util.function.Consumer<LogChunk> chunks) {
+                // reading changes nothing, so it needs no place in the order of the calls
+                return target.readLog(task, query, chunks);
+            }
+
+            @Override
             public CompletableFuture<Void> deployTask(TaskDeployment deployment) {
                 return dispatcher.dispatch(() -> target.deployTask(deployment));
             }

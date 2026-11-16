@@ -66,7 +66,8 @@ machine, `bin/pipeforge-standalone.sh start` runs a master and a worker in one p
 `start`, `restart` and `run` accept `--set key=value` and `--labels key=value,...`. A process
 writes its ID to `run/<role>.pid` and its log to `logs/pipeforge-<role>.log` (a new file every day
 or 100 MB, kept 14 days); what it prints before logging starts goes to `logs/pipeforge-<role>.out`.
-`PIPEFORGE_LOG_DIR` moves the logs.
+`PIPEFORGE_LOG_DIR` moves the logs. Every task also writes a log of its own under `logs/tasks/`
+(see [logs](./logs)).
 
 On Windows the `.cmd` scripts offer the same commands except `restart`; `stop` ends the process at
 once, since Windows has no SIGTERM.

@@ -1,0 +1,94 @@
+---
+title: Logs
+description: Where the cluster processes and every task write their logs, how task logs roll and expire, and how they are read with filters.
+order: 30
+---
+
+A cluster writes two kinds of logs: each **process** (master, worker) writes one log, and every
+**task** writes a log of its own on the worker it runs on. Task logs stay on the worker after the
+task ended, so that the run can be examined later.
+
+## Process logs
+
+`logs/pipeforge-<role>.log` holds everything a process logs (see [deployment](./deployment)). On a
+worker, the lines a task writes name it after the thread: `run/vertex/subtask/attempt`, for example
+
+```text
+2026-11-16 10:12:03.114 INFO  [task-src-0] 3f2c…/src/0/0 o.d.p.e.worker.Task - Task 3f2c…/src/0/0 is running
+```
+
+## Task logs
+
+Each attempt of a task writes into its own file:
+
+```text
+logs/tasks/<job name>/<run>/<vertex>-<subtask>-<attempt>.log
+```
+
+The job name comes from the job definition (`name:`); characters other than letters, digits, `_`,
+`.` and `-` become `_`. A retried task writes a new file with the next attempt number.
+
+What a task log holds:
+
+- everything logged on the task's thread, including the code of its source, transforms and sink,
+  and the lines of the engine about the task: `is running`, `finished`, `failed` with the stack
+  trace, `was cancelled`;
+- everything logged on its write thread, which writes to the target when the write buffer is on.
+
+Threads a connector starts itself carry no tags, so their lines are only in the worker's log. The
+tags are in the MDC under `pipeforge.job`, `pipeforge.run` and `pipeforge.task`; a pattern in
+`logback.xml` can show them with `%X{pipeforge.task}`.
+
+### Rolling and retention
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `worker.log.dir` | `logs/tasks` | The directory, relative to the installation |
+| `worker.log.max-file-size` | `64MB` | A file that would grow larger is rolled |
+| `worker.log.max-files` | `5` | Files kept per task, the current one included |
+| `worker.log.retention` | `7d` | How long the logs of a run are kept after their last write |
+
+A rolled file is renamed with the offset it starts at, for example `src-0-0.log.67108864`, so an
+offset into a task log keeps pointing at the same line when files roll. The worker removes runs
+past the retention once an hour, never a run whose tasks are still writing. All settings are listed
+in the [configuration reference](../reference/configuration).
+
+### The appender
+
+`conf/logback.xml` writes task logs with the `TASKS` appender:
+
+```xml
+<appender name="TASKS" class="org.devlive.pipeforge.engine.worker.log.TaskLogAppender">
+    <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+</appender>
+```
+
+The pattern may change, but keep the timestamp and then the level at the start of a line: reading
+by level and keeping stack traces with their entry rely on it. Without the appender in the logging
+configuration, tasks write no logs of their own.
+
+## Reading task logs
+
+The master reads a task log from its worker over the `ReadLog` call of the
+[engine protocol](../development/engine-protocol); the server and the Web UI read through it.
+A read takes:
+
+| Field | Meaning |
+|---|---|
+| `offset` | Where to start; a negative value counts back from the end and starts at the next whole line |
+| `max_bytes` | How much of the log one chunk covers: 64KB when 0, at most 4MB |
+| `contains` | Only the entries that contain this text |
+| `min_level` | Only the entries of this level or above: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` |
+| `follow` | Keep sending what the task writes until it ends |
+
+An entry is a line that starts with a timestamp, with the lines below it that do not, such as a
+stack trace: filters keep or drop entries whole. Each chunk holds whole lines and the offset where
+the next read continues, also when filters dropped lines; `eof` is set on the chunk that reaches the
+end of the log of a task that has ended. Following a task that already ended reads to the end and
+stops.
+
+A worker that has no log of the task answers with
+[`PF-CLUS-0012`](../reference/errors#pf-clus-0012): the task ran on another worker, or its log was
+past the retention.

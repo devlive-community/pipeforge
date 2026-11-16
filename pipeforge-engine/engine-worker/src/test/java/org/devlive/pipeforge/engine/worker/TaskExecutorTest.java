@@ -49,6 +49,70 @@ class TaskExecutorTest {
     }
 
     @Test
+    void everyTaskWritesItsOwnLogThatStaysReadableAfterItEnds(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        var logs = new org.devlive.pipeforge.engine.worker.log.LogService(
+                "worker-1", org.devlive.pipeforge.engine.worker.log.LogService.Settings.defaults(dir));
+        try (ScriptedMaster master = new ScriptedMaster(
+                List.of(TestConnectors.split("a", 0, 5), TestConnectors.split("b", 5, 10)), null, null, logs)) {
+            TaskDeployment deployment = ScriptedMaster.deployment(
+                    TestConnectors.job(probe, "", "", "fail-at: 3", 1), ScriptedMaster.settings());
+            master.executor.deployTask(deployment).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.FAILED);
+
+            // following a task that ended reads to the end and stops
+            List<org.devlive.pipeforge.engine.rpc.LogChunk> chunks = new java.util.ArrayList<>();
+            master.executor
+                    .readLog(
+                            deployment.id(),
+                            new org.devlive.pipeforge.engine.rpc.LogQuery(0, 0, "", null, true),
+                            chunks::add)
+                    .get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(chunks).last().satisfies(c -> assertThat(c.eof()).isTrue());
+            StringBuilder text = new StringBuilder();
+            chunks.forEach(c -> text.append(c.text()));
+            assertThat(text.toString())
+                    .contains("INFO  [task-src-0]")
+                    .contains("Task run-1/src/0/0 is running")
+                    .contains("INFO  [writer-src-0]")
+                    .contains("collect writes its first row")
+                    .contains("WARN  [task-src-0]")
+                    .contains("Task run-1/src/0/0 failed")
+                    .contains("\tat ");
+            assertThat(logs.path(deployment.chain().job().jobName(), deployment.id()))
+                    .exists()
+                    .hasParent(dir.resolve(deployment.chain().job().jobName()).resolve("run-1"));
+
+            List<org.devlive.pipeforge.engine.rpc.LogChunk> warnings = new java.util.ArrayList<>();
+            master.executor
+                    .readLog(
+                            deployment.id(),
+                            new org.devlive.pipeforge.engine.rpc.LogQuery(0, 0, "", "WARN", false),
+                            warnings::add)
+                    .get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(warnings.get(0).text())
+                    .matches("(?s)\\d{4}-\\d{2}-\\d{2} [0-9:.]+ WARN .*")
+                    .contains("Task run-1/src/0/0 failed")
+                    .contains("\tat ")
+                    .doesNotContain("is running")
+                    .doesNotContain("first row");
+        } finally {
+            logs.close();
+        }
+        try (ScriptedMaster without = ScriptedMaster.tenRows()) {
+            assertThat(without.executor
+                            .readLog(
+                                    new org.devlive.pipeforge.engine.rpc.ExecutionAttemptId("run-1", "src", 0, 0),
+                                    org.devlive.pipeforge.engine.rpc.LogQuery.all(),
+                                    c -> {})
+                            .handle((v, e) -> ((org.devlive.pipeforge.common.error.PipeForgeException) e).code())
+                            .get())
+                    .isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.TASK_LOG_NOT_FOUND);
+        }
+    }
+
+    @Test
     void runsTheChainOnTheTaskThreadAndWritesOnTheWriteThread() throws Exception {
         String probe = Probe.create();
         TaskStateUpdate end = run(TestConnectors.job(probe, "", "", "", 1));

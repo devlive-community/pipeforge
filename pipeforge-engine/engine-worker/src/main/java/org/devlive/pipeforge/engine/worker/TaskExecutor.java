@@ -46,6 +46,8 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final JobMasterGateway master;
     private final @Nullable SlotTable slots;
     private final @Nullable NetworkEnvironment network;
+    private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
+    private final String name;
     private volatile java.util.function.Consumer<String> runEnded = run -> {};
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService watchdog;
@@ -73,9 +75,25 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
      *
      * @param network the data exchange, which the caller starts and closes; {@code null} for none
      */
-    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
     public TaskExecutor(
             String name, JobMasterGateway master, @Nullable SlotTable slots, @Nullable NetworkEnvironment network) {
+        this(name, master, slots, network, null);
+    }
+
+    /**
+     * With task logs: every task writes its own log, which {@link #readLog} reads.
+     *
+     * @param logs the task logs, which the caller closes; {@code null} for none
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
+    public TaskExecutor(
+            String name,
+            JobMasterGateway master,
+            @Nullable SlotTable slots,
+            @Nullable NetworkEnvironment network,
+            org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs) {
+        this.name = name;
+        this.logs = logs;
         this.master = master;
         this.slots = slots;
         this.network = network;
@@ -133,7 +151,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
                 return CompletableFuture.failedFuture(e);
             }
         }
-        Task task = new Task(deployment, master, network, this::terminated);
+        Task task = new Task(deployment, master, network, logs, this::terminated);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Task " + deployment.id() + " is already deployed"));
@@ -166,6 +184,22 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             task.deliver(event);
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> readLog(
+            ExecutionAttemptId task,
+            org.devlive.pipeforge.engine.rpc.LogQuery query,
+            java.util.function.Consumer<org.devlive.pipeforge.engine.rpc.LogChunk> chunks) {
+        org.devlive.pipeforge.engine.worker.log.LogService service = logs;
+        if (service == null) {
+            return CompletableFuture.failedFuture(org.devlive.pipeforge.common.error.PipeForgeException.of(
+                            org.devlive.pipeforge.common.error.ErrorCode.TASK_LOG_NOT_FOUND)
+                    .param("task", task.toString())
+                    .param("worker", name)
+                    .build());
+        }
+        return service.read(task, query, chunks);
     }
 
     private void report(Task task) {

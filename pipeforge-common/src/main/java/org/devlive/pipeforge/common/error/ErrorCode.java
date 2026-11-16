@@ -129,6 +129,7 @@ public final class ErrorCode {
             define("PF-CLUS-0010", "DATA_CONNECTION_LOST", "peer", "reason");
     public static final ErrorCode PARTITION_NOT_FOUND =
             define("PF-CLUS-0011", "PARTITION_NOT_FOUND", "partition", "worker", "seconds");
+    public static final ErrorCode TASK_LOG_NOT_FOUND = define("PF-CLUS-0012", "TASK_LOG_NOT_FOUND", "task", "worker");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

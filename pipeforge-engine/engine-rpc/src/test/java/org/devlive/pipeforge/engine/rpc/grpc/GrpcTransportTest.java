@@ -35,6 +35,8 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.engine.rpc.ChainCodecTest;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
+import org.devlive.pipeforge.engine.rpc.LogChunk;
+import org.devlive.pipeforge.engine.rpc.LogQuery;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.OperatorSnapshot;
 import org.devlive.pipeforge.engine.rpc.ProtoMapping;
@@ -105,6 +107,30 @@ class GrpcTransportTest {
         public CompletableFuture<Void> freeSlot(String allocationId) {
             freed.add(allocationId);
             return CompletableFuture.completedFuture(null);
+        }
+
+        volatile CompletableFuture<Void> following = new CompletableFuture<>();
+
+        @Override
+        public CompletableFuture<Void> readLog(
+                ExecutionAttemptId task, LogQuery query, java.util.function.Consumer<LogChunk> chunks) {
+            if (task.subtask() == 9) {
+                return CompletableFuture.failedFuture(PipeForgeException.of(ErrorCode.TASK_LOG_NOT_FOUND)
+                        .param("task", task.toString())
+                        .param("worker", "worker-1")
+                        .build());
+            }
+            String echo =
+                    query.offset() + " " + query.maxBytes() + " " + query.contains() + " " + query.minLevel() + "\n";
+            if (!query.follow()) {
+                chunks.accept(new LogChunk(42, echo, true));
+                return CompletableFuture.completedFuture(null);
+            }
+            // following: one chunk, then the stream stays open until the reader cancels
+            chunks.accept(new LogChunk(7, echo, false));
+            CompletableFuture<Void> open = new CompletableFuture<>();
+            following = open;
+            return open;
         }
     }
 
@@ -207,6 +233,50 @@ class GrpcTransportTest {
         Throwable error = future.handle((v, e) -> e).join();
         assertThat(error).isInstanceOf(PipeForgeException.class);
         return (PipeForgeException) error;
+    }
+
+    @Test
+    void readsATaskLogOverTheStream() {
+        List<LogChunk> chunks = new CopyOnWriteArrayList<>();
+        executor(Headers.Epochs.FIRST)
+                .readLog(TASK, new LogQuery(-100, 10, "error", "warn", false), chunks::add)
+                .join();
+        assertThat(chunks).containsExactly(new LogChunk(42, "-100 10 error WARN\n", true));
+
+        PipeForgeException missing = failure(executor(Headers.Epochs.FIRST)
+                .readLog(new ExecutionAttemptId(TASK.runId(), TASK.vertexId(), 9, 0), LogQuery.all(), chunks::add));
+        assertThat(missing.code()).isEqualTo(ErrorCode.TASK_LOG_NOT_FOUND);
+        assertThat(missing.getMessage()).contains("Worker worker-1 has no log of task");
+
+        var stub = TaskExecutorServiceGrpc.newBlockingStub(channel);
+        var loud = org.devlive.pipeforge.engine.rpc.proto.ReadLogRequest.newBuilder()
+                .setHeader(RpcPartsTest.header(1, 1))
+                .setTask(ProtoMapping.toProto(TASK))
+                .setMinLevel("LOUD")
+                .build();
+        assertThatThrownBy(() -> stub.readLog(loud).next())
+                .satisfies(e -> assertThat(RpcErrors.fromStatus(e, "worker-1").getMessage())
+                        .contains("min_level must be one of TRACE, DEBUG, INFO, WARN, ERROR, not 'LOUD'"));
+    }
+
+    @Test
+    void aReaderThatStopsFollowingCancelsTheReadOnTheWorker() throws Exception {
+        List<LogChunk> chunks = new CopyOnWriteArrayList<>();
+        CompletableFuture<Void> reading =
+                executor(Headers.Epochs.FIRST).readLog(TASK, new LogQuery(0, 0, "", null, true), chunks::add);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (chunks.isEmpty() || worker.following.isDone()) {
+            assertThat(System.nanoTime()).as("the first chunk arrives").isLessThan(deadline);
+            Thread.sleep(5);
+        }
+        assertThat(chunks).containsExactly(new LogChunk(7, "0 65536  null\n", false));
+        CompletableFuture<Void> onWorker = worker.following;
+
+        reading.cancel(false);
+        while (!onWorker.isCancelled()) {
+            assertThat(System.nanoTime()).as("the worker stops reading").isLessThan(deadline);
+            Thread.sleep(5);
+        }
     }
 
     @Test

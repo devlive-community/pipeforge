@@ -678,6 +678,9 @@ public final class TestConnectors {
         @Override
         public void write(Row row) throws Exception {
             probe.writerThreads.add(Thread.currentThread().getName());
+            if (written == 0) {
+                org.slf4j.LoggerFactory.getLogger(CollectWriter.class).info("collect writes its first row");
+            }
             if (written == config.get(FAIL_AT)) {
                 throw failure(config, "writing row " + written);
             }

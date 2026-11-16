@@ -323,8 +323,9 @@ map   transform  1,000,000  999,000    1.00  4%
 out   sink       999,000    999,000    -     68%
 ```
 
-Each task logs when it starts running and when it fails; the job master logs the job's start,
-commit and end.
+Each task logs when it starts running, finishes, fails or is cancelled, into a log file of its own
+on its worker, which stays readable after the task ended (see [logs](../operations/logs)); the job
+master logs the job's start, commit and end.
 
 ## Performance and tuning
 

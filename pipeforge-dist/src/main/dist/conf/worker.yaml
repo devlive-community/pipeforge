@@ -33,6 +33,18 @@
 # The working directory of the worker: the plugin packages it downloaded from the master.
 # worker.dir: data/worker
 
+# Where tasks write their own logs, relative to the installation directory: <job>/<run>/<vertex>-<subtask>-<attempt>.log.
+# worker.log.dir: logs/tasks
+
+# The size at which a task log file is rolled; offsets in the log stay the same.
+# worker.log.max-file-size: 64MB
+
+# How many files of one task log are kept, the current one included; older ones are deleted.
+# worker.log.max-files: 5
+
+# How long the task logs of a run are kept after their last write; the worker checks every hour.
+# worker.log.retention: 7d
+
 # How often a worker that is not connected tries to register.
 # worker.registration-retry: 1s
 

@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.rpc.grpc;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.engine.rpc.ChainCodec;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
+import org.devlive.pipeforge.engine.rpc.LogQuery;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.ProtoMapping;
 import org.devlive.pipeforge.engine.rpc.SlotRequest;
@@ -34,7 +36,7 @@ import org.jspecify.annotations.Nullable;
  * The gRPC side of a worker: checks the protocol version and the epochs of every request, runs each
  * request ID once, decrypts the sensitive options, rebuilds the task description with the worker's
  * plugins and hands operator events over in order, then calls the worker's {@link
- * TaskExecutorGateway}. Reading task logs answers {@code UNIMPLEMENTED} until the log service.
+ * TaskExecutorGateway}. Reading a task log checks only the protocol version: it changes nothing.
  */
 public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecutorServiceImplBase {
 
@@ -149,6 +151,42 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
     public void freeSlot(org.devlive.pipeforge.engine.rpc.proto.FreeSlotRequest request, StreamObserver<Ack> observer) {
         // a release carries no run: it is checked against the leader epoch only
         handle(observer, request.getHeader(), null, () -> target.freeSlot(request.getAllocationId()));
+    }
+
+    @Override
+    public void readLog(
+            org.devlive.pipeforge.engine.rpc.proto.ReadLogRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.LogChunk> observer) {
+        CompletableFuture<Void> reading;
+        try {
+            Headers.checkVersion(request.getHeader());
+            ExecutionAttemptId task = ProtoMapping.fromProto(request.getTask());
+            LogQuery query = ProtoMapping.fromProto(request);
+            reading = target.readLog(task, query, chunk -> {
+                synchronized (observer) {
+                    observer.onNext(ProtoMapping.toProto(chunk));
+                }
+            });
+        } catch (RuntimeException e) {
+            reading = CompletableFuture.failedFuture(e);
+        }
+        CompletableFuture<Void> running = reading;
+        if (observer instanceof ServerCallStreamObserver<?> call) {
+            // a client that stops following cancels the call
+            call.setOnCancelHandler(() -> running.cancel(false));
+        }
+        running.whenComplete((ignored, error) -> {
+            synchronized (observer) {
+                if (error instanceof java.util.concurrent.CancellationException) {
+                    return;
+                }
+                if (error != null) {
+                    observer.onError(RpcErrors.toStatus(error));
+                } else {
+                    observer.onCompleted();
+                }
+            }
+        });
     }
 
     private void handle(

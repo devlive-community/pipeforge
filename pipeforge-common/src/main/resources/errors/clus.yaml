@@ -104,3 +104,12 @@
   hint:
     en-US: "The upstream task did not start on that worker, or it already failed. Look for the first error of the run; this one usually follows it."
     zh-CN: "上游 Task 没有在该 Worker 上启动，或者已经失败。请查找本次运行的第一个错误；这个错误通常是它的后果。"
+
+- code: PF-CLUS-0012
+  name: TASK_LOG_NOT_FOUND
+  message:
+    en-US: "Worker {worker} has no log of task {task}"
+    zh-CN: "Worker {worker} 上没有 Task {task} 的日志"
+  hint:
+    en-US: "The task did not run on this worker, or its log was removed after worker.log.retention. Ask the worker the task ran on; the job master knows it."
+    zh-CN: "该 Task 没有在这个 Worker 上运行，或者它的日志已超过 worker.log.retention 被清理。请向 Task 实际运行的 Worker 读取；JobMaster 知道是哪一个。"

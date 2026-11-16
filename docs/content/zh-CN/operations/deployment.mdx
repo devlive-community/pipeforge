@@ -63,7 +63,8 @@ Worker 向 Master 注册并提供 Slot，除非 `worker.slots` 另有设置，�
 
 `start`、`restart` 和 `run` 接受 `--set key=value` 和 `--labels key=value,...`。进程把自己的 ID 写入 `run/<role>.pid`，
 日志写入 `logs/pipeforge-<role>.log`（每天或每 100 MB 换一个文件，保留 14 天）；日志开始之前的输出写入
-`logs/pipeforge-<role>.out`。`PIPEFORGE_LOG_DIR` 可以修改日志目录。
+`logs/pipeforge-<role>.out`。`PIPEFORGE_LOG_DIR` 可以修改日志目录。每个 Task 还会在 `logs/tasks/` 下写自己的日志
+（见[日志](./logs)）。
 
 在 Windows 上，`.cmd` 脚本提供除 `restart` 之外的相同命令；由于 Windows 没有 SIGTERM，`stop` 会立即结束进程。
 

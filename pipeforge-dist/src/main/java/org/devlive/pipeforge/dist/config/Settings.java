@@ -200,6 +200,38 @@ public final class Settings {
             false,
             "The working directory of the worker: the plugin packages it downloaded from the master.",
             "Worker 的工作目录：从 Master 下载的插件包。");
+    public static final Setting WORKER_LOG_DIR = define(
+            "worker.log.dir",
+            "worker",
+            Setting.Type.STRING,
+            "logs/tasks",
+            false,
+            "Where tasks write their own logs, relative to the installation directory: <job>/<run>/<vertex>-<subtask>-<attempt>.log.",
+            "Task 写自己日志的目录，相对于安装目录：<job>/<run>/<vertex>-<subtask>-<attempt>.log。");
+    public static final Setting WORKER_LOG_MAX_FILE_SIZE = define(
+            "worker.log.max-file-size",
+            "worker",
+            Setting.Type.SIZE,
+            "64MB",
+            false,
+            "The size at which a task log file is rolled; offsets in the log stay the same.",
+            "Task 日志文件滚动的大小；日志中的偏移量保持不变。");
+    public static final Setting WORKER_LOG_MAX_FILES = define(
+            "worker.log.max-files",
+            "worker",
+            Setting.Type.INT,
+            "5",
+            false,
+            "How many files of one task log are kept, the current one included; older ones are deleted.",
+            "每个 Task 日志保留的文件数，包括当前文件；更早的文件会被删除。");
+    public static final Setting WORKER_LOG_RETENTION = define(
+            "worker.log.retention",
+            "worker",
+            Setting.Type.DURATION,
+            "7d",
+            false,
+            "How long the task logs of a run are kept after their last write; the worker checks every hour.",
+            "一次运行的 Task 日志在最后一次写入后保留多久；Worker 每小时检查一次。");
     public static final Setting WORKER_RETRY = define(
             "worker.registration-retry",
             "worker",

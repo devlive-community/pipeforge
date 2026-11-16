@@ -87,6 +87,8 @@
   docs: ["reference/cli"]
 - paths: ["pipeforge-dist/**"]
   docs: ["operations/deployment"]
+- paths: ["pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/log/**", "pipeforge-dist/src/main/dist/conf/logback.xml"]
+  docs: ["operations/logs"]
 - paths: ["pipeforge-dist/configuration.json", "pipeforge-dist/src/main/java/org/devlive/pipeforge/dist/config/**"]
   docs: ["reference/configuration"]
 - paths: ["pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/PluginCommand.java", "pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/Maven.java", "pipeforge-cli/src/it/**"]

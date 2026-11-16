@@ -53,6 +53,27 @@ public final class ProtoMapping {
                 .build();
     }
 
+    public static org.devlive.pipeforge.engine.rpc.proto.LogChunk toProto(LogChunk chunk) {
+        return org.devlive.pipeforge.engine.rpc.proto.LogChunk.newBuilder()
+                .setOffset(chunk.offset())
+                .setData(com.google.protobuf.ByteString.copyFromUtf8(chunk.text()))
+                .setEof(chunk.eof())
+                .build();
+    }
+
+    public static LogChunk fromProto(org.devlive.pipeforge.engine.rpc.proto.LogChunk chunk) {
+        return new LogChunk(chunk.getOffset(), chunk.getData().toStringUtf8(), chunk.getEof());
+    }
+
+    public static LogQuery fromProto(org.devlive.pipeforge.engine.rpc.proto.ReadLogRequest request) {
+        return new LogQuery(
+                request.getOffset(),
+                request.getMaxBytes(),
+                request.getContains(),
+                request.getMinLevel(),
+                request.getFollow());
+    }
+
     public static ExecutionAttemptId fromProto(org.devlive.pipeforge.engine.rpc.proto.ExecutionAttemptId id) {
         return new ExecutionAttemptId(id.getRunId(), id.getVertexId(), id.getSubtask(), id.getAttempt());
     }

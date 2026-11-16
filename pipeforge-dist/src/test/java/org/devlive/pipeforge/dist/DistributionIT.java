@@ -124,6 +124,29 @@ class DistributionIT {
         assertThat(Files.readString(home.resolve("logs/pipeforge-worker.out"))).contains("| +I |");
         assertThat(Files.readString(home.resolve("logs/pipeforge-master.log"))).contains("Master of cluster default");
         assertThat(Files.readString(home.resolve("logs/pipeforge-worker.log"))).contains("offers 2 slot(s)");
+        // every task wrote its own log, and the lines of the worker log name the task they come from
+        String run = out.toString(StandardCharsets.UTF_8)
+                .lines()
+                .filter(l -> l.startsWith("Submitted run "))
+                .findFirst()
+                .orElseThrow()
+                .split(" ")[2];
+        List<Path> all;
+        try (Stream<Path> files = Files.walk(home.resolve("logs"))) {
+            all = files.toList();
+        }
+        List<Path> taskLogs = all.stream()
+                .filter(f -> f.getParent().getFileName().toString().equals(run))
+                .filter(f -> f.toString().endsWith("-0.log"))
+                .toList();
+        assertThat(taskLogs).as("task logs of run %s among %s", run, all).isNotEmpty();
+        assertThat(taskLogs).allSatisfy(f -> assertThat(f.getParent())
+                .as("<job name>/<run>/<file>")
+                .isEqualTo(home.resolve("logs/tasks/fake-to-console").resolve(run)));
+        for (Path taskLog : taskLogs) {
+            assertThat(Files.readString(taskLog)).contains(" is running").contains(" finished");
+        }
+        assertThat(Files.readString(home.resolve("logs/pipeforge-worker.log"))).contains(" " + run + "/");
 
         Result stopped = script("worker", "stop");
         assertThat(stopped.out()).isEqualTo("Stopped the worker.\n");
