@@ -93,6 +93,18 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
     }
 
     @Override
+    public void analyze(
+            JobRequest request, StreamObserver<org.devlive.pipeforge.engine.rpc.proto.ExplainResult> observer) {
+        answer(observer, request.getHeader(), () -> {
+            var analysis = dispatcher.analysis(request.getRunId());
+            return org.devlive.pipeforge.engine.rpc.proto.ExplainResult.newBuilder()
+                    .setSchemaVersion(analysis.schemaVersion())
+                    .setJson(analysis.json())
+                    .build();
+        });
+    }
+
+    @Override
     public void listJobs(ListJobsRequest request, StreamObserver<ListJobsResponse> observer) {
         answer(observer, request.getHeader(), () -> {
             Set<State> states = EnumSet.noneOf(State.class);

@@ -113,7 +113,44 @@ sink:
 ## 可观测性
 
 `explain` 是作业的计划视图。JSON 输出的结构与引擎使用的计划一致：`job`、`variables`、`nodes`（含 `options`、`inputTables`、
-`outputTables`）和 `warnings`。服务的 `POST /api/v1/explain`（[REST API](../reference/api#explainjob)）返回同一份文档以及文本形式。在计划上叠加行数、速率和瓶颈的运行分析（`explain --analyze`）随引擎指标一起提供。
+`outputTables`）和 `warnings`。服务的 `POST /api/v1/explain`（[REST API](../reference/api#explainjob)）返回同一份文档以及文本形式。一次运行的情况见[运行分析](#运行分析)。
+
+### 运行分析
+
+运行分析把一次运行的指标与它的计划放在一起，并指出是什么限制了速度。`pipeforge run --analyze` 在运行结束后输出它；
+Master 的 `Analyze` 调用以 JSON 形式返回它供服务端使用，运行过程中也可以调用：
+
+```text
+Job orders-copy  SUCCESS 12.4s  parallelism 4
+Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
+Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
+Wait   reader 1.2s (target slow)  writer 300ms (source slow)  backpressured 0ms (downstream slow)
+
+Node  kind       in rows    out rows   sel.  in r/s  self%
+src   source     1,000,000  1,000,000  -     -       21%
+map   transform  1,000,000  999,000    1.00  80,645  4%
+out   sink       999,000    999,000    -     80,565  68%
+
+Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time for rows
+  → Raise the parallelism of out (now 4) or its batch size, if the target can take more writes
+  → Check the write latency and the load of the target system
+```
+
+- **窗口。** 运行中的作业按最近 10 秒判断，已结束的作业按整个运行判断。节点的速率（`in r/s`）取同一个窗口。
+- **占比。** 等待时间是 Task 运行时间（`runningMs`）中的占比：Reader 等待 Sink 写队列（`readerWaitMs`）、写线程等待数据
+  （`writerWaitMs`）、Task 等待网络缓冲（`backpressuredMs`）。`self%` 是节点在整个运行中忙于自身工作的时间占比（见[指标](../reference/metrics)）。
+- **结论。** 按下表顺序检查规则，第一个满足的就是瓶颈，并附带依据的指标和建议。占比超过 50% 为高，低于 20% 为低。
+
+| 结论 | 条件 | 建议 |
+|---|---|---|
+| `TARGET` | Reader 超过一半的时间在等写队列；或 Task 超过一半的时间在等网络缓冲，同时某个 Sink 超过一半的时间在忙；或某个 Sink 超过一半的时间在忙、不比 Source 闲，而写线程几乎不等数据 | `sink-parallelism`：提高 Sink 的并行度或批大小；`check-target`：检查目标端的写入延迟和负载 |
+| `NETWORK` | 有行在 Task 之间传递，Task 超过一半的时间在等网络缓冲，而没有 Sink 超过一半的时间在忙 | `network-buffers`：增大 `network.buffers-per-channel` 或 `network.floating-buffers-per-gate`；`check-network`：检查 Worker 之间的网络 |
+| `SOURCE` | 写线程超过一半的时间在等数据；或某个 Source 超过一半的时间在忙，而 Reader 和 Task 几乎不等待 | `source-parallelism`：提高 Source 的并行度或让它读取更多分片；`check-source`：检查源端的查询延迟和负载 |
+| `NONE` | 以上都不满足：没有长时间的等待 | — |
+| `UNKNOWN` | 窗口内还没有 Task 运行 | — |
+
+JSON 形式包含 `schemaVersion`（`1`）、`job`、`status`、窗口（`windowFromMs`、`windowToMs`）、带节点的 `metrics`、`rates`，
+以及 `bottleneck`：`kind`、`node`、`evidence`（指标、节点、数值）和 `advice`（`code`、`text`）。建议代码保持不变，文本为英文。
 
 ## 排障
 
@@ -130,6 +167,8 @@ sink:
 
 ## 限制
 
+- 运行分析判断作业和节点。限流结论（`THROTTLE`）随引擎的限流配额提供；倾斜、边和子任务级分析，以及服务端对一次运行的
+  `explain --analyze` 和它的 Web UI，在后续版本中提供。
 - 这里的计划是逻辑计划：优化规则（投影与过滤下推、Transform 合并）、执行图和资源估算随分布式引擎提供。
 - 保存在控制面中的数据源（`datasource:`）以及 `${secret:...}`、`${file:...}` 变量需要 PipeForge 服务。
 - `pipeforge explain` 命令属于本里程碑交付的命令行；计划器本身已经可以在 Java 代码中通过 `pipeforge-core` 的 `JobParser` 和 `Planner` 使用。

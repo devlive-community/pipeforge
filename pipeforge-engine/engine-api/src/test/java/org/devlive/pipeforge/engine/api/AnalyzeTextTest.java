@@ -32,14 +32,16 @@ class AnalyzeTextTest {
                 List.of(
                         new NodeMetrics("src", "source", 1_000_000, 1_000_000, 0, 0, 0.21, 0, 0),
                         new NodeMetrics("map", "transform", 1_000_000, 999_000, 1_000, 0, 0.04, 0, 0),
-                        new NodeMetrics("out", "sink", 999_000, 999_000, 0, 0, -1, 0, 0)),
+                        new NodeMetrics("out", "sink", 999_000, 999_000, 0, 0, 0.68, 0, 0)),
                 0,
                 0,
                 -1,
                 0,
                 0,
                 0,
-                0);
+                0,
+                // four tasks for 12 seconds
+                48_000);
 
         assertThat(AnalyzeText.format("orders-copy", JobStatus.SUCCESS, metrics))
                 .isEqualTo(
@@ -47,26 +49,32 @@ class AnalyzeTextTest {
                         Job orders-copy  SUCCESS 12.4s  parallelism 4
                         Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
                         Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
-                        Wait   reader 1.2s (target slow)  writer 300ms (source slow)
+                        Wait   reader 1.2s (target slow)  writer 300ms (source slow)  backpressured 0ms (downstream slow)
 
-                        Node  kind       in rows    out rows   sel.  self%
-                        src   source     1,000,000  1,000,000  -     21%
-                        map   transform  1,000,000  999,000    1.00  4%
-                        out   sink       999,000    999,000    -     -
+                        Node  kind       in rows    out rows   sel.  in r/s  self%
+                        src   source     1,000,000  1,000,000  -     -       21%
+                        map   transform  1,000,000  999,000    1.00  80,645  4%
+                        out   sink       999,000    999,000    -     80,565  68%
+
+                        Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time for rows
+                          → Raise the parallelism of out (now 4) or its batch size, if the target can take more writes
+                          → Check the write latency and the load of the target system
                         """);
     }
 
     @Test
     void marksRunningJobsAndMismatches() {
         JobMetrics metrics = new JobMetrics(
-                3_725_000, 10, 2, 0, 5, 0, 1, Rate.ZERO, Rate.ZERO, 0, 61_000, 2, 1, List.of(), 0, 0, -1, 0, 0, 0, 0);
+                3_725_000, 10, 2, 0, 5, 0, 1, Rate.ZERO, Rate.ZERO, 0, 61_000, 2, 1, List.of(), 0, 0, -1, 0, 0, 0, 0,
+                0);
 
         String text = AnalyzeText.format("j", JobStatus.RUNNING, metrics);
         assertThat(text)
                 .startsWith("Job j  RUNNING 1h2m  parallelism 2  tasks running 1\n")
                 .contains("expanded 5")
                 .contains("reconcile MISMATCH")
-                .contains("writer 1m1s");
+                .contains("writer 1m1s")
+                .endsWith("Bottleneck  UNKNOWN: no task ran yet\n");
         assertThat(AnalyzeText.count(-1)).isEqualTo("-");
     }
 }

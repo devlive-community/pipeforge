@@ -19,6 +19,8 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.common.error.ErrorCode;
+import org.devlive.pipeforge.engine.api.Bottleneck;
+import org.devlive.pipeforge.engine.api.RunAnalysis;
 import org.devlive.pipeforge.engine.master.RunStates.State;
 import org.devlive.pipeforge.engine.rpc.grpc.Headers;
 import org.devlive.pipeforge.engine.rpc.grpc.RpcErrors;
@@ -120,6 +122,39 @@ class DispatcherServiceTest {
     }
 
     @Test
+    void analysesARunAndFindsASlowTarget() throws Exception {
+        String probe = Probe.create();
+        runs.definitions.put("slow", () -> TestConnectors.job(probe, "rows: 200, splits: 2", "", "slow-ms: 5", 1));
+        stub.submitJob(submit("run-1", "slow"));
+        runs.awaitEnd("run-1");
+
+        var result = stub.analyze(request("run-1"));
+        assertThat(result.getSchemaVersion()).isEqualTo("1");
+        RunAnalysis analysis = RunAnalysis.fromJson(result.getJson());
+        assertThat(analysis.job()).isEqualTo("test-job");
+        assertThat(analysis.status()).isEqualTo(org.devlive.pipeforge.engine.api.JobStatus.SUCCESS);
+        assertThat(analysis.windowFromMs()).as("an ended run: the whole run").isZero();
+        assertThat(analysis.metrics().rowsWritten()).isEqualTo(200);
+        assertThat(analysis.metrics().runningMs()).isPositive();
+        assertThat(analysis.rates()).extracting(RunAnalysis.NodeRate::node).containsExactly("src", "up", "out");
+        assertThat(analysis.bottleneck().kind()).as(analysis.text()).isEqualTo(Bottleneck.Kind.TARGET);
+        assertThat(analysis.bottleneck().node()).isEqualTo("out");
+        assertThat(analysis.text()).contains("Bottleneck  TARGET at out: out busy");
+
+        String blocked = runs.blocking();
+        stub.submitJob(submit("run-2", "block"));
+        assertThat(Probe.get(blocked).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+        RunAnalysis running =
+                RunAnalysis.fromJson(stub.analyze(request("run-2")).getJson());
+        assertThat(running.status())
+                .isIn(
+                        org.devlive.pipeforge.engine.api.JobStatus.RUNNING,
+                        org.devlive.pipeforge.engine.api.JobStatus.CREATED);
+        stub.cancelJob(request("run-2"));
+        runs.awaitEnd("run-2");
+    }
+
+    @Test
     void cancelsAndReportsTheErrorOfARun() throws Exception {
         String probe = runs.blocking();
         stub.submitJob(submit("run-1", "block"));
@@ -151,10 +186,10 @@ class DispatcherServiceTest {
                         .build()))
                 .satisfies(e ->
                         assertThat(RpcErrors.fromStatus(e, "master").code()).isEqualTo(ErrorCode.RPC_VERSION_MISMATCH));
-        assertThatThrownBy(() -> stub.analyze(request("x")))
-                .isInstanceOfSatisfying(
-                        StatusRuntimeException.class,
-                        e -> assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.UNIMPLEMENTED));
+        assertThatThrownBy(() -> stub.analyze(request("x"))).isInstanceOfSatisfying(StatusRuntimeException.class, e -> {
+            assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.NOT_FOUND);
+            assertThat(RpcErrors.fromStatus(e, "master").code()).isEqualTo(ErrorCode.RUN_NOT_FOUND);
+        });
     }
 
     @Test

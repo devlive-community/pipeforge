@@ -43,6 +43,7 @@ import java.util.Optional;
  * @param queueCapacity the batches the write queues of the sinks hold
  * @param splitsAssigned splits the enumerator gave to readers
  * @param splitsFinished splits of readers that have finished
+ * @param runningMs time tasks ran, summed over tasks: the base of the wait shares
  */
 public record JobMetrics(
         long elapsedMs,
@@ -65,11 +66,12 @@ public record JobMetrics(
         int queueDepth,
         int queueCapacity,
         int splitsAssigned,
-        int splitsFinished) {
+        int splitsFinished,
+        long runningMs) {
 
     /** No data yet. */
     public static final JobMetrics EMPTY =
-            new JobMetrics(0, 0, 0, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 0, 0, List.of(), 0, 0, -1, 0, 0, 0, 0);
+            new JobMetrics(0, 0, 0, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 0, 0, List.of(), 0, 0, -1, 0, 0, 0, 0, 0);
 
     public JobMetrics {
         Objects.requireNonNull(readRowsPerSecond, "readRowsPerSecond");

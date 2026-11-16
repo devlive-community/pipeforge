@@ -133,8 +133,51 @@ job is streaming, because `live` never ends.
 `explain` is the plan view of a job. The JSON output has the same structure as the plan used by the
 engine: `job`, `variables`, `nodes` (with `options`, `inputTables` and `outputTables`) and
 `warnings`. The server returns the same document from `POST /api/v1/explain`
-([REST API](../reference/api#explainjob)), together with the text form. The run analysis that adds rows, rates and bottlenecks to the plan (`explain --analyze`)
-arrives with the metrics of the engine.
+([REST API](../reference/api#explainjob)), together with the text form. What a run did is in the
+[run analysis](#run-analysis).
+
+### Run analysis
+
+The run analysis puts the metrics of a run next to its plan and says what limits its speed. It is
+what `pipeforge run --analyze` prints after a run, and what the master's `Analyze` call returns as
+JSON for the server, also while the run is running:
+
+```text
+Job orders-copy  SUCCESS 12.4s  parallelism 4
+Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
+Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
+Wait   reader 1.2s (target slow)  writer 300ms (source slow)  backpressured 0ms (downstream slow)
+
+Node  kind       in rows    out rows   sel.  in r/s  self%
+src   source     1,000,000  1,000,000  -     -       21%
+map   transform  1,000,000  999,000    1.00  80,645  4%
+out   sink       999,000    999,000    -     80,565  68%
+
+Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time for rows
+  → Raise the parallelism of out (now 4) or its batch size, if the target can take more writes
+  → Check the write latency and the load of the target system
+```
+
+- **Window.** A running job is judged on its last 10 seconds, a job that ended on the whole run.
+  The rates of the nodes (`in r/s`) are of the same window.
+- **Shares.** The waits are shares of the time tasks ran (`runningMs`): readers waiting for the
+  write queue of the sink (`readerWaitMs`), write threads waiting for rows (`writerWaitMs`) and tasks
+  waiting for network buffers (`backpressuredMs`). `self%` is the share of its time a node is busy
+  with its own work, over the whole run (see [metrics](../reference/metrics)).
+- **Conclusion.** The rules below are checked in order, the first that holds is the bottleneck,
+  with the metrics it rests on and what to change. A share is high above 50% and low below 20%.
+
+| Conclusion | When | Advice |
+|---|---|---|
+| `TARGET` | readers wait more than half of their time for the write queue; or tasks wait more than half of their time for network buffers while a sink is busy more than half of its time; or a sink is busy more than half of its time, at least as busy as the sources, while its write threads hardly wait for rows | `sink-parallelism`: raise the parallelism of the sink or its batch size; `check-target`: check the write latency and load of the target |
+| `NETWORK` | rows cross tasks and tasks wait more than half of their time for network buffers, while no sink is busy more than half of its time | `network-buffers`: raise `network.buffers-per-channel` or `network.floating-buffers-per-gate`; `check-network`: check the network between the workers |
+| `SOURCE` | write threads wait more than half of their time for rows; or a source is busy more than half of its time while readers and tasks hardly wait | `source-parallelism`: raise the parallelism of the source or let it read more splits; `check-source`: check the query latency and load of the source |
+| `NONE` | none of these: nothing waits for long | — |
+| `UNKNOWN` | no task ran in the window yet | — |
+
+The JSON form holds `schemaVersion` (`1`), `job`, `status`, the window (`windowFromMs`,
+`windowToMs`), `metrics` with the nodes, `rates` and `bottleneck` with `kind`, `node`, `evidence`
+(metric, node, value) and `advice` (`code`, `text`). The codes stay the same; the text is English.
 
 ## Troubleshooting
 
@@ -151,6 +194,9 @@ arrives with the metrics of the engine.
 
 ## Limitations
 
+- The run analysis judges the job and its nodes. Rate limits (`THROTTLE`) come with the rate limit
+  quotas of the engine; skew, edges and subtasks come in a later version, as do the server's
+  `explain --analyze` for a run and its Web UI.
 - The plan is the logical plan: optimization rules (projection and filter push-down, merging
   transforms), the execution graph and resource estimates come with the distributed engine.
 - Data sources stored in the control plane (`datasource:`) and `${secret:...}` / `${file:...}`

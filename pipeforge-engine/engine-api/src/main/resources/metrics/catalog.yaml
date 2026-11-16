@@ -173,6 +173,14 @@
     en-US: "Splits of readers that have finished. Readers do not report single splits, so this grows when a reader ends."
     zh-CN: "已经结束的 Reader 的分片数。Reader 不会单独报告每个分片，因此这个值在 Reader 结束时增长。"
 
+- name: runningMs
+  scope: job
+  type: timer
+  unit: ms
+  description:
+    en-US: "Time tasks ran, summed over tasks; readerWaitMs, writerWaitMs and backpressuredMs are shares of it."
+    zh-CN: "Task 的运行时间，按 Task 求和；readerWaitMs、writerWaitMs 和 backpressuredMs 是它的一部分。"
+
 - name: rowsIn
   scope: node
   type: counter

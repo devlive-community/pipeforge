@@ -245,18 +245,22 @@ handle.result().get().status();   // CANCELLED
 - **队列与分片。** `queueDepth` 和 `queueCapacity` 显示 Sink 写队列当前的占用。`splitsAssigned` 统计分片分配器分出的分片数，
   `splitsFinished` 统计已结束的 Reader 的分片数：Reader 不会单独报告每个分片。
 
-`AnalyzeText` 按 `explain --analyze` 展示运行结果的格式输出指标：
+`AnalyzeText` 按 `explain --analyze` 展示运行结果的格式输出[运行分析](./plan-and-explain#运行分析)：
 
 ```text
 Job orders-copy  SUCCESS 12.4s  parallelism 4
 Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
 Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
-Wait   reader 1.2s (target slow)  writer 300ms (source slow)
+Wait   reader 1.2s (target slow)  writer 300ms (source slow)  backpressured 0ms (downstream slow)
 
-Node  kind       in rows    out rows   sel.  self%
-src   source     1,000,000  1,000,000  -     21%
-map   transform  1,000,000  999,000    1.00  4%
-out   sink       999,000    999,000    -     68%
+Node  kind       in rows    out rows   sel.  in r/s  self%
+src   source     1,000,000  1,000,000  -     -       21%
+map   transform  1,000,000  999,000    1.00  80,645  4%
+out   sink       999,000    999,000    -     80,565  68%
+
+Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time for rows
+  → Raise the parallelism of out (now 4) or its batch size, if the target can take more writes
+  → Check the write latency and the load of the target system
 ```
 
 每个 Task 在开始运行、结束、失败或被取消时写日志，写入它在 Worker 上的单独日志文件，Task 结束后仍可读取（见[日志](../operations/logs)）；

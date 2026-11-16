@@ -60,6 +60,8 @@
 # modules register their own entry; pipeforge-engine/pom.xml only lists the modules.
 - paths: ["pipeforge-engine/engine-api/**", "pipeforge-engine/engine-worker/**", "pipeforge-engine/engine-local/**", "pipeforge-engine/engine-network/src/main/java/org/devlive/pipeforge/engine/network/*.java", "pipeforge-engine/engine-network/src/main/java/org/devlive/pipeforge/engine/network/buffer/**", "pipeforge-engine/engine-network/src/main/java/org/devlive/pipeforge/engine/network/partition/**", "pipeforge-engine/engine-network/src/main/java/org/devlive/pipeforge/engine/network/gate/**"]
   docs: ["concepts/execution"]
+- paths: ["pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/RunAnaly*.java", "pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/Bottleneck.java", "pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/AnalyzeText.java"]
+  docs: ["concepts/plan-and-explain"]
 - paths: ["pipeforge-engine/engine-rpc/**", "pipeforge-engine/engine-network/**", "pipeforge-engine/protocol-compat/**"]
   docs: ["development/engine-protocol"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ResourceManager*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Scheduler.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/SlotTable.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MasterConnection.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/PluginCache.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/PluginBlobs.java"]

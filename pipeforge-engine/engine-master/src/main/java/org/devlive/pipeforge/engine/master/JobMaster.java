@@ -133,6 +133,9 @@ public final class JobMaster {
     private volatile List<TaskView> taskView = List.of();
 
     private volatile JobMetrics published = JobMetrics.EMPTY;
+    /** The samples a run analysis looks back on: one window and the sample before it. */
+    private final java.util.ArrayDeque<JobMetrics> history = new java.util.ArrayDeque<>();
+
     private @Nullable PipeForgeException failure;
     private @Nullable SplitEnumerator<SourceSplit, ?> enumerator;
     /** Runs every call of the enumerator, one at a time, so that a blocked call can time out. */
@@ -852,7 +855,39 @@ public final class JobMaster {
             int running = (int)
                     states.values().stream().filter(s -> s == TaskState.RUNNING).count();
             published = aggregator.sample(System.nanoTime(), running, MetricsAggregator.Phase.RUNNING);
+            remember(published);
         }
+    }
+
+    private void remember(JobMetrics sample) {
+        synchronized (history) {
+            history.addLast(sample);
+            // keep the newest sample that is at least a window old, as the base of the window
+            while (history.size() > 2) {
+                JobMetrics second = history.stream().skip(1).findFirst().orElseThrow();
+                if (second.elapsedMs() > sample.elapsedMs() - org.devlive.pipeforge.engine.api.RunAnalyzer.WINDOW_MS) {
+                    break;
+                }
+                history.removeFirst();
+            }
+        }
+    }
+
+    /**
+     * The run analysis: of the last {@link org.devlive.pipeforge.engine.api.RunAnalyzer#WINDOW_MS}
+     * while the run is running, of the whole run once it ended.
+     */
+    public org.devlive.pipeforge.engine.api.RunAnalysis analysis() {
+        JobStatus now = status;
+        JobMetrics current = published;
+        List<JobMetrics> samples;
+        synchronized (history) {
+            samples = new ArrayList<>(history);
+        }
+        if (samples.isEmpty() || samples.get(samples.size() - 1) != current) {
+            samples.add(current);
+        }
+        return org.devlive.pipeforge.engine.api.RunAnalyzer.analyze(plan.name(), now, samples);
     }
 
     /** The metrics published last: at most one metrics interval old while running, final once ended. */

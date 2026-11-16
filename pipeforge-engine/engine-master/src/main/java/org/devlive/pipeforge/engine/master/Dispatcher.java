@@ -266,6 +266,15 @@ public final class Dispatcher implements AutoCloseable {
         return find(runId).master.handle().metrics();
     }
 
+    /**
+     * The run analysis of a run.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
+     */
+    public org.devlive.pipeforge.engine.api.RunAnalysis analysis(String runId) {
+        return find(runId).master.analysis();
+    }
+
     /** The runs in {@code states} (all when empty), newest first, at most {@code limit}. */
     public synchronized List<RunStatus> list(Set<State> states, int limit) {
         List<RunStatus> list = new ArrayList<>();

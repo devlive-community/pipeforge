@@ -81,7 +81,7 @@ class MetricCatalogTest {
     void reconcilesAndFindsNodes() {
         NodeMetrics map = new NodeMetrics("map", "transform", 10, 8, 3, 1, 0.25, 0, 0);
         JobMetrics metrics = new JobMetrics(
-                1500, 10, 7, 3, 1, 0, 1, Rate.ZERO, Rate.ZERO, 0, 0, 1, 1, List.of(map), 0, 0, -1, 0, 0, 0, 0);
+                1500, 10, 7, 3, 1, 0, 1, Rate.ZERO, Rate.ZERO, 0, 0, 1, 1, List.of(map), 0, 0, -1, 0, 0, 0, 0, 0);
 
         assertThat(metrics.reconciled()).isTrue();
         assertThat(metrics.node("map")).contains(map);
@@ -90,7 +90,8 @@ class MetricCatalogTest {
         assertThat(new NodeMetrics("x", "source", 0, 0, 0, 0, -1, 0, 0).selectivity())
                 .isEqualTo(-1);
         assertThat(new JobMetrics(
-                                0, 10, 9, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 1, 0, List.of(), 0, 0, -1, 0, 0, 0, 0)
+                                0, 10, 9, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 1, 0, List.of(), 0, 0, -1, 0, 0, 0, 0,
+                                0)
                         .reconciled())
                 .isFalse();
     }

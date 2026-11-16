@@ -220,7 +220,8 @@ final class MetricsAggregator {
                 queueDepth,
                 queueCapacity,
                 splitsAssigned,
-                splitsFinished);
+                splitsFinished,
+                TimeUnit.NANOSECONDS.toMillis(running));
     }
 
     private Sample secondToLast() {

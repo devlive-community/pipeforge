@@ -309,18 +309,22 @@ runs, refreshed every `metricsInterval`.
   sinks are now. `splitsAssigned` counts the splits the enumerator gave out, `splitsFinished` those
   of readers that have ended: readers do not report single splits.
 
-`AnalyzeText` prints the metrics the way `explain --analyze` shows a run:
+`AnalyzeText` prints the [run analysis](./plan-and-explain#run-analysis) the way `explain --analyze` shows a run:
 
 ```text
 Job orders-copy  SUCCESS 12.4s  parallelism 4
 Rows   read 1,000,000  written 999,000  filtered 1,000  in-flight 0  failed 0   reconcile OK
 Rate   read 0 r/s (avg 80,645, peak 91,200)   write 0 r/s (avg 80,564, peak 91,000)
-Wait   reader 1.2s (target slow)  writer 300ms (source slow)
+Wait   reader 1.2s (target slow)  writer 300ms (source slow)  backpressured 0ms (downstream slow)
 
-Node  kind       in rows    out rows   sel.  self%
-src   source     1,000,000  1,000,000  -     21%
-map   transform  1,000,000  999,000    1.00  4%
-out   sink       999,000    999,000    -     68%
+Node  kind       in rows    out rows   sel.  in r/s  self%
+src   source     1,000,000  1,000,000  -     -       21%
+map   transform  1,000,000  999,000    1.00  80,645  4%
+out   sink       999,000    999,000    -     80,565  68%
+
+Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time for rows
+  → Raise the parallelism of out (now 4) or its batch size, if the target can take more writes
+  → Check the write latency and the load of the target system
 ```
 
 Each task logs when it starts running, finishes, fails or is cancelled, into a log file of its own
