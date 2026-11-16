@@ -114,6 +114,14 @@ public final class ErrorCode {
             define("PF-RES-0008", "NETWORK_BUFFERS_INSUFFICIENT", "owner", "required", "available", "total");
     public static final ErrorCode PORT_IN_USE = define("PF-RES-0006", "PORT_IN_USE", "port");
 
+    // Connections, authentication and metadata
+    public static final ErrorCode CONN_REFUSED = define("PF-CONN-0001", "CONN_REFUSED", "target", "reason");
+    public static final ErrorCode CONN_TIMEOUT = define("PF-CONN-0002", "CONN_TIMEOUT", "target", "reason");
+    public static final ErrorCode CONN_LOST = define("PF-CONN-0003", "CONN_LOST", "target", "reason");
+    public static final ErrorCode AUTH_FAILED = define("PF-AUTH-0001", "AUTH_FAILED", "target", "user", "reason");
+    public static final ErrorCode TABLE_NOT_FOUND = define("PF-META-0001", "TABLE_NOT_FOUND", "table", "target");
+    public static final ErrorCode COLUMN_NOT_FOUND = define("PF-META-0002", "COLUMN_NOT_FOUND", "table", "column");
+
     // Cluster and processes
     public static final ErrorCode WORKER_LOST = define("PF-CLUS-0001", "WORKER_LOST", "worker", "address", "seconds");
     public static final ErrorCode SERVER_START_FAILED = define("PF-CLUS-0002", "SERVER_START_FAILED", "reason", "log");

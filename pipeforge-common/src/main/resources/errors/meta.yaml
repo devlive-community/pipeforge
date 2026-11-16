@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Metadata errors: tables and columns.
+
+- code: PF-META-0001
+  name: TABLE_NOT_FOUND
+  message:
+    en-US: "Table {table} does not exist in {target}"
+    zh-CN: "{target} 中不存在表 {table}"
+  hint:
+    en-US: "Check the name, its database or schema, and the case of the name: some databases store unquoted names in upper or lower case."
+    zh-CN: "请检查表名、所在的库或 Schema，以及名称的大小写：有些数据库会把未加引号的名称存为大写或小写。"
+
+- code: PF-META-0002
+  name: COLUMN_NOT_FOUND
+  message:
+    en-US: "Table {table} has no column '{column}'"
+    zh-CN: "表 {table} 中没有列 '{column}'"
+  hint:
+    en-US: "The rows have a column the target table lacks. Add it to the table, or drop or rename it before the sink, for example with a field mapper."
+    zh-CN: "行中有目标表没有的列。请在表中添加该列，或者在 Sink 之前删除或重命名它，例如使用字段映射。"

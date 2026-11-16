@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Authentication and permission errors.
+
+- code: PF-AUTH-0001
+  name: AUTH_FAILED
+  message:
+    en-US: "{target} refused the login of user '{user}': {reason}"
+    zh-CN: "{target} 拒绝了用户 '{user}' 的登录：{reason}"
+  hint:
+    en-US: "Check the user name and the password of the data source, and that the user may connect from the hosts of the workers."
+    zh-CN: "请检查数据源的用户名和密码，以及该用户是否允许从 Worker 所在的主机连接。"

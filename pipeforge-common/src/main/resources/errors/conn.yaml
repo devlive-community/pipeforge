@@ -1,0 +1,34 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Connection errors: by default transient, so the operation is retried.
+
+- code: PF-CONN-0001
+  name: CONN_REFUSED
+  message:
+    en-US: "Cannot connect to {target}: {reason}"
+    zh-CN: "无法连接 {target}：{reason}"
+  hint:
+    en-US: "Check that the server runs and is reachable from the workers at this address, including firewalls and the port."
+    zh-CN: "请检查服务是否在运行，以及 Worker 能否访问这个地址，包括防火墙和端口。"
+
+- code: PF-CONN-0002
+  name: CONN_TIMEOUT
+  message:
+    en-US: "Connecting to or waiting for {target} timed out: {reason}"
+    zh-CN: "连接或等待 {target} 超时：{reason}"
+  hint:
+    en-US: "The server is slow or the network drops packets. Check the load of the server, or raise the timeout of the client in the native configuration."
+    zh-CN: "服务端响应慢或网络丢包。请检查服务端的负载，或在原生配置中调大客户端的超时。"
+
+- code: PF-CONN-0003
+  name: CONN_LOST
+  message:
+    en-US: "The connection to {target} broke while it was used: {reason}"
+    zh-CN: "与 {target} 的连接在使用过程中断开：{reason}"
+  hint:
+    en-US: "The server closed the connection or the network failed. Look for restarts or idle timeouts on the server side."
+    zh-CN: "服务端关闭了连接或网络出现故障。请检查服务端是否重启或设置了空闲超时。"
