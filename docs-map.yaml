@@ -72,6 +72,9 @@
   docs: ["concepts/execution"]
 - paths: ["pipeforge-connectors/connector-jdbc/**"]
   docs: ["development/jdbc-dialects"]
+# until the MySQL source and sink have their pages
+- paths: ["pipeforge-connectors/connector-mysql/**"]
+  docs: ["development/jdbc-dialects"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
 # Plugins: every plugin module has its page; the conventions of plugin builds are part of packaging.

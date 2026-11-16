@@ -44,6 +44,13 @@ does differently:
 Dialects are stateless and serializable. `GenericDialect` is the ANSI dialect itself, for databases
 without one.
 
+## Dialects
+
+| Dialect | Module | Verified with | What differs from ANSI |
+|---|---|---|---|
+| `jdbc` (`GenericDialect`) | `connector-jdbc` | H2 | nothing |
+| `mysql` | `connector-mysql` | MySQL 8.0, 8.4 with Connector/J 8.4 | backticks; `db.t` is a catalog; unsigned integers widen, `BIGINT UNSIGNED` is `DECIMAL(20, 0)`, `YEAR` is `INT16`, `BIT(n)` is `BYTES`, `TIMESTAMP` an instant; a UTC session, rewritten batches, UTF-8; streams row by row; `allowLoadLocalInfile`, `allowUrlInLocalInfile` and `autoReconnect` are controlled; classifies MySQL error codes |
+
 ## Wiring a plugin
 
 ```java
