@@ -41,3 +41,12 @@
   hint:
     en-US: "Guard the expression (for example NULLIF(qty, 0) or TRY_CAST), or set on-error to null or fail on the node."
     zh-CN: "为表达式加上保护（例如 NULLIF(qty, 0) 或 TRY_CAST），或者在节点上把 on-error 设置为 null 或 fail。"
+
+- code: PF-DATA-0007
+  name: ROW_TOO_LARGE
+  message:
+    en-US: "A row of table {table} takes {bytes} bytes, more than task.max-row-bytes ({limit})"
+    zh-CN: "表 {table} 的一行占用 {bytes} 字节，超过了 task.max-row-bytes（{limit}）"
+  hint:
+    en-US: "Look for very large values in the row, such as documents or files in one column, or raise task.max-row-bytes if the worker has the memory."
+    zh-CN: "请检查行中是否有特别大的值，例如某一列中的文档或文件；如果 Worker 内存充足，也可以调大 task.max-row-bytes。"

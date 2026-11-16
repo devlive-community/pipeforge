@@ -20,7 +20,7 @@ PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Tas
 定义位于 `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`。构建时由它们生成 Java 消息与服务桩
 （包 `org.devlive.pipeforge.engine.rpc.proto`）；引擎内部使用自己的类型，`ProtoMapping` 在边界上负责两者之间的转换。
 
-当前版本中协议、它的 gRPC 传输以及 Task 描述都已就绪；集群进程（Master、Worker）以及 Worker 之间的数据交换会在分布式运行时的后续步骤中加入。
+当前版本中协议、它的 gRPC 传输、Task 描述以及 Worker 之间的数据交换都已就绪；集群进程（Master、Worker）会在分布式运行时的后续步骤中加入。
 本地运行（`pipeforge run --local`）在进程内使用同一组接口。
 
 ## 约定
@@ -81,7 +81,40 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
 与列不匹配的值会让该行失败：值的类型不对时为 [`PF-DATA-0001`](../reference/errors#pf-data-0001)，超出范围时（例如小数的位数超过精度）
 为 [`PF-DATA-0002`](../reference/errors#pf-data-0002)，错误中给出列名，例如 `address.city` 或 `tags[]`。精度不超过 6 的时间戳保留到微秒，
 更细的部分被舍去。不是已知表的行的字节会作为内部错误被拒绝。每个格式版本的样本保存在 `pipeforge-engine/protocol-compat/row/` 中，
-每次构建都检查它仍能被读取，并且仍能逐字节地写出。目前行还不会在进程之间传输：使用这个格式的数据交换会在分布式运行时的后续步骤中加入。
+每次构建都检查它仍能被读取，并且仍能逐字节地写出。
+
+## 数据交换
+
+行通过 TCP 在 Worker 之间传输（Netty，`pipeforge-engine/engine-network`），每对 Worker 之间一条连接，它们之间的所有通道共用。每一帧为：
+
+```text
++---------+---------+---------+-----------+------------------+
+| "PF"    | 版本     | 类型     | 长度       | 内容              |
+| 2 字节  | 1 字节   | 1 字节   | 4 字节     | 长度个字节         |
++---------+---------+---------+-----------+------------------+
+```
+
+| 类型 | 帧 | 方向 | 内容 |
+|---|---|---|---|
+| `0x00` | `Hello` | 双向 | 协议版本、Worker ID、集群令牌 |
+| `0x01` | `PartitionRequest` | 消费者 → 生产者 | 通道 ID、生产者的 Task 实例与输出、子分区、初始 credit |
+| `0x02` | `BufferResponse` | 生产者 → 消费者 | 通道 ID、序号、积压数、缓冲类型（数据或事件）、标志、内容 |
+| `0x03` | `AddCredit` | 消费者 → 生产者 | 通道 ID、新增 credit |
+| `0x04` | `CancelPartition` | 消费者 → 生产者 | 通道 ID |
+| `0x05` | `CloseRequest` | 双向 | — |
+| `0x06` | `ErrorResponse` | 双向 | 通道 ID（为空表示整条连接）、错误码、信息 |
+| `0x07` / `0x08` | `Ping` / `Pong` | 双向 | — |
+
+- 双方先发送 `Hello`。集群令牌不同时以 [`PF-CLUS-0005`](../reference/errors#pf-clus-0005) 拒绝，主版本（每一帧的版本字节）不同时以
+  [`PF-CLUS-0007`](../reference/errors#pf-clus-0007) 拒绝；拒绝的一方发送 `ErrorResponse` 后关闭连接。
+- 长度、计数和编号为 varint，字符串为 varint 长度加 UTF-8，ID 为 16 字节。帧长度超过 `task.max-row-bytes` + 1 KB、magic 不对或内容无法解析时，
+  以 `ErrorResponse` 关闭连接。
+- 数据缓冲中是按上文行格式编码的行；事件缓冲中是事件类型（`0x01` 子分区结束、`0x02` 输入结束、`0x03` 表结构变化；`0x10`–`0x1F`
+  留给 checkpoint 和 watermark）及其内容。
+- 生产者只在通道有 credit 时发送数据缓冲，并为每个通道的缓冲从 0 开始编号；消费者拒绝序号不连续或没有 credit 的缓冲。
+- 消费者请求的输出还不存在时，最多等待一个分区请求超时（30 秒），之后以 [`PF-CLUS-0011`](../reference/errors#pf-clus-0011) 拒绝。
+- 没有发送 `CloseRequest` 就关闭的连接，会让消费者一端未结束的通道、以及生产者一端被它们读取的输出以
+  [`PF-CLUS-0010`](../reference/errors#pf-clus-0010) 失败。
 
 ## 传输
 

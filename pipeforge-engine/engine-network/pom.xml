@@ -18,7 +18,7 @@
 
     <artifactId>pipeforge-engine-network</artifactId>
     <name>PipeForge Engine Network</name>
-    <description>Data exchange between tasks: the row serialization format (protocol v1)</description>
+    <description>Data exchange between tasks: the row format, buffers, credit-based flow control and the Netty transport (protocol v1)</description>
 
     <dependencies>
         <dependency>
@@ -30,6 +30,30 @@
             <groupId>org.devlive.pipeforge</groupId>
             <artifactId>pipeforge-api</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-codec-base</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
         </dependency>
         <dependency>
             <groupId>com.github.spotbugs</groupId>

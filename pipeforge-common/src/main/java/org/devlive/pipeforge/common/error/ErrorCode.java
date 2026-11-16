@@ -89,6 +89,7 @@ public final class ErrorCode {
     public static final ErrorCode CONSTRAINT_VIOLATION =
             define("PF-DATA-0004", "CONSTRAINT_VIOLATION", "table", "column", "reason");
     public static final ErrorCode EXPRESSION_ERROR = define("PF-DATA-0006", "EXPRESSION_ERROR", "expression", "reason");
+    public static final ErrorCode ROW_TOO_LARGE = define("PF-DATA-0007", "ROW_TOO_LARGE", "table", "bytes", "limit");
 
     // Sources
     public static final ErrorCode SOURCE_FAILED = define("PF-SRC-0001", "SOURCE_FAILED", "node", "reason");
@@ -105,6 +106,8 @@ public final class ErrorCode {
     public static final ErrorCode SLOTS_INSUFFICIENT =
             define("PF-RES-0001", "SLOTS_INSUFFICIENT", "job", "required", "available", "timeout");
     public static final ErrorCode SLOT_TAKEN = define("PF-RES-0007", "SLOT_TAKEN", "worker", "slot", "holder");
+    public static final ErrorCode NETWORK_BUFFERS_INSUFFICIENT =
+            define("PF-RES-0008", "NETWORK_BUFFERS_INSUFFICIENT", "owner", "required", "available", "total");
     public static final ErrorCode PORT_IN_USE = define("PF-RES-0006", "PORT_IN_USE", "port");
 
     // Cluster and processes
@@ -120,6 +123,10 @@ public final class ErrorCode {
             define("PF-CLUS-0007", "RPC_VERSION_MISMATCH", "local", "remote");
     public static final ErrorCode RPC_UNAVAILABLE = define("PF-CLUS-0008", "RPC_UNAVAILABLE", "target", "reason");
     public static final ErrorCode SECRETS_UNREADABLE = define("PF-CLUS-0009", "SECRETS_UNREADABLE", "task", "reason");
+    public static final ErrorCode DATA_CONNECTION_LOST =
+            define("PF-CLUS-0010", "DATA_CONNECTION_LOST", "peer", "reason");
+    public static final ErrorCode PARTITION_NOT_FOUND =
+            define("PF-CLUS-0011", "PARTITION_NOT_FOUND", "partition", "worker", "seconds");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

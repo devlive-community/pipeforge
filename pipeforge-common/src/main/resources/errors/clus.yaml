@@ -86,3 +86,21 @@
   hint:
     en-US: "They were encrypted for another key of this worker, usually because the worker restarted after it registered; the task is deployed again once the worker has registered anew."
     zh-CN: "它们是为该 Worker 的另一个密钥加密的，通常是因为 Worker 在注册后重启过；Worker 重新注册后 Task 会被再次部署。"
+
+- code: PF-CLUS-0010
+  name: DATA_CONNECTION_LOST
+  message:
+    en-US: "The data connection to {peer} was lost: {reason}"
+    zh-CN: "与 {peer} 的数据连接已断开：{reason}"
+  hint:
+    en-US: "The other worker stopped, paused for longer than three heartbeats of the connection, or the network between the workers failed. The tasks on both ends fail; check the log of the other worker and the network between them."
+    zh-CN: "另一个 Worker 已停止、停顿超过连接的三次心跳，或者 Worker 之间的网络出现故障。两端的 Task 都会失败；请检查另一个 Worker 的日志以及两者之间的网络。"
+
+- code: PF-CLUS-0011
+  name: PARTITION_NOT_FOUND
+  message:
+    en-US: "The output {partition} is not on worker {worker}; it did not appear within {seconds} seconds"
+    zh-CN: "Worker {worker} 上没有输出 {partition}，{seconds} 秒内也没有出现"
+  hint:
+    en-US: "The upstream task did not start on that worker, or it already failed. Look for the first error of the run; this one usually follows it."
+    zh-CN: "上游 Task 没有在该 Worker 上启动，或者已经失败。请查找本次运行的第一个错误；这个错误通常是它的后果。"

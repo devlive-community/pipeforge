@@ -41,3 +41,12 @@
   hint:
     en-US: "Another job reserved the slot first; the scheduler takes another one. If this repeats, the master and the worker disagree about the slots: the next heartbeat brings them together."
     zh-CN: "另一个作业先预留了这个 Slot；调度器会改用其他 Slot。如果反复出现，说明 Master 与 Worker 对 Slot 的记录不一致，下一次心跳会使两者一致。"
+
+- code: PF-RES-0008
+  name: NETWORK_BUFFERS_INSUFFICIENT
+  message:
+    en-US: "{owner} needs {required} network buffers, but only {available} of {total} are free"
+    zh-CN: "{owner} 需要 {required} 个网络缓冲，但 {total} 个中只有 {available} 个空闲"
+  hint:
+    en-US: "Each input channel takes network.buffers-per-channel buffers and each input network.floating-buffers-per-gate more. Give the worker more network memory (worker.memory.network), or lower the parallelism."
+    zh-CN: "每个输入通道占用 network.buffers-per-channel 个缓冲，每个输入另外占用 network.floating-buffers-per-gate 个。请为 Worker 分配更多网络内存（worker.memory.network），或者降低并行度。"

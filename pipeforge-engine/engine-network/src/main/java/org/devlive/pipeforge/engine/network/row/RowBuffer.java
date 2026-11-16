@@ -34,6 +34,11 @@ public final class RowBuffer {
         return ByteBuffer.wrap(data, 0, size).slice();
     }
 
+    /** Copies the bytes written into {@code target} at {@code offset}. */
+    public void copyTo(byte[] target, int offset) {
+        System.arraycopy(data, 0, target, offset, size);
+    }
+
     public byte[] toByteArray() {
         return Arrays.copyOf(data, size);
     }

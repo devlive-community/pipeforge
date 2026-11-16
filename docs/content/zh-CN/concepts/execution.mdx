@@ -83,6 +83,22 @@ Task 线程：… → 攒批 ──► 有界队列 ──► 写线程：SinkWr
 
 目标端比源端慢时，队列被填满，Task 线程阻塞：这就是让 Reader 慢下来的背压。输入结束时，Task 等待所有批次写完，然后让 Writer 准备提交。
 
+### 数据交换与背压
+
+不同算子链的 Task 相连时，上游 Task 把行写入一个**输出**，每个下游子任务对应其中一个子分区；每个下游 Task 读取一个**输入**，
+每个上游子分区对应其中一个通道。
+
+- 行被打包进 Worker 网络内存中 32 KB 的网络缓冲。缓冲满了、低流量时超过缓冲超时（100 毫秒）、或者遇到事件之前，都会被发送。
+  比缓冲大的行单独占用一个缓冲；超过 `task.max-row-bytes` 的行以 [`PF-DATA-0007`](../reference/errors#pf-data-0007) 失败。
+- 事件（子分区结束、有界输入结束、表结构变化）与行在同一条流中传输，因此它们恰好位于之前和之后写入的行之间。
+- **credit**：每个输入通道有 2 个专属缓冲，生产者报告积压时，还可以从输入的 8 个浮动缓冲中借用。只有通道有 credit 时，
+  生产者才发送数据缓冲；事件不需要 credit。
+- **背压**：慢的消费者不再给出 credit，生产者的缓冲被占满，写下一行时等待空闲缓冲。等待一直传到 Source，使它停止读取。
+  只有这个输出被拖慢：同一条连接上的其他通道照常传输。
+- 同一 Worker 上的 Task 在内存中交接缓冲，credit 和顺序规则相同。不同 Worker 上的 Task 之间，每对 Worker 使用一条 TCP 连接，
+  所有通道共用；空闲的连接每 30 秒发送一次 ping，连续三个间隔没有任何消息的连接会被关闭。
+- 连接断开时，两端的 Task 都以 [`PF-CLUS-0010`](../reference/errors#pf-clus-0010) 失败。
+
 ### 输入结束时提交
 
 两阶段提交的 Sink 在 `prepareCommit` 中返回待提交内容（committable）。所有 Task 都结束后，JobMaster 先用 Sink 的 Committer、
@@ -147,6 +163,19 @@ try (Engine engine = new LocalEngine()) {
 | `metricsInterval` | `1s` | Task 上报指标、作业指标和速率刷新的周期 |
 
 每个 Task 的并行度来自作业：`env.parallelism` 或节点的 `parallelism`。
+
+数据交换按 Worker 配置；Worker 作为独立进程运行（集群发行包）之后才会读取这些设置：
+
+| 设置 | 默认值 | 作用 |
+|---|---|---|
+| `worker.memory.network` | 内存的 10%（64 MB–1 GB） | 网络缓冲使用的内存 |
+| `network.buffer-size` | `32KB` | 网络缓冲的大小 |
+| `network.buffers-per-channel` | `2` | 每个输入通道的专属缓冲数 |
+| `network.floating-buffers-per-gate` | `8` | 生产者报告积压时，一个输入在各通道之间共享的缓冲数 |
+| `network.buffer-timeout` | `100ms` | 未满的缓冲在多久之后也会被发送 |
+| `task.max-row-bytes` | `64MB` | 单行的大小上限 |
+
+一个输入需要 `buffer-size × (buffers-per-channel × 通道数 + floating-buffers-per-gate)`，一条边的通道数为上游并行度乘以下游并行度。
 
 ## 示例
 
@@ -226,6 +255,8 @@ out   sink       999,000    999,000    -     68%
 - 更大的 `writeQueueCapacity` 可以吸收目标端的短暂变慢，但目标端平均速度较慢时没有帮助。
 - 并行度越高，Task 和线程越多；Source 的分片需要足够细，才能让它们都有活干。
 - `readerWaitMs` 高且 Sink 的 `selfTimeRatio` 高，说明瓶颈在目标端；`writerWaitMs` 高说明瓶颈在源端。
+- 在 Task 之间，输出等待缓冲的时间（`backpressuredMs`）说明下游更慢；下一个 Task 的输入等待时间说明它在等上游。
+  更多的浮动缓冲可以吸收突发流量，但对平均速度更慢的消费者没有帮助。
 
 ## 排障
 
@@ -237,13 +268,17 @@ out   sink       999,000    999,000    -     68%
 | `PF-PLUG-0007` | Transform 处理一行数据时失败 |
 | `PF-RES-0005` | 被取消的 Task 既不响应取消也不响应中断；请为连接器配置连接或查询超时 |
 | `PF-PLAN-0012` | 作业需要在 Task 之间交换数据，当前版本无法运行（见“限制”） |
+| `PF-CLUS-0010` | 两个 Worker 之间的数据连接断开；两端的 Task 都会失败 |
+| `PF-CLUS-0011` | Task 请求的上游输出没有及时出现在它的 Worker 上；请查找本次运行的第一个错误 |
+| `PF-RES-0008` | Worker 的网络内存放不下一个输入需要的缓冲；请调大 `worker.memory.network` 或降低并行度 |
+| `PF-DATA-0007` | 一行的大小超过了 `task.max-row-bytes` |
 
 连接器用自己的错误码上报的错误保留原错误码，引擎会在其定位中补充节点和子任务。完整列表见[错误码参考](../reference/errors)。
 
 ## 限制
 
 - 作业必须是一条直线：一个 Source、它的 Transform 和一个 Sink，并行度全部相同。多个 Source 或 Sink、一个节点输出到多个下游、
-  并行度变化都需要在 Task 之间交换数据，会以 `PF-PLAN-0012` 失败。
+  并行度变化都需要在 Task 之间交换数据，会以 `PF-PLAN-0012` 失败：上文所述的数据交换已经就绪，把 Task 接到它上面会在分布式运行时的下一步中完成。
 - 没有 checkpoint：失败或取消的作业再次运行时从头开始，两阶段提交的 Sink 在输入结束时提交一次。
 - 没有重启：第一个 Task 失败即作业失败。
 - 流式作业一直运行，直到被取消。

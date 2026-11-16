@@ -101,6 +101,30 @@ When the target is slower than the source, the queue fills and the task thread b
 backpressure that slows the reader down. When the input ends, the task waits until every batch is
 written, then asks the writer to prepare its commit.
 
+### Data exchange and backpressure
+
+When tasks of different chains are connected, the upstream task writes its rows into an **output**
+with one subpartition per downstream subtask, and each downstream task reads an **input** with one
+channel per upstream subpartition.
+
+- Rows are packed into network buffers of 32 KB from the worker's network memory. A buffer is sent
+  when it is full, after the buffer timeout (100 ms) when traffic is low, or before an event. A row
+  larger than a buffer gets a buffer of its own; a row above `task.max-row-bytes` fails with
+  [`PF-DATA-0007`](../reference/errors#pf-data-0007).
+- Events — the end of a subpartition, the end of a bounded input, a table that changed — travel in
+  the same stream as the rows, so they arrive exactly between the rows written before and after them.
+- **Credit**: each input channel owns 2 buffers and may borrow from 8 floating buffers of its input
+  when the producer reports a backlog. A producer sends a data buffer only when the channel has
+  credit; events need none.
+- **Backpressure**: a slow consumer stops giving credit, its producer's buffers fill up, and writing
+  the next row waits until one is free. The wait reaches the source, which stops reading. Only that
+  output is held back: other channels on the same connection keep flowing.
+- Tasks on the same worker hand buffers over in memory, with the same credit and order. Tasks on
+  different workers use one TCP connection per pair of workers, shared by all their channels; an idle
+  connection sends a ping every 30 seconds, and one silent for three intervals is closed.
+- If a connection breaks, the tasks on both ends fail with
+  [`PF-CLUS-0010`](../reference/errors#pf-clus-0010).
+
 ### Commit at the end of the input
 
 A sink that commits in two phases returns a committable from `prepareCommit`. When every task has
@@ -174,6 +198,21 @@ Engine settings are given per submission with `SubmitOptions`:
 | `metricsInterval` | `1s` | How often tasks report their metrics and the job metrics and rates are refreshed |
 
 The parallelism of each task comes from the job: `env.parallelism` or the node's `parallelism`.
+
+The data exchange is configured per worker; the settings are read once workers run as their own
+processes, with the cluster distribution:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `worker.memory.network` | 10% of the memory (64 MB–1 GB) | Memory for network buffers |
+| `network.buffer-size` | `32KB` | Size of a network buffer |
+| `network.buffers-per-channel` | `2` | Buffers each input channel owns |
+| `network.floating-buffers-per-gate` | `8` | Buffers an input shares among its channels when producers report a backlog |
+| `network.buffer-timeout` | `100ms` | When a buffer that is not full is sent anyway |
+| `task.max-row-bytes` | `64MB` | Largest row |
+
+An input needs `buffer-size × (buffers-per-channel × channels + floating-buffers-per-gate)`, and
+the channels of an edge are the upstream times the downstream parallelism.
 
 ## Examples
 
@@ -275,6 +314,9 @@ commit and end.
   keep them busy.
 - A high `readerWaitMs` with a high `selfTimeRatio` of the sink means the target is the limit; a
   high `writerWaitMs` means the source is.
+- Between tasks, the time an output waits for buffers (`backpressuredMs`) shows that something
+  downstream is slower; the input wait time of the next task shows that it waits for upstream. More
+  floating buffers absorb bursts; they do not help a consumer that is slower on average.
 
 ## Troubleshooting
 
@@ -286,6 +328,10 @@ commit and end.
 | `PF-PLUG-0007` | A transform failed while processing a row |
 | `PF-RES-0005` | A cancelled task ignored cancellation and interrupts; give the connector a socket or query timeout |
 | `PF-PLAN-0012` | The job needs data exchange between tasks, which this version cannot run (see Limitations) |
+| `PF-CLUS-0010` | The data connection between two workers broke; the tasks on both ends fail |
+| `PF-CLUS-0011` | A task asked for the output of an upstream task that did not appear on its worker in time; look for the first error of the run |
+| `PF-RES-0008` | The worker's network memory cannot hold the buffers an input needs; raise `worker.memory.network` or lower the parallelism |
+| `PF-DATA-0007` | A row is larger than `task.max-row-bytes` |
 
 Errors that a connector reports with its own code keep that code; the engine adds the node and
 subtask to their scope. The full list is in the [error reference](../reference/errors).
@@ -294,7 +340,8 @@ subtask to their scope. The full list is in the [error reference](../reference/e
 
 - Jobs must be a straight line: one source, its transforms and one sink, all with the same
   parallelism. Several sources or sinks, fan-out and changes of parallelism need data exchange
-  between tasks and fail with `PF-PLAN-0012`.
+  between tasks and fail with `PF-PLAN-0012`: the data exchange described above is in place, and
+  connecting tasks to it comes in the next step of the distributed runtime.
 - No checkpoints: a failed or cancelled job starts from the beginning when it is run again, and
   two-phase sinks commit once at the end of the input.
 - No restarts: the first task failure fails the job.

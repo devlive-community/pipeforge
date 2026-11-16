@@ -23,9 +23,9 @@ generates the Java messages and service stubs from them (package
 `org.devlive.pipeforge.engine.rpc.proto`); the engine itself works with its own types, and
 `ProtoMapping` converts between the two at the edge.
 
-In this version the protocol, its gRPC transport and the task descriptions are in place; the cluster
-processes (master, workers) and the data exchange between workers follow in the next steps of the
-distributed runtime. Local runs
+In this version the protocol, its gRPC transport, the task descriptions and the data exchange
+between workers are in place; the cluster processes (master, workers) follow in the next steps of
+the distributed runtime. Local runs
 (`pipeforge run --local`) use the same interfaces in process.
 
 ## Conventions
@@ -112,8 +112,47 @@ precision), naming the column, such as `address.city` or `tags[]`. Timestamps of
 keep microseconds; finer digits are dropped. Bytes that are not a row of a known table are refused
 as an internal error. A sample of every format version is kept in
 `pipeforge-engine/protocol-compat/row/`; each build checks that it still reads it and still writes
-it byte for byte. Rows are not yet sent between processes: the data exchange that uses this format
-comes in a later step of the distributed runtime.
+it byte for byte.
+
+## Data exchange
+
+Rows travel between workers over TCP (Netty, `pipeforge-engine/engine-network`), one connection per
+pair of workers shared by all channels between them. Every frame is:
+
+```text
++---------+---------+---------+-----------+------------------+
+| "PF"    | version | type    | length    | payload          |
+| 2 bytes | 1 byte  | 1 byte  | 4 bytes   | length bytes     |
++---------+---------+---------+-----------+------------------+
+```
+
+| Type | Frame | Direction | Payload |
+|---|---|---|---|
+| `0x00` | `Hello` | both | protocol version, worker ID, cluster token |
+| `0x01` | `PartitionRequest` | consumer → producer | channel ID, the producer's task attempt and output, subpartition, initial credit |
+| `0x02` | `BufferResponse` | producer → consumer | channel ID, sequence, backlog, buffer type (data or event), flags, content |
+| `0x03` | `AddCredit` | consumer → producer | channel ID, new credit |
+| `0x04` | `CancelPartition` | consumer → producer | channel ID |
+| `0x05` | `CloseRequest` | both | — |
+| `0x06` | `ErrorResponse` | both | channel ID or none for the connection, error code, message |
+| `0x07` / `0x08` | `Ping` / `Pong` | both | — |
+
+- Both ends start with `Hello`. Another cluster token is refused with
+  [`PF-CLUS-0005`](../reference/errors#pf-clus-0005), another major version (the version byte of
+  every frame) with [`PF-CLUS-0007`](../reference/errors#pf-clus-0007); the refusing end sends an
+  `ErrorResponse` and closes the connection.
+- Lengths, counts and numbers are varints, strings are a varint length and UTF-8, IDs are 16 bytes.
+  A frame longer than `task.max-row-bytes` + 1 KB, a wrong magic or a malformed payload closes the
+  connection with an `ErrorResponse`.
+- Data buffers hold rows in the row format above; event buffers hold an event type (`0x01` end of
+  partition, `0x02` end of input, `0x03` schema change; `0x10`–`0x1F` are kept for checkpoints and
+  watermarks) and its content.
+- A producer sends a data buffer only while the channel has credit and numbers the buffers of a
+  channel from 0; a consumer refuses a buffer out of sequence or without credit.
+- An output that a consumer asks for before it exists is waited for up to the partition request
+  timeout (30 seconds), then refused with [`PF-CLUS-0011`](../reference/errors#pf-clus-0011).
+- A connection that closes without `CloseRequest` fails the unfinished channels at the consumer and
+  the outputs they read at the producer with [`PF-CLUS-0010`](../reference/errors#pf-clus-0010).
 
 ## Transport
 
