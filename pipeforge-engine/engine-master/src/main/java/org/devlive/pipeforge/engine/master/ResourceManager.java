@@ -117,7 +117,7 @@ public final class ResourceManager {
     public record HeartbeatAck(long leaderEpoch, boolean reregister) {}
 
     /** A free slot of a worker. */
-    public record FreeSlot(String workerId, String rpcAddress, int index) {}
+    public record FreeSlot(String workerId, String rpcAddress, String dataAddress, int index) {}
 
     /** A registered worker, as seen at one moment. */
     public record Worker(
@@ -371,7 +371,8 @@ public final class ResourceManager {
             entry.slots.stream()
                     .filter(s -> !s.allocated())
                     .sorted(Comparator.comparingInt(Slot::index))
-                    .forEach(s -> free.add(new FreeSlot(entry.id, entry.spec.rpcAddress(), s.index())));
+                    .forEach(s -> free.add(
+                            new FreeSlot(entry.id, entry.spec.rpcAddress(), entry.spec.dataAddress(), s.index())));
         }
         return free;
     }

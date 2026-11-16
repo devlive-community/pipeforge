@@ -226,21 +226,32 @@ class LocalEngineTest {
         assertThatThrownBy(() -> engine.submit(fanOut))
                 .isInstanceOfSatisfying(PipeForgeException.class, e -> assertThat(e.getMessage())
                         .contains("its output goes to 2 nodes"));
+    }
 
+    @Test
+    void runsAJobWhoseParallelismChangesWithTasksThatExchangeRows() throws Exception {
+        String probe = Probe.create();
         JobPlan rescale = TestConnectors.plan(
                 """
                 version: 1
                 name: rescale
                 env: { parallelism: 2 }
                 source:
-                  - { id: a, type: numbers, probe: x }
+                  - { id: a, type: numbers, probe: %s, rows: 1000, splits: 4 }
+                transform:
+                  - { id: up, type: upper, probe: %s, parallelism: 3 }
                 sink:
-                  - { id: out, type: collect, probe: x, parallelism: 1 }
-                """);
-        assertThatThrownBy(() -> engine.submit(rescale)).isInstanceOfSatisfying(PipeForgeException.class, e -> {
-            assertThat(e.scope().node()).isEqualTo("out");
-            assertThat(e.getMessage()).contains("parallelism 1 differs from the source's 2");
-        });
+                  - { id: out, type: collect, probe: %s, parallelism: 1 }
+                """
+                        .formatted(probe, probe, probe));
+        JobResult result = engine.submit(rescale).result().get(30, TimeUnit.SECONDS);
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertThat(Probe.get(probe).rows).hasSize(1000);
+        assertThat(result.metrics().rowsRead()).isEqualTo(1000);
+        assertThat(result.metrics().rowsWritten()).isEqualTo(1000);
+        assertThat(result.metrics().reconciled()).isTrue();
+        assertThat(result.metrics().parallelism()).as("2 + 3 + 1 tasks").isEqualTo(6);
+        assertThat(result.metrics().nodes()).extracting(n -> n.node()).containsExactly("a", "up", "out");
     }
 
     @Test

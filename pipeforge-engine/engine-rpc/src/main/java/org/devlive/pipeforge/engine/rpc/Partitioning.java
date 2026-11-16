@@ -4,7 +4,7 @@
  * Licensed under the MIT License. See the LICENSE file in the
  * project root for full license text.
  */
-package org.devlive.pipeforge.engine.master.graph;
+package org.devlive.pipeforge.engine.rpc;
 
 import java.util.List;
 import java.util.Objects;

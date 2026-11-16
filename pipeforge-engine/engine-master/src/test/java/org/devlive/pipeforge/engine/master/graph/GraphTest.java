@@ -30,6 +30,7 @@ import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.master.graph.ExecutionGraph.Task;
 import org.devlive.pipeforge.engine.master.graph.JobGraph.Edge;
+import org.devlive.pipeforge.engine.rpc.Partitioning;
 import org.junit.jupiter.api.Test;
 
 /** Chaining, partitioning, expansion, regions and slots of job graphs. */

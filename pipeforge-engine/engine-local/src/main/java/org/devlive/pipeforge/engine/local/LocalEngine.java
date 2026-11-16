@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.local;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -14,7 +15,6 @@ import java.util.concurrent.TimeoutException;
 import org.devlive.pipeforge.api.factory.EngineKind;
 import org.devlive.pipeforge.core.explain.PlanExplainer;
 import org.devlive.pipeforge.core.plan.JobPlan;
-import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.api.Engine;
 import org.devlive.pipeforge.engine.api.EngineCapabilities;
 import org.devlive.pipeforge.engine.api.ExplainResult;
@@ -26,6 +26,9 @@ import org.devlive.pipeforge.engine.master.ChainTopology;
 import org.devlive.pipeforge.engine.master.JobMaster;
 import org.devlive.pipeforge.engine.master.JobMasters;
 import org.devlive.pipeforge.engine.master.Placement;
+import org.devlive.pipeforge.engine.master.graph.JobGraph;
+import org.devlive.pipeforge.engine.network.NetworkEnvironment;
+import org.devlive.pipeforge.engine.network.NetworkOptions;
 import org.devlive.pipeforge.engine.rpc.InProcessRpc;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
@@ -35,20 +38,24 @@ import org.devlive.pipeforge.engine.worker.TaskExecutor;
  * The native engine in one process: a master with one job master per job and a worker with a task
  * executor, connected by the in-process implementation of the same RPC interfaces a cluster uses.
  *
- * <p>Every forward-connected job runs: one source, its transforms and one sink in a line, with the
- * same parallelism; each parallel instance is a task on its own thread. Checkpoints, restarts and
- * data exchange between tasks come with the distributed engine.
+ * <p>A job is a pipeline: one source, its transforms and one sink in a line; each parallel instance
+ * of a chain is a task on its own thread, and where the parallelism changes the tasks exchange
+ * rows in memory, with the same buffers and credit as between workers. Checkpoints and restarts
+ * come with the distributed engine.
  */
 public final class LocalEngine implements Engine {
 
     private final JobMasters jobs = new JobMasters();
     private final InProcessRpc.Endpoint<JobMasterGateway> master;
+    private final NetworkEnvironment network;
     private final TaskExecutor taskExecutor;
     private final InProcessRpc.Endpoint<TaskExecutorGateway> worker;
 
     public LocalEngine() {
         master = InProcessRpc.serve("master", jobs);
-        taskExecutor = new TaskExecutor("local", master.gateway());
+        network = new NetworkEnvironment("local", UUID.randomUUID().toString(), NetworkOptions.defaults());
+        network.startLocal();
+        taskExecutor = new TaskExecutor("local", master.gateway(), null, network);
         worker = InProcessRpc.serve("worker", taskExecutor);
     }
 
@@ -64,10 +71,10 @@ public final class LocalEngine implements Engine {
 
     @Override
     public JobHandle submit(JobPlan plan, SubmitOptions options) {
-        List<PlannedNode> chain = ChainTopology.chain(plan);
+        JobGraph graph = ChainTopology.graph(plan);
         JobId id = JobId.random();
         JobMaster job = new JobMaster(
-                id, plan, chain, options, Placement.local(worker.gateway()), () -> jobs.remove(id.value()));
+                id, plan, graph, options, Placement.local(worker.gateway()), () -> jobs.remove(id.value()));
         jobs.add(job);
         job.start();
         return job.handle();
@@ -97,5 +104,6 @@ public final class LocalEngine implements Engine {
         taskExecutor.close();
         worker.close();
         master.close();
+        network.close();
     }
 }

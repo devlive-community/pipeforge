@@ -173,6 +173,45 @@ public class ChainCodecTest {
         return ChainCodec.decode(encoded.descriptor(), encoded.secrets(), Fake::new);
     }
 
+    /** The source and transform of the sample, writing to the sink's vertex over the network. */
+    public static ChainDescriptor head() {
+        ChainDescriptor full = sample();
+        return new ChainDescriptor(
+                "src",
+                full.job(),
+                full.nodes().subList(0, 2),
+                List.of(
+                        new ChainDescriptor.Output(0, "out", Partitioning.hash(List.of("user_id")), 3),
+                        new ChainDescriptor.Output(
+                                1, "audit", new Partitioning(Partitioning.Kind.BROADCAST, List.of()), 2)));
+    }
+
+    /** The sink of the sample, reading from the network. */
+    public static ChainDescriptor tail() {
+        ChainDescriptor full = sample();
+        return new ChainDescriptor("out", full.job(), full.nodes().subList(2, 3));
+    }
+
+    @Test
+    void chainsThatExchangeRowsKeepTheirOutputs() {
+        ChainDescriptor head = decode(ChainCodec.encode(head(), RUN)).chain();
+        assertThat(head.outputs()).isEqualTo(head().outputs());
+        assertThat(head.hasSink()).isFalse();
+        for (Partitioning.Kind kind : Partitioning.Kind.values()) {
+            Partitioning partitioning = kind == Partitioning.Kind.HASH
+                    ? Partitioning.hash(List.of("a", "b"))
+                    : new Partitioning(kind, List.of());
+            assertThat(ChainCodec.partitioning(ChainCodec.partitioning(partitioning)))
+                    .isEqualTo(partitioning);
+        }
+        ChainDescriptor tail = decode(ChainCodec.encode(tail(), RUN)).chain();
+        assertThat(tail.hasSource()).isFalse();
+        assertThat(tail.sink().inputTables()).isEqualTo(List.of(MAPPED));
+        assertThatThrownBy(() -> ChainCodec.partitioning(
+                        org.devlive.pipeforge.engine.rpc.proto.Partitioning.getDefaultInstance()))
+                .hasMessageContaining("KIND_UNSPECIFIED");
+    }
+
     @Test
     void theWorkerRebuildsThePlannedChain() {
         ChainDescriptor planned = sample();

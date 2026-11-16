@@ -150,8 +150,9 @@ class ResourceManagerTest {
         manager.offerSlots(east, List.of(new Slot(0, true, "job", "alloc")));
 
         assertThat(manager.freeSlots(Map.of()))
-                .containsExactly(new FreeSlot(east, "a:6124", 1), new FreeSlot(west, "b:6124", 0));
-        assertThat(manager.freeSlots(Map.of("zone", "east"))).containsExactly(new FreeSlot(east, "a:6124", 1));
+                .containsExactly(new FreeSlot(east, "a:6124", "a:6125", 1), new FreeSlot(west, "b:6124", "b:6125", 0));
+        assertThat(manager.freeSlots(Map.of("zone", "east")))
+                .containsExactly(new FreeSlot(east, "a:6124", "a:6125", 1));
         assertThat(manager.freeSlots(Map.of("zone", "east", "net", "db"))).hasSize(1);
         assertThat(manager.freeSlots(Map.of("zone", "east", "net", "web"))).isEmpty();
     }
@@ -159,11 +160,13 @@ class ResourceManagerTest {
     @Test
     void aReservationOfTheMasterOutlivesOlderReportsOfTheWorker() {
         String id = manager.register(spec("a:6124", 2, Map.of(), null)).workerId();
-        FreeSlot slot = new FreeSlot(id, "a:6124", 1);
+        FreeSlot slot = new FreeSlot(id, "a:6124", "a:6125", 1);
         assertThat(manager.reserve(slot, "job", "alloc")).isTrue();
         assertThat(manager.reserve(slot, "other", "alloc-2")).as("taken").isFalse();
-        assertThat(manager.reserve(new FreeSlot("gone", "x:1", 0), "job", "a")).isFalse();
-        assertThat(manager.reserve(new FreeSlot(id, "a:6124", 7), "job", "a")).isFalse();
+        assertThat(manager.reserve(new FreeSlot("gone", "x:1", "x:2", 0), "job", "a"))
+                .isFalse();
+        assertThat(manager.reserve(new FreeSlot(id, "a:6124", "a:6125", 7), "job", "a"))
+                .isFalse();
 
         // a heartbeat that left the worker before the reservation arrived
         manager.heartbeat(id, List.of(Slot.free(0), Slot.free(1)), List.of());
@@ -184,7 +187,7 @@ class ResourceManagerTest {
     @Test
     void releasesOnlyTheSlotOfTheAllocation() {
         String id = manager.register(spec("a:6124", 1, Map.of(), null)).workerId();
-        manager.reserve(new FreeSlot(id, "a:6124", 0), "job", "alloc");
+        manager.reserve(new FreeSlot(id, "a:6124", "a:6125", 0), "job", "alloc");
         manager.release(id, 0, "someone-else");
         assertThat(manager.freeSlots(Map.of())).isEmpty();
         manager.release(id, 0, "alloc");

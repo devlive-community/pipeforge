@@ -24,6 +24,9 @@ public final class Probe {
     private static final Map<String, Probe> PROBES = new ConcurrentHashMap<>();
 
     public final List<Row> rows = Collections.synchronizedList(new ArrayList<>());
+    /** The rows each sink subtask wrote, by subtask. */
+    public final Map<Integer, List<Row>> rowsBySubtask = new ConcurrentHashMap<>();
+
     public final List<Object> schemaChanges = Collections.synchronizedList(new ArrayList<>());
     public final List<String> committed = Collections.synchronizedList(new ArrayList<>());
     public final List<String> globallyCommitted = Collections.synchronizedList(new ArrayList<>());

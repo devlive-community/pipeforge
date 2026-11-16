@@ -104,7 +104,7 @@ class SchedulerTest {
         List<FreeSlot> slots = new java.util.ArrayList<>();
         for (int w = 0; w < perWorker.length; w++) {
             for (int i = 0; i < perWorker[w]; i++) {
-                slots.add(new FreeSlot("w" + w, "w" + w + ":6124", i));
+                slots.add(new FreeSlot("w" + w, "w" + w + ":6124", "w" + w + ":6125", i));
             }
         }
         return slots;

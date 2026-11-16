@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import org.devlive.pipeforge.engine.rpc.Partitioning;
 
 /**
  * A {@link JobGraph} expanded by parallelism: one task per vertex and subtask, the connections

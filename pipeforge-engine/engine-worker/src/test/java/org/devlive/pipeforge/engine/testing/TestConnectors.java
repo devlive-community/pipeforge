@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
@@ -106,6 +107,9 @@ public final class TestConnectors {
 
     static final Option<Integer> SLOW_MS = Options.key("slow-ms").intType().defaultValue(0);
     static final Option<String> COMMIT = Options.key("commit").stringType().defaultValue("none");
+    /** Declares the source unbounded, as a stream would be; it still ends after its rows. */
+    static final Option<Boolean> UNBOUNDED =
+            Options.key("unbounded").booleanType().defaultValue(false);
 
     private TestConnectors() {}
 
@@ -242,7 +246,16 @@ public final class TestConnectors {
         public OptionRule optionRule() {
             return OptionRule.builder()
                     .required(PROBE)
-                    .optional(ROWS, SPLITS, FAIL_AT, FAIL_WITH, BLOCK, SCHEMA_CHANGE, FAIL_ENUMERATOR, BLOCK_ENUMERATOR)
+                    .optional(
+                            ROWS,
+                            SPLITS,
+                            FAIL_AT,
+                            FAIL_WITH,
+                            BLOCK,
+                            SCHEMA_CHANGE,
+                            FAIL_ENUMERATOR,
+                            BLOCK_ENUMERATOR,
+                            UNBOUNDED)
                     .build();
         }
 
@@ -262,7 +275,7 @@ public final class TestConnectors {
 
         @Override
         public Boundedness boundedness() {
-            return Boundedness.BOUNDED;
+            return config.get(UNBOUNDED) ? Boundedness.UNBOUNDED : Boundedness.BOUNDED;
         }
 
         @Override
@@ -687,6 +700,9 @@ public final class TestConnectors {
         @Override
         public void flush() {
             probe.rows.addAll(buffered);
+            probe.rowsBySubtask
+                    .computeIfAbsent(context.subtaskIndex(), s -> Collections.synchronizedList(new ArrayList<>()))
+                    .addAll(buffered);
             buffered.clear();
         }
 

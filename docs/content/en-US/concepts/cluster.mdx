@@ -36,7 +36,9 @@ worker                                   master (resource manager)
 - **Registration.** A worker registers with the addresses where the master and other workers reach
   it, its resources, the number of slots, its labels and the public key that sensitive options are
   encrypted for. The master gives it an ID; a worker that registers again with its previous ID
-  keeps it, and its slots start free.
+  keeps it, and its slots start free. Its data address (`worker.data.port`) is where tasks on
+  other workers read the rows of its tasks; the master tells every task the data addresses of the
+  tasks it reads from.
 - **Heartbeats.** Every worker keeps one stream to the master and sends a heartbeat every five
   seconds with the state of its slots and the tasks it runs. A heartbeat from a worker the master
   does not know asks the worker to register again — for example after the master restarted.

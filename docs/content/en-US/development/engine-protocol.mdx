@@ -61,6 +61,11 @@ the `ChainDescriptor` message inside an envelope that the worker checks before i
   descriptions with a clear message, before it builds anything.
 - Nodes name their components by plugin and identifier (`fake`, `connector-mysql@1.2.0`); the
   worker resolves them with its own plugins.
+- A chain starts with a source or reads its first node's input from other tasks, and ends with a
+  sink or writes to outputs: one output edge per downstream chain, with its partitioning and one
+  subpartition per downstream task. The deployment lists the task's inputs: for every upstream
+  task, its attempt, output and the subpartition to read, and the data address of its worker, or
+  none when it runs on the same worker.
 - Every table appears once in a table directory, with its columns as DSL types
   (`DECIMAL(10, 2) NOT NULL`); nodes and, later, rows refer to tables by their number there.
 - Options are JSON. Options a plugin marks as sensitive never enter the description: their values

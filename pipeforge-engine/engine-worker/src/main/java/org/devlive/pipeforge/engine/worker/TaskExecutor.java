@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.engine.network.NetworkEnvironment;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
@@ -44,6 +45,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
 
     private final JobMasterGateway master;
     private final @Nullable SlotTable slots;
+    private final @Nullable NetworkEnvironment network;
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService watchdog;
     private final Map<ExecutionAttemptId, ScheduledFuture<?>> reporters = new ConcurrentHashMap<>();
@@ -61,10 +63,21 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
      * With the slots of a worker: tasks run in slots that a job master reserved, and reservations
      * that no task used are released after {@link SlotTable#UNUSED_TIMEOUT}.
      */
-    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
     public TaskExecutor(String name, JobMasterGateway master, @Nullable SlotTable slots) {
+        this(name, master, slots, null);
+    }
+
+    /**
+     * With the data exchange of the worker, so that tasks can read from and write to other tasks.
+     *
+     * @param network the data exchange, which the caller starts and closes; {@code null} for none
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
+    public TaskExecutor(
+            String name, JobMasterGateway master, @Nullable SlotTable slots, @Nullable NetworkEnvironment network) {
         this.master = master;
         this.slots = slots;
+        this.network = network;
         this.watchdog = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "task-watchdog-" + name);
             thread.setDaemon(true);
@@ -119,7 +132,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
                 return CompletableFuture.failedFuture(e);
             }
         }
-        Task task = new Task(deployment, master, this::terminated);
+        Task task = new Task(deployment, master, network, this::terminated);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Task " + deployment.id() + " is already deployed"));

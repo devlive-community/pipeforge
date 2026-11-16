@@ -17,7 +17,7 @@ import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.api.JobMetrics;
 import org.devlive.pipeforge.engine.api.NodeMetrics;
 import org.devlive.pipeforge.engine.api.Rate;
-import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
+import org.devlive.pipeforge.engine.master.graph.JobGraph;
 import org.devlive.pipeforge.engine.rpc.OperatorSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 
@@ -39,24 +39,33 @@ final class MetricsAggregator {
 
     private record Sample(long nanos, long read, long written) {}
 
-    private final ChainDescriptor chain;
+    /** The nodes of every vertex in order: a pipeline from the source to the sink. */
+    private final List<PlannedNode> nodes = new ArrayList<>();
+    /** Where the nodes of each vertex start in {@link #nodes}. */
+    private final Map<String, Integer> offsets = new HashMap<>();
+
     private final int parallelism;
     private final long started;
-    private final Map<Integer, TaskMetricsSnapshot> tasks = new HashMap<>();
+    private final Map<String, TaskMetricsSnapshot> tasks = new HashMap<>();
     private final Deque<Sample> window = new ArrayDeque<>();
     private double peakRead;
     private double peakWritten;
     private boolean twoPhase;
     private boolean committed;
 
-    MetricsAggregator(ChainDescriptor chain, int parallelism, long startedNanos) {
-        this.chain = chain;
-        this.parallelism = parallelism;
+    MetricsAggregator(JobGraph graph, long startedNanos) {
+        int tasksTotal = 0;
+        for (JobGraph.Vertex vertex : graph.vertices()) {
+            offsets.put(vertex.id(), nodes.size());
+            nodes.addAll(vertex.nodes());
+            tasksTotal += vertex.parallelism();
+        }
+        this.parallelism = tasksTotal;
         this.started = startedNanos;
     }
 
-    void update(int subtask, TaskMetricsSnapshot metrics) {
-        tasks.put(subtask, metrics);
+    void update(String vertex, int subtask, TaskMetricsSnapshot metrics) {
+        tasks.put(vertex + "/" + subtask, metrics);
     }
 
     /** The sink prepared committables: its rows count as written once they are committed. */
@@ -70,7 +79,6 @@ final class MetricsAggregator {
 
     /** Takes a rate sample and returns the metrics as of {@code now}. */
     JobMetrics sample(long now, int tasksRunning, Phase phase) {
-        List<PlannedNode> nodes = chain.nodes();
         long[] in = new long[nodes.size()];
         long[] out = new long[nodes.size()];
         long[] filtered = new long[nodes.size()];
@@ -79,18 +87,22 @@ final class MetricsAggregator {
         long running = 0;
         long readerWait = 0;
         long writerWait = 0;
-        for (TaskMetricsSnapshot task : tasks.values()) {
+        for (Map.Entry<String, TaskMetricsSnapshot> entry : tasks.entrySet()) {
+            TaskMetricsSnapshot task = entry.getValue();
+            String vertex = entry.getKey().substring(0, entry.getKey().lastIndexOf('/'));
+            int offset = offsets.getOrDefault(vertex, 0);
             running += task.runningNanos();
             readerWait += task.readerWaitNanos();
             writerWait += task.writerWaitNanos();
             List<OperatorSnapshot> operators = task.operators();
-            for (int i = 0; i < operators.size() && i < nodes.size(); i++) {
+            for (int i = 0; i < operators.size() && offset + i < nodes.size(); i++) {
                 OperatorSnapshot operator = operators.get(i);
-                in[i] += operator.rowsIn();
-                out[i] += operator.rowsOut();
-                filtered[i] += operator.rowsFiltered();
-                expanded[i] += operator.rowsExpanded();
-                self[i] += operator.selfTimeNanos();
+                int node = offset + i;
+                in[node] += operator.rowsIn();
+                out[node] += operator.rowsOut();
+                filtered[node] += operator.rowsFiltered();
+                expanded[node] += operator.rowsExpanded();
+                self[node] += operator.selfTimeNanos();
             }
         }
         int sink = nodes.size() - 1;

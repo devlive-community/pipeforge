@@ -288,4 +288,59 @@ public final class ProtoMapping {
                         .toList(),
                 update.hasFinalMetrics() ? fromProto(update.getFinalMetrics()) : null);
     }
+
+    /** The inputs of a deployment in their Protobuf form. */
+    public static java.util.List<org.devlive.pipeforge.engine.rpc.proto.InputGateDescriptor> toProtoInputs(
+            java.util.List<TaskDeployment.Input> inputs) {
+        java.util.List<org.devlive.pipeforge.engine.rpc.proto.InputGateDescriptor> gates = new java.util.ArrayList<>();
+        for (TaskDeployment.Input input : inputs) {
+            var gate = org.devlive.pipeforge.engine.rpc.proto.InputGateDescriptor.newBuilder()
+                    .setInputIndex(input.index())
+                    .setUpstreamVertex(input.upstreamVertex());
+            for (TaskDeployment.Channel channel : input.channels()) {
+                String address = channel.producerAddress();
+                gate.addChannels(org.devlive.pipeforge.engine.rpc.proto.InputChannelDescriptor.newBuilder()
+                        .setPartition(org.devlive.pipeforge.engine.rpc.proto.ResultPartitionId.newBuilder()
+                                .setProducer(toProto(channel.producer()))
+                                .setOutputIndex(channel.outputIndex()))
+                        .setSubpartition(channel.subpartition())
+                        .setProducerDataAddress(address == null ? "" : address)
+                        .setLocal(address == null));
+            }
+            gates.add(gate.build());
+        }
+        return gates;
+    }
+
+    /** The inputs of a deployment from their Protobuf form. */
+    public static java.util.List<TaskDeployment.Input> fromProtoInputs(
+            java.util.List<org.devlive.pipeforge.engine.rpc.proto.InputGateDescriptor> gates) {
+        java.util.List<TaskDeployment.Input> inputs = new java.util.ArrayList<>();
+        for (var gate : gates) {
+            java.util.List<TaskDeployment.Channel> channels = new java.util.ArrayList<>();
+            for (var channel : gate.getChannelsList()) {
+                channels.add(new TaskDeployment.Channel(
+                        fromProto(channel.getPartition().getProducer()),
+                        channel.getPartition().getOutputIndex(),
+                        channel.getSubpartition(),
+                        channel.getLocal() || channel.getProducerDataAddress().isEmpty()
+                                ? null
+                                : channel.getProducerDataAddress()));
+            }
+            inputs.add(new TaskDeployment.Input(gate.getInputIndex(), gate.getUpstreamVertex(), channels));
+        }
+        return inputs;
+    }
+
+    /** The outputs of a chain as the result partitions of its deployment. */
+    public static java.util.List<org.devlive.pipeforge.engine.rpc.proto.ResultPartitionDescriptor> outputs(
+            java.util.List<ChainDescriptor.Output> outputs) {
+        return outputs.stream()
+                .map(o -> org.devlive.pipeforge.engine.rpc.proto.ResultPartitionDescriptor.newBuilder()
+                        .setOutputIndex(o.index())
+                        .setSubpartitions(o.subpartitions())
+                        .setPartitioning(ChainCodec.partitioning(o.partitioning()))
+                        .build())
+                .toList();
+    }
 }

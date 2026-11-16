@@ -9,7 +9,8 @@ package org.devlive.pipeforge.engine.master;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,8 @@ import org.devlive.pipeforge.engine.api.JobMetrics;
 import org.devlive.pipeforge.engine.api.JobResult;
 import org.devlive.pipeforge.engine.api.JobStatus;
 import org.devlive.pipeforge.engine.api.SubmitOptions;
+import org.devlive.pipeforge.engine.master.graph.ExecutionGraph;
+import org.devlive.pipeforge.engine.master.graph.JobGraph;
 import org.devlive.pipeforge.engine.rpc.ChainCodec;
 import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
@@ -67,7 +70,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The job master of one run: gets the slots of the job from its {@link Placement}, runs the split
- * enumerator, deploys the tasks into the slots, follows their states and decides how the run ends.
+ * enumerator, deploys the tasks of every vertex into the slots with the connections between them,
+ * follows their states and decides how the run ends.
  * Everything it does runs on its own thread, one event at a time, so the enumerator and the run
  * state are never touched concurrently.
  *
@@ -91,13 +95,19 @@ public final class JobMaster {
 
     private final JobId id;
     private final JobPlan plan;
-    private final ChainDescriptor chain;
-    /** What the tasks receive: {@link #chain} written and read in the task description format. */
-    private final ChainDescriptor deployed;
+    private final JobGraph graph;
+    private final ExecutionGraph execution;
+    private final JobGraph.Vertex sourceVertex;
+    private final JobGraph.Vertex sinkVertex;
+    private final JobContext job;
+    /** What the tasks of every vertex receive: their chain written and read in the task description format. */
+    private final Map<String, ChainDescriptor> deployed = new LinkedHashMap<>();
 
     private final RunContext run;
 
+    /** The number of readers: the parallelism of the source. */
     private final int parallelism;
+
     private final TaskSettings settings;
     private final Placement placement;
     private List<Placement.Slot> slots = List.of();
@@ -107,7 +117,7 @@ public final class JobMaster {
     private final long started = System.nanoTime();
     private final Instant runStartTime = Instant.now();
     private final ExpressionCompiler expressions;
-    private final Map<Integer, TaskState> states = new HashMap<>();
+    private final Map<ExecutionGraph.Task, TaskState> states = new LinkedHashMap<>();
     private final Set<Integer> readers = new LinkedHashSet<>();
     private final List<SerializedValue> committables = new ArrayList<>();
     private final Runnable onEnded;
@@ -130,21 +140,19 @@ public final class JobMaster {
     private @Nullable Source<SourceSplit, ?> source;
 
     /**
-     * @param nodes the chain of the job, from {@link ChainTopology#chain}
+     * @param graph the job graph, from {@link ChainTopology#graph}
      * @param onEnded runs once the run has ended and its slots were given back
      */
     public JobMaster(
-            JobId id,
-            JobPlan plan,
-            List<PlannedNode> nodes,
-            SubmitOptions options,
-            Placement placement,
-            Runnable onEnded) {
+            JobId id, JobPlan plan, JobGraph graph, SubmitOptions options, Placement placement, Runnable onEnded) {
         this.id = id;
         this.plan = plan;
-        this.parallelism = nodes.get(0).parallelism();
-        this.chain = new ChainDescriptor(
-                nodes.get(0).id(), new JobContext(plan.name(), plan.parallelism(), plan.timeZone()), nodes);
+        this.graph = graph;
+        this.execution = ExecutionGraph.of(graph);
+        this.sourceVertex = graph.vertices().get(0);
+        this.sinkVertex = graph.vertices().get(graph.vertices().size() - 1);
+        this.parallelism = sourceVertex.parallelism();
+        this.job = new JobContext(plan.name(), plan.parallelism(), plan.timeZone());
         this.run = new RunContext(
                 id.value(),
                 id.value(),
@@ -153,7 +161,9 @@ public final class JobMaster {
                 null,
                 plan.mode().id(),
                 plan.delivery().id());
-        this.deployed = described(chain, run);
+        for (JobGraph.Vertex vertex : graph.vertices()) {
+            deployed.put(vertex.id(), described(chain(vertex), run));
+        }
         this.settings = new TaskSettings(
                 options.asyncWriteBuffer(),
                 options.writeBatchSize(),
@@ -163,7 +173,7 @@ public final class JobMaster {
         this.placement = placement;
         this.onEnded = onEnded;
         this.expressions = EngineExpressions.forRun(plan.timeZone(), runStartTime);
-        this.aggregator = new MetricsAggregator(chain, parallelism, started);
+        this.aggregator = new MetricsAggregator(graph, started);
         this.thread = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread t = new Thread(runnable, "jobmaster-" + plan.name());
             t.setDaemon(true);
@@ -191,7 +201,7 @@ public final class JobMaster {
      */
     @SuppressWarnings("FutureReturnValueIgnored") // the callback posts to the job master thread
     public void start() {
-        placement.acquire(id.value(), id.value(), parallelism).whenComplete((acquired, error) -> {
+        placement.acquire(id.value(), id.value(), execution.slots()).whenComplete((acquired, error) -> {
             Runnable arrived = () -> {
                 if (status.isTerminal()) {
                     placement.release();
@@ -217,25 +227,24 @@ public final class JobMaster {
      */
     public void workerLost(String workerId, PipeForgeException error) {
         post(() -> {
-            List<Integer> gone = new ArrayList<>();
-            for (Placement.Slot slot : slots) {
-                TaskState state = states.get(slot.index());
-                if (slot.workerId().equals(workerId) && state != null && !state.isTerminal()) {
-                    gone.add(slot.index());
+            List<ExecutionGraph.Task> gone = new ArrayList<>();
+            states.forEach((task, state) -> {
+                if (slots.get(task.slot()).workerId().equals(workerId) && !state.isTerminal()) {
+                    gone.add(task);
                 }
-            }
+            });
             if (gone.isEmpty()) {
                 return;
             }
             PipeForgeException.Builder scoped = PipeForgeException.of(error.code())
-                    .scope(ErrorScope.node(chain.vertexId())
+                    .scope(ErrorScope.node(gone.get(0).vertex())
                             .withJob(plan.name())
                             .withRun(id.value())
-                            .withSubtask(gone.get(0)))
+                            .withSubtask(gone.get(0).subtask()))
                     .kind(error.kind());
             error.params().forEach(scoped::param);
             fail(scoped.build());
-            gone.forEach(subtask -> states.put(subtask, TaskState.FAILED));
+            gone.forEach(task -> states.put(task, TaskState.FAILED));
             refreshTasks();
             endIfDone();
         });
@@ -245,13 +254,13 @@ public final class JobMaster {
         post(() -> handleTaskState(update));
     }
 
-    public void onMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
+    public void onMetrics(ExecutionAttemptId attempt, TaskMetricsSnapshot metrics) {
         post(() -> {
-            int subtask = task.subtask();
-            TaskState state = states.get(subtask);
+            ExecutionGraph.Task task = task(attempt);
+            TaskState state = states.get(task);
             // a periodic report can arrive after the final one; the final one wins
-            if (state != null && !state.isTerminal() && task.equals(attempt(subtask))) {
-                aggregator.update(subtask, metrics);
+            if (state != null && !state.isTerminal() && attempt.equals(attempt(task))) {
+                aggregator.update(task.vertex(), task.subtask(), metrics);
             }
         });
     }
@@ -277,7 +286,7 @@ public final class JobMaster {
     // deployment failures post back; the metrics task runs until the thread stops
     @SuppressWarnings({"unchecked", "FutureReturnValueIgnored"})
     private void deploy() {
-        PlannedNode node = chain.source();
+        PlannedNode node = sourceVertex.head();
         try {
             SourceFactory factory = (SourceFactory) node.component().factory();
             Source<SourceSplit, ?> created = (Source<SourceSplit, ?>)
@@ -294,11 +303,21 @@ public final class JobMaster {
             fail(e);
             return;
         }
-        for (int subtask = 0; subtask < parallelism; subtask++) {
-            states.put(subtask, TaskState.DEPLOYING);
-            Placement.Slot slot = slots.get(subtask);
-            TaskDeployment deployment =
-                    new TaskDeployment(attempt(subtask), deployed, parallelism, settings, run, slot.allocationId());
+        for (ExecutionGraph.Task task : execution.tasks()) {
+            states.put(task, TaskState.DEPLOYING);
+        }
+        // consumers may ask for an output before its producer runs; the worker waits for it
+        for (ExecutionGraph.Task task : execution.tasks()) {
+            Placement.Slot slot = slots.get(task.slot());
+            JobGraph.Vertex vertex = graph.vertex(task.vertex()).orElseThrow();
+            TaskDeployment deployment = new TaskDeployment(
+                    attempt(task),
+                    deployed.get(task.vertex()),
+                    vertex.parallelism(),
+                    settings,
+                    run,
+                    slot.allocationId(),
+                    inputs(task));
             slot.gateway().deployTask(deployment).whenComplete((ignored, error) -> {
                 if (error != null) {
                     post(() -> fail(PipeForgeException.wrap(error)));
@@ -309,24 +328,72 @@ public final class JobMaster {
         refreshTasks();
         long interval = settings.metricsInterval().toMillis();
         thread.scheduleAtFixedRate(() -> run(this::publish), interval, interval, TimeUnit.MILLISECONDS);
-        LOG.info("Job {} ({}) is running with {} task(s)", plan.name(), id, parallelism);
+        LOG.info(
+                "Job {} ({}) is running with {} task(s) in {} vertices",
+                plan.name(),
+                id,
+                execution.tasks().size(),
+                graph.vertices().size());
+    }
+
+    /** The chain of a vertex, with an output for every edge that leaves it. */
+    private ChainDescriptor chain(JobGraph.Vertex vertex) {
+        List<ChainDescriptor.Output> outputs = new ArrayList<>();
+        List<JobGraph.Edge> edges = graph.outputs(vertex.id());
+        for (int i = 0; i < edges.size(); i++) {
+            JobGraph.Edge edge = edges.get(i);
+            int consumers = graph.vertex(edge.target()).orElseThrow().parallelism();
+            outputs.add(new ChainDescriptor.Output(
+                    i, edge.target(), edge.partitioning(), edge.partitioning().allToAll() ? consumers : 1));
+        }
+        return new ChainDescriptor(vertex.id(), job, vertex.nodes(), outputs);
+    }
+
+    /**
+     * The inputs of a task: one channel per upstream task connected to it, local when the producer
+     * runs on the same worker.
+     */
+    private List<TaskDeployment.Input> inputs(ExecutionGraph.Task task) {
+        List<TaskDeployment.Input> inputs = new ArrayList<>();
+        for (JobGraph.Edge edge : graph.inputs(task.vertex())) {
+            int output = graph.outputs(edge.source()).indexOf(edge);
+            String worker = slots.get(task.slot()).workerId();
+            List<TaskDeployment.Channel> channels = execution.connections().stream()
+                    .filter(c -> c.target().equals(task) && c.source().vertex().equals(edge.source()))
+                    .sorted(Comparator.comparingInt(c -> c.source().subtask()))
+                    .map(c -> {
+                        Placement.Slot producer = slots.get(c.source().slot());
+                        return new TaskDeployment.Channel(
+                                attempt(c.source()),
+                                output,
+                                c.partitioning().allToAll() ? task.subtask() : 0,
+                                producer.workerId().equals(worker) ? null : producer.dataAddress());
+                    })
+                    .toList();
+            inputs.add(new TaskDeployment.Input(edge.input(), edge.source(), channels));
+        }
+        return inputs;
     }
 
     private void handleTaskState(TaskStateUpdate update) {
-        int subtask = update.id().subtask();
-        TaskState previous = states.get(subtask);
-        if (previous == null || previous.isTerminal() || !update.id().equals(attempt(subtask))) {
+        ExecutionGraph.Task task = task(update.id());
+        TaskState previous = states.get(task);
+        if (previous == null || previous.isTerminal() || !update.id().equals(attempt(task))) {
             return;
         }
-        states.put(subtask, update.state());
+        boolean reader = task.vertex().equals(sourceVertex.id());
+        int subtask = task.subtask();
+        states.put(task, update.state());
         refreshTasks();
         if (update.metrics() != null) {
-            aggregator.update(subtask, update.metrics());
+            aggregator.update(task.vertex(), subtask, update.metrics());
         }
         switch (update.state()) {
             case RUNNING -> {
-                readers.add(subtask);
-                callEnumerator("register reader " + subtask, e -> e.addReader(subtask));
+                if (reader) {
+                    readers.add(subtask);
+                    callEnumerator("register reader " + subtask, e -> e.addReader(subtask));
+                }
             }
             case FINISHED -> {
                 committables.addAll(update.committables());
@@ -339,15 +406,20 @@ public final class JobMaster {
                 // nothing to do until every task has ended
             }
         }
-        if (update.state().isTerminal()) {
+        if (update.state().isTerminal() && reader) {
             readers.remove(subtask);
         }
         endIfDone();
     }
 
+    /** The task of an attempt; every task of a vertex runs in the slot of its subtask. */
+    private static ExecutionGraph.Task task(ExecutionAttemptId attempt) {
+        return new ExecutionGraph.Task(attempt.vertexId(), attempt.subtask(), attempt.subtask());
+    }
+
     private void handleReaderMessage(ReaderMessage message) {
         int subtask = message.task().subtask();
-        if (status.isTerminal() || !readers.contains(subtask) || !message.task().equals(attempt(subtask))) {
+        if (status.isTerminal() || !readers.contains(subtask) || !message.task().equals(reader(subtask))) {
             return;
         }
         switch (message) {
@@ -370,9 +442,9 @@ public final class JobMaster {
 
     @SuppressWarnings("FutureReturnValueIgnored") // each task reports its end itself
     private void cancelTasks() {
-        states.forEach((subtask, state) -> {
+        states.forEach((task, state) -> {
             if (!state.isTerminal()) {
-                gateway(subtask).cancelTask(attempt(subtask));
+                gateway(task).cancelTask(attempt(task));
             }
         });
     }
@@ -413,7 +485,7 @@ public final class JobMaster {
         if (committables.isEmpty()) {
             return;
         }
-        PlannedNode node = chain.sink();
+        PlannedNode node = sinkVertex.tail();
         SinkFactory factory = (SinkFactory) node.component().factory();
         Sink<Object, Object> sink =
                 (Sink<Object, Object>) callSink(node, "create the sink", () -> factory.createSink(context(node)));
@@ -501,7 +573,7 @@ public final class JobMaster {
         } catch (java.util.concurrent.TimeoutException e) {
             call.cancel(true);
             enumeratorStuck = true;
-            PlannedNode node = chain.source();
+            PlannedNode node = sourceVertex.head();
             throw PipeForgeException.of(ErrorCode.ENUMERATOR_TIMEOUT)
                     .param("node", node.id())
                     .param("operation", operation)
@@ -521,7 +593,7 @@ public final class JobMaster {
     }
 
     private <T> T callSource(String operation, PluginAction<T> action) {
-        PlannedNode node = chain.source();
+        PlannedNode node = sourceVertex.head();
         try {
             return call(node, action);
         } catch (PipeForgeException e) {
@@ -572,10 +644,10 @@ public final class JobMaster {
                 values.add(callSource(
                         "write split " + split.splitId(), () -> SerializedValue.of(owner.splitSerializer(), split)));
             }
-            gateway(reader)
+            gateway(readerTask(reader))
                     .sendOperatorEvent(
-                            attempt(reader),
-                            new OperatorEvent.AddSplits(chain.source().id(), values));
+                            reader(reader),
+                            new OperatorEvent.AddSplits(sourceVertex.head().id(), values));
         });
     }
 
@@ -583,7 +655,7 @@ public final class JobMaster {
     private final class LocalEnumeratorContext implements EnumeratorContext<SourceSplit> {
         @Override
         public JobContext job() {
-            return chain.job();
+            return job;
         }
 
         @Override
@@ -604,10 +676,10 @@ public final class JobMaster {
         @Override
         @SuppressWarnings("FutureReturnValueIgnored") // a lost event fails its task, which reports it
         public void signalNoMoreSplits(int readerId) {
-            gateway(readerId)
+            gateway(readerTask(readerId))
                     .sendOperatorEvent(
-                            attempt(readerId),
-                            new OperatorEvent.NoMoreSplits(chain.source().id()));
+                            reader(readerId),
+                            new OperatorEvent.NoMoreSplits(sourceVertex.head().id()));
         }
     }
 
@@ -633,7 +705,7 @@ public final class JobMaster {
         return new MasterFactoryContext(
                 node.id(),
                 node.config(),
-                chain.job(),
+                job,
                 node.inputTables(),
                 node.component().classLoader(),
                 expressions);
@@ -714,22 +786,31 @@ public final class JobMaster {
         }
     }
 
+    /** The tasks in the order of the execution graph: vertex by vertex, then by subtask. */
     private void refreshTasks() {
         List<TaskView> view = new ArrayList<>();
-        states.forEach((subtask, state) -> view.add(new TaskView(
-                attempt(subtask),
+        states.forEach((task, state) -> view.add(new TaskView(
+                attempt(task),
                 state,
-                subtask < slots.size() ? slots.get(subtask).workerId() : "")));
-        view.sort(java.util.Comparator.comparingInt(t -> t.attempt().subtask()));
+                task.slot() < slots.size() ? slots.get(task.slot()).workerId() : "")));
         taskView = List.copyOf(view);
     }
 
-    private TaskExecutorGateway gateway(int subtask) {
-        return slots.get(subtask).gateway();
+    private TaskExecutorGateway gateway(ExecutionGraph.Task task) {
+        return slots.get(task.slot()).gateway();
     }
 
-    private ExecutionAttemptId attempt(int subtask) {
-        return new ExecutionAttemptId(id.value(), chain.vertexId(), subtask, 0);
+    private ExecutionAttemptId attempt(ExecutionGraph.Task task) {
+        return new ExecutionAttemptId(id.value(), task.vertex(), task.subtask(), 0);
+    }
+
+    private ExecutionGraph.Task readerTask(int subtask) {
+        return new ExecutionGraph.Task(sourceVertex.id(), subtask, subtask);
+    }
+
+    /** The attempt of reader {@code subtask}: the task of the source vertex. */
+    private ExecutionAttemptId reader(int subtask) {
+        return attempt(readerTask(subtask));
     }
 
     /** Publishes the current metrics; runs once per metrics interval while the job runs. */

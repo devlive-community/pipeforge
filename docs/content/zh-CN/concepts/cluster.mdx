@@ -31,6 +31,7 @@ Worker                                   Master（ResourceManager）
 
 - **注册**。Worker 注册时提供 Master 与其他 Worker 访问它的地址、资源、Slot 数量、标签，以及用于加密敏感选项的公钥。
   Master 为它分配一个 ID；用原来的 ID 重新注册的 Worker 保留这个 ID，它的 Slot 重新变为空闲。
+  其中的数据地址（`worker.data.port`）是其他 Worker 上的 Task 读取它的 Task 输出的地方；Master 会告诉每个 Task 它要读取的那些 Task 的数据地址。
 - **心跳**。每个 Worker 与 Master 之间保持一条流，每 5 秒发送一次心跳，携带 Slot 状态和正在运行的 Task。
   Master 不认识的 Worker 发来心跳时，会被要求重新注册——例如 Master 重启之后。
 - **Slot 账本**。Master 记录哪些 Slot 空闲、哪些正在运行哪个作业的 Task。调度器从账本中取空闲 Slot；

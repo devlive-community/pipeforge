@@ -87,7 +87,9 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                     .setChainDescriptor(ByteString.copyFrom(encoded.descriptor()))
                     .setAllocationId(deployment.allocationId() == null ? "" : deployment.allocationId())
                     .setParallelism(deployment.parallelism())
-                    .setSettings(ProtoMapping.toProto(deployment.settings()));
+                    .setSettings(ProtoMapping.toProto(deployment.settings()))
+                    .addAllInputs(ProtoMapping.toProtoInputs(deployment.inputs()))
+                    .addAllOutputs(ProtoMapping.outputs(deployment.chain().outputs()));
             for (PlannedNode node : deployment.chain().nodes()) {
                 request.addPlugins(plugins.apply(node.plugin()));
             }

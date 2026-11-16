@@ -146,7 +146,7 @@ class ClusterJobTest {
         JobMaster job = new JobMaster(
                 id,
                 plan,
-                ChainTopology.chain(plan),
+                ChainTopology.graph(plan),
                 options,
                 Placement.cluster(
                         scheduler,

@@ -7,19 +7,22 @@
 package org.devlive.pipeforge.engine.worker;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.api.source.PollStatus;
 import org.devlive.pipeforge.api.source.ReaderOutput;
 import org.devlive.pipeforge.api.table.SchemaChangeEvent;
+import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.expression.EngineExpressions;
+import org.devlive.pipeforge.core.job.NodeKind;
 import org.devlive.pipeforge.core.plan.PlannedNode;
+import org.devlive.pipeforge.engine.network.NetworkEnvironment;
 import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
@@ -29,74 +32,161 @@ import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The operators of one task, connected by direct method calls: the reader emits into the first
- * transform, each transform into the next, the last into the sink. A row goes through the whole
- * chain before the reader emits the next one, on the task thread.
+ * The operators of one task, connected by direct method calls. Rows enter from the reader of the
+ * source or from the task's network input, go through each transform, and leave into the sink or
+ * the task's network outputs; a row goes through the whole chain before the next one enters, on
+ * the task thread.
+ *
+ * <p>The operator clock has a slot for the reader or the input (0), one per node, and one for the
+ * network outputs or the hand-off to the sink's write thread.
  */
 final class OperatorChain {
 
     private final TaskDeployment deployment;
-    private final SourceOperator source;
+    private final ChainDescriptor chain;
+    private final @Nullable SourceOperator source;
     private final List<TransformOperator> transforms;
-    private final SinkOperator sink;
-    private final ReaderOutput output;
-    private final OperatorMetrics sourceMetrics;
+    private final @Nullable SinkOperator sink;
+    private final @Nullable ReaderOutput output;
+    private final @Nullable OperatorMetrics sourceMetrics;
     private final OperatorClock clock;
     private final ExpressionCompiler expressions;
+    private final @Nullable NetworkEnvironment network;
+    private final BooleanSupplier cancelled;
+    /** Where rows enter the first operator after the reader or the input. */
+    private final ChainOutput first;
 
-    OperatorChain(TaskDeployment deployment, ErrorScope scope, String taskName, JobMasterGateway master) {
+    private final @Nullable DeferredOutput deferred;
+    private @Nullable NetworkOutput outputs;
+    private @Nullable NetworkInput input;
+
+    OperatorChain(
+            TaskDeployment deployment,
+            ErrorScope scope,
+            String taskName,
+            JobMasterGateway master,
+            @Nullable NetworkEnvironment network,
+            BooleanSupplier cancelled) {
         this.deployment = deployment;
-        ChainDescriptor chain = deployment.chain();
+        this.chain = deployment.chain();
+        this.network = network;
+        this.cancelled = cancelled;
         JobContext job = chain.job();
         expressions = EngineExpressions.forRun(job.timeZone(), deployment.runStartTime());
-        int sinkSlot = chain.nodes().size() - 1;
-        // one slot per operator, from the source (0) to the sink, plus one for handing rows to the write thread
-        clock = new OperatorClock(sinkSlot + 2);
-        PlannedNode sinkNode = chain.sink();
-        sink = new SinkOperator(sinkNode, call(sinkNode, scope), taskName, clock, sinkSlot, sinkSlot + 1);
-        ChainOutput next = sink;
-        List<TransformOperator> reversed = new ArrayList<>();
-        List<PlannedNode> middle = chain.transforms();
-        for (int i = middle.size() - 1; i >= 0; i--) {
-            PlannedNode node = middle.get(i);
-            TransformOperator transform = new TransformOperator(node, call(node, scope), next, clock, i + 1);
-            reversed.add(transform);
-            next = transform;
+        List<PlannedNode> nodes = chain.nodes();
+        int offset = chain.hasSource() ? 0 : 1;
+        int last = nodes.size() - 1 + offset;
+        clock = new OperatorClock(last + 2);
+        if ((!chain.hasSource() || !chain.hasSink()) && network == null) {
+            throw PipeForgeException.of(ErrorCode.TOPOLOGY_UNSUPPORTED)
+                    .param(
+                            "node",
+                            chain.hasSource() ? chain.tail().id() : chain.head().id())
+                    .param("reason", "its task exchanges rows with other tasks, but this worker has no data exchange")
+                    .scope(scope)
+                    .build();
         }
-        Collections.reverse(reversed);
-        transforms = List.copyOf(reversed);
-        PlannedNode sourceNode = chain.source();
-        source = new SourceOperator(
-                sourceNode, call(sourceNode, scope), job, deployment.id(), deployment.parallelism(), master);
-        sourceMetrics = new OperatorMetrics(sourceNode.id());
-        output = new ChainReaderOutput(next, sourceMetrics);
+
+        ChainOutput next;
+        if (chain.hasSink()) {
+            PlannedNode node = chain.sink();
+            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1);
+            deferred = null;
+            next = sink;
+        } else {
+            sink = null;
+            deferred = new DeferredOutput();
+            next = deferred;
+        }
+        List<TransformOperator> reversed = new ArrayList<>();
+        for (int i = nodes.size() - 1; i >= 0; i--) {
+            PlannedNode node = nodes.get(i);
+            if (node.kind() == NodeKind.TRANSFORM) {
+                TransformOperator transform = new TransformOperator(node, call(node, scope), next, clock, i + offset);
+                reversed.add(transform);
+                next = transform;
+            }
+        }
+        transforms = List.copyOf(reversed.reversed());
+        first = next;
+        if (chain.hasSource()) {
+            PlannedNode node = chain.source();
+            source =
+                    new SourceOperator(node, call(node, scope), job, deployment.id(), deployment.parallelism(), master);
+            sourceMetrics = new OperatorMetrics(node.id());
+            output = new ChainReaderOutput(next, sourceMetrics);
+        } else {
+            source = null;
+            sourceMetrics = null;
+            output = null;
+        }
     }
 
     private static OperatorCall call(PlannedNode node, ErrorScope scope) {
         return new OperatorCall(node, node.component().classLoader(), scope);
     }
 
-    /** Opens the operators from the sink up to the source, so that nothing emits into an operator that is not open. */
+    /**
+     * Opens the outputs and operators from the end of the chain to its start, so that nothing
+     * emits into something that is not open, and asks the producers of the input for their data
+     * last.
+     */
     void open() {
-        JobContext job = deployment.chain().job();
+        JobContext job = chain.job();
         int subtask = deployment.id().subtask();
         int parallelism = deployment.parallelism();
-        sink.open(job, subtask, parallelism, deployment.settings(), expressions);
+        if (!chain.hasSink()) {
+            int slot = chain.nodes().size() + (chain.hasSource() ? 0 : 1);
+            NetworkOutput created = new NetworkOutput(
+                    network(), deployment.id(), chain, chain.tail().outputTables(), cancelled, clock, slot);
+            outputs = created;
+            if (deferred != null) {
+                deferred.target = created;
+            }
+        }
+        if (sink != null) {
+            sink.open(job, subtask, parallelism, deployment.settings(), expressions);
+        }
         for (int i = transforms.size() - 1; i >= 0; i--) {
             transforms.get(i).open(job, subtask, parallelism, expressions);
         }
-        source.open(job, expressions);
+        if (source != null) {
+            source.open(job, expressions);
+        } else {
+            input = new NetworkInput(network(), deployment, chain.head().inputTables());
+        }
+    }
+
+    private NetworkEnvironment network() {
+        if (network == null) {
+            throw new IllegalStateException("no data exchange");
+        }
+        return network;
     }
 
     /** Starts the reader; see {@link SourceOperator#start()}. */
     void startSource() {
-        source.start();
+        if (source != null) {
+            source.start();
+        }
     }
 
-    PollStatus pollNext() {
+    /** Whether a poll waits for data itself, so the task need not wait for mail in between. */
+    boolean pollWaits() {
+        return source == null;
+    }
+
+    PollStatus pollNext() throws InterruptedException {
         boolean measured = clock.beginRead(0);
         try {
-            return source.pollNext(output);
+            if (source != null && output != null) {
+                return source.pollNext(output);
+            }
+            NetworkInput current = input;
+            if (current == null) {
+                throw new IllegalStateException("the input of " + deployment.id() + " is not open");
+            }
+            return current.poll(first);
         } finally {
             if (measured) {
                 clock.endRead();
@@ -105,50 +195,84 @@ final class OperatorChain {
     }
 
     /**
-     * The counters and self time of every operator, from the source to the sink; callable from any
-     * thread.
+     * The counters and self time of every node in chain order; callable from any thread.
      *
      * <p>The task thread keeps moving rows while another thread reads the counters, so the counters
-     * are read from the sink back to the source: every row a downstream counter has seen was counted
-     * upstream before, and rows read but not yet accepted by the sink ({@code rowsRead + rowsExpanded
-     * - rowsFiltered - accepted}) are never negative.
+     * are read from the end of the chain back to its start: every row a downstream counter has seen
+     * was counted upstream before, and rows read but not yet accepted by the sink ({@code rowsRead +
+     * rowsExpanded - rowsFiltered - accepted}) are never negative.
      */
     List<OperatorSnapshot> snapshot() {
-        OperatorSnapshot[] operators = new OperatorSnapshot[transforms.size() + 2];
-        operators[operators.length - 1] = sink.metrics().snapshot(sink.selfNanos());
+        List<PlannedNode> nodes = chain.nodes();
+        OperatorSnapshot[] operators = new OperatorSnapshot[nodes.size()];
+        int index = nodes.size() - 1;
+        if (sink != null) {
+            operators[index--] = sink.metrics().snapshot(sink.selfNanos());
+        }
         for (int i = transforms.size() - 1; i >= 0; i--) {
             TransformOperator transform = transforms.get(i);
-            operators[i + 1] = transform.metrics().snapshot(transform.selfNanos());
+            operators[index--] = transform.metrics().snapshot(transform.selfNanos());
         }
-        operators[0] = sourceMetrics.snapshot(clock.selfNanos(0));
+        if (sourceMetrics != null) {
+            operators[index] = sourceMetrics.snapshot(clock.selfNanos(0));
+        }
         return List.of(operators);
     }
 
     void handle(OperatorEvent event) {
-        source.handle(event);
+        if (source != null) {
+            source.handle(event);
+        }
     }
 
-    /** Ends the input and returns the sink's committable. */
+    /** Ends the input: returns the sink's committable, or ends the outputs. */
     Optional<SerializedValue> finish(long checkpointId) {
-        return sink.finish(checkpointId);
+        if (sink != null) {
+            return sink.finish(checkpointId);
+        }
+        NetworkOutput current = outputs;
+        if (current != null) {
+            current.finish();
+        }
+        return Optional.empty();
     }
 
     /** Interrupts blocking reads and writes; called from another thread. */
     void cancel() {
-        source.cancel();
-        sink.cancel();
+        if (source != null) {
+            source.cancel();
+        }
+        if (sink != null) {
+            sink.cancel();
+        }
     }
 
     /**
-     * Closes the operators from the source down to the sink. Every operator is closed even when one
-     * fails; the first failure is thrown afterwards.
+     * Closes the operators from the start of the chain to its end, then the input and outputs.
+     * Every one is closed even when one fails; the first failure is thrown afterwards.
      */
     void close() {
         @Nullable PipeForgeException first = null;
         List<Runnable> steps = new ArrayList<>();
-        steps.add(source::close);
+        if (source != null) {
+            steps.add(source::close);
+        }
         transforms.forEach(t -> steps.add(t::close));
-        steps.add(sink::close);
+        if (sink != null) {
+            steps.add(sink::close);
+        }
+        steps.add(() -> {
+            NetworkInput current = input;
+            if (current != null) {
+                current.close();
+            }
+        });
+        steps.add(() -> {
+            NetworkOutput current = outputs;
+            if (current != null) {
+                current.release();
+            }
+        });
         for (Runnable step : steps) {
             try {
                 step.run();
@@ -165,12 +289,38 @@ final class OperatorChain {
         }
     }
 
+    /** Time the reader waited for the write queue, or the task waited for network buffers. */
     long producerWaitNanos() {
-        return sink.producerWaitNanos();
+        long waited = sink != null ? sink.producerWaitNanos() : 0;
+        NetworkOutput current = outputs;
+        return current == null ? waited : waited + current.backpressureNanos();
     }
 
     long writerWaitNanos() {
-        return sink.writerWaitNanos();
+        return sink != null ? sink.writerWaitNanos() : 0;
+    }
+
+    /** The network outputs, which are created when the chain opens. */
+    private static final class DeferredOutput implements ChainOutput {
+        private @Nullable NetworkOutput target;
+
+        @Override
+        public void row(Row row) {
+            NetworkOutput current = target;
+            if (current == null) {
+                throw new IllegalStateException("the outputs are not open");
+            }
+            current.row(row);
+        }
+
+        @Override
+        public void schemaChange(SchemaChangeEvent event) {
+            NetworkOutput current = target;
+            if (current == null) {
+                throw new IllegalStateException("the outputs are not open");
+            }
+            current.schemaChange(event);
+        }
     }
 
     /** Where the reader emits: straight into the first operator after it. */

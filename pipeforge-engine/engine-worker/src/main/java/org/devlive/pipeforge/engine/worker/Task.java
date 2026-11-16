@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 import org.devlive.pipeforge.api.source.PollStatus;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.engine.network.NetworkEnvironment;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
@@ -57,6 +58,7 @@ final class Task implements Runnable {
 
     private final TaskDeployment deployment;
     private final JobMasterGateway master;
+    private final @Nullable NetworkEnvironment network;
     private final Consumer<Task> onTerminated;
     private final Mailbox mailbox = new Mailbox();
     private final AtomicReference<TaskState> state = new AtomicReference<>(TaskState.DEPLOYING);
@@ -70,6 +72,16 @@ final class Task implements Runnable {
     private final AtomicLong idleNanos = new AtomicLong();
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
+        this(deployment, master, null, onTerminated);
+    }
+
+    /** @param network the data exchange of the worker, or {@code null} for tasks that need none */
+    Task(
+            TaskDeployment deployment,
+            JobMasterGateway master,
+            @Nullable NetworkEnvironment network,
+            Consumer<Task> onTerminated) {
+        this.network = network;
         this.deployment = deployment;
         this.master = master;
         this.onTerminated = onTerminated;
@@ -103,7 +115,7 @@ final class Task implements Runnable {
     public void run() {
         OperatorChain operators = null;
         try {
-            operators = new OperatorChain(deployment, scope, name, master);
+            operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled);
             chain = operators;
             if (cancelled) {
                 throw new CancelledException();
@@ -148,6 +160,10 @@ final class Task implements Runnable {
             switch (status) {
                 case MORE_AVAILABLE -> idle = MIN_IDLE_NANOS;
                 case NOTHING_AVAILABLE -> {
+                    if (operators.pollWaits()) {
+                        // the poll waited for the input already; look at the mail and poll again
+                        continue;
+                    }
                     long start = System.nanoTime();
                     int handled = mailbox.waitAndDrain(idle);
                     idleNanos.addAndGet(System.nanoTime() - start);

@@ -77,18 +77,53 @@ class ChainDescriptorTest {
     }
 
     @Test
-    void rejectsChainsThatAreNotSourceTransformsSink() {
+    void chainsStartWithASourceOrAnInputAndEndWithASinkOrOutputs() {
         PlannedNode src = node("src", NodeKind.SOURCE);
+        PlannedNode up = node("up", NodeKind.TRANSFORM);
         PlannedNode out = node("out", NodeKind.SINK);
+        ChainDescriptor.Output edge = new ChainDescriptor.Output(0, "out", Partitioning.REBALANCE, 3);
 
-        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of(src)))
-                .hasMessageContaining("at least a source and a sink");
-        assertThatThrownBy(() -> new ChainDescriptor("out", JOB, List.of(out, out)))
-                .hasMessageContaining("starts with a source");
-        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of(src, src)))
-                .hasMessageContaining("ends with a sink");
-        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of(src, out, out)))
-                .hasMessageContaining("Only transforms");
+        ChainDescriptor head = new ChainDescriptor("src", JOB, List.of(src, up), List.of(edge));
+        assertThat(head.hasSource()).isTrue();
+        assertThat(head.hasSink()).isFalse();
+        assertThat(head.transforms()).containsExactly(up);
+        assertThatThrownBy(head::sink).hasMessageContaining("writes to the network");
+        ChainDescriptor tail = new ChainDescriptor("out", JOB, List.of(out));
+        assertThat(tail.hasSource()).isFalse();
+        assertThat(tail.sink()).isEqualTo(out);
+        assertThatThrownBy(tail::source).hasMessageContaining("reads from the network");
+
+        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of())).hasMessageContaining("at least one node");
+        assertThatThrownBy(() -> new ChainDescriptor("up", JOB, List.of(up, src)))
+                .hasMessageContaining("A source can only start a chain");
+        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of(src, out, up), List.of(edge)))
+                .hasMessageContaining("A sink can only end a chain");
+        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of(src, up)))
+                .hasMessageContaining("must end with a sink or write to outputs");
+        assertThatThrownBy(() -> new ChainDescriptor("src", JOB, List.of(src, out), List.of(edge)))
+                .hasMessageContaining("ends with a sink has no outputs");
+        assertThatThrownBy(() -> new ChainDescriptor.Output(0, "out", Partitioning.FORWARD, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aChainThatReadsFromTheNetworkIsDeployedWithItsInputs() {
+        ChainDescriptor tail = new ChainDescriptor("out", JOB, List.of(node("out", NodeKind.SINK)));
+        ExecutionAttemptId task = new ExecutionAttemptId("run", "out", 0, 0);
+        TaskDeployment.Input input = new TaskDeployment.Input(
+                0,
+                "src",
+                List.of(new TaskDeployment.Channel(new ExecutionAttemptId("run", "src", 0, 0), 0, 0, "w2:6124")));
+        RunContext run = RunContext.of("r", Instant.EPOCH);
+        assertThat(new TaskDeployment(task, tail, 1, TaskSettings.defaults(), run, null, List.of(input)).inputs())
+                .containsExactly(input);
+        assertThatThrownBy(() -> new TaskDeployment(task, tail, 1, TaskSettings.defaults(), run))
+                .hasMessageContaining("reads from the network and needs its inputs");
+        ChainDescriptor full =
+                new ChainDescriptor("src", JOB, List.of(node("src", NodeKind.SOURCE), node("out", NodeKind.SINK)));
+        assertThatThrownBy(() -> new TaskDeployment(task, full, 1, TaskSettings.defaults(), run, null, List.of(input)))
+                .hasMessageContaining("starts with a source and has no inputs");
+        assertThatThrownBy(() -> new TaskDeployment.Input(0, "src", List.of())).hasMessageContaining("has no channels");
     }
 
     @Test

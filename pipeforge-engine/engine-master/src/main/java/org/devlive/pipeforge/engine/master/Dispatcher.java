@@ -190,7 +190,7 @@ public final class Dispatcher implements AutoCloseable {
             JobMaster master = new JobMaster(
                     new JobId(submission.runId()),
                     plan,
-                    ChainTopology.chain(plan),
+                    ChainTopology.graph(plan),
                     options,
                     placements.forRun(plan),
                     () -> jobs.remove(submission.runId()));

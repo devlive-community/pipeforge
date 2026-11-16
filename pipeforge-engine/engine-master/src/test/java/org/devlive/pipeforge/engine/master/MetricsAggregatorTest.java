@@ -9,10 +9,8 @@ package org.devlive.pipeforge.engine.master;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.engine.api.JobMetrics;
-import org.devlive.pipeforge.engine.rpc.ChainDescriptor;
 import org.devlive.pipeforge.engine.rpc.OperatorSnapshot;
 import org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot;
 import org.devlive.pipeforge.engine.testing.Probe;
@@ -28,11 +26,7 @@ class MetricsAggregatorTest {
 
     static MetricsAggregator aggregator() {
         JobPlan plan = TestConnectors.job(Probe.create(), "rows: 100", "", "", 2);
-        ChainDescriptor chain = new ChainDescriptor(
-                plan.nodes().get(0).id(),
-                new JobContext(plan.name(), plan.parallelism(), plan.timeZone()),
-                plan.nodes());
-        return new MetricsAggregator(chain, 2, 0);
+        return new MetricsAggregator(org.devlive.pipeforge.engine.master.graph.JobGraph.of(plan), 0);
     }
 
     static TaskMetricsSnapshot task(long sourceOut, long filtered, long expanded, long sinkIn, long sinkOut) {
@@ -52,8 +46,8 @@ class MetricsAggregatorTest {
         MetricsAggregator metrics = aggregator();
         // read in one order, the counters of task 0 would say 10 - 1 + 3 = 12 rows reached the sink;
         // the sink counter was read later and has seen 2 more
-        metrics.update(0, task(10, 1, 3, 14, 8));
-        metrics.update(1, task(5, 0, 0, 5, 5));
+        metrics.update("src", 0, task(10, 1, 3, 14, 8));
+        metrics.update("src", 1, task(5, 0, 0, 5, 5));
 
         JobMetrics live = metrics.sample(1_000_000_000L, 2, MetricsAggregator.Phase.RUNNING);
 
@@ -69,8 +63,8 @@ class MetricsAggregatorTest {
     @Test
     void theEndOfARunStillCountsWhatDidNotArrive() {
         MetricsAggregator metrics = aggregator();
-        metrics.update(0, task(10, 0, 0, 10, 7));
-        metrics.update(1, task(10, 0, 0, 10, 10));
+        metrics.update("src", 0, task(10, 0, 0, 10, 7));
+        metrics.update("src", 1, task(10, 0, 0, 10, 10));
 
         JobMetrics stopped = metrics.sample(2_000_000_000L, 0, MetricsAggregator.Phase.STOPPED);
 

@@ -46,7 +46,10 @@ an edge decides how rows are distributed over the instances of the next chain:
 | `forward` | Same parallelism on both sides: instance i sends to instance i |
 | `rebalance` | The parallelism changes: rows go round robin to all instances |
 | `hash(keys)` | A sink with a parallelism above 1 may receive updates or deletes: the changes of one primary key, or of one table and primary key when there are several tables, always reach the same writer, in order |
-| `table`, `broadcast` | Known to the engine; no rule chooses them yet |
+| `table`, `broadcast` | The engine can run them (`table`: every table to one instance, by the hash of its name; `broadcast`: every row to every instance); no rule chooses them yet |
+
+The hash of `hash` and `table` depends only on the values, so the same key reaches the same
+instance on every worker and every run.
 
 The **execution graph** expands every chain by its parallelism into tasks. Tasks connected by
 edges form a **region**; tasks that exchange no rows are in separate regions, so a failure of one
@@ -63,7 +66,13 @@ tasks: cdc[0]  doris[0] doris[1] doris[2] doris[3]    one region, 4 slots
 
 Until the planner derives which nodes emit updates or deletes, an unbounded source counts as one
 that may, and so do the nodes after it: an unneeded `hash` costs throughput, a missing one would
-reorder the changes of a key. Local runs still execute one straight chain with one parallelism.
+reorder the changes of a key.
+
+Each task of a chain that does not start with a source reads its rows from the tasks of the chain
+before it, and each task of a chain that does not end with a sink writes them to the tasks of the
+next one — in memory when both run on the same worker, over the network otherwise (see below).
+Local runs use the same graph; all their tasks are in one process, so they exchange rows in
+memory.
 
 ### Splits are pulled
 
@@ -282,8 +291,9 @@ runs, refreshed every `metricsInterval`.
 - **Self time.** `selfTimeRatio` is the share of the running time a node spends in its own code,
   without the nodes after it. It is measured on every 16th read, so that the hot path does not read
   the clock for every row; for a sink with the write buffer it is the busy time of the write thread.
-- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue (the target is slow),
-  `writerWaitMs` the time write threads waited for rows (the source is slow).
+- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue or on full network
+  buffers (something downstream is slow), `writerWaitMs` the time write threads waited for rows
+  (the source is slow).
 
 `AnalyzeText` prints the metrics the way `explain --analyze` shows a run:
 
@@ -327,7 +337,7 @@ commit and end.
 | `PF-SINK-0003` | The data was written but the commit failed or was still refused after 3 attempts |
 | `PF-PLUG-0007` | A transform failed while processing a row |
 | `PF-RES-0005` | A cancelled task ignored cancellation and interrupts; give the connector a socket or query timeout |
-| `PF-PLAN-0012` | The job needs data exchange between tasks, which this version cannot run (see Limitations) |
+| `PF-PLAN-0012` | The job has a shape this version cannot run, or a schema change reached a data exchange (see Limitations) |
 | `PF-CLUS-0010` | The data connection between two workers broke; the tasks on both ends fail |
 | `PF-CLUS-0011` | A task asked for the output of an upstream task that did not appear on its worker in time; look for the first error of the run |
 | `PF-RES-0008` | The worker's network memory cannot hold the buffers an input needs; raise `worker.memory.network` or lower the parallelism |
@@ -338,10 +348,12 @@ subtask to their scope. The full list is in the [error reference](../reference/e
 
 ## Limitations
 
-- Jobs must be a straight line: one source, its transforms and one sink, all with the same
-  parallelism. Several sources or sinks, fan-out and changes of parallelism need data exchange
-  between tasks and fail with `PF-PLAN-0012`: the data exchange described above is in place, and
-  connecting tasks to it comes in the next step of the distributed runtime.
+- Jobs are pipelines: one source, its transforms and one sink, each node reading from the one
+  before; the parallelism may change from node to node. Several sources or sinks, a node whose
+  output goes to several nodes and nodes that read from several nodes fail with `PF-PLAN-0012`.
+- Schema changes cannot cross a data exchange yet: a schema change that reaches the end of a chain
+  whose rows go to another chain fails the task with `PF-PLAN-0012`. Jobs whose nodes all have the
+  same parallelism run in one chain and are not affected.
 - No checkpoints: a failed or cancelled job starts from the beginning when it is run again, and
   two-phase sinks commit once at the end of the input.
 - No restarts: the first task failure fails the job.

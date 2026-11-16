@@ -224,6 +224,32 @@ class GrpcTransportTest {
     }
 
     @Test
+    void deploysTheInputsAndOutputsOfATask() {
+        ExecutionAttemptId sink = new ExecutionAttemptId(TASK.runId(), "out", 1, 0);
+        List<TaskDeployment.Input> inputs = List.of(new TaskDeployment.Input(
+                0,
+                "src",
+                List.of(
+                        new TaskDeployment.Channel(new ExecutionAttemptId(TASK.runId(), "src", 0, 0), 0, 1, null),
+                        new TaskDeployment.Channel(
+                                new ExecutionAttemptId(TASK.runId(), "src", 1, 0), 0, 1, "10.0.0.2:6124"))));
+        TaskDeployment tail = new TaskDeployment(
+                sink, ChainCodecTest.tail(), 3, TaskSettings.defaults(), ChainCodecTest.RUN, null, inputs);
+        executor(Headers.Epochs.FIRST).deployTask(tail).join();
+        TaskDeployment head =
+                new TaskDeployment(TASK, ChainCodecTest.head(), 2, TaskSettings.defaults(), ChainCodecTest.RUN);
+        executor(Headers.Epochs.FIRST).deployTask(head).join();
+
+        assertThat(worker.deployed).hasSize(2);
+        assertThat(worker.deployed.get(0).inputs()).isEqualTo(inputs);
+        assertThat(worker.deployed.get(1).chain().outputs())
+                .isEqualTo(ChainCodecTest.head().outputs());
+        assertThat(ProtoMapping.outputs(ChainCodecTest.head().outputs()))
+                .extracting(o -> o.getSubpartitions())
+                .containsExactly(3, 2);
+    }
+
+    @Test
     void secretsSealedForAnotherKeyCannotBeRead() {
         TaskExecutorClient stale = new TaskExecutorClient(
                 channel, "worker-1", SecretBox.generate().publicKey(), () -> Headers.Epochs.FIRST, retry);

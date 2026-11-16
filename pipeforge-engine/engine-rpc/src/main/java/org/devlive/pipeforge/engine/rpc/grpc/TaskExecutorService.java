@@ -106,7 +106,8 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
                 request.getParallelism(),
                 ProtoMapping.fromProto(request.getSettings()),
                 decoded.run(),
-                request.getAllocationId().isEmpty() ? null : request.getAllocationId());
+                request.getAllocationId().isEmpty() ? null : request.getAllocationId(),
+                ProtoMapping.fromProtoInputs(request.getInputsList()));
     }
 
     @Override

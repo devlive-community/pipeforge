@@ -20,6 +20,7 @@ import org.devlive.pipeforge.api.table.CatalogTable;
 import org.devlive.pipeforge.core.job.NodeKind;
 import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.core.plan.PlannedNode;
+import org.devlive.pipeforge.engine.rpc.Partitioning;
 
 /**
  * A plan with its operators chained into vertices (native engine design, section 4): a node joins

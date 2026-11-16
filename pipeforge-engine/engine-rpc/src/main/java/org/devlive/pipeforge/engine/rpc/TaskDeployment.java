@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.rpc;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -19,6 +20,7 @@ import java.util.Objects;
  * @param run the run the task belongs to
  * @param allocationId the slot reservation the task runs in, or {@code null} where slots are not
  *     reserved (local runs)
+ * @param inputs where the first node reads from when the chain has no source, one per input edge
  */
 public record TaskDeployment(
         ExecutionAttemptId id,
@@ -26,15 +28,53 @@ public record TaskDeployment(
         int parallelism,
         TaskSettings settings,
         RunContext run,
-        @org.jspecify.annotations.Nullable String allocationId) {
+        @org.jspecify.annotations.Nullable String allocationId,
+        List<Input> inputs) {
+
+    /**
+     * An input edge: one channel per upstream subpartition this task reads.
+     *
+     * @param index the position of the edge among the inputs of the first node
+     * @param upstreamVertex the vertex that writes it
+     */
+    public record Input(int index, String upstreamVertex, List<Channel> channels) {
+        public Input {
+            channels = List.copyOf(channels);
+            if (channels.isEmpty()) {
+                throw new IllegalArgumentException("input " + index + " from " + upstreamVertex + " has no channels");
+            }
+        }
+    }
+
+    /**
+     * A channel of an input.
+     *
+     * @param producer the task attempt that writes it
+     * @param outputIndex the output of the producer
+     * @param subpartition the subpartition of that output this task reads
+     * @param producerAddress the data address of the producer's worker, {@code host:port}, or
+     *     {@code null} when it runs on the same worker
+     */
+    public record Channel(
+            ExecutionAttemptId producer,
+            int outputIndex,
+            int subpartition,
+            @org.jspecify.annotations.Nullable String producerAddress) {}
 
     public TaskDeployment {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(chain, "chain");
         Objects.requireNonNull(settings, "settings");
         Objects.requireNonNull(run, "run");
+        inputs = List.copyOf(inputs);
         if (id.subtask() >= parallelism) {
             throw new IllegalArgumentException("Subtask " + id.subtask() + " is outside parallelism " + parallelism);
+        }
+        if (chain.hasSource() != inputs.isEmpty()) {
+            throw new IllegalArgumentException(
+                    chain.hasSource()
+                            ? "Chain " + chain.vertexId() + " starts with a source and has no inputs"
+                            : "Chain " + chain.vertexId() + " reads from the network and needs its inputs");
         }
     }
 
@@ -43,9 +83,20 @@ public record TaskDeployment(
         return run.runStart();
     }
 
+    /** A deployment of a chain that starts with a source. */
+    public TaskDeployment(
+            ExecutionAttemptId id,
+            ChainDescriptor chain,
+            int parallelism,
+            TaskSettings settings,
+            RunContext run,
+            @org.jspecify.annotations.Nullable String allocationId) {
+        this(id, chain, parallelism, settings, run, allocationId, List.of());
+    }
+
     /** A deployment outside of reserved slots, as local runs deploy. */
     public TaskDeployment(
             ExecutionAttemptId id, ChainDescriptor chain, int parallelism, TaskSettings settings, RunContext run) {
-        this(id, chain, parallelism, settings, run, null);
+        this(id, chain, parallelism, settings, run, null, List.of());
     }
 }

@@ -53,10 +53,21 @@ public final class NetworkEnvironment implements AutoCloseable {
         if (address != null) {
             return address;
         }
-        address = transport.bind(host, port, partitions);
-        long every = options.bufferTimeout().toMillis();
-        flusher = transport.timer().scheduleAtFixedRate(partitions::flushAll, every, every, TimeUnit.MILLISECONDS);
-        return address;
+        InetSocketAddress bound = transport.bind(host, port, partitions);
+        address = bound;
+        startLocal();
+        return bound;
+    }
+
+    /**
+     * Starts sending buffers that are not full every buffer timeout, without listening: for one
+     * process whose tasks exchange rows only with each other.
+     */
+    public synchronized void startLocal() {
+        if (flusher == null) {
+            long every = options.bufferTimeout().toMillis();
+            flusher = transport.timer().scheduleAtFixedRate(partitions::flushAll, every, every, TimeUnit.MILLISECONDS);
+        }
     }
 
     public synchronized @Nullable InetSocketAddress address() {

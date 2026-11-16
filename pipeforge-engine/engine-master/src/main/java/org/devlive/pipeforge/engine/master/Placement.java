@@ -24,10 +24,17 @@ public interface Placement {
     /**
      * One slot of a job.
      *
+     * @param address the RPC address of the worker
+     * @param dataAddress where other tasks read the outputs of tasks in this slot, {@code host:port}
      * @param allocationId the reservation, or {@code null} where slots are not reserved
      */
     record Slot(
-            int index, String workerId, String address, TaskExecutorGateway gateway, @Nullable String allocationId) {}
+            int index,
+            String workerId,
+            String address,
+            String dataAddress,
+            TaskExecutorGateway gateway,
+            @Nullable String allocationId) {}
 
     /** Gets {@code count} slots for a run; completes when they are reserved. */
     CompletableFuture<List<Slot>> acquire(String jobId, String runId, int count);
@@ -42,7 +49,7 @@ public interface Placement {
             public CompletableFuture<List<Slot>> acquire(String jobId, String runId, int count) {
                 List<Slot> slots = new ArrayList<>(count);
                 for (int i = 0; i < count; i++) {
-                    slots.add(new Slot(i, "local", "local", executor, null));
+                    slots.add(new Slot(i, "local", "local", "local", executor, null));
                 }
                 return CompletableFuture.completedFuture(slots);
             }
@@ -79,6 +86,7 @@ public interface Placement {
                                         assignment.index(),
                                         assignment.worker().workerId(),
                                         assignment.worker().rpcAddress(),
+                                        assignment.worker().dataAddress(),
                                         workers.gateway(assignment.worker()),
                                         assignment.allocationId()));
                             }

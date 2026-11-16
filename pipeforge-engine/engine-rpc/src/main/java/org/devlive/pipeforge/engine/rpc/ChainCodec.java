@@ -119,7 +119,45 @@ public final class ChainCodec {
             builder.addNodes(node(node, tables, secrets));
         }
         builder.addAllTables(tables.entries());
+        for (ChainDescriptor.Output output : chain.outputs()) {
+            builder.addOutputs(org.devlive.pipeforge.engine.rpc.proto.OutputEdge.newBuilder()
+                    .setOutputIndex(output.index())
+                    .setTargetVertex(output.targetVertex())
+                    .setPartitioning(partitioning(output.partitioning()))
+                    .setSubpartitions(output.subpartitions()));
+        }
         return new Encoded(wrap(builder.build()), secrets);
+    }
+
+    /** The Protobuf form of a partitioning. */
+    public static org.devlive.pipeforge.engine.rpc.proto.Partitioning partitioning(Partitioning partitioning) {
+        var kind =
+                switch (partitioning.kind()) {
+                    case FORWARD -> org.devlive.pipeforge.engine.rpc.proto.Partitioning.Kind.KIND_FORWARD;
+                    case REBALANCE -> org.devlive.pipeforge.engine.rpc.proto.Partitioning.Kind.KIND_REBALANCE;
+                    case HASH -> org.devlive.pipeforge.engine.rpc.proto.Partitioning.Kind.KIND_HASH;
+                    case TABLE -> org.devlive.pipeforge.engine.rpc.proto.Partitioning.Kind.KIND_TABLE;
+                    case BROADCAST -> org.devlive.pipeforge.engine.rpc.proto.Partitioning.Kind.KIND_BROADCAST;
+                };
+        return org.devlive.pipeforge.engine.rpc.proto.Partitioning.newBuilder()
+                .setKind(kind)
+                .addAllKeys(partitioning.keys())
+                .build();
+    }
+
+    /** A partitioning from its Protobuf form. */
+    public static Partitioning partitioning(org.devlive.pipeforge.engine.rpc.proto.Partitioning partitioning) {
+        Partitioning.Kind kind =
+                switch (partitioning.getKind()) {
+                    case KIND_FORWARD -> Partitioning.Kind.FORWARD;
+                    case KIND_REBALANCE -> Partitioning.Kind.REBALANCE;
+                    case KIND_HASH -> Partitioning.Kind.HASH;
+                    case KIND_TABLE -> Partitioning.Kind.TABLE;
+                    case KIND_BROADCAST -> Partitioning.Kind.BROADCAST;
+                    case KIND_UNSPECIFIED, UNRECOGNIZED -> throw new IllegalArgumentException(
+                            "a partitioning of kind " + partitioning.getKind());
+                };
+        return new Partitioning(kind, partitioning.getKeysList());
     }
 
     private static org.devlive.pipeforge.engine.rpc.proto.JobContext job(JobContext job, RunContext run) {
@@ -258,10 +296,19 @@ public final class ChainCodec {
             nodes.add(node(node, previous, tables, secrets, resolver));
             previous = node.getNodeId();
         }
+        List<ChainDescriptor.Output> outputs = new ArrayList<>();
+        for (var output : chain.getOutputsList()) {
+            outputs.add(new ChainDescriptor.Output(
+                    output.getOutputIndex(),
+                    output.getTargetVertex(),
+                    partitioning(output.getPartitioning()),
+                    output.getSubpartitions()));
+        }
         ChainDescriptor decoded = new ChainDescriptor(
                 chain.getVertexId(),
                 new JobContext(job.getJobName(), job.getParallelism(), ZoneId.of(job.getTimeZone())),
-                nodes);
+                nodes,
+                outputs);
         RunContext run = new RunContext(
                 job.getJobId(),
                 job.getRunId(),
