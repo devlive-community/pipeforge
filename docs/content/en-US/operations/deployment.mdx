@@ -1,0 +1,120 @@
+---
+title: Deployment
+description: Installing the distribution, starting a master and workers with their scripts, configuring them and managing the processes.
+order: 20
+---
+
+A cluster is one **master** and any number of **workers** (see [cluster](../concepts/cluster)).
+Both come with the distribution, which also holds the `pipeforge` command and the Web UI server.
+
+## Installing
+
+Unpack `pipeforge-<version>.tar.gz` on every machine of the cluster. In a checkout, build it with:
+
+```bash
+./mvnw -B -pl pipeforge-dist -am package -DskipTests
+tar -xzf pipeforge-dist/target/pipeforge-0.1.0-SNAPSHOT.tar.gz
+```
+
+| Directory | Content |
+|---|---|
+| `bin/` | `pipeforge` (the command) and `pipeforge-master`, `pipeforge-worker`, `pipeforge-standalone` as `.sh` and `.cmd` |
+| `conf/` | `pipeforge.yaml`, `master.yaml`, `worker.yaml`, `logback.xml`, `jvm.options` |
+| `lib/` | the libraries; `lib/logback/` the logging of the cluster processes, `lib/server/` the server |
+| `plugins/` | the plugins the master offers: `fake`, `field-mapper`, `console`, `blackhole` |
+| `logs/`, `run/`, `data/` | created at the first start: logs, process IDs, plugin caches |
+
+The processes need Java 21 or later; `JAVA_HOME` selects the runtime.
+
+## Starting a cluster
+
+Every process needs the same cluster token. Set it in `conf/pipeforge.yaml` of every machine, or
+give it as an environment variable:
+
+```bash
+export PIPEFORGE_CLUSTER_TOKEN="$(openssl rand -hex 32)"
+```
+
+On the master's machine:
+
+```bash
+bin/pipeforge-master.sh start
+```
+
+On each worker's machine, tell the worker where the master is and how others reach it:
+
+```bash
+export PIPEFORGE_WORKER_MASTER_ADDRESS=master.example.com:6123
+export PIPEFORGE_WORKER_HOST=worker-1.example.com
+bin/pipeforge-worker.sh start --labels zone=east
+```
+
+The worker registers with the master and offers its slots, one per processor unless
+`worker.slots` says otherwise; its log shows `Worker … offers 8 slot(s)`. For a trial on one
+machine, `bin/pipeforge-standalone.sh start` runs a master and a worker in one process.
+
+## Managing the processes
+
+| Command | Effect |
+|---|---|
+| `start` | Starts the process in the background and waits until it runs; if it does not start, prints the end of its output and exits with 1 |
+| `stop` | Stops it: SIGTERM, then SIGKILL after 60 seconds |
+| `status` | Exits with 0 when it runs, 3 when it does not |
+| `restart` | `stop`, then `start` |
+| `run` | Runs it in the foreground, for containers and service managers such as systemd |
+
+`start`, `restart` and `run` accept `--set key=value` and `--labels key=value,...`. A process
+writes its ID to `run/<role>.pid` and its log to `logs/pipeforge-<role>.log` (a new file every day
+or 100 MB, kept 14 days); what it prints before logging starts goes to `logs/pipeforge-<role>.out`.
+`PIPEFORGE_LOG_DIR` moves the logs.
+
+On Windows the `.cmd` scripts offer the same commands except `restart`; `stop` ends the process at
+once, since Windows has no SIGTERM.
+
+## Configuration
+
+Settings come from `conf/*.yaml`, then `PIPEFORGE_*` environment variables, then `--set`; the
+[configuration reference](../reference/configuration) lists every one with its default. JVM
+options are in `conf/jvm.options`, one per line; a line applies to every process, or to one when it
+starts with `master:`, `worker:` or `standalone:`. `JAVA_OPTS` adds options for one start:
+
+```text
+-XX:+UseG1GC
+master: -Xmx2g
+worker: -Xmx4g
+```
+
+## Ports and security
+
+| Port | Setting | Who connects |
+|---|---|---|
+| 6123 | `master.rpc.port` | workers, and clients that submit jobs |
+| 6125 | `worker.rpc.port` | the master, to deploy and cancel tasks |
+| 6124 | `worker.data.port` | other workers, to read the rows of tasks |
+
+Every call carries the cluster token; a process with another token is refused with
+[`PF-CLUS-0005`](../reference/errors#pf-clus-0005). With `security.tls.enabled`, the RPC between
+the processes is encrypted with the PKCS#12 key and trust stores of `security.tls.*`. Keep the
+ports reachable only inside the cluster's network.
+
+## Submitting jobs
+
+The master accepts runs over its RPC (`DispatcherService` of the
+[engine protocol](../development/engine-protocol)): it plans the job with its plugins, places the
+tasks on the workers' slots and follows the run. The server and `pipeforge run` submit jobs to a
+cluster in a later step of the distributed runtime; until then they run jobs in local mode.
+
+## Troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-CONF-0011` `SETTING_INVALID` | A setting is unknown, of the wrong type, or `cluster.token` is missing. The error names the key and the file or variable it came from. |
+| `PF-RES-0006` `PORT_IN_USE` | Another process uses the port. Stop it or change the port setting. |
+| `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | The processes have different cluster tokens. |
+| `PF-CLUS-0001` `WORKER_LOST` | A worker stopped sending heartbeats; see [cluster](../concepts/cluster#troubleshooting). |
+
+## Limitations
+
+- One master per cluster; a standby master comes with failover.
+- `standalone` runs a master and a worker; the server joins it once it submits jobs to a cluster.
+- The settings of the metadata database, checkpoints and isolation arrive with those features.

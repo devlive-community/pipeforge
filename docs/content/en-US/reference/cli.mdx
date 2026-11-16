@@ -8,8 +8,9 @@ data: cli
 ## Running the command
 
 `pipeforge` validates, explains and runs jobs on this machine, evaluates expressions and starts
-the Web UI. Build it in a checkout and run it from the app directory, or unpack
-`pipeforge-<version>.tar.gz`:
+the Web UI. Build it in a checkout and run it from the app directory, or unpack the release
+`pipeforge-<version>.tar.gz`, which `pipeforge-dist` builds and which also holds the
+[cluster processes](../operations/deployment):
 
 ```bash
 ./mvnw -B -pl pipeforge-cli -am package -DskipTests

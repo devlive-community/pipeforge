@@ -7,8 +7,8 @@ data: cli
 
 ## 运行命令
 
-`pipeforge` 在本机校验、解释和运行作业，计算表达式，启动 Web UI。在源码仓库中构建后从应用目录运行，或者解压
-`pipeforge-<版本>.tar.gz`：
+`pipeforge` 在本机校验、解释和运行作业，计算表达式，启动 Web UI。在源码仓库中构建后从应用目录运行，或者解压发行包
+`pipeforge-<版本>.tar.gz`（由 `pipeforge-dist` 构建，其中也包含[集群进程](../operations/deployment)）：
 
 ```bash
 ./mvnw -B -pl pipeforge-cli -am package -DskipTests

@@ -46,6 +46,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final JobMasterGateway master;
     private final @Nullable SlotTable slots;
     private final @Nullable NetworkEnvironment network;
+    private volatile java.util.function.Consumer<String> runEnded = run -> {};
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService watchdog;
     private final Map<ExecutionAttemptId, ScheduledFuture<?>> reporters = new ConcurrentHashMap<>();
@@ -179,6 +180,22 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         if (reporter != null) {
             reporter.cancel(false);
         }
+        String run = task.id().runId();
+        if (tasks.keySet().stream().noneMatch(id -> id.runId().equals(run))) {
+            try {
+                runEnded.accept(run);
+            } catch (RuntimeException e) {
+                LOG.warn("Releasing the resources of run {} failed", run, e);
+            }
+        }
+    }
+
+    /**
+     * Learns when the last task of a run on this executor has ended, for example to release the
+     * plugins of the run; called on the thread of that task.
+     */
+    public void onRunEnded(java.util.function.Consumer<String> listener) {
+        this.runEnded = listener;
     }
 
     /** The tasks that have not reported a final state yet. */

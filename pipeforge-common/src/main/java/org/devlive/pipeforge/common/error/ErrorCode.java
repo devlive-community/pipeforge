@@ -40,6 +40,8 @@ public final class ErrorCode {
     public static final ErrorCode FILE_NOT_READABLE = define("PF-CONF-0008", "FILE_NOT_READABLE", "path", "reason");
     public static final ErrorCode SERVER_NOT_INSTALLED = define("PF-CONF-0009", "SERVER_NOT_INSTALLED", "searched");
     public static final ErrorCode RUN_NOT_FOUND = define("PF-CONF-0010", "RUN_NOT_FOUND", "run");
+    public static final ErrorCode SETTING_INVALID =
+            define("PF-CONF-0011", "SETTING_INVALID", "key", "source", "reason");
 
     // Planning
     public static final ErrorCode DAG_CYCLE = define("PF-PLAN-0001", "DAG_CYCLE", "path");

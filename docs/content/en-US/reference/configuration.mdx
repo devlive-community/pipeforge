@@ -1,0 +1,33 @@
+---
+title: Configuration
+description: Every setting of the master and worker processes with its file, type, default and environment variable, generated from the code.
+order: 75
+data: configuration
+---
+
+## Where settings come from
+
+The [cluster processes](../operations/deployment) read their settings from `conf/` of the
+installation, in this order; a later source overrides an earlier one:
+
+1. `conf/pipeforge.yaml`, `conf/master.yaml` and `conf/worker.yaml`. Keys may be nested or
+   dotted: `worker: { slots: 8 }` and `worker.slots: 8` are the same.
+2. Environment variables: `PIPEFORGE_` and the key in upper case with `_` for `.` and `-`, such as
+   `PIPEFORGE_WORKER_SLOTS` for `worker.slots`.
+3. The command line: `bin/pipeforge-worker.sh start --set worker.slots=8`, and `--labels
+   zone=east,net=db` for `worker.labels`.
+
+Every value is checked when a process starts. An unknown key, a value of the wrong type or a
+missing `cluster.token` stops it with [`PF-CONF-0011`](./errors#pf-conf-0011), naming the key and
+where it came from:
+
+```text
+ERROR PF-CONF-0011 Setting 'worker.slot' in conf/worker.yaml is not valid: there is no such setting; did you mean 'worker.slots'?
+```
+
+Durations are written `500ms`, `30s`, `5min`, `2h` or `1d`; sizes `512`, `32KB`, `64MB` or
+`1GB`; lists as YAML lists or `a,b,c`; maps as YAML maps or `key=value,key=value`.
+
+## All settings
+
+<ConfigurationList />

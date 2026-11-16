@@ -1,0 +1,112 @@
+---
+title: 部署
+description: 安装发行包，用脚本启动 Master 和 Worker，配置它们并管理进程。
+order: 20
+---
+
+一个集群由一个 **Master** 和任意数量的 **Worker** 组成（见[集群](../concepts/cluster)）。两者都在发行包中，发行包还包含
+`pipeforge` 命令和 Web UI 服务。
+
+## 安装
+
+在集群的每台机器上解压 `pipeforge-<version>.tar.gz`。在源码目录中可以这样构建：
+
+```bash
+./mvnw -B -pl pipeforge-dist -am package -DskipTests
+tar -xzf pipeforge-dist/target/pipeforge-0.1.0-SNAPSHOT.tar.gz
+```
+
+| 目录 | 内容 |
+|---|---|
+| `bin/` | `pipeforge`（命令）以及 `pipeforge-master`、`pipeforge-worker`、`pipeforge-standalone` 的 `.sh` 与 `.cmd` 脚本 |
+| `conf/` | `pipeforge.yaml`、`master.yaml`、`worker.yaml`、`logback.xml`、`jvm.options` |
+| `lib/` | 依赖库；`lib/logback/` 是集群进程的日志库，`lib/server/` 是服务 |
+| `plugins/` | Master 提供的插件：`fake`、`field-mapper`、`console`、`blackhole` |
+| `logs/`、`run/`、`data/` | 首次启动时创建：日志、进程 ID、插件缓存 |
+
+进程需要 Java 21 或更高版本；`JAVA_HOME` 选择运行时。
+
+## 启动集群
+
+所有进程都需要同一个集群令牌。在每台机器的 `conf/pipeforge.yaml` 中设置，或者用环境变量提供：
+
+```bash
+export PIPEFORGE_CLUSTER_TOKEN="$(openssl rand -hex 32)"
+```
+
+在 Master 所在的机器上：
+
+```bash
+bin/pipeforge-master.sh start
+```
+
+在每台 Worker 机器上，告诉 Worker Master 在哪里，以及其他进程如何访问它：
+
+```bash
+export PIPEFORGE_WORKER_MASTER_ADDRESS=master.example.com:6123
+export PIPEFORGE_WORKER_HOST=worker-1.example.com
+bin/pipeforge-worker.sh start --labels zone=east
+```
+
+Worker 向 Master 注册并提供 Slot，除非 `worker.slots` 另有设置，否则每个 CPU 核一个 Slot；它的日志中会出现
+`Worker … offers 8 slot(s)`。在一台机器上试用时，`bin/pipeforge-standalone.sh start` 在一个进程中运行 Master 和 Worker。
+
+## 管理进程
+
+| 命令 | 作用 |
+|---|---|
+| `start` | 在后台启动进程并等待它运行；没有启动成功时，输出它最后的输出并以 1 退出 |
+| `stop` | 停止进程：先发送 SIGTERM，60 秒后发送 SIGKILL |
+| `status` | 进程运行时以 0 退出，否则以 3 退出 |
+| `restart` | 先 `stop` 再 `start` |
+| `run` | 在前台运行，供容器和 systemd 等服务管理器使用 |
+
+`start`、`restart` 和 `run` 接受 `--set key=value` 和 `--labels key=value,...`。进程把自己的 ID 写入 `run/<role>.pid`，
+日志写入 `logs/pipeforge-<role>.log`（每天或每 100 MB 换一个文件，保留 14 天）；日志开始之前的输出写入
+`logs/pipeforge-<role>.out`。`PIPEFORGE_LOG_DIR` 可以修改日志目录。
+
+在 Windows 上，`.cmd` 脚本提供除 `restart` 之外的相同命令；由于 Windows 没有 SIGTERM，`stop` 会立即结束进程。
+
+## 配置
+
+设置依次来自 `conf/*.yaml`、`PIPEFORGE_*` 环境变量和 `--set`；[配置参考](../reference/configuration)列出了每个设置及其默认值。
+JVM 参数在 `conf/jvm.options` 中，每行一个；一行适用于所有进程，以 `master:`、`worker:` 或 `standalone:` 开头时只适用于对应进程。
+`JAVA_OPTS` 为某一次启动追加参数：
+
+```text
+-XX:+UseG1GC
+master: -Xmx2g
+worker: -Xmx4g
+```
+
+## 端口与安全
+
+| 端口 | 设置 | 谁来连接 |
+|---|---|---|
+| 6123 | `master.rpc.port` | Worker，以及提交作业的客户端 |
+| 6125 | `worker.rpc.port` | Master，用于部署和取消 Task |
+| 6124 | `worker.data.port` | 其他 Worker，用于读取 Task 的数据 |
+
+每次调用都携带集群令牌；令牌不同的进程会被以 [`PF-CLUS-0005`](../reference/errors#pf-clus-0005) 拒绝。开启
+`security.tls.enabled` 后，进程之间的 RPC 使用 `security.tls.*` 中的 PKCS#12 密钥库和信任库加密。这些端口只应在集群网络内部可达。
+
+## 提交作业
+
+Master 通过它的 RPC（[引擎协议](../development/engine-protocol)中的 `DispatcherService`）接收运行：它用自己的插件规划作业，
+把 Task 放到 Worker 的 Slot 上，并跟踪运行。服务和 `pipeforge run` 向集群提交作业会在分布式运行时的后续步骤中提供；
+在此之前它们以本地模式运行作业。
+
+## 排障
+
+| 错误 | 原因与处理 |
+|---|---|
+| `PF-CONF-0011` `SETTING_INVALID` | 设置未知、类型不对，或者缺少 `cluster.token`。错误中给出键以及它来自哪个文件或变量。 |
+| `PF-RES-0006` `PORT_IN_USE` | 端口被其他进程占用。请停止该进程或修改端口设置。 |
+| `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | 进程之间的集群令牌不同。 |
+| `PF-CLUS-0001` `WORKER_LOST` | Worker 不再发送心跳；见[集群](../concepts/cluster#排障)。 |
+
+## 限制
+
+- 每个集群一个 Master；可以接管的备用 Master 随故障恢复一起提供。
+- `standalone` 运行 Master 和 Worker；服务向集群提交作业之后才会加入其中。
+- 元数据库、checkpoint 和隔离的设置随对应功能一起提供。

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<!--
+  The distribution:
+    bin/pipeforge, bin/pipeforge.cmd        the command
+    bin/pipeforge-master|worker|standalone  the cluster processes (.sh and .cmd)
+    conf/                                   their settings, logging and JVM options
+    lib/                                    the command, the engine and their libraries
+    lib/logback/                            the logging of the cluster processes
+    lib/server/                             the server, started by `pipeforge ui`
+    plugins/                                the plugins that come with the distribution
+    dev/                                    the development environment, for `pipeforge dev`
+-->
+<component xmlns="http://maven.apache.org/ASSEMBLY-COMPONENT/2.2.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://maven.apache.org/ASSEMBLY-COMPONENT/2.2.0 https://maven.apache.org/xsd/assembly-component-2.2.0.xsd">
+    <fileSets>
+        <fileSet>
+            <directory>${project.basedir}/../pipeforge-cli/src/main/dist/bin</directory>
+            <outputDirectory>bin</outputDirectory>
+            <fileMode>0755</fileMode>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/dist/bin</directory>
+            <outputDirectory>bin</outputDirectory>
+            <includes>
+                <include>*.sh</include>
+            </includes>
+            <fileMode>0755</fileMode>
+            <lineEnding>unix</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/dist/bin</directory>
+            <outputDirectory>bin</outputDirectory>
+            <includes>
+                <include>*.cmd</include>
+            </includes>
+            <lineEnding>dos</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/dist/conf</directory>
+            <outputDirectory>conf</outputDirectory>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../dev</directory>
+            <outputDirectory>dev</outputDirectory>
+            <includes>
+                <include>*.sh</include>
+            </includes>
+            <fileMode>0755</fileMode>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../dev</directory>
+            <outputDirectory>dev</outputDirectory>
+            <excludes>
+                <exclude>*.sh</exclude>
+                <exclude>.env</exclude>
+            </excludes>
+            <lineEnding>keep</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/..</directory>
+            <outputDirectory></outputDirectory>
+            <includes>
+                <include>LICENSE</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+    <dependencySets>
+        <dependencySet>
+            <outputDirectory>lib</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <scope>runtime</scope>
+            <includes>
+                <include>*:*:jar</include>
+            </includes>
+            <excludes>
+                <exclude>ch.qos.logback:*</exclude>
+            </excludes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>lib/logback</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <scope>runtime</scope>
+            <includes>
+                <include>ch.qos.logback:*</include>
+            </includes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>lib/server</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <scope>provided</scope>
+            <includes>
+                <include>org.devlive.pipeforge:pipeforge-server:jar:exec</include>
+            </includes>
+        </dependencySet>
+        <dependencySet>
+            <outputDirectory>plugins</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <scope>provided</scope>
+            <includes>
+                <include>*:*:zip</include>
+            </includes>
+        </dependencySet>
+    </dependencySets>
+</component>

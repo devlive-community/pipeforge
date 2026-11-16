@@ -1,0 +1,360 @@
+{
+  "settings" : [ {
+    "key" : "cluster.name",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "string",
+    "default" : "default",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_CLUSTER_NAME",
+    "description" : {
+      "en-US" : "The name of the cluster, shown in the logs.",
+      "zh-CN" : "集群名，显示在日志中。"
+    }
+  }, {
+    "key" : "cluster.token",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "string",
+    "default" : null,
+    "derived" : null,
+    "required" : true,
+    "env" : "PIPEFORGE_CLUSTER_TOKEN",
+    "description" : {
+      "en-US" : "The shared token every process presents to the others; processes with another token are refused. Use a long random value and keep it secret.",
+      "zh-CN" : "每个进程向其他进程出示的共享令牌；令牌不同的进程会被拒绝。请使用较长的随机值并妥善保密。"
+    }
+  }, {
+    "key" : "security.tls.enabled",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "boolean",
+    "default" : "false",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SECURITY_TLS_ENABLED",
+    "description" : {
+      "en-US" : "Encrypt the RPC between the processes with TLS; the key store and the trust store are then required.",
+      "zh-CN" : "用 TLS 加密进程之间的 RPC；开启后必须提供密钥库和信任库。"
+    }
+  }, {
+    "key" : "security.tls.key-store",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "string",
+    "default" : null,
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SECURITY_TLS_KEY_STORE",
+    "description" : {
+      "en-US" : "The PKCS#12 key store with the certificate this process presents.",
+      "zh-CN" : "本进程出示的证书所在的 PKCS#12 密钥库。"
+    }
+  }, {
+    "key" : "security.tls.key-store-password",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "string",
+    "default" : "",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SECURITY_TLS_KEY_STORE_PASSWORD",
+    "description" : {
+      "en-US" : "The password of the key store.",
+      "zh-CN" : "密钥库的密码。"
+    }
+  }, {
+    "key" : "security.tls.trust-store",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "string",
+    "default" : null,
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SECURITY_TLS_TRUST_STORE",
+    "description" : {
+      "en-US" : "The PKCS#12 trust store with the certificates of the other processes.",
+      "zh-CN" : "其他进程的证书所在的 PKCS#12 信任库。"
+    }
+  }, {
+    "key" : "security.tls.trust-store-password",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "string",
+    "default" : "",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SECURITY_TLS_TRUST_STORE_PASSWORD",
+    "description" : {
+      "en-US" : "The password of the trust store.",
+      "zh-CN" : "信任库的密码。"
+    }
+  }, {
+    "key" : "plugins.dirs",
+    "file" : "conf/pipeforge.yaml",
+    "type" : "list",
+    "default" : "plugins",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_PLUGINS_DIRS",
+    "description" : {
+      "en-US" : "The directories with plugin packages, relative to the installation directory. The master plans jobs with them and serves them to the workers.",
+      "zh-CN" : "存放插件包的目录，相对于安装目录。Master 用它们规划作业，并把它们提供给 Worker。"
+    }
+  }, {
+    "key" : "master.rpc.port",
+    "file" : "conf/master.yaml",
+    "type" : "int",
+    "default" : "6123",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_RPC_PORT",
+    "description" : {
+      "en-US" : "The port of the master's RPC: workers register here, tasks report here, jobs are submitted here.",
+      "zh-CN" : "Master 的 RPC 端口：Worker 在此注册，Task 在此报告，作业在此提交。"
+    }
+  }, {
+    "key" : "master.dir",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : "data/master",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_DIR",
+    "description" : {
+      "en-US" : "The working directory of the master: extracted plugins and the packages it serves to workers.",
+      "zh-CN" : "Master 的工作目录：解压后的插件以及提供给 Worker 的插件包。"
+    }
+  }, {
+    "key" : "master.heartbeat.interval",
+    "file" : "conf/master.yaml",
+    "type" : "duration",
+    "default" : "5s",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_HEARTBEAT_INTERVAL",
+    "description" : {
+      "en-US" : "How often workers send a heartbeat; the master checks for lost workers as often.",
+      "zh-CN" : "Worker 发送心跳的频率；Master 也按这个频率检查失联的 Worker。"
+    }
+  }, {
+    "key" : "master.heartbeat.timeout",
+    "file" : "conf/master.yaml",
+    "type" : "duration",
+    "default" : "30s",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_HEARTBEAT_TIMEOUT",
+    "description" : {
+      "en-US" : "After how long without a heartbeat a worker counts as lost and its tasks fail.",
+      "zh-CN" : "多久没有心跳就认为 Worker 失联，它上面的 Task 失败。"
+    }
+  }, {
+    "key" : "scheduler.strategy",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : "spread",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SCHEDULER_STRATEGY",
+    "description" : {
+      "en-US" : "spread puts the slots of a job on as many workers as possible, pack on as few as possible.",
+      "zh-CN" : "spread 把作业的 Slot 分散到尽量多的 Worker 上，pack 集中到尽量少的 Worker 上。"
+    }
+  }, {
+    "key" : "scheduler.slot-request-timeout",
+    "file" : "conf/master.yaml",
+    "type" : "duration",
+    "default" : "5min",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_SCHEDULER_SLOT_REQUEST_TIMEOUT",
+    "description" : {
+      "en-US" : "How long a job waits for free slots before it fails with PF-RES-0001.",
+      "zh-CN" : "作业等待空闲 Slot 的最长时间，超过后以 PF-RES-0001 失败。"
+    }
+  }, {
+    "key" : "worker.master.address",
+    "file" : "conf/worker.yaml",
+    "type" : "address",
+    "default" : "localhost:6123",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_MASTER_ADDRESS",
+    "description" : {
+      "en-US" : "Where the worker finds the master.",
+      "zh-CN" : "Worker 连接 Master 的地址。"
+    }
+  }, {
+    "key" : "worker.host",
+    "file" : "conf/worker.yaml",
+    "type" : "string",
+    "default" : null,
+    "derived" : {
+      "en-US" : "the host name of this machine",
+      "zh-CN" : "本机的主机名"
+    },
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_HOST",
+    "description" : {
+      "en-US" : "The host name or address other processes reach this worker at.",
+      "zh-CN" : "其他进程访问本 Worker 时使用的主机名或地址。"
+    }
+  }, {
+    "key" : "worker.rpc.port",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : "6125",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_RPC_PORT",
+    "description" : {
+      "en-US" : "The port the master deploys and cancels tasks on.",
+      "zh-CN" : "Master 部署和取消 Task 使用的端口。"
+    }
+  }, {
+    "key" : "worker.data.port",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : "6124",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_DATA_PORT",
+    "description" : {
+      "en-US" : "The port tasks on other workers read the rows of this worker's tasks from.",
+      "zh-CN" : "其他 Worker 上的 Task 读取本 Worker 上 Task 数据的端口。"
+    }
+  }, {
+    "key" : "worker.slots",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : null,
+    "derived" : {
+      "en-US" : "the number of processors",
+      "zh-CN" : "CPU 核数"
+    },
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_SLOTS",
+    "description" : {
+      "en-US" : "How many tasks the worker runs at the same time.",
+      "zh-CN" : "Worker 同时运行的 Task 数量。"
+    }
+  }, {
+    "key" : "worker.labels",
+    "file" : "conf/worker.yaml",
+    "type" : "map",
+    "default" : "",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_LABELS",
+    "description" : {
+      "en-US" : "Key and value pairs jobs can require, such as zone=east or net=db-zone.",
+      "zh-CN" : "作业可以要求的键值对，例如 zone=east 或 net=db-zone。"
+    }
+  }, {
+    "key" : "worker.resource-group",
+    "file" : "conf/worker.yaml",
+    "type" : "string",
+    "default" : "default",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_RESOURCE_GROUP",
+    "description" : {
+      "en-US" : "The resource group the worker belongs to.",
+      "zh-CN" : "Worker 所属的资源组。"
+    }
+  }, {
+    "key" : "worker.dir",
+    "file" : "conf/worker.yaml",
+    "type" : "string",
+    "default" : "data/worker",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_DIR",
+    "description" : {
+      "en-US" : "The working directory of the worker: the plugin packages it downloaded from the master.",
+      "zh-CN" : "Worker 的工作目录：从 Master 下载的插件包。"
+    }
+  }, {
+    "key" : "worker.registration-retry",
+    "file" : "conf/worker.yaml",
+    "type" : "duration",
+    "default" : "1s",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_REGISTRATION_RETRY",
+    "description" : {
+      "en-US" : "How often a worker that is not connected tries to register.",
+      "zh-CN" : "未连接的 Worker 尝试注册的频率。"
+    }
+  }, {
+    "key" : "worker.memory.network",
+    "file" : "conf/worker.yaml",
+    "type" : "size",
+    "default" : null,
+    "derived" : {
+      "en-US" : "10% of the maximum heap, at least 64MB and at most 1GB",
+      "zh-CN" : "最大堆的 10%，不少于 64MB、不超过 1GB"
+    },
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_MEMORY_NETWORK",
+    "description" : {
+      "en-US" : "The memory for network buffers of the data exchange.",
+      "zh-CN" : "数据交换使用的网络缓冲内存。"
+    }
+  }, {
+    "key" : "network.buffer-size",
+    "file" : "conf/worker.yaml",
+    "type" : "size",
+    "default" : "32KB",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_NETWORK_BUFFER_SIZE",
+    "description" : {
+      "en-US" : "The size of a network buffer.",
+      "zh-CN" : "网络缓冲的大小。"
+    }
+  }, {
+    "key" : "network.buffers-per-channel",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : "2",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_NETWORK_BUFFERS_PER_CHANNEL",
+    "description" : {
+      "en-US" : "The buffers each input channel owns.",
+      "zh-CN" : "每个输入通道的专属缓冲数。"
+    }
+  }, {
+    "key" : "network.floating-buffers-per-gate",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : "8",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_NETWORK_FLOATING_BUFFERS_PER_GATE",
+    "description" : {
+      "en-US" : "The buffers an input shares among its channels when producers report a backlog.",
+      "zh-CN" : "生产者报告积压时，一个输入在各通道之间共享的缓冲数。"
+    }
+  }, {
+    "key" : "network.buffer-timeout",
+    "file" : "conf/worker.yaml",
+    "type" : "duration",
+    "default" : "100ms",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_NETWORK_BUFFER_TIMEOUT",
+    "description" : {
+      "en-US" : "After how long a buffer that is not full is sent anyway.",
+      "zh-CN" : "未满的缓冲在多久之后也会被发送。"
+    }
+  }, {
+    "key" : "task.max-row-bytes",
+    "file" : "conf/worker.yaml",
+    "type" : "size",
+    "default" : "64MB",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_TASK_MAX_ROW_BYTES",
+    "description" : {
+      "en-US" : "The largest row a task may exchange with another task.",
+      "zh-CN" : "Task 之间交换的单行大小上限。"
+    }
+  } ]
+}

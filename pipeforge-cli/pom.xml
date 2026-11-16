@@ -267,8 +267,8 @@
                             <finalName>pipeforge-${project.version}</finalName>
                             <appendAssemblyId>false</appendAssemblyId>
                             <descriptors>
+                                <!-- the release tar.gz is built by pipeforge-dist -->
                                 <descriptor>src/main/assembly/dir.xml</descriptor>
-                                <descriptor>src/main/assembly/tar.xml</descriptor>
                             </descriptors>
                             <tarLongFileMode>posix</tarLongFileMode>
                         </configuration>

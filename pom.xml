@@ -45,6 +45,7 @@
         <module>pipeforge-connectors</module>
         <module>pipeforge-server</module>
         <module>pipeforge-cli</module>
+        <module>pipeforge-dist</module>
     </modules>
 
     <properties>

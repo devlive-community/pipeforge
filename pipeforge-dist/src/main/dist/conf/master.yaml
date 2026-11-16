@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# The settings of the master process (bin/pipeforge-master.sh).
+# Every setting can also be given as an environment variable, e.g. PIPEFORGE_WORKER_SLOTS for
+# worker.slots, or on the command line with --set key=value. Remove the # to change a setting;
+# the configuration reference of the documentation lists them all.
+
+# The port of the master's RPC: workers register here, tasks report here, jobs are submitted here.
+# master.rpc.port: 6123
+
+# The working directory of the master: extracted plugins and the packages it serves to workers.
+# master.dir: data/master
+
+# How often workers send a heartbeat; the master checks for lost workers as often.
+# master.heartbeat.interval: 5s
+
+# After how long without a heartbeat a worker counts as lost and its tasks fail.
+# master.heartbeat.timeout: 30s
+
+# spread puts the slots of a job on as many workers as possible, pack on as few as possible.
+# scheduler.strategy: spread
+
+# How long a job waits for free slots before it fails with PF-RES-0001.
+# scheduler.slot-request-timeout: 5min

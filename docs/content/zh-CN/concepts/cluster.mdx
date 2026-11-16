@@ -4,9 +4,9 @@ description: PipeForge 集群的组成——一个 Master、多个带 Slot 的 W
 order: 70
 template: feature
 omit:
-  quickstart: Master 和 Worker 进程随集群发行包启动，发行包会在分布式运行时的后续步骤中提供；在此之前作业以本地模式运行。
-  configuration: 心跳间隔、超时、Slot 与标签在集群发行包的配置文件中设置；本页在“行为与语义”中列出它们的默认值。
-  examples: 当前版本还没有可以启动的集群；示例随发行包一起提供。
+  quickstart: 启动 Master 和 Worker 的方法见“部署”；本页说明它们做什么。
+  configuration: 心跳间隔、超时、Slot 与标签是 conf/master.yaml 和 conf/worker.yaml 中的设置，列在配置参考中；本页在“行为与语义”中列出它们的默认值。
+  examples: 部署指南一步步启动一个集群。
 ---
 
 ## 概述
@@ -104,9 +104,9 @@ Worker                                   Master（ResourceManager）
 
 ## 限制
 
-- 作业目前仍以本地模式运行。本页关于 Worker 上 Task 与作业的描述，在作业运行于集群之后（分布式运行时的后续步骤）才适用。
+- Master 通过它的 RPC 接收运行；服务和 `pipeforge run` 向集群提交作业会在分布式运行时的后续步骤中提供，在此之前以本地模式运行作业。
 - 只有一个 Master；可以接管的备用 Master 随故障恢复一起提供。
-- 目前还没有命令能启动 Master 和 Worker 进程；当前版本提供的是集群发行包所使用的基础组件。
+- Master 和 Worker 通过发行包中的脚本启动；见[部署](../operations/deployment)。
 - 资源组会被记录，但还没有用来限制一个组占用的 Slot 数量。
 
 ## 版本

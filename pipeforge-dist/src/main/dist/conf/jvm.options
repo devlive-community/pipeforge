@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# JVM options of the cluster processes, one per line. A line applies to every process, or to one
+# when it starts with "master:", "worker:" or "standalone:". JAVA_OPTS adds options for one start.
+
+-XX:+UseG1GC
+-XX:+ExitOnOutOfMemoryError
+-Dfile.encoding=UTF-8
+
+master: -Xms512m
+master: -Xmx2g
+
+worker: -Xms1g
+worker: -Xmx4g
+
+standalone: -Xms1g
+standalone: -Xmx4g

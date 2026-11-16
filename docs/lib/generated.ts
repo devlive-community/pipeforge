@@ -103,6 +103,22 @@ export function cliReference(): CliReferenceData {
   });
 }
 
+export interface SettingEntry {
+  key: string;
+  file: string;
+  type: string;
+  default: string | null;
+  derived: Record<string, string> | null;
+  required: boolean;
+  env: string;
+  description: Record<string, string>;
+}
+
+/** The settings of the cluster processes, exported by `pnpm generate` from pipeforge-dist/configuration.json. */
+export function settingEntries(): SettingEntry[] {
+  return read<SettingEntry[]>("configuration.json", []);
+}
+
 export interface MetricEntry {
   name: string;
   scope: "job" | "node";

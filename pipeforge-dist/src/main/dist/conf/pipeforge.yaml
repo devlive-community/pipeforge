@@ -1,0 +1,38 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# The settings of the whole cluster, read by the master and the workers.
+# Every setting can also be given as an environment variable, e.g. PIPEFORGE_WORKER_SLOTS for
+# worker.slots, or on the command line with --set key=value. Remove the # to change a setting;
+# the configuration reference of the documentation lists them all.
+
+# The name of the cluster, shown in the logs.
+# cluster.name: default
+
+# The shared token every process presents to the others; processes with another token are refused.
+# Use a long random value and keep it secret.
+# Required: the processes do not start without it.
+# cluster.token: <a long random secret>
+
+# Encrypt the RPC between the processes with TLS; the key store and the trust store are then
+# required.
+# security.tls.enabled: false
+
+# The PKCS#12 key store with the certificate this process presents.
+# security.tls.key-store:
+
+# The password of the key store.
+# security.tls.key-store-password: ""
+
+# The PKCS#12 trust store with the certificates of the other processes.
+# security.tls.trust-store:
+
+# The password of the trust store.
+# security.tls.trust-store-password: ""
+
+# The directories with plugin packages, relative to the installation directory. The master plans
+# jobs with them and serves them to the workers.
+# plugins.dirs: plugins

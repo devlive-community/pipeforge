@@ -1,0 +1,55 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# The settings of the worker processes (bin/pipeforge-worker.sh).
+# Every setting can also be given as an environment variable, e.g. PIPEFORGE_WORKER_SLOTS for
+# worker.slots, or on the command line with --set key=value. Remove the # to change a setting;
+# the configuration reference of the documentation lists them all.
+
+# Where the worker finds the master.
+# worker.master.address: localhost:6123
+
+# The host name or address other processes reach this worker at.
+# worker.host:   # default: the host name of this machine
+
+# The port the master deploys and cancels tasks on.
+# worker.rpc.port: 6125
+
+# The port tasks on other workers read the rows of this worker's tasks from.
+# worker.data.port: 6124
+
+# How many tasks the worker runs at the same time.
+# worker.slots:   # default: the number of processors
+
+# Key and value pairs jobs can require, such as zone=east or net=db-zone.
+# worker.labels: ""
+
+# The resource group the worker belongs to.
+# worker.resource-group: default
+
+# The working directory of the worker: the plugin packages it downloaded from the master.
+# worker.dir: data/worker
+
+# How often a worker that is not connected tries to register.
+# worker.registration-retry: 1s
+
+# The memory for network buffers of the data exchange.
+# worker.memory.network:   # default: 10% of the maximum heap, at least 64MB and at most 1GB
+
+# The size of a network buffer.
+# network.buffer-size: 32KB
+
+# The buffers each input channel owns.
+# network.buffers-per-channel: 2
+
+# The buffers an input shares among its channels when producers report a backlog.
+# network.floating-buffers-per-gate: 8
+
+# After how long a buffer that is not full is sent anyway.
+# network.buffer-timeout: 100ms
+
+# The largest row a task may exchange with another task.
+# task.max-row-bytes: 64MB

@@ -95,3 +95,12 @@
   hint:
     en-US: "Check the run ID. The master keeps the runs of the last hours only; older runs are in the run history of the server."
     zh-CN: "请检查运行 ID。Master 只保留最近一段时间的运行，更早的运行请查看 Server 的运行记录。"
+
+- code: PF-CONF-0011
+  name: SETTING_INVALID
+  message:
+    en-US: "Setting '{key}' in {source} is not valid: {reason}"
+    zh-CN: "{source} 中的设置 '{key}' 无效：{reason}"
+  hint:
+    en-US: "Every setting, its type and default is listed in the configuration reference. Settings come from conf/pipeforge.yaml, conf/master.yaml, conf/worker.yaml and PIPEFORGE_* environment variables."
+    zh-CN: "配置参考列出了每个设置及其类型和默认值。设置来自 conf/pipeforge.yaml、conf/master.yaml、conf/worker.yaml 以及 PIPEFORGE_* 环境变量。"

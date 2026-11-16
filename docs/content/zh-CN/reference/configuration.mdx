@@ -1,0 +1,29 @@
+---
+title: 配置
+description: Master 和 Worker 进程的每个设置，包括所在文件、类型、默认值和环境变量，由代码生成。
+order: 75
+data: configuration
+---
+
+## 设置的来源
+
+[集群进程](../operations/deployment)从安装目录的 `conf/` 读取设置，顺序如下，后面的来源覆盖前面的：
+
+1. `conf/pipeforge.yaml`、`conf/master.yaml` 和 `conf/worker.yaml`。键可以嵌套，也可以用点号连接：`worker: { slots: 8 }`
+   与 `worker.slots: 8` 相同。
+2. 环境变量：`PIPEFORGE_` 加上大写的键，`.` 和 `-` 换成 `_`，例如 `worker.slots` 对应 `PIPEFORGE_WORKER_SLOTS`。
+3. 命令行：`bin/pipeforge-worker.sh start --set worker.slots=8`，以及用于 `worker.labels` 的 `--labels zone=east,net=db`。
+
+进程启动时会检查每个值。未知的键、类型不对的值或缺少 `cluster.token` 都会让进程以 [`PF-CONF-0011`](./errors#pf-conf-0011)
+停止，错误中给出键以及它的来源：
+
+```text
+ERROR PF-CONF-0011 Setting 'worker.slot' in conf/worker.yaml is not valid: there is no such setting; did you mean 'worker.slots'?
+```
+
+时长写作 `500ms`、`30s`、`5min`、`2h` 或 `1d`；大小写作 `512`、`32KB`、`64MB` 或 `1GB`；列表写作 YAML 列表或 `a,b,c`；
+映射写作 YAML 映射或 `key=value,key=value`。
+
+## 所有设置
+
+<ConfigurationList />

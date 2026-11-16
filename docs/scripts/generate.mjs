@@ -21,6 +21,7 @@ import { collectCli } from "./cli-data.mjs";
 import { collectErrors } from "./errors-data.mjs";
 import { collectFunctions } from "./functions-data.mjs";
 import { collectMetrics } from "./metrics-data.mjs";
+import { collectConfiguration } from "./configuration-data.mjs";
 import { collectPlugins } from "./plugins-data.mjs";
 import { buildSearchDocuments } from "./search-index.mjs";
 
@@ -49,6 +50,9 @@ console.log(`plugin docs: ${plugins.length} plugin(s)`);
 const cli = collectCli(join(root, ".."));
 writeFileSync(join(root, "generated", "cli.json"), JSON.stringify(cli, null, 2));
 console.log(`CLI: ${cli.commands.length} command(s)`);
+const configuration = collectConfiguration(join(root, ".."));
+writeFileSync(join(root, "generated", "configuration.json"), JSON.stringify(configuration, null, 2));
+console.log(`configuration: ${configuration.length} setting(s)`);
 
 const api = collectApi(join(root, ".."));
 writeFileSync(join(root, "generated", "api.json"), JSON.stringify(api, null, 2));
