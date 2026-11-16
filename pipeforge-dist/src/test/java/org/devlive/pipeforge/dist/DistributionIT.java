@@ -8,8 +8,6 @@ package org.devlive.pipeforge.dist;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,12 +43,6 @@ class DistributionIT {
 
     record Result(int exit, String out) {}
 
-    static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
-
     /** Copies the packaged distribution, keeping the modes of the scripts. */
     @BeforeEach
     void install() throws Exception {
@@ -66,15 +58,16 @@ class DistributionIT {
                 }
             }
         }
-        masterPort = freePort();
+        int[] ports = ProcessTest.freePorts(3);
+        masterPort = ports[0];
         environment.put("JAVA_HOME", System.getProperty("java.home"));
         environment.put("JAVA_OPTS", "-Xms128m -Xmx512m");
         environment.put("PIPEFORGE_CLUSTER_TOKEN", UUID.randomUUID().toString());
         environment.put("PIPEFORGE_MASTER_RPC_PORT", String.valueOf(masterPort));
         environment.put("PIPEFORGE_WORKER_MASTER_ADDRESS", "localhost:" + masterPort);
         environment.put("PIPEFORGE_WORKER_HOST", "localhost");
-        environment.put("PIPEFORGE_WORKER_RPC_PORT", String.valueOf(freePort()));
-        environment.put("PIPEFORGE_WORKER_DATA_PORT", String.valueOf(freePort()));
+        environment.put("PIPEFORGE_WORKER_RPC_PORT", String.valueOf(ports[1]));
+        environment.put("PIPEFORGE_WORKER_DATA_PORT", String.valueOf(ports[2]));
         environment.put("PIPEFORGE_WORKER_SLOTS", "2");
     }
 

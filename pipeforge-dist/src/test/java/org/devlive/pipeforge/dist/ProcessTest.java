@@ -36,9 +36,30 @@ class ProcessTest {
     Path home;
 
     static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
+        return freePorts(1)[0];
+    }
+
+    /** Distinct free ports: the sockets stay open until all are chosen, so no port comes twice. */
+    static int[] freePorts(int count) throws IOException {
+        ServerSocket[] sockets = new ServerSocket[count];
+        try {
+            int[] ports = new int[count];
+            for (int i = 0; i < count; i++) {
+                sockets[i] = new ServerSocket(0);
+                ports[i] = sockets[i].getLocalPort();
+            }
+            return ports;
+        } finally {
+            for (ServerSocket socket : sockets) {
+                if (socket != null) {
+                    socket.close();
+                }
+            }
         }
+    }
+
+    Map<String, String> settings(int[] ports) {
+        return settings(ports[0], ports[1], ports[2]);
     }
 
     Map<String, String> settings(int master, int rpc, int data) {
@@ -65,8 +86,7 @@ class ProcessTest {
     @Test
     void aWorkerRegistersWithTheMasterAndOffersItsSlots() throws Exception {
         Files.createDirectories(home.resolve("plugins"));
-        Configuration config =
-                Configuration.load(home.resolve("conf"), Map.of(), settings(freePort(), freePort(), freePort()));
+        Configuration config = Configuration.load(home.resolve("conf"), Map.of(), settings(freePorts(3)));
         try (MasterProcess master = new MasterProcess(config, home);
                 WorkerProcess worker = new WorkerProcess(config, home)) {
             await("the worker registers", () -> worker.state() == MasterConnection.State.CONNECTED);
@@ -103,8 +123,7 @@ class ProcessTest {
     @Test
     void standaloneRunsAMasterAndAWorkerAndWritesItsProcessId() throws Exception {
         Files.createDirectories(home.resolve("plugins"));
-        int master = freePort();
-        Map<String, String> settings = settings(master, freePort(), freePort());
+        Map<String, String> settings = settings(freePorts(3));
         String[] args = settings.entrySet().stream()
                 .flatMap(e -> java.util.stream.Stream.of("--set", e.getKey() + "=" + e.getValue()))
                 .toArray(String[]::new);
