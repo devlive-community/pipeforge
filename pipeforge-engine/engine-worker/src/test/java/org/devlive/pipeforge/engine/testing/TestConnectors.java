@@ -111,6 +111,26 @@ public final class TestConnectors {
      */
     static final Option<String> THREAD = Options.key("thread").stringType().defaultValue("");
 
+    /** The source cannot read the record with this id: it throws a bad row and goes on after it. */
+    static final Option<Integer> BAD_RECORD_AT =
+            Options.key("bad-record-at").intType().defaultValue(-1);
+
+    /** Ids a transform or a sink refuses with a bad row, e.g. {@code "3;7"}. */
+    static final Option<String> BAD_IDS = Options.key("bad-ids").stringType().defaultValue("");
+
+    /** Ids the sink accepts in write and reports as bad rows when it flushes, e.g. {@code "4"}. */
+    static final Option<String> REPORT_IDS =
+            Options.key("report-ids").stringType().defaultValue("");
+
+    static boolean listed(String ids, long id) {
+        for (String part : ids.split(";")) {
+            if (!part.isBlank() && Long.parseLong(part.trim()) == id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Pads the name of every row to this many characters. */
     static final Option<Integer> PAD = Options.key("pad").intType().defaultValue(0);
 
@@ -150,8 +170,17 @@ public final class TestConnectors {
      * @param parallelism the job parallelism
      */
     public static JobPlan job(String probe, String source, @Nullable String transform, String sink, int parallelism) {
+        return job(probe, source, transform, sink, parallelism, "");
+    }
+
+    /** The same job with more {@code env} settings, e.g. {@code "dirty: { policy: skip }"}. */
+    public static JobPlan job(
+            String probe, String source, @Nullable String transform, String sink, int parallelism, String env) {
         StringBuilder yaml =
                 new StringBuilder("version: 1\nname: test-job\nenv:\n  parallelism: " + parallelism + "\n");
+        if (!env.isEmpty()) {
+            yaml.append("  ").append(env).append('\n');
+        }
         yaml.append("source:\n  - { id: src, type: numbers, probe: ")
                 .append(probe)
                 .append(source.isEmpty() ? "" : ", " + source)
@@ -266,7 +295,8 @@ public final class TestConnectors {
                             BLOCK_ENUMERATOR,
                             UNBOUNDED,
                             PAD,
-                            THREAD)
+                            THREAD,
+                            BAD_RECORD_AT)
                     .build();
         }
 
@@ -475,6 +505,15 @@ public final class TestConnectors {
             if (emitted == config.get(FAIL_AT)) {
                 throw failure(config, "reading row " + emitted);
             }
+            if (next == config.get(BAD_RECORD_AT)) {
+                // the record is skipped by moving past it before refusing it
+                long bad = next++;
+                if (next >= current.to()) {
+                    current = null;
+                    context.sendSplitRequest();
+                }
+                throw new org.devlive.pipeforge.api.row.BadRowException("record " + bad + " is not readable");
+            }
             String name = "name-" + next;
             int pad = config.get(PAD);
             output.collect(
@@ -518,7 +557,7 @@ public final class TestConnectors {
         public OptionRule optionRule() {
             return OptionRule.builder()
                     .required(PROBE)
-                    .optional(FAIL_AT, FAIL_WITH, DROP_ODD, DUPLICATE, EXPR)
+                    .optional(FAIL_AT, FAIL_WITH, DROP_ODD, DUPLICATE, EXPR, BAD_IDS)
                     .build();
         }
 
@@ -569,6 +608,9 @@ public final class TestConnectors {
                 throw failure(config, "transforming row " + (seen - 1));
             }
             long id = (Long) row.get(0);
+            if (listed(config.get(BAD_IDS), id)) {
+                throw new org.devlive.pipeforge.api.row.BadRowException("id " + id + " cannot be transformed");
+            }
             if (config.get(DROP_ODD) && id % 2 == 1) {
                 return;
             }
@@ -609,7 +651,7 @@ public final class TestConnectors {
         public OptionRule optionRule() {
             return OptionRule.builder()
                     .required(PROBE)
-                    .optional(FAIL_AT, FAIL_WITH, SLOW_MS, BLOCK, COMMIT)
+                    .optional(FAIL_AT, FAIL_WITH, SLOW_MS, BLOCK, COMMIT, BAD_IDS, REPORT_IDS)
                     .build();
         }
 
@@ -733,6 +775,9 @@ public final class TestConnectors {
             if (slow > 0) {
                 Thread.sleep(slow);
             }
+            if (listed(config.get(BAD_IDS), (Long) row.get(0))) {
+                throw new org.devlive.pipeforge.api.row.BadRowException("id " + row.get(0) + " violates a constraint");
+            }
             buffered.add(row);
             written++;
         }
@@ -744,6 +789,14 @@ public final class TestConnectors {
 
         @Override
         public void flush() {
+            // rows the target refuses only when the batch arrives
+            buffered.removeIf(row -> {
+                if (listed(config.get(REPORT_IDS), (Long) row.get(0))) {
+                    context.reportBadRow(row, "id " + row.get(0) + " was refused by the target");
+                    return true;
+                }
+                return false;
+            });
             probe.rows.addAll(buffered);
             probe.rowsBySubtask
                     .computeIfAbsent(context.subtaskIndex(), s -> Collections.synchronizedList(new ArrayList<>()))

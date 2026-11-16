@@ -46,6 +46,18 @@ public final class EnvOptions {
     public static final Option<Map<String, String>> VARIABLES =
             Options.key("variables").mapType().noDefault().withDescription("Job variables, referred to as ${var:name}");
 
+    public static final Option<org.devlive.pipeforge.core.dirty.DirtyPolicy.Mode> DIRTY_POLICY = Options.key(
+                    "dirty.policy")
+            .enumType(org.devlive.pipeforge.core.dirty.DirtyPolicy.Mode.class)
+            .defaultValue(org.devlive.pipeforge.core.dirty.DirtyPolicy.Mode.FAIL)
+            .withDescription("fail the job at the first bad row, or skip bad rows and count them");
+
+    public static final Option<Long> DIRTY_MAX_ROWS = Options.key("dirty.max-rows")
+            .longType()
+            .noDefault()
+            .withRange(0L, Long.MAX_VALUE)
+            .withDescription("With dirty.policy skip: the job fails once it skipped more bad rows than this");
+
     /** Prefixes of node defaults: {@code source.*}, {@code transform.*} and {@code sink.*}. */
     public static final List<String> NODE_DEFAULT_PREFIXES = List.of("source", "transform", "sink");
 
@@ -53,7 +65,7 @@ public final class EnvOptions {
     public static final List<String> CLUSTER_PREFIXES = List.of("worker", "master", "server", "cluster");
 
     public static final OptionRule RULE = OptionRule.builder()
-            .optional(MODE, PARALLELISM, DELIVERY, TIMEZONE, VARIABLES)
+            .optional(MODE, PARALLELISM, DELIVERY, TIMEZONE, VARIABLES, DIRTY_POLICY, DIRTY_MAX_ROWS)
             .nativeNamespaces(NODE_DEFAULT_PREFIXES.toArray(String[]::new))
             .build();
 

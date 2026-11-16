@@ -32,7 +32,7 @@ class MetricsAggregatorTest {
     static TaskMetricsSnapshot task(long sourceOut, long filtered, long expanded, long sinkIn, long sinkOut) {
         return new TaskMetricsSnapshot(
                 List.of(
-                        new OperatorSnapshot("src", 0, sourceOut, 0, 0, 0),
+                        new OperatorSnapshot("src", sourceOut, sourceOut, 0, 0, 0),
                         new OperatorSnapshot("up", sourceOut, sourceOut - filtered + expanded, filtered, expanded, 0),
                         new OperatorSnapshot("out", sinkIn, sinkOut, 0, 0, 0)),
                 1_000_000,

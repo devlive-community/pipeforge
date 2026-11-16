@@ -51,6 +51,7 @@ final class OperatorChain {
     private final @Nullable OperatorMetrics sourceMetrics;
     private final OperatorClock clock;
     private final TaskMemory memory;
+    private final DirtyRows dirty;
     private final ExpressionCompiler expressions;
     private final @Nullable NetworkEnvironment network;
     private final BooleanSupplier cancelled;
@@ -70,7 +71,9 @@ final class OperatorChain {
             @Nullable NetworkEnvironment network,
             BooleanSupplier cancelled,
             TaskMemory memory,
-            PluginThreads threads) {
+            PluginThreads threads,
+            DirtyRows dirty) {
+        this.dirty = dirty;
         this.memory = memory;
         this.deployment = deployment;
         this.chain = deployment.chain();
@@ -95,7 +98,7 @@ final class OperatorChain {
         ChainOutput next;
         if (chain.hasSink()) {
             PlannedNode node = chain.sink();
-            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1, memory, threads);
+            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1, memory, threads, dirty);
             deferred = null;
             next = sink;
         } else {
@@ -107,7 +110,8 @@ final class OperatorChain {
         for (int i = nodes.size() - 1; i >= 0; i--) {
             PlannedNode node = nodes.get(i);
             if (node.kind() == NodeKind.TRANSFORM) {
-                TransformOperator transform = new TransformOperator(node, call(node, scope), next, clock, i + offset);
+                TransformOperator transform =
+                        new TransformOperator(node, call(node, scope), next, clock, i + offset, dirty);
                 reversed.add(transform);
                 next = transform;
             }
@@ -119,7 +123,7 @@ final class OperatorChain {
             source = new SourceOperator(
                     node, call(node, scope), job, deployment.id(), deployment.parallelism(), master, threads);
             sourceMetrics = new OperatorMetrics(node.id());
-            output = new ChainReaderOutput(next, sourceMetrics, memory, node.id());
+            output = new ChainReaderOutput(next, sourceMetrics, memory, node.id(), dirty);
         } else {
             source = null;
             sourceMetrics = null;
@@ -190,7 +194,21 @@ final class OperatorChain {
         boolean measured = clock.beginRead(0);
         try {
             if (source != null && output != null) {
-                return source.pollNext(output);
+                try {
+                    return source.pollNext(output);
+                } catch (PipeForgeException e) {
+                    // a record the reader could not read; errors of nodes after it name their node
+                    OperatorMetrics metrics = sourceMetrics;
+                    String node = chain.source().id();
+                    if (metrics != null && node.equals(e.scope().node())) {
+                        metrics.rowsIn.increment();
+                        if (dirty.skipped(e, null, node, metrics)) {
+                            return PollStatus.MORE_AVAILABLE;
+                        }
+                        metrics.rowsIn.decrement();
+                    }
+                    throw e;
+                }
             }
             NetworkInput current = input;
             if (current == null) {
@@ -361,17 +379,28 @@ final class OperatorChain {
         private final OperatorMetrics metrics;
         private final TaskMemory memory;
         private final String node;
+        private final DirtyRows dirty;
 
-        ChainReaderOutput(ChainOutput next, OperatorMetrics metrics, TaskMemory memory, String node) {
+        ChainReaderOutput(ChainOutput next, OperatorMetrics metrics, TaskMemory memory, String node, DirtyRows dirty) {
             this.next = next;
             this.metrics = metrics;
             this.memory = memory;
             this.node = node;
+            this.dirty = dirty;
         }
 
         @Override
         public void collect(Row row) {
-            memory.check(row, node);
+            try {
+                memory.check(row, node);
+            } catch (PipeForgeException e) {
+                // read, but too large to pass on
+                metrics.rowsIn.increment();
+                if (dirty.skipped(e, row, node, metrics)) {
+                    return;
+                }
+                throw e;
+            }
             metrics.rowsIn.increment();
             metrics.rowsOut.increment();
             next.row(row);

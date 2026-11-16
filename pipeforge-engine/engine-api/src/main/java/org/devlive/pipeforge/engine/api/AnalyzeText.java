@@ -67,6 +67,9 @@ public final class AnalyzeText {
         if (metrics.rowsExpanded() > 0) {
             out.append("  expanded ").append(count(metrics.rowsExpanded()));
         }
+        if (metrics.rowsDirty() > 0) {
+            out.append("  dirty ").append(count(metrics.rowsDirty()));
+        }
         out.append("  in-flight ")
                 .append(count(metrics.rowsInFlight()))
                 .append("  failed ")
@@ -109,6 +112,20 @@ public final class AnalyzeText {
                 });
             }
             appendTable(out, rows);
+        }
+        if (!metrics.dirtySamples().isEmpty()) {
+            out.append('\n');
+            out.append("Dirty rows (first ")
+                    .append(metrics.dirtySamples().size())
+                    .append(")\n");
+            metrics.dirtySamples().stream().limit(3).forEach(sample -> out.append("  ")
+                    .append(sample.node())
+                    .append("  ")
+                    .append(sample.code())
+                    .append("  ")
+                    .append(sample.message())
+                    .append(sample.row().isEmpty() ? "" : "  row " + sample.row())
+                    .append('\n'));
         }
         out.append('\n');
         appendBottleneck(out, analysis.bottleneck());

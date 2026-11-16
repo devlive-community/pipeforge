@@ -117,6 +117,8 @@ message JobMetrics {
   int32 tasks_running = 21;
   int32 parallelism = 22;
   int64 memory_bytes = 23;            // Task 当前记账的内存之和
+  int64 rows_dirty = 24;              // 跳过的坏行
+  repeated DirtySample dirty_samples = 25;  // 作业最先跳过的坏行，最多 20 条
 }
 
 message ListJobsRequest {

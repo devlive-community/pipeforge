@@ -16,6 +16,8 @@ import org.devlive.pipeforge.api.sink.Sink;
 import org.devlive.pipeforge.api.sink.SinkWriter;
 import org.devlive.pipeforge.api.sink.WriterContext;
 import org.devlive.pipeforge.api.table.SchemaChangeEvent;
+import org.devlive.pipeforge.common.error.ErrorCode;
+import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskSettings;
@@ -33,6 +35,7 @@ final class SinkOperator implements ChainOutput {
     private final OperatorMetrics metrics;
     private final TaskMemory memory;
     private final PluginThreads threads;
+    private final DirtyRows dirty;
     private final OperatorClock clock;
     private final int slot;
     private final int handoffSlot;
@@ -53,7 +56,9 @@ final class SinkOperator implements ChainOutput {
             int slot,
             int handoffSlot,
             TaskMemory memory,
-            PluginThreads threads) {
+            PluginThreads threads,
+            DirtyRows dirty) {
+        this.dirty = dirty;
         this.memory = memory;
         this.threads = threads;
         this.node = node;
@@ -81,8 +86,8 @@ final class SinkOperator implements ChainOutput {
         Sink<Object, Object> created = (Sink<Object, Object>)
                 call.call("create the sink", () -> factory.createSink(NodeContext.of(node, job, expressions)));
         sink = created;
-        WriterContext context =
-                new TaskWriterContext(job, subtask, parallelism, call.classLoader(), threads.factory(call));
+        WriterContext context = new TaskWriterContext(
+                job, subtask, parallelism, call.classLoader(), threads.factory(call), this::reportBadRow);
         SinkWriter<Object, Object> opened =
                 call.call("create the writer", () -> created.createWriter(context, List.of()));
         writer = opened;
@@ -127,8 +132,19 @@ final class SinkOperator implements ChainOutput {
         int token = clock.enter(async != null ? handoffSlot : slot);
         try {
             if (async != null) {
-                // rows a transform made larger are checked here, before the buffer holds them
-                async.add(item, item instanceof Row row ? memory.check(row, node.id()) : 0);
+                long bytes = 0;
+                if (item instanceof Row row) {
+                    // rows a transform made larger are checked here, before the buffer holds them
+                    try {
+                        bytes = memory.check(row, node.id());
+                    } catch (PipeForgeException e) {
+                        if (dirty.skipped(e, row, node.id(), metrics)) {
+                            return;
+                        }
+                        throw e;
+                    }
+                }
+                async.add(item, bytes);
             } else {
                 writeNow(opened(), item);
             }
@@ -139,7 +155,14 @@ final class SinkOperator implements ChainOutput {
 
     private void writeNow(SinkWriter<Object, Object> target, Object item) {
         if (item instanceof Row row) {
-            call.run("write a row", () -> target.write(row));
+            try {
+                call.run("write a row", () -> target.write(row));
+            } catch (PipeForgeException e) {
+                if (dirty.skipped(e, row, node.id(), metrics)) {
+                    return;
+                }
+                throw e;
+            }
             metrics.rowsOut.increment();
         } else {
             call.run("apply a schema change", () -> target.applySchemaChange((SchemaChangeEvent) item));
@@ -221,11 +244,31 @@ final class SinkOperator implements ChainOutput {
         return current;
     }
 
+    /** A row the writer accepted earlier and the target refused later: counted as bad, not written. */
+    private void reportBadRow(Row row, String reason) {
+        PipeForgeException error = PipeForgeException.of(ErrorCode.BAD_ROW)
+                .param("node", node.id())
+                .param("reason", reason)
+                .scope(org.devlive.pipeforge.common.error.ErrorScope.node(node.id()))
+                .build();
+        if (!dirty.skipped(error, row, node.id(), metrics)) {
+            throw error;
+        }
+        metrics.rowsOut.decrement();
+    }
+
     private record TaskWriterContext(
             JobContext job,
             int subtaskIndex,
             int parallelism,
             ClassLoader classLoader,
-            java.util.concurrent.ThreadFactory threadFactory)
-            implements WriterContext {}
+            java.util.concurrent.ThreadFactory threadFactory,
+            java.util.function.BiConsumer<Row, String> badRows)
+            implements WriterContext {
+
+        @Override
+        public void reportBadRow(Row row, String reason) {
+            badRows.accept(row, reason);
+        }
+    }
 }

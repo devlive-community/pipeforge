@@ -72,6 +72,7 @@ final class Task implements Runnable {
     private final AtomicLong idleNanos = new AtomicLong();
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
     private final TaskMemory memory;
+    private final DirtyRows dirty;
     private volatile @Nullable PluginThreads threads;
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
@@ -100,6 +101,8 @@ final class Task implements Runnable {
         this.network = network;
         this.logs = logs;
         this.memory = new TaskMemory(limits);
+        this.dirty = new DirtyRows(
+                deployment.settings().skipDirtyRows(), deployment.id().toString());
         this.deployment = deployment;
         this.master = master;
         this.onTerminated = onTerminated;
@@ -162,7 +165,8 @@ final class Task implements Runnable {
         PluginThreads started = new PluginThreads(name, this::failFromPluginThread);
         threads = started;
         try {
-            operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled, memory, started);
+            operators = new OperatorChain(
+                    deployment, scope, name, master, network, () -> cancelled, memory, started, dirty);
             chain = operators;
             if (cancelled) {
                 throw new CancelledException();
@@ -348,7 +352,8 @@ final class Task implements Runnable {
                 operators.bytesReceived(),
                 operators.queueDepth(),
                 operators.queueCapacity(),
-                memory.accounted());
+                memory.accounted(),
+                dirty.samples());
     }
 
     private void transition(TaskState next) {

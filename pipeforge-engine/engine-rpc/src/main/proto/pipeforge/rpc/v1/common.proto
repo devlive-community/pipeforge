@@ -75,6 +75,7 @@ message TaskSettings {
   int64 cancel_kill_timeout_ms = 5;
   int64 metrics_interval_ms = 6;
   int64 max_row_bytes = 7;
+  bool skip_dirty_rows = 8;           // env.dirty.policy 为 skip：跳过并计数坏行；否则第一个坏行让 Task 失败
 }
 
 message OperatorMetrics {           // 累计值
@@ -93,6 +94,15 @@ message SplitProgress {
   bool finished = 3;
 }
 
+message DirtySample {               // 跳过的坏行样本
+  string node_id = 1;
+  string table = 2;                   // 读取方无法读成行时为空
+  string code = 3;                    // 错误码，例如 PF-DATA-0006
+  string message = 4;
+  string row = 5;                     // 行的值，每个值最多 256 个字符
+  int64 at_ms = 6;
+}
+
 message TaskMetrics {               // 累计值：丢失或重复上报都不影响结果
   repeated OperatorMetrics operators = 1;
   int64 running_nanos = 2;
@@ -106,4 +116,5 @@ message TaskMetrics {               // 累计值：丢失或重复上报都不�
   repeated SplitProgress splits = 10;
   int32 queue_depth = 11;             // Sink 写队列中当前的批数
   int32 queue_capacity = 12;          // 写队列容量；没有写队列时为 0
+  repeated DirtySample dirty_samples = 13;  // Task 最先跳过的坏行，最多 20 条
 }

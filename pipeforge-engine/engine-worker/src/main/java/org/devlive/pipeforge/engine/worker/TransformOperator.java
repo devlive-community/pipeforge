@@ -16,6 +16,7 @@ import org.devlive.pipeforge.api.table.SchemaChangeEvent;
 import org.devlive.pipeforge.api.transform.Collector;
 import org.devlive.pipeforge.api.transform.Transform;
 import org.devlive.pipeforge.api.transform.TransformContext;
+import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.PlannedNode;
 import org.jspecify.annotations.Nullable;
 
@@ -30,9 +31,12 @@ final class TransformOperator implements ChainOutput {
     private final OperatorClock clock;
     private final int slot;
     private long emitted;
+    private final DirtyRows dirty;
     private @Nullable Transform transform;
 
-    TransformOperator(PlannedNode node, OperatorCall call, ChainOutput next, OperatorClock clock, int slot) {
+    TransformOperator(
+            PlannedNode node, OperatorCall call, ChainOutput next, OperatorClock clock, int slot, DirtyRows dirty) {
+        this.dirty = dirty;
         this.node = node;
         this.call = call;
         this.next = next;
@@ -71,6 +75,12 @@ final class TransformOperator implements ChainOutput {
         int token = clock.enter(slot);
         try {
             call.run("process a row", () -> current.process(row, collector));
+        } catch (PipeForgeException e) {
+            // a bad row only when nothing was emitted for it: emitted rows went on already
+            if (emitted == 0 && node.id().equals(e.scope().node()) && dirty.skipped(e, row, node.id(), metrics)) {
+                return;
+            }
+            throw e;
         } finally {
             clock.exit(token);
         }

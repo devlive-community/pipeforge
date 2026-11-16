@@ -281,6 +281,38 @@ class PlannerTest {
     }
 
     @Test
+    void readsTheDirtyDataPolicy() {
+        String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
+        assertThat(plan(job(nodes)).dirty()).isEqualTo(org.devlive.pipeforge.core.dirty.DirtyPolicy.FAIL);
+
+        JobPlan skip = plan(job("env: { dirty: { policy: skip, max-rows: 100 } }\n" + nodes));
+        assertThat(skip.dirty().skips()).isTrue();
+        assertThat(skip.dirty().maxRows()).isEqualTo(100);
+        assertThat(skip.dirty().exceeded(100)).isFalse();
+        assertThat(skip.dirty().exceeded(101)).isTrue();
+        assertThat(skip.warnings()).isEmpty();
+        assertThat(plan(job("env: { dirty: { policy: skip } }\n" + nodes))
+                        .dirty()
+                        .exceeded(Long.MAX_VALUE))
+                .as("no limit")
+                .isFalse();
+
+        JobPlan pointless = plan(job("env: { dirty: { max-rows: 5 } }\n" + nodes));
+        assertThat(pointless.dirty().skips()).isFalse();
+        assertThat(pointless.warnings())
+                .containsExactly(
+                        "env.dirty.max-rows has no effect with dirty.policy fail: the first bad row fails the job");
+
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { dirty: { policy: route } }\n" + nodes))))
+                .contains("dirty.policy");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID,
+                        () -> plan(job("env: { dirty: { policy: skip, max-rows: -1 } }\n" + nodes))))
+                .contains("dirty.max-rows");
+    }
+
+    @Test
     void componentProblemsKeepTheirCodes() {
         assertThat(Errors.thrown(ErrorCode.PLUGIN_NOT_FOUND, () -> plan(LINEAR.replace("type: console", "type: kafka")))
                         .scope()

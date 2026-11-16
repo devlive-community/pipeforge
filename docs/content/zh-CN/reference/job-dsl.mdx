@@ -64,6 +64,8 @@ sink:
 | `mode` | `batch` 或 `streaming` | 推导：所有 Source 都有界时为 `batch`，否则为 `streaming` |
 | `parallelism` | 1 到 32768 | `1` |
 | `delivery` | `at-least-once` 或 `exactly-once` | `at-least-once` |
+| `dirty.policy` | `fail` 或 `skip`，见[脏数据](../concepts/dirty-data) | `fail` |
+| `dirty.max-rows` | `skip` 时一次运行最多可以跳过的坏行数 | 不限制 |
 | `timezone` | IANA 时区，例如 `Asia/Shanghai` | `UTC` |
 | `variables` | 名称到取值的映射，见[变量](./variables#作业变量) | 无 |
 | `source.*`、`transform.*`、`sink.*` | 同类所有节点的选项默认值 | 无 |

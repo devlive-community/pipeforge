@@ -174,11 +174,12 @@ public final class JobMaster {
             deployed.put(vertex.id(), described(chain(vertex), run));
         }
         this.settings = new TaskSettings(
-                options.asyncWriteBuffer(),
-                options.writeBatchSize(),
-                options.writeQueueCapacity(),
-                options.cancelTimeout(),
-                options.metricsInterval());
+                        options.asyncWriteBuffer(),
+                        options.writeBatchSize(),
+                        options.writeQueueCapacity(),
+                        options.cancelTimeout(),
+                        options.metricsInterval())
+                .withSkipDirtyRows(plan.dirty().skips());
         this.placement = placement;
         this.onEnded = onEnded;
         this.expressions = EngineExpressions.forRun(plan.timeZone(), runStartTime);
@@ -270,6 +271,7 @@ public final class JobMaster {
             // a periodic report can arrive after the final one; the final one wins
             if (state != null && !state.isTerminal() && attempt.equals(attempt(task))) {
                 aggregator.update(task.vertex(), task.subtask(), metrics);
+                checkDirtyRows();
             }
         });
     }
@@ -396,6 +398,7 @@ public final class JobMaster {
         refreshTasks();
         if (update.metrics() != null) {
             aggregator.update(task.vertex(), subtask, update.metrics());
+            checkDirtyRows();
         }
         switch (update.state()) {
             case RUNNING -> {
@@ -448,6 +451,18 @@ public final class JobMaster {
                     "handle a split request", e -> e.handleSplitRequest(subtask));
             case ReaderMessage.Custom custom -> callEnumerator(
                     "handle a reader event", e -> e.handleReaderEvent(subtask, custom.event()));
+        }
+    }
+
+    /** Fails the job once its tasks skipped more bad rows than {@code env.dirty.max-rows}. */
+    private void checkDirtyRows() {
+        long skipped = aggregator.rowsDirty();
+        if (plan.dirty().exceeded(skipped)) {
+            fail(PipeForgeException.of(ErrorCode.TOO_MANY_DIRTY_ROWS)
+                    .param("rows", skipped)
+                    .param("limit", plan.dirty().maxRows())
+                    .scope(ErrorScope.none().withJob(plan.name()).withRun(id.value()))
+                    .build());
         }
     }
 

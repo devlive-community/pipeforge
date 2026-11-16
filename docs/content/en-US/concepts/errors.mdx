@@ -34,7 +34,7 @@ default kind:
 | `SYS` | Internal errors (always a defect) | fatal |
 
 The kind decides what the engine does: **transient** errors are retried, **data** errors go
-through the dirty data policy of the node, and **fatal** errors fail the run. A component that
+through the [dirty data policy](./dirty-data) of the job, and **fatal** errors fail the run. A component that
 knows better may override the kind of a single error.
 
 Every code is registered with an English and a Chinese message and hint. Messages contain named

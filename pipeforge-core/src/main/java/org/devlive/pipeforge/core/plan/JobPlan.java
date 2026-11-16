@@ -45,9 +45,39 @@ public record JobPlan(
         ZoneId timeZone,
         Map<String, String> variables,
         List<PlannedNode> nodes,
-        List<String> warnings) {
+        List<String> warnings,
+        org.devlive.pipeforge.core.dirty.DirtyPolicy dirty) {
+
+    /** A plan that fails at the first bad row. */
+    public JobPlan(
+            String name,
+            @Nullable String description,
+            EngineKind engine,
+            JobMode mode,
+            boolean modeDerived,
+            Delivery delivery,
+            int parallelism,
+            ZoneId timeZone,
+            Map<String, String> variables,
+            List<PlannedNode> nodes,
+            List<String> warnings) {
+        this(
+                name,
+                description,
+                engine,
+                mode,
+                modeDerived,
+                delivery,
+                parallelism,
+                timeZone,
+                variables,
+                nodes,
+                warnings,
+                org.devlive.pipeforge.core.dirty.DirtyPolicy.FAIL);
+    }
 
     public JobPlan {
+        java.util.Objects.requireNonNull(dirty, "dirty");
         variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
         nodes = List.copyOf(nodes);
         warnings = List.copyOf(warnings);

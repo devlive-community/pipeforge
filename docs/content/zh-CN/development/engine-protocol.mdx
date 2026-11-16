@@ -133,7 +133,7 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
 | 拒绝 | 被拒绝的调用以说明原因的 gRPC 状态结束——`UNAUTHENTICATED`（令牌）、`FAILED_PRECONDITION`（已被替换的 Master）、`UNIMPLEMENTED`（主版本）、`NOT_FOUND`（未知的运行或 Task 日志）、`RESOURCE_EXHAUSTED`（Slot 不足）——并在 trailer 中携带错误，调用方据此显示相同的错误码和信息。 |
 | 顺序 | 分片分配与分片请求按 Task 和节点编号；即使乱序到达，接收方也按编号顺序、只交付一次。 |
 | 敏感选项 | 为运行该 Task 的 Worker 加密：使用 Worker 注册时提供的公钥做一次临时 X25519 密钥协商，再经 HKDF-SHA256 和 AES-256-GCM 加密，并绑定到这次 Task 尝试。重启过的 Worker 无法读取为旧密钥加密的选项（[`PF-CLUS-0009`](../reference/errors#pf-clus-0009)）。 |
-| 指标 | 每个 Worker 与 JobMaster 之间一条流；每次上报都包含完整的计数，丢失一次上报不影响结果。上报中还带有 Task 当前记账的内存（`memory_bytes`），`GetJobMetrics` 按作业求和。 |
+| 指标 | 每个 Worker 与 JobMaster 之间一条流；每次上报都包含完整的计数，丢失一次上报不影响结果。上报中还带有 Task 当前记账的内存（`memory_bytes`）和它最先跳过的坏行（`dirty_samples`），`GetJobMetrics` 按作业汇总内存和坏行，并保留作业最先的 20 条样本。`TaskSettings.skip_dirty_rows` 告诉 Task 脏数据策略，默认值 `false` 即 `fail`。 |
 | Task 日志 | `ReadLog` 以完整行为单位分块流式返回 Task 日志。它不改变任何状态，因此只校验协议版本，也不重试。`LogChunk.offset` 是下一次读取继续的位置——有过滤条件时，它是分块覆盖的日志范围的末尾，而不是分块文本的末尾——`eof` 表示已结束 Task 的日志读到了末尾。跟随没有截止时间，读取方取消调用即可结束。见[日志](../operations/logs)。 |
 
 部署 Task 的截止时间为 60 秒，其他请求为 30 秒。Source 发给分片分配器的自定义 Reader 事件在当前版本中只能在同一进程内传递；跨进程传递需要 Source 提供序列化器。

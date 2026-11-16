@@ -1,0 +1,100 @@
+---
+title: 脏数据
+description: 作业如何处理坏行——Source 无法读取、Transform 无法转换或 Sink 无法写入的行——以及它们如何被计数、采样和限制。
+order: 85
+template: feature
+---
+
+## 概述
+
+**坏行**是因为数据本身而出问题的行，而不是作业的问题：无法转换的值、目标端拒绝的约束、Source 无法解析的记录、超过
+`task.max-row-bytes` 的行。作业的**脏数据策略**决定如何处理：在第一个坏行时让作业失败（默认），或者跳过坏行、计数并保留样本，
+也可以设置上限。
+
+## 原理
+
+针对某一行抛出的 `DATA` 类错误（见[错误处理](./errors)）就是坏行：
+
+| 位置 | 视为坏行的情况 |
+|---|---|
+| Source | Reader 无法读取的记录（`pollNext` 抛出 `BadRowException`）、超过 `task.max-row-bytes` 的行（`PF-DATA-0007`） |
+| Transform | 它拒绝的行（`BadRowException`，`PF-DATA-0009`），或 `on-error: dirty` 时的表达式错误（`PF-DATA-0006`），前提是它还没有为这一行输出任何行 |
+| Sink | `write` 拒绝的行（`BadRowException`）、Writer 先接受后用 `reportBadRow` 报告的行（例如失败批次中的一行）、被 Transform 变得过大的行 |
+
+`fail` 时，这个错误像其他错误一样让作业失败。`skip` 时，节点把该行计入 `rowsDirty`，该行不再往下传递，Task 继续运行；
+JobMaster 汇总计数，超过 `max-rows` 时以 [`PF-DATA-0010`](../reference/errors#pf-data-0010) 让作业失败。其他错误，以及
+Transform 已经为输入行输出了部分行之后的失败，仍会让作业失败。
+
+## 快速上手
+
+```yaml
+env:
+  dirty:
+    policy: skip
+    max-rows: 1000
+```
+
+作业最多跳过 1,000 个坏行；第 1,001 个会让它失败。
+
+## 配置
+
+| 选项 | 取值 | 默认值 |
+|---|---|---|
+| `env.dirty.policy` | `fail`、`skip` | `fail` |
+| `env.dirty.max-rows` | 0 或更大；仅在 `skip` 时有效 | 不限制 |
+
+`policy: fail` 时设置 `max-rows` 没有作用；计划阶段会给出警告。
+
+## 示例
+
+**跳过所有坏行。** `policy: skip` 且不设 `max-rows` 时，所有坏行都被计数，作业不会因它们失败；运行后查看 `rowsDirty` 和样本。
+
+**一个都不允许，但要看到它们。** `policy: skip` 加 `max-rows: 0` 也会在第一个坏行时让作业失败，但错误码是 `PF-DATA-0010`，
+指标中带有样本，可以看到 JobMaster 让 Task 停下之前遇到的所有坏行。
+
+**在插件中。** Transform 或 Writer 针对传入的行抛出 `BadRowException`：
+
+```java
+if (amount.signum() < 0) {
+    throw new BadRowException("amount " + amount + " is negative");
+}
+```
+
+只有在批次写出时才知道某行被拒绝的 Writer，用 `context.reportBadRow(row, reason)` 报告它。
+
+## 行为与语义
+
+- 计数满足对账：`rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsDirty + rowsFailed + rowsInFlight`。Source 无法读取的
+  记录同时计为读取和坏行。
+- 每当 Task 上报时（至少每个 `metricsInterval` 一次）检查上限；JobMaster 让 Task 停下之前它们会继续跳过，因此一次运行跳过的行数
+  可能略多于 `max-rows`。
+- 用 `reportBadRow` 报告的行在 `write` 时已计为写入；它会从写入转为坏行。
+
+## 可观测性
+
+- 作业和每个节点的 `rowsDirty`，见[指标](../reference/metrics)；`pipeforge run --analyze` 显示计数和最先的几个样本。
+- 每次运行最多 20 条**样本**，按时间取最先的坏行：节点、表、错误码和信息，以及行中的值，每个值最多 256 个字符（Reader 无法读取
+  记录时为空）。
+- 每个 Task 的第一个坏行以 `WARN` 记录在它的 [Task 日志](../operations/logs) 中，之后的以 `DEBUG` 记录。
+
+## 性能与调优
+
+跳过一个坏行的代价与处理这个错误相同；不是坏行的行没有额外开销。
+
+## 排障
+
+| 错误 | 含义 |
+|---|---|
+| `PF-DATA-0009` … `'out' 拒绝了一行：…` | 插件拒绝了一行，原因由插件给出 |
+| `PF-DATA-0010` … `跳过了 1001 个坏行，超过了 env.dirty.max-rows（1000）` | 查看样本，修正数据或映射，或调大上限 |
+| `PF-DATA-0006` | 表达式在某一行上出错；见[表达式](./expressions) |
+
+## 限制
+
+- 坏行只会被跳过，不会被保存：把坏行转发到脏数据 Sink 以及写出完整的坏行文件在后续版本中提供。
+- 样本中的值还不会遮蔽；不要依赖样本处理敏感列。
+- 按批写入的 Sink 只有在报告时才能找出失败批次中的坏行；自动拆分失败批次在后续版本中提供。
+
+## 版本
+
+自 0.1.0 起提供。

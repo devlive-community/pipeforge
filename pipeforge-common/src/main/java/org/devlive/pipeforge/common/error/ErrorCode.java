@@ -92,6 +92,8 @@ public final class ErrorCode {
             define("PF-DATA-0004", "CONSTRAINT_VIOLATION", "table", "column", "reason");
     public static final ErrorCode EXPRESSION_ERROR = define("PF-DATA-0006", "EXPRESSION_ERROR", "expression", "reason");
     public static final ErrorCode ROW_TOO_LARGE = define("PF-DATA-0007", "ROW_TOO_LARGE", "table", "bytes", "limit");
+    public static final ErrorCode BAD_ROW = define("PF-DATA-0009", "BAD_ROW", "node", "reason");
+    public static final ErrorCode TOO_MANY_DIRTY_ROWS = define("PF-DATA-0010", "TOO_MANY_DIRTY_ROWS", "rows", "limit");
 
     // Sources
     public static final ErrorCode SOURCE_FAILED = define("PF-SRC-0001", "SOURCE_FAILED", "node", "reason");

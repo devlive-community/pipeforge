@@ -189,6 +189,14 @@
     en-US: "The memory the tasks hold now, summed over tasks: rows in write buffers, network buffers and split assignments not yet handed to readers."
     zh-CN: "各 Task 当前占用的内存之和：写缓冲中的行、网络缓冲和尚未交给 Reader 的分片。"
 
+- name: rowsDirty
+  scope: job
+  type: counter
+  unit: rows
+  description:
+    en-US: "Bad rows the job skipped under env.dirty.policy skip: rows a source could not read, a transform could not transform or a sink could not write."
+    zh-CN: "env.dirty.policy 为 skip 时作业跳过的坏行：Source 无法读取、Transform 无法转换或 Sink 无法写入的行。"
+
 - name: rowsIn
   scope: node
   type: counter
@@ -244,3 +252,11 @@
   description:
     en-US: "Bytes of rows the node sent to other tasks; 0 for a node that does not write to another task."
     zh-CN: "节点发给其他 Task 的行的字节数；不向其他 Task 写入的节点为 0。"
+
+- name: rowsDirty
+  scope: node
+  type: counter
+  unit: rows
+  description:
+    en-US: "Bad rows the node skipped: they went into it and not out."
+    zh-CN: "节点跳过的坏行：它们进入了节点，但没有输出。"

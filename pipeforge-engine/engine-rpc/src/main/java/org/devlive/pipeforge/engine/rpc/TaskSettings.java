@@ -18,13 +18,16 @@ import java.util.Objects;
  * @param cancelTimeout time a cancelled task gets to stop before its thread is interrupted; after
  *     twice this time it is given up
  * @param metricsInterval how often the task reports its metrics to the job master
+ * @param skipDirtyRows whether bad rows are skipped and counted ({@code env.dirty.policy: skip});
+ *     otherwise the first bad row fails the task
  */
 public record TaskSettings(
         boolean asyncWriteBuffer,
         int writeBatchSize,
         int writeQueueCapacity,
         Duration cancelTimeout,
-        Duration metricsInterval) {
+        Duration metricsInterval,
+        boolean skipDirtyRows) {
 
     public static final Duration DEFAULT_METRICS_INTERVAL = Duration.ofSeconds(1);
 
@@ -37,6 +40,21 @@ public record TaskSettings(
         if (writeBatchSize < 1 || writeQueueCapacity < 1) {
             throw new IllegalArgumentException("writeBatchSize and writeQueueCapacity must be at least 1");
         }
+    }
+
+    /** Settings that fail at the first bad row. */
+    public TaskSettings(
+            boolean asyncWriteBuffer,
+            int writeBatchSize,
+            int writeQueueCapacity,
+            Duration cancelTimeout,
+            Duration metricsInterval) {
+        this(asyncWriteBuffer, writeBatchSize, writeQueueCapacity, cancelTimeout, metricsInterval, false);
+    }
+
+    public TaskSettings withSkipDirtyRows(boolean skip) {
+        return new TaskSettings(
+                asyncWriteBuffer, writeBatchSize, writeQueueCapacity, cancelTimeout, metricsInterval, skip);
     }
 
     public static TaskSettings defaults() {

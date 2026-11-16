@@ -9,6 +9,7 @@ package org.devlive.pipeforge.engine.api;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import org.devlive.pipeforge.core.dirty.DirtySample;
 
 /**
  * Job-level metrics, summed over all tasks, with the metrics of every node. Every metric is listed
@@ -45,6 +46,9 @@ import java.util.Optional;
  * @param splitsFinished splits of readers that have finished
  * @param runningMs time tasks ran, summed over tasks: the base of the wait shares
  * @param memoryBytes the memory the tasks account now, summed over tasks
+ * @param rowsDirty bad rows the job skipped ({@code env.dirty.policy: skip})
+ * @param dirtySamples the first bad rows the job skipped, at most {@link DirtySample#MAX_SAMPLES},
+ *     oldest first
  */
 public record JobMetrics(
         long elapsedMs,
@@ -69,7 +73,9 @@ public record JobMetrics(
         int splitsAssigned,
         int splitsFinished,
         long runningMs,
-        long memoryBytes) {
+        long memoryBytes,
+        long rowsDirty,
+        List<DirtySample> dirtySamples) {
 
     /** No data yet. */
     public static final JobMetrics EMPTY = new JobMetrics(
@@ -79,11 +85,68 @@ public record JobMetrics(
         Objects.requireNonNull(readRowsPerSecond, "readRowsPerSecond");
         Objects.requireNonNull(writeRowsPerSecond, "writeRowsPerSecond");
         nodes = List.copyOf(nodes);
+        dirtySamples = List.copyOf(dirtySamples);
     }
 
-    /** Whether the row counters satisfy the reconciliation identity. */
+    /** Metrics without bad rows. */
+    public JobMetrics(
+            long elapsedMs,
+            long rowsRead,
+            long rowsWritten,
+            long rowsFiltered,
+            long rowsExpanded,
+            long rowsFailed,
+            long rowsInFlight,
+            Rate readRowsPerSecond,
+            Rate writeRowsPerSecond,
+            long readerWaitMs,
+            long writerWaitMs,
+            int parallelism,
+            int tasksRunning,
+            List<NodeMetrics> nodes,
+            long exchangedBytes,
+            long backpressuredMs,
+            double backpressuredRatio,
+            int queueDepth,
+            int queueCapacity,
+            int splitsAssigned,
+            int splitsFinished,
+            long runningMs,
+            long memoryBytes) {
+        this(
+                elapsedMs,
+                rowsRead,
+                rowsWritten,
+                rowsFiltered,
+                rowsExpanded,
+                rowsFailed,
+                rowsInFlight,
+                readRowsPerSecond,
+                writeRowsPerSecond,
+                readerWaitMs,
+                writerWaitMs,
+                parallelism,
+                tasksRunning,
+                nodes,
+                exchangedBytes,
+                backpressuredMs,
+                backpressuredRatio,
+                queueDepth,
+                queueCapacity,
+                splitsAssigned,
+                splitsFinished,
+                runningMs,
+                memoryBytes,
+                0,
+                List.of());
+    }
+
+    /**
+     * Whether the row counters satisfy the reconciliation identity: {@code rowsRead + rowsExpanded =
+     * rowsWritten + rowsFiltered + rowsDirty + rowsFailed + rowsInFlight}.
+     */
     public boolean reconciled() {
-        return rowsRead + rowsExpanded == rowsWritten + rowsFiltered + rowsFailed + rowsInFlight;
+        return rowsRead + rowsExpanded == rowsWritten + rowsFiltered + rowsDirty + rowsFailed + rowsInFlight;
     }
 
     public Optional<NodeMetrics> node(String id) {

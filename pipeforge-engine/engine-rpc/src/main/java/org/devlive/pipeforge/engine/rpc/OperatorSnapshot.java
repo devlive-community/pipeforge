@@ -17,11 +17,24 @@ import java.util.Objects;
  * @param rowsFiltered input rows for which a transform emitted nothing
  * @param rowsExpanded extra rows when a transform emitted several rows for one input row
  * @param selfTimeNanos time spent in the operator's own code, excluding the operators after it
+ * @param rowsDirty bad rows the operator skipped: they went into it and not out
  */
 public record OperatorSnapshot(
-        String node, long rowsIn, long rowsOut, long rowsFiltered, long rowsExpanded, long selfTimeNanos) {
+        String node,
+        long rowsIn,
+        long rowsOut,
+        long rowsFiltered,
+        long rowsExpanded,
+        long selfTimeNanos,
+        long rowsDirty) {
 
     public OperatorSnapshot {
         Objects.requireNonNull(node, "node");
+    }
+
+    /** Counters of an operator that skipped no bad rows. */
+    public OperatorSnapshot(
+            String node, long rowsIn, long rowsOut, long rowsFiltered, long rowsExpanded, long selfTimeNanos) {
+        this(node, rowsIn, rowsOut, rowsFiltered, rowsExpanded, selfTimeNanos, 0);
     }
 }

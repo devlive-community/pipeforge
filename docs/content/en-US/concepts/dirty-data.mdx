@@ -1,0 +1,113 @@
+---
+title: Dirty data
+description: What a job does with bad rows - rows a source cannot read, a transform cannot transform or a sink cannot write - how they are counted, sampled and limited.
+order: 85
+template: feature
+---
+
+## Overview
+
+A **bad row** is a row whose data is the problem, not the job: a value that does not convert, a
+constraint the target refuses, a record a source cannot parse, a row larger than
+`task.max-row-bytes`. The **dirty data policy** of a job decides what happens: fail the job at the
+first bad row (the default), or skip bad rows, count them and keep samples, optionally up to a
+limit.
+
+## How it works
+
+An error of kind `DATA` (see [error handling](./errors)) raised for one row is a bad row:
+
+| Where | What counts as a bad row |
+|---|---|
+| Source | A record the reader cannot read (`BadRowException` from `pollNext`), a row larger than `task.max-row-bytes` (`PF-DATA-0007`) |
+| Transform | A row it refuses (`BadRowException`, `PF-DATA-0009`) or an expression error with `on-error: dirty` (`PF-DATA-0006`), when it emitted nothing for the row |
+| Sink | A row `write` refuses (`BadRowException`), a row the writer accepted and reports later with `reportBadRow` (for example one row of a failed batch), a row a transform made too large |
+
+Under `fail` the error fails the job, as any other error. Under `skip` the node counts the row in
+`rowsDirty`, the row goes no further, and the task continues; the job master sums the counts and
+fails the job with [`PF-DATA-0010`](../reference/errors#pf-data-0010) once they exceed
+`max-rows`. Any other error, and a transform that fails after it emitted rows for the input, still
+fails the job.
+
+## Quick start
+
+```yaml
+env:
+  dirty:
+    policy: skip
+    max-rows: 1000
+```
+
+The job skips up to 1,000 bad rows; the 1,001st fails it.
+
+## Configuration
+
+| Option | Values | Default |
+|---|---|---|
+| `env.dirty.policy` | `fail`, `skip` | `fail` |
+| `env.dirty.max-rows` | 0 or more; with `skip` only | no limit |
+
+`max-rows` with `policy: fail` has no effect; planning warns about it.
+
+## Examples
+
+**Skip everything bad.** `policy: skip` without `max-rows` counts every bad row and never fails
+for them; check `rowsDirty` and the samples after the run.
+
+**Allow none, but see them.** `policy: skip` with `max-rows: 0` fails the job at the first bad row
+too, but with `PF-DATA-0010` and the samples in the metrics, which show all the bad rows that the
+tasks met before the job master stopped them.
+
+**In a plugin.** A transform or a writer throws `BadRowException` for the row it was given:
+
+```java
+if (amount.signum() < 0) {
+    throw new BadRowException("amount " + amount + " is negative");
+}
+```
+
+A writer that learns about a refused row only when a batch is flushed reports it with
+`context.reportBadRow(row, reason)`.
+
+## Behavior
+
+- Counts reconcile: `rowsRead + rowsExpanded = rowsWritten + rowsFiltered + rowsDirty + rowsFailed
+  + rowsInFlight`. A row a source could not read counts as read and as dirty.
+- The limit is checked whenever a task reports, at least once per `metricsInterval`; tasks keep
+  skipping until the job master stops them, so a run may skip somewhat more rows than `max-rows`.
+- A row reported with `reportBadRow` was counted as written by `write`; it moves from written to
+  dirty.
+
+## Observability
+
+- `rowsDirty` for the job and for every node, in the [metrics](../reference/metrics);
+  `pipeforge run --analyze` shows the count and the first samples.
+- Up to 20 **samples** per run, the first bad rows by time: the node, the table, the error code
+  and message, and the values of the row, each cut to 256 characters (empty when a reader could
+  not read the record).
+- The first bad row of each task is logged at `WARN` in its [task log](../operations/logs), every
+  further one at `DEBUG`.
+
+## Performance and tuning
+
+Skipping a bad row costs as much as handling the error; rows that are not bad pay nothing.
+
+## Troubleshooting
+
+| Error | Meaning |
+|---|---|
+| `PF-DATA-0009` … `'out' refused a row: …` | A plugin refused a row; the reason is the plugin's |
+| `PF-DATA-0010` … `skipped 1,001 bad rows, more than env.dirty.max-rows (1000)` | Look at the samples, fix the data or the mapping, or raise the limit |
+| `PF-DATA-0006` | An expression failed on a row; see [expressions](./expressions) |
+
+## Limitations
+
+- Bad rows are skipped, not kept: routing them to a dirty data sink and writing a full file of bad
+  rows come in a later version.
+- Sample values are not masked yet; do not rely on samples for sensitive columns.
+- A sink that writes rows in batches can find the bad row of a failed batch only when it reports
+  it; splitting failed batches by itself comes in a later version.
+
+## Version history
+
+Available since 0.1.0.

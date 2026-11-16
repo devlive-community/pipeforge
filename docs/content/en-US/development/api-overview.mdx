@@ -85,6 +85,15 @@ A `Sink` validates its input tables while planning and creates writers. Writers 
 and, for exactly-once delivery, produce committables in `prepareCommit`; a `SinkCommitter` or
 `GlobalCommitter` commits them after the checkpoint completes.
 
+### Bad rows
+
+When the data of a row is the problem — a value that does not convert, a constraint the target
+refuses, a record that cannot be parsed — throw `BadRowException` for that row from `process`,
+`write` or `pollNext`. The engine applies the job's [dirty data policy](../concepts/dirty-data):
+it fails the job or skips and counts the row. A writer that learns about a refused row only when it
+flushes a batch reports it with `WriterContext.reportBadRow(row, reason)`. Any other exception
+fails the job.
+
 ### Threads of a plugin
 
 A reader or writer that needs threads of its own, for example to fetch ahead or write in the

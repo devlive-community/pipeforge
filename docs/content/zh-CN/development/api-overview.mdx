@@ -76,6 +76,12 @@ Enumerator 在 JobMaster 中运行，而不是在 Worker 上，并遵守以下�
 `Sink` 在计划阶段校验输入表并创建 Writer。Writer 负责 `write`、`flush`，需要 exactly-once 时在 `prepareCommit`
 中产生待提交物，由 `SinkCommitter` 或 `GlobalCommitter` 在 checkpoint 完成后提交。
 
+### 坏行
+
+当问题出在某一行的数据上——值无法转换、目标端拒绝的约束、无法解析的记录——请在 `process`、`write` 或 `pollNext` 中针对这一行抛出
+`BadRowException`。引擎按作业的[脏数据策略](../concepts/dirty-data)处理：让作业失败，或者跳过该行并计数。只有在写出批次时才知道
+某行被拒绝的 Writer，用 `WriterContext.reportBadRow(row, reason)` 报告它。其他异常会让作业失败。
+
 ### 插件的线程
 
 需要自己线程的 Reader 或 Writer（例如预取或后台写入）从 `context.threadFactory()` 获取线程。引擎以 Task 为它们命名，

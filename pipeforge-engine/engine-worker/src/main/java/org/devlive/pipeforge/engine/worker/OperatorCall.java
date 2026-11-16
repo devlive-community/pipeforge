@@ -88,6 +88,15 @@ final class OperatorCall {
         if (error instanceof InterruptedException) {
             Thread.currentThread().interrupt();
         }
+        if (error instanceof org.devlive.pipeforge.api.row.BadRowException bad) {
+            // the plugin says the data is wrong: a bad row for the dirty data policy
+            return PipeForgeException.of(ErrorCode.BAD_ROW)
+                    .param("node", node.id())
+                    .param("reason", String.valueOf(bad.getMessage()))
+                    .scope(scope)
+                    .cause(bad)
+                    .build();
+        }
         if (error instanceof PipeForgeException e) {
             if (e.scope().node() != null) {
                 return e;

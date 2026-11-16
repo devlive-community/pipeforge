@@ -74,6 +74,17 @@ final class MetricsAggregator {
         tasks.put(vertex + "/" + subtask, metrics);
     }
 
+    /** The bad rows the tasks skipped, from their latest reports. */
+    long rowsDirty() {
+        long total = 0;
+        for (TaskMetricsSnapshot task : tasks.values()) {
+            for (OperatorSnapshot operator : task.operators()) {
+                total += operator.rowsDirty();
+            }
+        }
+        return total;
+    }
+
     /** The splits the enumerator assigned, and those of readers that have finished. */
     void splits(int assigned, int finished) {
         splitsAssigned = assigned;
@@ -97,6 +108,8 @@ final class MetricsAggregator {
         long[] expanded = new long[nodes.size()];
         long[] self = new long[nodes.size()];
         long[] bytesIn = new long[nodes.size()];
+        long[] dirty = new long[nodes.size()];
+        List<org.devlive.pipeforge.core.dirty.DirtySample> samples = new ArrayList<>();
         long[] bytesOut = new long[nodes.size()];
         long running = 0;
         long readerWait = 0;
@@ -118,6 +131,7 @@ final class MetricsAggregator {
             queueDepth += task.queueDepth();
             queueCapacity += task.queueCapacity();
             memory += task.memoryBytes();
+            samples.addAll(task.dirtySamples());
             if (offset < nodes.size()) {
                 bytesIn[offset] += task.bytesReceived();
             }
@@ -134,10 +148,16 @@ final class MetricsAggregator {
                 filtered[node] += operator.rowsFiltered();
                 expanded[node] += operator.rowsExpanded();
                 self[node] += operator.selfTimeNanos();
+                dirty[node] += operator.rowsDirty();
             }
         }
         int sink = nodes.size() - 1;
-        long read = out[0];
+        // a source counts what it read as input, also rows it could not pass on
+        long read = in[0];
+        long totalDirty = 0;
+        for (long d : dirty) {
+            totalDirty += d;
+        }
         long accepted = out[sink];
         long written = twoPhase && !committed && phase != Phase.RUNNING ? 0 : accepted;
         long totalFiltered = 0;
@@ -151,9 +171,9 @@ final class MetricsAggregator {
         switch (phase) {
                 // Everything read and not yet accepted by the sink, wherever it is: the identity holds for
                 // a snapshot taken while the task moves rows (see OperatorChain.snapshot).
-            case RUNNING -> inFlight = read + totalExpanded - totalFiltered - accepted;
-            case SUCCEEDED -> inFlight = in[sink] - written;
-            case STOPPED -> failed = Math.max(0, read + totalExpanded - totalFiltered - written);
+            case RUNNING -> inFlight = read + totalExpanded - totalFiltered - totalDirty - accepted;
+            case SUCCEEDED -> inFlight = in[sink] - dirty[sink] - written;
+            case STOPPED -> failed = Math.max(0, read + totalExpanded - totalFiltered - totalDirty - written);
         }
 
         List<NodeMetrics> nodeMetrics = new ArrayList<>(nodes.size());
@@ -170,7 +190,8 @@ final class MetricsAggregator {
                     expanded[i],
                     ratio,
                     bytesIn[i],
-                    bytesOut[i]));
+                    bytesOut[i],
+                    dirty[i]));
         }
 
         window.addLast(new Sample(now, read, written));
@@ -224,7 +245,12 @@ final class MetricsAggregator {
                 splitsAssigned,
                 splitsFinished,
                 TimeUnit.NANOSECONDS.toMillis(running),
-                memory);
+                memory,
+                totalDirty,
+                samples.stream()
+                        .sorted(java.util.Comparator.comparingLong(org.devlive.pipeforge.core.dirty.DirtySample::atMs))
+                        .limit(org.devlive.pipeforge.core.dirty.DirtySample.MAX_SAMPLES)
+                        .toList());
     }
 
     private Sample secondToLast() {

@@ -41,6 +41,7 @@ import org.devlive.pipeforge.api.transform.Transform;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.core.dirty.DirtyPolicy;
 import org.devlive.pipeforge.core.expression.EngineExpressions;
 import org.devlive.pipeforge.core.job.Delivery;
 import org.devlive.pipeforge.core.job.EnvOptions;
@@ -122,6 +123,7 @@ public final class Planner {
                     .build();
         }
         JobMode mode = written != null ? written : unbounded ? JobMode.STREAMING : JobMode.BATCH;
+        DirtyPolicy dirty = dirty(job, warnings);
         return new JobPlan(
                 job.name(),
                 job.description(),
@@ -133,7 +135,17 @@ public final class Planner {
                 job.timeZone(),
                 job.variables(),
                 List.copyOf(planned.values()),
-                warnings);
+                warnings,
+                dirty);
+    }
+
+    private DirtyPolicy dirty(JobDefinition job, List<String> warnings) {
+        DirtyPolicy.Mode policy = setting(job, EnvOptions.DIRTY_POLICY);
+        boolean limited = job.env().contains(EnvOptions.DIRTY_MAX_ROWS);
+        if (limited && policy == DirtyPolicy.Mode.FAIL) {
+            warnings.add("env.dirty.max-rows has no effect with dirty.policy fail: the first bad row fails the job");
+        }
+        return new DirtyPolicy(policy, limited ? job.env().get(EnvOptions.DIRTY_MAX_ROWS) : -1);
     }
 
     private <T> T setting(JobDefinition job, Option<T> option) {

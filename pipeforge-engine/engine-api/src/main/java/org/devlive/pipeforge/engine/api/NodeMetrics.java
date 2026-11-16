@@ -21,6 +21,7 @@ import java.util.Objects;
  *     over its instances; -1 when unknown
  * @param bytesIn bytes of rows the node received from other tasks, when it reads from the network
  * @param bytesOut bytes of rows the node sent to other tasks, when it writes to the network
+ * @param rowsDirty bad rows the node skipped
  */
 public record NodeMetrics(
         String node,
@@ -31,11 +32,26 @@ public record NodeMetrics(
         long rowsExpanded,
         double selfTimeRatio,
         long bytesIn,
-        long bytesOut) {
+        long bytesOut,
+        long rowsDirty) {
 
     public NodeMetrics {
         Objects.requireNonNull(node, "node");
         Objects.requireNonNull(kind, "kind");
+    }
+
+    /** Metrics of a node that skipped no bad rows. */
+    public NodeMetrics(
+            String node,
+            String kind,
+            long rowsIn,
+            long rowsOut,
+            long rowsFiltered,
+            long rowsExpanded,
+            double selfTimeRatio,
+            long bytesIn,
+            long bytesOut) {
+        this(node, kind, rowsIn, rowsOut, rowsFiltered, rowsExpanded, selfTimeRatio, bytesIn, bytesOut, 0);
     }
 
     /** Output rows per input row; -1 when the node received nothing. */

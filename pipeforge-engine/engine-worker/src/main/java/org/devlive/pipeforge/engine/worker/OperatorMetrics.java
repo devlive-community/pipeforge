@@ -20,6 +20,7 @@ final class OperatorMetrics {
     final LongAdder rowsOut = new LongAdder();
     final LongAdder rowsFiltered = new LongAdder();
     final LongAdder rowsExpanded = new LongAdder();
+    final LongAdder rowsDirty = new LongAdder();
 
     OperatorMetrics(String node) {
         this.node = node;
@@ -31,6 +32,12 @@ final class OperatorMetrics {
 
     OperatorSnapshot snapshot(long selfTimeNanos) {
         return new OperatorSnapshot(
-                node, rowsIn.sum(), rowsOut.sum(), rowsFiltered.sum(), rowsExpanded.sum(), selfTimeNanos);
+                node,
+                rowsIn.sum(),
+                rowsOut.sum(),
+                rowsFiltered.sum(),
+                rowsExpanded.sum(),
+                selfTimeNanos,
+                rowsDirty.sum());
     }
 }

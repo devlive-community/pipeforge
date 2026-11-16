@@ -47,6 +47,8 @@
   docs: ["concepts/plugins"]
 - paths: ["pipeforge-expressions/**"]
   docs: ["concepts/expressions", "reference/expression-syntax"]
+- paths: ["pipeforge-core/src/main/java/org/devlive/pipeforge/core/dirty/**", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/DirtyRows.java", "pipeforge-api/src/main/java/org/devlive/pipeforge/api/row/BadRowException.java"]
+  docs: ["concepts/dirty-data"]
 - paths: ["pipeforge-core/src/main/java/org/devlive/pipeforge/core/job/**"]
   docs: ["reference/job-dsl"]
 - paths: ["pipeforge-core/src/main/java/org/devlive/pipeforge/core/variable/**"]

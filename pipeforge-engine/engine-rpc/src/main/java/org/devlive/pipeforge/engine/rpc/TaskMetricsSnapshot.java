@@ -24,6 +24,8 @@ import java.util.List;
  * @param queueDepth batches in the write queue of the sink now
  * @param queueCapacity the batches the write queue holds; 0 without one
  * @param memoryBytes the memory the task accounts now: write buffer, network buffers, queued splits
+ * @param dirtySamples the first bad rows the task skipped, at most {@link
+ *     org.devlive.pipeforge.core.dirty.DirtySample#MAX_SAMPLES}
  */
 public record TaskMetricsSnapshot(
         List<OperatorSnapshot> operators,
@@ -36,12 +38,42 @@ public record TaskMetricsSnapshot(
         long bytesReceived,
         int queueDepth,
         int queueCapacity,
-        long memoryBytes) {
+        long memoryBytes,
+        List<org.devlive.pipeforge.core.dirty.DirtySample> dirtySamples) {
 
     public static final TaskMetricsSnapshot EMPTY = new TaskMetricsSnapshot(List.of(), 0, 0, 0, 0);
 
     public TaskMetricsSnapshot {
         operators = List.copyOf(operators);
+        dirtySamples = List.copyOf(dirtySamples);
+    }
+
+    /** A snapshot without bad rows. */
+    public TaskMetricsSnapshot(
+            List<OperatorSnapshot> operators,
+            long runningNanos,
+            long idleNanos,
+            long readerWaitNanos,
+            long writerWaitNanos,
+            long backpressuredNanos,
+            long bytesSent,
+            long bytesReceived,
+            int queueDepth,
+            int queueCapacity,
+            long memoryBytes) {
+        this(
+                operators,
+                runningNanos,
+                idleNanos,
+                readerWaitNanos,
+                writerWaitNanos,
+                backpressuredNanos,
+                bytesSent,
+                bytesReceived,
+                queueDepth,
+                queueCapacity,
+                memoryBytes,
+                List.of());
     }
 
     /** A snapshot of a task that exchanges no rows with other tasks and has no write queue. */

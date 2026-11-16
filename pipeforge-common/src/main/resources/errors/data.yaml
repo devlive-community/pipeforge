@@ -50,3 +50,21 @@
   hint:
     en-US: "Look for very large values in the row, such as documents or files in one column, or raise task.max-row-bytes if the worker has the memory."
     zh-CN: "请检查行中是否有特别大的值，例如某一列中的文档或文件；如果 Worker 内存充足，也可以调大 task.max-row-bytes。"
+
+- code: PF-DATA-0009
+  name: BAD_ROW
+  message:
+    en-US: "'{node}' refused a row: {reason}"
+    zh-CN: "'{node}' 拒绝了一行：{reason}"
+  hint:
+    en-US: "The row does not fit the target or the transformation. Fix the data at the source, map the column to a fitting type, or set env.dirty.policy to skip so that such rows are counted and skipped."
+    zh-CN: "这一行不适合目标端或转换。请在源端修正数据、把该列映射为合适的类型，或者把 env.dirty.policy 设为 skip，让这类行被计数并跳过。"
+
+- code: PF-DATA-0010
+  name: TOO_MANY_DIRTY_ROWS
+  message:
+    en-US: "The job skipped {rows} bad rows, more than env.dirty.max-rows ({limit})"
+    zh-CN: "作业跳过了 {rows} 个坏行，超过了 env.dirty.max-rows（{limit}）"
+  hint:
+    en-US: "The samples of the bad rows in the run's metrics show what is wrong. Fix the data or the mapping, or raise env.dirty.max-rows if that many bad rows are expected."
+    zh-CN: "运行指标中的坏行样本说明了问题所在。请修正数据或映射；如果确实会有这么多坏行，可以调大 env.dirty.max-rows。"

@@ -27,6 +27,12 @@ field pipeforge.rpc.v1.ColumnEntry 4 default_value_json string
 field pipeforge.rpc.v1.ColumnEntry 5 options repeated pipeforge.rpc.v1.ColumnEntry.OptionsEntry
 field pipeforge.rpc.v1.ColumnEntry.OptionsEntry 1 key string
 field pipeforge.rpc.v1.ColumnEntry.OptionsEntry 2 value string
+field pipeforge.rpc.v1.DirtySample 1 node_id string
+field pipeforge.rpc.v1.DirtySample 2 table string
+field pipeforge.rpc.v1.DirtySample 3 code string
+field pipeforge.rpc.v1.DirtySample 4 message string
+field pipeforge.rpc.v1.DirtySample 5 row string
+field pipeforge.rpc.v1.DirtySample 6 at_ms int64
 field pipeforge.rpc.v1.ErrorInfo 1 code string
 field pipeforge.rpc.v1.ErrorInfo 2 params repeated pipeforge.rpc.v1.ErrorInfo.ParamsEntry
 field pipeforge.rpc.v1.ErrorInfo 3 message string
@@ -89,6 +95,8 @@ field pipeforge.rpc.v1.JobMetrics 20 queue_capacity int32
 field pipeforge.rpc.v1.JobMetrics 21 tasks_running int32
 field pipeforge.rpc.v1.JobMetrics 22 parallelism int32
 field pipeforge.rpc.v1.JobMetrics 23 memory_bytes int64
+field pipeforge.rpc.v1.JobMetrics 24 rows_dirty int64
+field pipeforge.rpc.v1.JobMetrics 25 dirty_samples repeated pipeforge.rpc.v1.DirtySample
 field pipeforge.rpc.v1.JobMetrics 3 nodes repeated pipeforge.rpc.v1.NodeMetrics
 field pipeforge.rpc.v1.JobMetrics 4 splits_total int32
 field pipeforge.rpc.v1.JobMetrics 5 splits_finished int32
@@ -272,6 +280,7 @@ field pipeforge.rpc.v1.TaskMetrics 1 operators repeated pipeforge.rpc.v1.Operato
 field pipeforge.rpc.v1.TaskMetrics 10 splits repeated pipeforge.rpc.v1.SplitProgress
 field pipeforge.rpc.v1.TaskMetrics 11 queue_depth int32
 field pipeforge.rpc.v1.TaskMetrics 12 queue_capacity int32
+field pipeforge.rpc.v1.TaskMetrics 13 dirty_samples repeated pipeforge.rpc.v1.DirtySample
 field pipeforge.rpc.v1.TaskMetrics 2 running_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 3 idle_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 4 reader_wait_nanos int64
@@ -287,6 +296,7 @@ field pipeforge.rpc.v1.TaskSettings 4 cancel_timeout_ms int64
 field pipeforge.rpc.v1.TaskSettings 5 cancel_kill_timeout_ms int64
 field pipeforge.rpc.v1.TaskSettings 6 metrics_interval_ms int64
 field pipeforge.rpc.v1.TaskSettings 7 max_row_bytes int64
+field pipeforge.rpc.v1.TaskSettings 8 skip_dirty_rows bool
 field pipeforge.rpc.v1.TaskStateUpdate 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.TaskStateUpdate 2 id pipeforge.rpc.v1.ExecutionAttemptId
 field pipeforge.rpc.v1.TaskStateUpdate 3 state pipeforge.rpc.v1.TaskState
@@ -318,6 +328,7 @@ message pipeforge.rpc.v1.CancelTaskRequest
 message pipeforge.rpc.v1.ChainDescriptor
 message pipeforge.rpc.v1.ColumnEntry
 message pipeforge.rpc.v1.ColumnEntry.OptionsEntry
+message pipeforge.rpc.v1.DirtySample
 message pipeforge.rpc.v1.ErrorInfo
 message pipeforge.rpc.v1.ErrorInfo.ParamsEntry
 message pipeforge.rpc.v1.ErrorInfo.ScopeEntry

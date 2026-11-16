@@ -317,7 +317,8 @@ class ClusterJobTest {
                 lost,
                 new org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot(
                         List.of(
-                                new org.devlive.pipeforge.engine.rpc.OperatorSnapshot("src", 0, 1_000_000, 0, 0, 0),
+                                new org.devlive.pipeforge.engine.rpc.OperatorSnapshot(
+                                        "src", 1_000_000, 1_000_000, 0, 0, 0),
                                 new org.devlive.pipeforge.engine.rpc.OperatorSnapshot(
                                         "out", 1_000_000, 1_000_000, 0, 0, 0)),
                         1_000_000_000L,

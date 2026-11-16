@@ -130,6 +130,7 @@ public final class ProtoMapping {
                 .setWriteQueueCapacity(settings.writeQueueCapacity())
                 .setCancelTimeoutMs(settings.cancelTimeout().toMillis())
                 .setMetricsIntervalMs(settings.metricsInterval().toMillis())
+                .setSkipDirtyRows(settings.skipDirtyRows())
                 .build();
     }
 
@@ -139,7 +140,8 @@ public final class ProtoMapping {
                 settings.getWriteBatchSize(),
                 settings.getWriteQueueCapacity(),
                 Duration.ofMillis(settings.getCancelTimeoutMs()),
-                Duration.ofMillis(settings.getMetricsIntervalMs()));
+                Duration.ofMillis(settings.getMetricsIntervalMs()),
+                settings.getSkipDirtyRows());
     }
 
     // ----------------------------------------------------------------------------- metrics
@@ -156,6 +158,7 @@ public final class ProtoMapping {
                 .setQueueDepth(metrics.queueDepth())
                 .setQueueCapacity(metrics.queueCapacity())
                 .setMemoryBytes(metrics.memoryBytes());
+        metrics.dirtySamples().forEach(sample -> builder.addDirtySamples(toProto(sample)));
         for (OperatorSnapshot operator : metrics.operators()) {
             builder.addOperators(OperatorMetrics.newBuilder()
                     .setNodeId(operator.node())
@@ -163,6 +166,7 @@ public final class ProtoMapping {
                     .setRowsOut(operator.rowsOut())
                     .setRowsFiltered(operator.rowsFiltered())
                     .setRowsExpanded(operator.rowsExpanded())
+                    .setRowsDirty(operator.rowsDirty())
                     .setSelfTimeNanos(operator.selfTimeNanos()));
         }
         return builder.build();
@@ -177,7 +181,8 @@ public final class ProtoMapping {
                     operator.getRowsOut(),
                     operator.getRowsFiltered(),
                     operator.getRowsExpanded(),
-                    operator.getSelfTimeNanos()));
+                    operator.getSelfTimeNanos(),
+                    operator.getRowsDirty()));
         }
         return new TaskMetricsSnapshot(
                 operators,
@@ -190,7 +195,35 @@ public final class ProtoMapping {
                 metrics.getBytesIn(),
                 metrics.getQueueDepth(),
                 metrics.getQueueCapacity(),
-                metrics.getMemoryBytes());
+                metrics.getMemoryBytes(),
+                metrics.getDirtySamplesList().stream()
+                        .map(ProtoMapping::fromProto)
+                        .toList());
+    }
+
+    public static org.devlive.pipeforge.engine.rpc.proto.DirtySample toProto(
+            org.devlive.pipeforge.core.dirty.DirtySample sample) {
+        var builder = org.devlive.pipeforge.engine.rpc.proto.DirtySample.newBuilder()
+                .setNodeId(sample.node())
+                .setCode(sample.code())
+                .setMessage(sample.message())
+                .setRow(sample.row())
+                .setAtMs(sample.atMs());
+        if (sample.table() != null) {
+            builder.setTable(sample.table());
+        }
+        return builder.build();
+    }
+
+    public static org.devlive.pipeforge.core.dirty.DirtySample fromProto(
+            org.devlive.pipeforge.engine.rpc.proto.DirtySample sample) {
+        return new org.devlive.pipeforge.core.dirty.DirtySample(
+                sample.getNodeId(),
+                sample.getTable().isEmpty() ? null : sample.getTable(),
+                sample.getCode(),
+                sample.getMessage(),
+                sample.getRow(),
+                sample.getAtMs());
     }
 
     // ----------------------------------------------------------------------------- errors

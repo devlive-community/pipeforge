@@ -28,7 +28,7 @@ class MetricCatalogTest {
     void listsEveryMetricTheEngineReports() {
         MetricCatalog catalog = MetricCatalog.global();
 
-        for (String name : components(JobMetrics.class, Set.of("nodes"))) {
+        for (String name : components(JobMetrics.class, Set.of("nodes", "dirtySamples"))) {
             assertThat(catalog.find("job", name)).as("job metric %s", name).isPresent();
         }
         for (String name : components(NodeMetrics.class, Set.of("node", "kind"))) {
