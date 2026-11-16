@@ -243,7 +243,12 @@ final class Task implements Runnable {
                 running,
                 idleNanos.get(),
                 operators.producerWaitNanos(),
-                operators.writerWaitNanos());
+                operators.writerWaitNanos(),
+                operators.backpressureNanos(),
+                operators.bytesSent(),
+                operators.bytesReceived(),
+                operators.queueDepth(),
+                operators.queueCapacity());
     }
 
     private void transition(TaskState next) {

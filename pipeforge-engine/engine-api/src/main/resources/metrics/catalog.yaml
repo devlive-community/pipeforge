@@ -11,7 +11,7 @@
 #   name:        lower camel case, as in the JSON output
 #   scope:       job | node
 #   type:        counter | gauge | meter | timer
-#   unit:        rows | ms | rows/s | ratio | tasks
+#   unit:        rows | ms | rows/s | ratio | bytes | batches | splits | tasks
 
 - name: elapsedMs
   scope: job
@@ -117,6 +117,62 @@
     en-US: "The tasks that are running now."
     zh-CN: "当前正在运行的 Task 数。"
 
+- name: exchangedBytes
+  scope: job
+  type: counter
+  unit: bytes
+  description:
+    en-US: "Bytes of rows tasks sent to other tasks, in memory on one worker or over the network between workers."
+    zh-CN: "Task 发给其他 Task 的行的字节数，包括同一 Worker 上的内存交换和 Worker 之间的网络交换。"
+
+- name: backpressuredMs
+  scope: job
+  type: timer
+  unit: ms
+  description:
+    en-US: "Time tasks waited for network buffers, summed over tasks. High values mean something downstream is slower."
+    zh-CN: "Task 等待网络缓冲的时间，按 Task 求和。数值高说明下游更慢。"
+
+- name: backpressuredRatio
+  scope: job
+  type: gauge
+  unit: ratio
+  description:
+    en-US: "backpressuredMs as a share of the running time of the tasks, from 0 to 1; -1 before any task ran."
+    zh-CN: "backpressuredMs 占 Task 运行时间的比例，从 0 到 1；还没有 Task 运行时为 -1。"
+
+- name: queueDepth
+  scope: job
+  type: gauge
+  unit: batches
+  description:
+    en-US: "Batches in the write queues of the sinks now; close to queueCapacity means the target is the bottleneck."
+    zh-CN: "Sink 写队列中当前的批数；接近 queueCapacity 说明瓶颈在目标端。"
+
+- name: queueCapacity
+  scope: job
+  type: gauge
+  unit: batches
+  description:
+    en-US: "The batches the write queues of the sinks hold, summed over tasks; 0 without write buffers."
+    zh-CN: "Sink 写队列能容纳的批数，按 Task 求和；没有写缓冲时为 0。"
+
+- name: splitsAssigned
+  scope: job
+  type: counter
+  unit: splits
+  description:
+    en-US: "Splits the enumerator gave to readers."
+    zh-CN: "分片分配器分给 Reader 的分片数。"
+
+- name: splitsFinished
+  scope: job
+  type: counter
+  unit: splits
+  description:
+    en-US: "Splits of readers that have finished. Readers do not report single splits, so this grows when a reader ends."
+    zh-CN: "已经结束的 Reader 的分片数。Reader 不会单独报告每个分片，因此这个值在 Reader 结束时增长。"
+
 - name: rowsIn
   scope: node
   type: counter
@@ -156,3 +212,19 @@
   description:
     en-US: "Share of the running time spent in the node's own code, without the nodes after it (0 to 1). Sampled on every 16th read; for a sink with the write buffer, the busy time of its write thread."
     zh-CN: "节点自身代码占运行时间的比例（0 到 1），不含其下游节点。每 16 次读取采样一次；开启写缓冲的 Sink 取写线程的忙碌时间。"
+
+- name: bytesIn
+  scope: node
+  type: counter
+  unit: bytes
+  description:
+    en-US: "Bytes of rows the node received from other tasks; 0 for a node that does not read from another task."
+    zh-CN: "节点从其他 Task 收到的行的字节数；不从其他 Task 读取的节点为 0。"
+
+- name: bytesOut
+  scope: node
+  type: counter
+  unit: bytes
+  description:
+    en-US: "Bytes of rows the node sent to other tasks; 0 for a node that does not write to another task."
+    zh-CN: "节点发给其他 Task 的行的字节数；不向其他 Task 写入的节点为 0。"

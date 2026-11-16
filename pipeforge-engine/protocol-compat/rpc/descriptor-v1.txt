@@ -74,10 +74,27 @@ field pipeforge.rpc.v1.JobContext 9 delivery string
 field pipeforge.rpc.v1.JobContext.VariablesEntry 1 key string
 field pipeforge.rpc.v1.JobContext.VariablesEntry 2 value string
 field pipeforge.rpc.v1.JobMetrics 1 run_id string
+field pipeforge.rpc.v1.JobMetrics 10 rows_expanded int64
+field pipeforge.rpc.v1.JobMetrics 11 rows_failed int64
+field pipeforge.rpc.v1.JobMetrics 12 rows_in_flight int64
+field pipeforge.rpc.v1.JobMetrics 13 read_rows_per_second double
+field pipeforge.rpc.v1.JobMetrics 14 write_rows_per_second double
+field pipeforge.rpc.v1.JobMetrics 15 reader_wait_ms int64
+field pipeforge.rpc.v1.JobMetrics 16 writer_wait_ms int64
+field pipeforge.rpc.v1.JobMetrics 17 back_pressured_ms int64
+field pipeforge.rpc.v1.JobMetrics 18 exchanged_bytes int64
+field pipeforge.rpc.v1.JobMetrics 19 queue_depth int32
 field pipeforge.rpc.v1.JobMetrics 2 timestamp_ms int64
+field pipeforge.rpc.v1.JobMetrics 20 queue_capacity int32
+field pipeforge.rpc.v1.JobMetrics 21 tasks_running int32
+field pipeforge.rpc.v1.JobMetrics 22 parallelism int32
 field pipeforge.rpc.v1.JobMetrics 3 nodes repeated pipeforge.rpc.v1.NodeMetrics
 field pipeforge.rpc.v1.JobMetrics 4 splits_total int32
 field pipeforge.rpc.v1.JobMetrics 5 splits_finished int32
+field pipeforge.rpc.v1.JobMetrics 6 elapsed_ms int64
+field pipeforge.rpc.v1.JobMetrics 7 rows_read int64
+field pipeforge.rpc.v1.JobMetrics 8 rows_written int64
+field pipeforge.rpc.v1.JobMetrics 9 rows_filtered int64
 field pipeforge.rpc.v1.JobRequest 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.JobRequest 2 run_id string
 field pipeforge.rpc.v1.JobRequest 3 reason string
@@ -252,6 +269,8 @@ field pipeforge.rpc.v1.TaskDeployment 7 inputs repeated pipeforge.rpc.v1.InputGa
 field pipeforge.rpc.v1.TaskDeployment 8 outputs repeated pipeforge.rpc.v1.ResultPartitionDescriptor
 field pipeforge.rpc.v1.TaskMetrics 1 operators repeated pipeforge.rpc.v1.OperatorMetrics
 field pipeforge.rpc.v1.TaskMetrics 10 splits repeated pipeforge.rpc.v1.SplitProgress
+field pipeforge.rpc.v1.TaskMetrics 11 queue_depth int32
+field pipeforge.rpc.v1.TaskMetrics 12 queue_capacity int32
 field pipeforge.rpc.v1.TaskMetrics 2 running_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 3 idle_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 4 reader_wait_nanos int64

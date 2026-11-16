@@ -50,6 +50,11 @@ final class MetricsAggregator {
     private final Deque<Sample> window = new ArrayDeque<>();
     private double peakRead;
     private double peakWritten;
+    /** Where the nodes of each vertex end in {@link #nodes}. */
+    private final Map<String, Integer> tails = new HashMap<>();
+
+    private int splitsAssigned;
+    private int splitsFinished;
     private boolean twoPhase;
     private boolean committed;
 
@@ -58,6 +63,7 @@ final class MetricsAggregator {
         for (JobGraph.Vertex vertex : graph.vertices()) {
             offsets.put(vertex.id(), nodes.size());
             nodes.addAll(vertex.nodes());
+            tails.put(vertex.id(), nodes.size() - 1);
             tasksTotal += vertex.parallelism();
         }
         this.parallelism = tasksTotal;
@@ -66,6 +72,12 @@ final class MetricsAggregator {
 
     void update(String vertex, int subtask, TaskMetricsSnapshot metrics) {
         tasks.put(vertex + "/" + subtask, metrics);
+    }
+
+    /** The splits the enumerator assigned, and those of readers that have finished. */
+    void splits(int assigned, int finished) {
+        splitsAssigned = assigned;
+        splitsFinished = finished;
     }
 
     /** The sink prepared committables: its rows count as written once they are committed. */
@@ -84,9 +96,15 @@ final class MetricsAggregator {
         long[] filtered = new long[nodes.size()];
         long[] expanded = new long[nodes.size()];
         long[] self = new long[nodes.size()];
+        long[] bytesIn = new long[nodes.size()];
+        long[] bytesOut = new long[nodes.size()];
         long running = 0;
         long readerWait = 0;
         long writerWait = 0;
+        long backpressured = 0;
+        long exchanged = 0;
+        int queueDepth = 0;
+        int queueCapacity = 0;
         for (Map.Entry<String, TaskMetricsSnapshot> entry : tasks.entrySet()) {
             TaskMetricsSnapshot task = entry.getValue();
             String vertex = entry.getKey().substring(0, entry.getKey().lastIndexOf('/'));
@@ -94,6 +112,17 @@ final class MetricsAggregator {
             running += task.runningNanos();
             readerWait += task.readerWaitNanos();
             writerWait += task.writerWaitNanos();
+            backpressured += task.backpressuredNanos();
+            exchanged += task.bytesSent();
+            queueDepth += task.queueDepth();
+            queueCapacity += task.queueCapacity();
+            if (offset < nodes.size()) {
+                bytesIn[offset] += task.bytesReceived();
+            }
+            Integer tail = tails.get(vertex);
+            if (tail != null) {
+                bytesOut[tail] += task.bytesSent();
+            }
             List<OperatorSnapshot> operators = task.operators();
             for (int i = 0; i < operators.size() && offset + i < nodes.size(); i++) {
                 OperatorSnapshot operator = operators.get(i);
@@ -130,8 +159,16 @@ final class MetricsAggregator {
             PlannedNode node = nodes.get(i);
             double ratio = running == 0 ? -1 : Math.min(1.0, (double) self[i] / running);
             long nodeOut = i == sink ? written : out[i];
-            nodeMetrics.add(
-                    new NodeMetrics(node.id(), node.kind().id(), in[i], nodeOut, filtered[i], expanded[i], ratio));
+            nodeMetrics.add(new NodeMetrics(
+                    node.id(),
+                    node.kind().id(),
+                    in[i],
+                    nodeOut,
+                    filtered[i],
+                    expanded[i],
+                    ratio,
+                    bytesIn[i],
+                    bytesOut[i]));
         }
 
         window.addLast(new Sample(now, read, written));
@@ -176,7 +213,14 @@ final class MetricsAggregator {
                 TimeUnit.NANOSECONDS.toMillis(writerWait),
                 parallelism,
                 tasksRunning,
-                nodeMetrics);
+                nodeMetrics,
+                exchanged,
+                TimeUnit.NANOSECONDS.toMillis(backpressured),
+                running == 0 ? -1 : Math.min(1.0, (double) backpressured / running),
+                queueDepth,
+                queueCapacity,
+                splitsAssigned,
+                splitsFinished);
     }
 
     private Sample secondToLast() {

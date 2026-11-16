@@ -34,6 +34,15 @@ import java.util.Optional;
  * @param parallelism the number of tasks
  * @param tasksRunning the tasks that are running now
  * @param nodes the metrics of every node, in the order of the plan
+ * @param exchangedBytes bytes of rows tasks sent to other tasks
+ * @param backpressuredMs time tasks waited for network buffers, summed over tasks: something
+ *     downstream is slower
+ * @param backpressuredRatio {@code backpressuredMs} as a share of the running time of the tasks,
+ *     from 0 to 1; -1 before any task ran
+ * @param queueDepth batches in the write queues of the sinks now
+ * @param queueCapacity the batches the write queues of the sinks hold
+ * @param splitsAssigned splits the enumerator gave to readers
+ * @param splitsFinished splits of readers that have finished
  */
 public record JobMetrics(
         long elapsedMs,
@@ -49,11 +58,18 @@ public record JobMetrics(
         long writerWaitMs,
         int parallelism,
         int tasksRunning,
-        List<NodeMetrics> nodes) {
+        List<NodeMetrics> nodes,
+        long exchangedBytes,
+        long backpressuredMs,
+        double backpressuredRatio,
+        int queueDepth,
+        int queueCapacity,
+        int splitsAssigned,
+        int splitsFinished) {
 
     /** No data yet. */
     public static final JobMetrics EMPTY =
-            new JobMetrics(0, 0, 0, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 0, 0, List.of());
+            new JobMetrics(0, 0, 0, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 0, 0, List.of(), 0, 0, -1, 0, 0, 0, 0);
 
     public JobMetrics {
         Objects.requireNonNull(readRowsPerSecond, "readRowsPerSecond");

@@ -54,7 +54,7 @@ class MetricCatalogTest {
                         - name: RowsRead
                           scope: task
                           type: histogram
-                          unit: bytes
+                          unit: furlongs
                           description: { en-US: "x" }
                         - name: ok
                           scope: job
@@ -71,7 +71,7 @@ class MetricCatalogTest {
                 .hasMessageContaining("task.RowsRead: the name must be lower camel case")
                 .hasMessageContaining("unknown scope 'task'")
                 .hasMessageContaining("unknown type 'histogram'")
-                .hasMessageContaining("unknown unit 'bytes'")
+                .hasMessageContaining("unknown unit 'furlongs'")
                 .hasMessageContaining("no zh-CN description")
                 .hasMessageContaining("job.ok: listed twice")
                 .hasMessageContaining("entry is not a mapping");
@@ -79,15 +79,19 @@ class MetricCatalogTest {
 
     @Test
     void reconcilesAndFindsNodes() {
-        NodeMetrics map = new NodeMetrics("map", "transform", 10, 8, 3, 1, 0.25);
-        JobMetrics metrics = new JobMetrics(1500, 10, 7, 3, 1, 0, 1, Rate.ZERO, Rate.ZERO, 0, 0, 1, 1, List.of(map));
+        NodeMetrics map = new NodeMetrics("map", "transform", 10, 8, 3, 1, 0.25, 0, 0);
+        JobMetrics metrics = new JobMetrics(
+                1500, 10, 7, 3, 1, 0, 1, Rate.ZERO, Rate.ZERO, 0, 0, 1, 1, List.of(map), 0, 0, -1, 0, 0, 0, 0);
 
         assertThat(metrics.reconciled()).isTrue();
         assertThat(metrics.node("map")).contains(map);
         assertThat(metrics.node("nope")).isEmpty();
         assertThat(map.selectivity()).isEqualTo(0.8);
-        assertThat(new NodeMetrics("x", "source", 0, 0, 0, 0, -1).selectivity()).isEqualTo(-1);
-        assertThat(new JobMetrics(0, 10, 9, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 1, 0, List.of()).reconciled())
+        assertThat(new NodeMetrics("x", "source", 0, 0, 0, 0, -1, 0, 0).selectivity())
+                .isEqualTo(-1);
+        assertThat(new JobMetrics(
+                                0, 10, 9, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 1, 0, List.of(), 0, 0, -1, 0, 0, 0, 0)
+                        .reconciled())
                 .isFalse();
     }
 }

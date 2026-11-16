@@ -178,6 +178,18 @@ final class SinkOperator implements ChainOutput {
         return async == null ? 0 : async.producerWaitNanos();
     }
 
+    /** Batches in the write queue now; 0 without the buffer. */
+    int queueDepth() {
+        AsyncWriteBuffer async = buffer;
+        return async == null ? 0 : async.depth();
+    }
+
+    /** The batches the write queue holds; 0 without the buffer. */
+    int queueCapacity() {
+        AsyncWriteBuffer async = buffer;
+        return async == null ? 0 : async.capacity();
+    }
+
     /** Time the write thread waited for rows; 0 without the buffer. */
     long writerWaitNanos() {
         AsyncWriteBuffer async = buffer;

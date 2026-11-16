@@ -30,9 +30,16 @@ class AnalyzeTextTest {
                 4,
                 0,
                 List.of(
-                        new NodeMetrics("src", "source", 1_000_000, 1_000_000, 0, 0, 0.21),
-                        new NodeMetrics("map", "transform", 1_000_000, 999_000, 1_000, 0, 0.04),
-                        new NodeMetrics("out", "sink", 999_000, 999_000, 0, 0, -1)));
+                        new NodeMetrics("src", "source", 1_000_000, 1_000_000, 0, 0, 0.21, 0, 0),
+                        new NodeMetrics("map", "transform", 1_000_000, 999_000, 1_000, 0, 0.04, 0, 0),
+                        new NodeMetrics("out", "sink", 999_000, 999_000, 0, 0, -1, 0, 0)),
+                0,
+                0,
+                -1,
+                0,
+                0,
+                0,
+                0);
 
         assertThat(AnalyzeText.format("orders-copy", JobStatus.SUCCESS, metrics))
                 .isEqualTo(
@@ -51,8 +58,8 @@ class AnalyzeTextTest {
 
     @Test
     void marksRunningJobsAndMismatches() {
-        JobMetrics metrics =
-                new JobMetrics(3_725_000, 10, 2, 0, 5, 0, 1, Rate.ZERO, Rate.ZERO, 0, 61_000, 2, 1, List.of());
+        JobMetrics metrics = new JobMetrics(
+                3_725_000, 10, 2, 0, 5, 0, 1, Rate.ZERO, Rate.ZERO, 0, 61_000, 2, 1, List.of(), 0, 0, -1, 0, 0, 0, 0);
 
         String text = AnalyzeText.format("j", JobStatus.RUNNING, metrics);
         assertThat(text)

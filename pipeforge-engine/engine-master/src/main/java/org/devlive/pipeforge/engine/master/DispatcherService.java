@@ -147,7 +147,26 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
     static org.devlive.pipeforge.engine.rpc.proto.JobMetrics toProto(String runId, JobMetrics metrics) {
         var proto = org.devlive.pipeforge.engine.rpc.proto.JobMetrics.newBuilder()
                 .setRunId(runId)
-                .setTimestampMs(System.currentTimeMillis());
+                .setTimestampMs(System.currentTimeMillis())
+                .setSplitsTotal(metrics.splitsAssigned())
+                .setSplitsFinished(metrics.splitsFinished())
+                .setElapsedMs(metrics.elapsedMs())
+                .setRowsRead(metrics.rowsRead())
+                .setRowsWritten(metrics.rowsWritten())
+                .setRowsFiltered(metrics.rowsFiltered())
+                .setRowsExpanded(metrics.rowsExpanded())
+                .setRowsFailed(metrics.rowsFailed())
+                .setRowsInFlight(metrics.rowsInFlight())
+                .setReadRowsPerSecond(metrics.readRowsPerSecond().current())
+                .setWriteRowsPerSecond(metrics.writeRowsPerSecond().current())
+                .setReaderWaitMs(metrics.readerWaitMs())
+                .setWriterWaitMs(metrics.writerWaitMs())
+                .setBackPressuredMs(metrics.backpressuredMs())
+                .setExchangedBytes(metrics.exchangedBytes())
+                .setQueueDepth(metrics.queueDepth())
+                .setQueueCapacity(metrics.queueCapacity())
+                .setTasksRunning(metrics.tasksRunning())
+                .setParallelism(metrics.parallelism());
         for (NodeMetrics node : metrics.nodes()) {
             proto.addNodes(org.devlive.pipeforge.engine.rpc.proto.NodeMetrics.newBuilder()
                     .setNodeId(node.node())
@@ -155,7 +174,9 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                     .setRowsIn(node.rowsIn())
                     .setRowsOut(node.rowsOut())
                     .setRowsFiltered(node.rowsFiltered())
-                    .setRowsExpanded(node.rowsExpanded()));
+                    .setRowsExpanded(node.rowsExpanded())
+                    .setBytesIn(node.bytesIn())
+                    .setBytesOut(node.bytesOut()));
         }
         return proto.build();
     }

@@ -137,6 +137,15 @@ final class NetworkOutput implements ChainOutput {
         }
     }
 
+    /** Bytes of rows written to the outputs. */
+    long bytesSent() {
+        long total = 0;
+        for (Edge edge : edges) {
+            total += edge.partition().metrics().bytes();
+        }
+        return total;
+    }
+
     /** Nanoseconds the task waited for network buffers: its backpressure. */
     long backpressureNanos() {
         long total = 0;

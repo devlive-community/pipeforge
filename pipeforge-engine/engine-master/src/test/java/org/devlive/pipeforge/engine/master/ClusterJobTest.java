@@ -254,6 +254,49 @@ class ClusterJobTest {
     }
 
     @Test
+    void theMetricsOfTheTasksOfALostWorkerStopCounting() throws Exception {
+        String probe = Probe.create();
+        JobMaster job = start(
+                TestConnectors.job(probe, "block: cancel", null, "", 3),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults());
+        assertThat(Probe.get(probe).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+        while (job.handle().status() != JobStatus.RUNNING || job.tasks().size() < 3) {
+            Thread.sleep(5);
+        }
+        Worker silent = workers.values().stream()
+                .filter(w -> w.address.startsWith("worker-2"))
+                .findFirst()
+                .orElseThrow();
+        ExecutionAttemptId lost = job.tasks().stream()
+                .filter(t -> t.workerId().equals(silent.id))
+                .findFirst()
+                .orElseThrow()
+                .attempt();
+        now.addAndGet(ResourceManager.Settings.DEFAULTS.heartbeatTimeout().toNanos());
+        workers.values().stream().filter(w -> w != silent).forEach(w -> manager.heartbeat(w.id, List.of(), List.of()));
+        assertThat(manager.expire()).hasSize(1);
+        // a report the lost task sent before it was cut off arrives late: it no longer counts
+        job.onMetrics(
+                lost,
+                new org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot(
+                        List.of(
+                                new org.devlive.pipeforge.engine.rpc.OperatorSnapshot("src", 0, 1_000_000, 0, 0, 0),
+                                new org.devlive.pipeforge.engine.rpc.OperatorSnapshot(
+                                        "out", 1_000_000, 1_000_000, 0, 0, 0)),
+                        1_000_000_000L,
+                        0,
+                        0,
+                        0));
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(result.metrics().rowsRead()).isLessThan(1_000_000);
+        assertThat(result.metrics().reconciled()).isTrue();
+        assertThat(job.handle().metrics()).as("frozen once the run ended").isEqualTo(result.metrics());
+    }
+
+    @Test
     void failsWhenTheClusterHasTooFewSlots() throws Exception {
         JobResult result = end(submit(TestConnectors.job(Probe.create(), "", null, "", 7), Duration.ofMillis(200)));
 

@@ -57,8 +57,9 @@ final class OperatorChain {
     private final ChainOutput first;
 
     private final @Nullable DeferredOutput deferred;
-    private @Nullable NetworkOutput outputs;
-    private @Nullable NetworkInput input;
+    // set on the task thread when the chain opens, read by the metrics reporter
+    private volatile @Nullable NetworkOutput outputs;
+    private volatile @Nullable NetworkInput input;
 
     OperatorChain(
             TaskDeployment deployment,
@@ -289,11 +290,33 @@ final class OperatorChain {
         }
     }
 
-    /** Time the reader waited for the write queue, or the task waited for network buffers. */
+    /** Time the reader waited for the write queue of the sink. */
     long producerWaitNanos() {
-        long waited = sink != null ? sink.producerWaitNanos() : 0;
+        return sink != null ? sink.producerWaitNanos() : 0;
+    }
+
+    /** Time the task waited for network buffers of its outputs. */
+    long backpressureNanos() {
         NetworkOutput current = outputs;
-        return current == null ? waited : waited + current.backpressureNanos();
+        return current == null ? 0 : current.backpressureNanos();
+    }
+
+    long bytesSent() {
+        NetworkOutput current = outputs;
+        return current == null ? 0 : current.bytesSent();
+    }
+
+    long bytesReceived() {
+        NetworkInput current = input;
+        return current == null ? 0 : current.bytesReceived();
+    }
+
+    int queueDepth() {
+        return sink != null ? sink.queueDepth() : 0;
+    }
+
+    int queueCapacity() {
+        return sink != null ? sink.queueCapacity() : 0;
     }
 
     long writerWaitNanos() {

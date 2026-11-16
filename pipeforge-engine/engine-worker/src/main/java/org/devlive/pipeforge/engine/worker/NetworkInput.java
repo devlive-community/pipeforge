@@ -108,6 +108,10 @@ final class NetworkInput {
         return PollStatus.MORE_AVAILABLE;
     }
 
+    long bytesReceived() {
+        return gate.metrics().bytes();
+    }
+
     InputGate.Metrics metrics() {
         return gate.metrics();
     }

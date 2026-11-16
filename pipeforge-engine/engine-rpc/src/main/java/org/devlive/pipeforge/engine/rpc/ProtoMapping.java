@@ -128,7 +128,12 @@ public final class ProtoMapping {
                 .setRunningNanos(metrics.runningNanos())
                 .setIdleNanos(metrics.idleNanos())
                 .setReaderWaitNanos(metrics.readerWaitNanos())
-                .setWriterWaitNanos(metrics.writerWaitNanos());
+                .setWriterWaitNanos(metrics.writerWaitNanos())
+                .setBackPressuredNanos(metrics.backpressuredNanos())
+                .setBytesOut(metrics.bytesSent())
+                .setBytesIn(metrics.bytesReceived())
+                .setQueueDepth(metrics.queueDepth())
+                .setQueueCapacity(metrics.queueCapacity());
         for (OperatorSnapshot operator : metrics.operators()) {
             builder.addOperators(OperatorMetrics.newBuilder()
                     .setNodeId(operator.node())
@@ -157,7 +162,12 @@ public final class ProtoMapping {
                 metrics.getRunningNanos(),
                 metrics.getIdleNanos(),
                 metrics.getReaderWaitNanos(),
-                metrics.getWriterWaitNanos());
+                metrics.getWriterWaitNanos(),
+                metrics.getBackPressuredNanos(),
+                metrics.getBytesOut(),
+                metrics.getBytesIn(),
+                metrics.getQueueDepth(),
+                metrics.getQueueCapacity());
     }
 
     // ----------------------------------------------------------------------------- errors

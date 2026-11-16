@@ -482,6 +482,7 @@ public final class JobMaster {
         JobStatus end = failure != null
                 ? JobStatus.FAILED
                 : status == JobStatus.CANCELLING ? JobStatus.CANCELLED : JobStatus.SUCCESS;
+        countSplits();
         JobMetrics last = aggregator.sample(
                 System.nanoTime(),
                 0,
@@ -831,8 +832,22 @@ public final class JobMaster {
         return attempt(readerTask(subtask));
     }
 
+    /** Gives the aggregator the splits assigned, and those of readers that have finished. */
+    private void countSplits() {
+        int assigned = 0;
+        int finished = 0;
+        for (Map.Entry<Integer, Set<String>> owned : owners.entrySet()) {
+            assigned += owned.getValue().size();
+            if (states.get(readerTask(owned.getKey())) == TaskState.FINISHED) {
+                finished += owned.getValue().size();
+            }
+        }
+        aggregator.splits(assigned, finished);
+    }
+
     /** Publishes the current metrics; runs once per metrics interval while the job runs. */
     private void publish() {
+        countSplits();
         if (!status.isTerminal()) {
             int running = (int)
                     states.values().stream().filter(s -> s == TaskState.RUNNING).count();

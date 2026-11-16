@@ -283,7 +283,10 @@ runs, refreshed every `metricsInterval`.
 
 - **Collection.** Each operator counts its rows with one `LongAdder` increment per row and counter.
   Every task sends a snapshot of its counters to the job master once per `metricsInterval`, and a
-  final one with its final state; the job master sums them per node and for the job.
+  final one with its final state, from whichever worker it runs on; the job master sums them per
+  node and for the job. Snapshots hold totals, so a lost or late report makes the metrics stale,
+  never wrong. When a worker is lost, its tasks count with their last report: reports that arrive
+  later are ignored.
 - **Rows.** `rowsRead` is what the source emitted, `rowsWritten` what the sink wrote (for sinks that
   commit in two phases: what was committed), `rowsFiltered` and `rowsExpanded` what transforms
   dropped or added, `rowsInFlight` what was read but not yet taken by the sink, mostly rows in the
@@ -295,9 +298,16 @@ runs, refreshed every `metricsInterval`.
 - **Self time.** `selfTimeRatio` is the share of the running time a node spends in its own code,
   without the nodes after it. It is measured on every 16th read, so that the hot path does not read
   the clock for every row; for a sink with the write buffer it is the busy time of the write thread.
-- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue or on full network
-  buffers (something downstream is slow), `writerWaitMs` the time write threads waited for rows
-  (the source is slow).
+- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue (the target is slow),
+  `writerWaitMs` the time write threads waited for rows (the source is slow), `backpressuredMs`
+  the time tasks waited for network buffers (the tasks they send to are slower), also as
+  `backpressuredRatio` of the running time.
+- **Exchange.** `exchangedBytes` counts the bytes of rows tasks sent to other tasks; per node,
+  `bytesOut` is what the last node of a chain sent and `bytesIn` what the first node of the next
+  chain received.
+- **Queues and splits.** `queueDepth` and `queueCapacity` show how full the write queues of the
+  sinks are now. `splitsAssigned` counts the splits the enumerator gave out, `splitsFinished` those
+  of readers that have ended: readers do not report single splits.
 
 `AnalyzeText` prints the metrics the way `explain --analyze` shows a run:
 

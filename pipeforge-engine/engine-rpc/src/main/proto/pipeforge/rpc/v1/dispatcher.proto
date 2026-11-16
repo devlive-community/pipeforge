@@ -99,6 +99,23 @@ message JobMetrics {
   repeated NodeMetrics nodes = 3;
   int32 splits_total = 4;
   int32 splits_finished = 5;
+  int64 elapsed_ms = 6;               // 以下为作业级汇总，含义见指标目录
+  int64 rows_read = 7;
+  int64 rows_written = 8;
+  int64 rows_filtered = 9;
+  int64 rows_expanded = 10;
+  int64 rows_failed = 11;
+  int64 rows_in_flight = 12;
+  double read_rows_per_second = 13;
+  double write_rows_per_second = 14;
+  int64 reader_wait_ms = 15;
+  int64 writer_wait_ms = 16;
+  int64 back_pressured_ms = 17;
+  int64 exchanged_bytes = 18;
+  int32 queue_depth = 19;
+  int32 queue_capacity = 20;
+  int32 tasks_running = 21;
+  int32 parallelism = 22;
 }
 
 message ListJobsRequest {

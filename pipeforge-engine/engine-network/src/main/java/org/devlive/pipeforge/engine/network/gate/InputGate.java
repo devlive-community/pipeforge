@@ -167,9 +167,12 @@ public final class InputGate implements AutoCloseable {
                 channel.release();
                 continue;
             }
-            synchronized (this) {
-                buffers++;
-                bytes += buffer.size();
+            if (!buffer.isEvent()) {
+                // rows only, as the output counts them
+                synchronized (this) {
+                    buffers++;
+                    bytes += buffer.size();
+                }
             }
             return new Next(channel.index, buffer);
         }

@@ -140,6 +140,16 @@ final class AsyncWriteBuffer implements AutoCloseable {
         return producerWaitNanos.get();
     }
 
+    /** Batches in the queue now; callable from any thread. */
+    int depth() {
+        return queue.size();
+    }
+
+    /** The batches the queue holds. */
+    int capacity() {
+        return queue.size() + queue.remainingCapacity();
+    }
+
     /** Time the write thread spent writing and flushing. */
     long busyNanos() {
         return busyNanos.get();

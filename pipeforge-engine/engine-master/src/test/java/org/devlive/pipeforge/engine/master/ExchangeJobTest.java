@@ -178,6 +178,8 @@ class ExchangeJobTest {
         assertThat(result.metrics().rowsWritten()).isEqualTo(3000);
         assertThat(result.metrics().reconciled()).isTrue();
         assertThat(result.metrics().parallelism()).isEqualTo(5);
+        // the rows crossed tasks: what the source vertex sent is what the sink vertex received
+        JobMetricsCheck.exchange(result.metrics(), "src", "out", 6);
         assertThat(workers.values()).as("the channels cross workers").anySatisfy(w -> assertThat(
                         w.network.transport().openConnections())
                 .isPositive());

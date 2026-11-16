@@ -19,6 +19,8 @@ import java.util.Objects;
  * @param rowsExpanded extra rows a transform emitted when one row became several
  * @param selfTimeRatio share of the running time spent in the node's own code (0 to 1), averaged
  *     over its instances; -1 when unknown
+ * @param bytesIn bytes of rows the node received from other tasks, when it reads from the network
+ * @param bytesOut bytes of rows the node sent to other tasks, when it writes to the network
  */
 public record NodeMetrics(
         String node,
@@ -27,7 +29,9 @@ public record NodeMetrics(
         long rowsOut,
         long rowsFiltered,
         long rowsExpanded,
-        double selfTimeRatio) {
+        double selfTimeRatio,
+        long bytesIn,
+        long bytesOut) {
 
     public NodeMetrics {
         Objects.requireNonNull(node, "node");

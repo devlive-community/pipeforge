@@ -32,7 +32,7 @@ public final class MetricCatalog {
 
     static final Set<String> SCOPES = Set.of("job", "node");
     static final Set<String> TYPES = Set.of("counter", "gauge", "meter", "timer");
-    static final Set<String> UNITS = Set.of("rows", "ms", "rows/s", "ratio", "tasks");
+    static final Set<String> UNITS = Set.of("rows", "ms", "rows/s", "ratio", "bytes", "batches", "splits", "tasks");
     static final Set<String> LANGUAGES = Set.of("en-US", "zh-CN");
     private static final Pattern NAME = Pattern.compile("[a-z][a-zA-Z0-9]*");
 
