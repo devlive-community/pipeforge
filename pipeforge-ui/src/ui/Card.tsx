@@ -13,21 +13,23 @@ export function Card({
   title,
   description,
   actions,
+  flush = false,
   className,
   children,
 }: {
   title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  flush?: boolean;
   className?: string;
   children?: ReactNode;
 }) {
   return (
-    <section className={cx("rounded-card border border-border bg-surface p-4 shadow-card", className)}>
+    <section className={cx("workspace-card rounded-card border border-border bg-surface", !flush && "p-4", className)}>
       {title || actions ? (
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            {title ? <h2 className="text-sm font-semibold text-fg">{title}</h2> : null}
+            {title ? <h2 className="text-base font-semibold text-fg">{title}</h2> : null}
             {description ? <p className="mt-0.5 text-sm text-fg-muted">{description}</p> : null}
           </div>
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}

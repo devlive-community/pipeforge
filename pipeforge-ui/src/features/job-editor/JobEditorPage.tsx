@@ -5,7 +5,7 @@
  * project root for full license text.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MappingEditor } from "@/features/field-mapping/MappingEditor";
 import { useJobSchema } from "@/api/queries";
 import { useT } from "@/i18n";
@@ -18,9 +18,11 @@ import {
   cx,
   DagCanvas,
   FileButton,
-  PageHeader,
+  Icon,
+  IconButton,
   SegmentedControl,
-  Spinner,
+  LoadingLogo,
+  LoadingPanel,
   Splitter,
   Tabs,
   type CodeEditorHandle,
@@ -55,6 +57,13 @@ export function JobEditorPage() {
   const schema = useJobSchema();
   const { checking, validation, plan } = useJobCheck(definition);
   const [tab, setTab] = useState("problems");
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [view, setView] = useState("yaml");
+  const [focusedLine, setFocusedLine] = useState<{ number: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (focusedLine) editor.current?.focusLine(focusedLine.number);
+  }, [focusedLine]);
 
   // the mapping editor keeps showing the last valid plan while the job is being changed
   const current = plan?.data?.plan;
@@ -99,10 +108,16 @@ export function JobEditorPage() {
   const activeTab = tab === "mapping" && !mapper ? "problems" : tab;
 
   const errorCount = problems.filter((p) => p.severity === "error").length;
+  useEffect(() => {
+    if (errorCount === 0 && !validation.isError) return;
+    setResultsOpen(true);
+    setTab((selected) => (selected === "mapping" ? selected : "problems"));
+  }, [errorCount, validation.isError]);
+
   const status =
     definition.trim() === "" ? null : checking ? (
-      <span className="flex items-center gap-1.5 text-sm text-fg-muted">
-        <Spinner size={14} />
+      <span role="status" className="flex items-center gap-1.5 text-sm text-fg-muted">
+        <LoadingLogo size={18} />
         {t("editor.checking")}
       </span>
     ) : validation.data?.valid ? (
@@ -112,64 +127,119 @@ export function JobEditorPage() {
     ) : null;
 
   const name = /^name:\s*(\S+)/m.exec(definition)?.[1] ?? "job";
-  const goTo = (line: number) => editor.current?.focusLine(line);
+  const goTo = (line: number) => {
+    setView("yaml");
+    setFocusedLine({ number: line });
+  };
+
+  function openResult(id: string) {
+    setTab(id);
+    setResultsOpen(true);
+  }
 
   return (
-    <div className="flex h-[calc(100dvh-7.5rem)] min-h-[36rem] flex-col">
-      <PageHeader
-        title={t("editor.title")}
-        description={t("editor.description")}
-        actions={
-          <>
-            {status}
-            <FileButton accept=".yaml,.yml,.json" onFile={(_, text) => setDefinition(text)}>
-              {t("editor.import")}
-            </FileButton>
-            <Button icon="download" onClick={() => download(`${name}.yaml`, definition)}>
-              {t("editor.export")}
-            </Button>
-            <Button icon="undo" variant="ghost" onClick={() => setDefinition(EXAMPLE_JOB)}>
-              {t("editor.reset")}
-            </Button>
-          </>
-        }
-      />
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+    <div className="editor-workspace">
+      <header className="editor-heading">
+        <div className="editor-identity">
+          <h1>{t("editor.title")}</h1>
+          <span className="editor-filename">{name}.yaml</span>
+        </div>
+        <div className="workspace-page-actions">
+          {status}
+          <FileButton accept=".yaml,.yml,.json" onFile={(_, text) => setDefinition(text)}>
+            {t("editor.import")}
+          </FileButton>
+          <Button icon="download" onClick={() => download(`${name}.yaml`, definition)}>
+            {t("editor.export")}
+          </Button>
+          <Button icon="undo" variant="ghost" onClick={() => setDefinition(EXAMPLE_JOB)}>
+            {t("editor.reset")}
+          </Button>
+        </div>
+      </header>
+      <Card flush className="editor-card flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="editor-view-picker">
+          <SegmentedControl
+            label={t("editor.view")}
+            value={view}
+            onChange={setView}
+            segments={[
+              { id: "yaml", label: "YAML" },
+              { id: "graph", label: t("editor.graph") },
+            ]}
+          />
+        </div>
         <Splitter
-          className={cx("min-h-0 overflow-hidden", activeTab === "mapping" ? "flex-[2]" : "flex-[3]")}
+          className={cx("editor-panes min-h-0 flex-1 overflow-hidden", view === "graph" && "editor-show-graph")}
           label={t("editor.splitter")}
-          initial={55}
+          initial={57}
           first={
-            <CodeEditor
-              ref={editor}
-              value={definition}
-              onChange={setDefinition}
-              label={t("editor.editorLabel")}
-              diagnostics={diagnostics}
-              completion={completion}
-            />
+            <section className="editor-pane">
+              <h2 className="editor-pane-title">
+                <Icon name="code" size={15} />
+                {t("editor.editorLabel")}
+              </h2>
+              <div className="min-h-0 flex-1">
+                <CodeEditor
+                  ref={editor}
+                  value={definition}
+                  onChange={setDefinition}
+                  label={t("editor.editorLabel")}
+                  diagnostics={diagnostics}
+                  completion={completion}
+                />
+              </div>
+            </section>
           }
           second={
-            <DagCanvas
-              nodes={nodes}
-              label={t("editor.graphLabel")}
-              labels={{ zoomIn: t("editor.zoomIn"), zoomOut: t("editor.zoomOut"), fit: t("editor.fit") }}
-              onSelect={(id) => {
-                const selected = structure.find((n) => n.id === id);
-                if (selected?.type === "field-mapper") {
-                  setChosenMapper(id);
-                  setTab("mapping");
-                }
-                if (selected?.line) goTo(selected.line);
-              }}
-            />
+            <section className="editor-pane">
+              <h2 className="editor-pane-title">
+                <Icon name="topology" size={15} />
+                {t("editor.graph")}
+              </h2>
+              <div className="relative min-h-0 flex-1">
+                {nodes.length > 0 ? (
+                  <DagCanvas
+                    nodes={nodes}
+                    label={t("editor.graphLabel")}
+                    labels={{ zoomIn: t("editor.zoomIn"), zoomOut: t("editor.zoomOut"), fit: t("editor.fit") }}
+                    onSelect={(id) => {
+                      const selected = structure.find((n) => n.id === id);
+                      if (selected?.type === "field-mapper") {
+                        setChosenMapper(id);
+                        openResult("mapping");
+                      }
+                      if (selected?.line) goTo(selected.line);
+                    }}
+                  />
+                ) : (
+                  <div className="dag-surface flex h-full min-h-48 items-center justify-center p-4 text-center text-sm text-fg-muted">
+                    {t("editor.graphEmpty")}
+                  </div>
+                )}
+              </div>
+            </section>
           }
         />
         <Tabs
-          className={cx("min-h-0 border-t border-border", activeTab === "mapping" ? "flex-[5]" : "flex-[2]")}
+          className={cx(
+            "editor-results border-t border-border",
+            resultsOpen && (activeTab === "mapping" ? "editor-results-mapping" : "editor-results-open"),
+          )}
+          collapsed={!resultsOpen}
+          panelAction={(panelId) => (
+            <IconButton
+              className="mx-2"
+              icon={resultsOpen ? "chevronDown" : "chevronUp"}
+              label={t(resultsOpen ? "editor.hideResults" : "editor.showResults")}
+              aria-controls={panelId}
+              aria-expanded={resultsOpen}
+              onClick={() => setResultsOpen((open) => !open)}
+            />
+          )}
           label={t("editor.panels")}
           value={activeTab}
-          onChange={setTab}
+          onChange={openResult}
           tabs={[
             {
               id: "problems",
@@ -185,10 +255,7 @@ export function JobEditorPage() {
               ) : definition.trim() === "" ? (
                 <p className="p-4 text-sm text-fg-muted">{t("editor.emptyDefinition")}</p>
               ) : !validation.data ? (
-                <p className="flex items-center gap-2 p-4 text-sm text-fg-muted">
-                  <Spinner size={14} />
-                  {t("editor.checking")}
-                </p>
+                <LoadingPanel />
               ) : (
                 <ProblemList problems={problems} onGoTo={goTo} />
               ),
@@ -198,6 +265,8 @@ export function JobEditorPage() {
               label: t("editor.plan"),
               content: plan?.data?.plan ? (
                 <PlanView plan={plan.data.plan} />
+              ) : plan?.isFetching ? (
+                <LoadingPanel />
               ) : (
                 <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
               ),
@@ -238,6 +307,8 @@ export function JobEditorPage() {
               label: t("editor.text"),
               content: plan?.data ? (
                 <pre className="p-4 font-mono text-xs leading-relaxed text-fg">{plan.data.text}</pre>
+              ) : plan?.isFetching ? (
+                <LoadingPanel />
               ) : (
                 <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
               ),

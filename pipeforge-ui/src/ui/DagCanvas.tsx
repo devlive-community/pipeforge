@@ -27,7 +27,7 @@ const MIN_SCALE = 0.3;
 const MAX_SCALE = 2;
 const PADDING = 24;
 /** Room above the graph for the toolbar. */
-const TOP = 56;
+const TOP = 53;
 
 /**
  * A read-only picture of a job graph: nodes in layers from left to right with curved edges. Drag
@@ -64,7 +64,8 @@ export function DagCanvas({
       MIN_SCALE,
       Math.min(1, (area.width - 2 * PADDING) / width, (area.height - TOP - PADDING) / height),
     );
-    setView({ scale, x: Math.max(PADDING, (area.width - width * scale) / 2), y: TOP });
+    const y = Math.max(TOP, (area.height + TOP - height * scale) / 2 - PADDING);
+    setView({ scale, x: Math.max(PADDING, (area.width - width * scale) / 2), y });
   }, [width, height]);
 
   // Fit when the graph changes and when the area is resized (window, splitter).
@@ -100,7 +101,7 @@ export function DagCanvas({
   };
 
   return (
-    <div ref={box} className={cx("relative h-full min-h-48 overflow-hidden bg-canvas", className)}>
+    <div ref={box} className={cx("dag-surface relative h-full min-h-48 overflow-hidden", className)}>
       <div
         role="group"
         aria-label={label}
@@ -124,8 +125,8 @@ export function DagCanvas({
                     key={`${input}->${node.id}`}
                     d={edgePath(from, to)}
                     fill="none"
-                    stroke="var(--pf-border-strong)"
-                    strokeWidth={1.5}
+                    stroke="var(--dag-line)"
+                    strokeWidth={2}
                   />
                 ) : null;
               }),
@@ -139,9 +140,10 @@ export function DagCanvas({
                 key={node.id}
                 type="button"
                 aria-label={node.label}
+                data-kind={node.kind}
                 onClick={() => onSelect?.(node.id)}
                 className={cx(
-                  "pointer-events-auto absolute flex items-center gap-2 rounded-card border bg-surface px-3 text-left shadow-card",
+                  "dag-node pointer-events-auto absolute flex items-center gap-2 rounded-card border bg-surface px-3 text-left shadow-card",
                   "transition-colors duration-fast ease-out hover:border-primary",
                   node.status === "error"
                     ? "border-danger"
@@ -151,7 +153,7 @@ export function DagCanvas({
                 )}
                 style={{ left: p.x, top: p.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
               >
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-surface-2 text-fg-muted">
+                <span className="dag-node-icon flex size-8 shrink-0 items-center justify-center rounded-control">
                   <Icon name={KIND_ICONS[node.kind]} />
                 </span>
                 <span className="min-w-0">

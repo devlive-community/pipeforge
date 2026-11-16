@@ -36,7 +36,7 @@ export function Table<T>({
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-b border-border text-left text-xs text-fg-muted">
+          <tr className="border-b border-border bg-surface-2 text-left text-xs text-fg-muted">
             {columns.map((column) => (
               <th key={column.key} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                 {column.header}
@@ -55,7 +55,7 @@ export function Table<T>({
             rows.map((row, index) => (
               <tr key={rowKey(row, index)} className="border-b border-border last:border-b-0">
                 {columns.map((column) => (
-                  <td key={column.key} className={cx("px-3 py-1.5 align-top text-fg", column.className)}>
+                  <td key={column.key} className={cx("px-3 py-2 align-top text-fg", column.className)}>
                     {column.cell(row)}
                   </td>
                 ))}

@@ -10,6 +10,7 @@ import { ErrorCodesPage } from "@/features/errors/ErrorCodesPage";
 import { NotFoundPage } from "@/features/not-found/NotFoundPage";
 import { OverviewPage } from "@/features/overview/OverviewPage";
 import { PluginsPage } from "@/features/plugins/PluginsPage";
+import { LoadingPanel } from "@/ui/LoadingPanel";
 import { Shell } from "./Shell";
 
 /** The pages of the Web UI; every page renders inside the shell. */
@@ -17,6 +18,7 @@ export const ROUTES: RouteObject[] = [
   {
     path: "/",
     element: <Shell />,
+    hydrateFallbackElement: <LoadingPanel className="min-h-dvh" />,
     children: [
       { index: true, element: <OverviewPage /> },
       {

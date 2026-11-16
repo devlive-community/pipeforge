@@ -6,14 +6,19 @@
  */
 
 import { useT } from "@/i18n";
-import { Badge, Button, Empty, Icon } from "@/ui";
+import { Badge, Button, Icon } from "@/ui";
 import type { Problem } from "./problems";
 
 /** The problems of the job; problems with a line can be jumped to. */
 export function ProblemList({ problems, onGoTo }: { problems: Problem[]; onGoTo: (line: number) => void }) {
   const t = useT();
   if (problems.length === 0) {
-    return <Empty icon="circleCheck" title={t("editor.noProblems")} />;
+    return (
+      <p className="flex items-center gap-2 px-4 py-3 text-sm text-fg-muted">
+        <Icon name="circleCheck" className="text-success" />
+        {t("editor.noProblems")}
+      </p>
+    );
   }
   return (
     <ul className="divide-y divide-border">

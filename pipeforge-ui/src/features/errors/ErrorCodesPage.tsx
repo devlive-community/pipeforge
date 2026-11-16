@@ -10,7 +10,8 @@ import { useMemo, useState } from "react";
 import { useErrorCodes } from "@/api/queries";
 import { useScrollToHash } from "@/app/useScrollToHash";
 import { useT } from "@/i18n";
-import { Badge, Card, Empty, Input, PageHeader, SegmentedControl, Skeleton, type BadgeTone } from "@/ui";
+import { Badge, Card, Empty, Input, PageHeader, SegmentedControl, type BadgeTone } from "@/ui";
+import { LoadingPanel } from "@/ui/LoadingPanel";
 
 type ErrorCodeInfo = components["schemas"]["ErrorCodeInfo"];
 type Kind = "FATAL" | "TRANSIENT" | "DATA";
@@ -41,7 +42,7 @@ function ErrorCodeEntry({ entry }: { entry: ErrorCodeInfo }) {
     <article
       id={code.toLowerCase()}
       tabIndex={-1}
-      className="scroll-mt-4 rounded-card border border-border p-4 outline-none target:border-primary"
+      className="scroll-mt-4 rounded-card border border-border bg-surface p-4 outline-none target:border-primary"
     >
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="font-mono text-sm font-semibold text-fg">{code}</h2>
@@ -97,25 +98,29 @@ export function ErrorCodesPage() {
     <>
       <PageHeader title={t("errors.title")} description={t("errors.description")} />
       <div className="max-w-4xl space-y-3">
-        <Input
-          label={t("errors.search")}
-          hideLabel
-          icon="search"
-          placeholder={t("errors.search")}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <SegmentedControl
-          label={t("errors.category")}
-          value={category}
-          onChange={setCategory}
-          segments={[{ id: "all", label: t("errors.all") }, ...categories.map((c) => ({ id: c, label: c }))]}
-        />
+        <div className="filter-panel">
+          <Input
+            label={t("errors.search")}
+            hideLabel
+            icon="search"
+            placeholder={t("errors.search")}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <SegmentedControl
+            label={t("errors.category")}
+            value={category}
+            onChange={setCategory}
+            segments={[{ id: "all", label: t("errors.all") }, ...categories.map((c) => ({ id: c, label: c }))]}
+          />
+        </div>
         <p className="text-sm text-fg-muted" aria-live="polite">
           {t("errors.count", { count: visible.length })}
         </p>
         {codes.isPending ? (
-          <Skeleton className="h-40 w-full" />
+          <Card>
+            <LoadingPanel />
+          </Card>
         ) : visible.length === 0 ? (
           <Card>
             <Empty icon="codes" title={t("errors.none")} />

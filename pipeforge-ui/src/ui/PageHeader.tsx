@@ -18,12 +18,12 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <header className="workspace-page-header">
       <div>
-        <h1 className="text-xl font-semibold text-fg">{title}</h1>
-        {description ? <p className="mt-1 text-sm text-fg-muted">{description}</p> : null}
+        <h1 className="workspace-page-title">{title}</h1>
+        {description ? <p className="workspace-page-description">{description}</p> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="workspace-page-actions">{actions}</div> : null}
     </header>
   );
 }

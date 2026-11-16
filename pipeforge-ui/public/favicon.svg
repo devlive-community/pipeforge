@@ -4,10 +4,20 @@
   Licensed under the MIT License. See the LICENSE file in the
   project root for full license text.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <style>:root { color: #4f46e5 } @media (prefers-color-scheme: dark) { :root { color: #818cf8 } }</style>
-  <circle cx="5" cy="12" r="3" fill="currentColor" />
-  <circle cx="19" cy="6" r="3" fill="currentColor" opacity="0.7" />
-  <circle cx="19" cy="18" r="3" fill="currentColor" opacity="0.7" />
-  <path d="M8 12h4l4-5M12 12l4 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">
+  <title>PipeForge</title>
+  <defs>
+    <linearGradient id="inlet" x1="14" y1="24" x2="53" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a093fc" />
+      <stop offset="1" stop-color="#6555db" />
+    </linearGradient>
+    <linearGradient id="outlet" x1="14" y1="64" x2="74" y2="23" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4635c9" />
+      <stop offset="1" stop-color="#7664f3" />
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-width="14" stroke-linecap="round">
+    <path d="M14 24C30 24 42 29 51 44" stroke="url(#inlet)" />
+    <path d="M14 64C33 64 40 60 51 44S65 24 74 24" stroke="url(#outlet)" />
+  </g>
 </svg>

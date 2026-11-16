@@ -8,7 +8,7 @@
 import type { ComponentProps } from "react";
 import { cx } from "./cx";
 import { Icon, type IconName } from "./Icon";
-import { Spinner } from "./Spinner";
+import { LoadingLogo } from "./LoadingLogo";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -38,7 +38,7 @@ export function buttonClass(variant: ButtonVariant = "secondary", size: ButtonSi
 }
 
 /**
- * A button. While `loading` it shows a spinner, is disabled and reports aria-busy; state is
+ * A button. While `loading` it shows the loading logo, is disabled and reports aria-busy; state is
  * shown with color and opacity transitions only, never with a ripple.
  */
 export function Button({
@@ -65,7 +65,11 @@ export function Button({
       className={buttonClass(variant, size, className)}
       {...rest}
     >
-      {loading ? <Spinner /> : icon ? <Icon name={icon} /> : null}
+      {loading ? (
+        <LoadingLogo className={variant === "primary" || variant === "danger" ? "loading-logo-inverse" : undefined} />
+      ) : icon ? (
+        <Icon name={icon} />
+      ) : null}
       {children}
     </button>
   );

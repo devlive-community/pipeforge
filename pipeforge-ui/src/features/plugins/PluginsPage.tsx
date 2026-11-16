@@ -9,7 +9,8 @@ import type { components } from "@pipeforge/client";
 import { useSearchParams } from "react-router";
 import { useComponent, usePlugins } from "@/api/queries";
 import { useT } from "@/i18n";
-import { Badge, Button, Card, Empty, OptionForm, PageHeader, Skeleton, type OptionField } from "@/ui";
+import { Badge, Button, Card, Empty, OptionForm, PageHeader, type OptionField } from "@/ui";
+import { LoadingPanel } from "@/ui/LoadingPanel";
 
 type Kind = "source" | "transform" | "sink";
 type Plugin = components["schemas"]["PluginInfo"];
@@ -87,10 +88,7 @@ function ComponentDetails({ type, identifier, plugin }: { type: Kind; identifier
       description={plugin}
     >
       {component.isPending ? (
-        <div className="space-y-2">
-          <Skeleton className="h-5 w-2/3" />
-          <Skeleton className="h-5 w-1/2" />
-        </div>
+        <LoadingPanel className="min-h-24" />
       ) : component.isError ? (
         <p className="text-sm text-danger">{(component.error as Error).message}</p>
       ) : info ? (
@@ -152,7 +150,9 @@ export function PluginsPage() {
     <>
       <PageHeader title={t("plugins.title")} description={t("plugins.description")} />
       {plugins.isPending ? (
-        <Skeleton className="h-40 w-full" />
+        <Card>
+          <LoadingPanel />
+        </Card>
       ) : list.length === 0 ? (
         <Card>
           <Empty icon="plug" title={t("plugins.none")} description={t("plugins.noneHint")} />
@@ -169,7 +169,7 @@ export function PluginsPage() {
               />
             ))}
           </div>
-          <div className="lg:sticky lg:top-4">
+          <div className="lg:sticky lg:top-[calc(var(--workspace-header)+1rem)]">
             {type && identifier && plugin ? (
               <ComponentDetails type={type} identifier={identifier} plugin={plugin} />
             ) : (

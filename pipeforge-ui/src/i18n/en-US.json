@@ -1,5 +1,6 @@
 {
   "app": {
+    "loading": "Loading…",
     "name": "PipeForge",
     "skipToContent": "Skip to content",
     "mainNavigation": "Main navigation"
@@ -19,6 +20,11 @@
     "language": "Language"
   },
   "overview": {
+    "workflow": "Design your data pipeline",
+    "workflowHint": "Build a job in YAML, check its configuration, and inspect how data flows through each stage.",
+    "workflowAction": "Open job editor",
+    "resources": "Installed resources",
+
     "title": "Overview",
     "description": "The server this UI is connected to and what is installed on it.",
     "server": "Server",
@@ -47,13 +53,18 @@
     "back": "Back to the overview"
   },
   "editor": {
+    "view": "Editor view",
+    "showResults": "Show results",
+    "hideResults": "Hide results",
+
+    "graphEmpty": "Add a source to see the job topology.",
     "title": "Job editor",
     "description": "Write a job in YAML; it is validated while you type and its plan is shown once it is valid.",
     "import": "Import",
     "export": "Export",
     "reset": "Load the example",
     "editorLabel": "Job definition (YAML)",
-    "graph": "Graph",
+    "graph": "Topology",
     "graphLabel": "Graph of the job",
     "splitter": "Resize the editor and the graph",
     "zoomIn": "Zoom in",

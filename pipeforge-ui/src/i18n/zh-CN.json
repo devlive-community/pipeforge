@@ -1,5 +1,6 @@
 {
   "app": {
+    "loading": "正在加载…",
     "name": "PipeForge",
     "skipToContent": "跳到正文",
     "mainNavigation": "主导航"
@@ -19,6 +20,11 @@
     "language": "语言"
   },
   "overview": {
+    "workflow": "设计你的数据管道",
+    "workflowHint": "用 YAML 编写作业，检查配置，并查看数据如何流经各个节点。",
+    "workflowAction": "打开作业编辑器",
+    "resources": "已安装的资源",
+
     "title": "概览",
     "description": "当前连接的服务以及服务上安装的内容。",
     "server": "服务",
@@ -47,13 +53,18 @@
     "back": "返回概览"
   },
   "editor": {
+    "view": "编辑器视图",
+    "showResults": "展开结果",
+    "hideResults": "收起结果",
+
+    "graphEmpty": "添加数据源后即可查看作业拓扑。",
     "title": "作业编辑器",
     "description": "用 YAML 编写作业；输入时实时校验，作业合法后显示计划。",
     "import": "导入",
     "export": "导出",
     "reset": "加载示例",
     "editorLabel": "作业定义（YAML）",
-    "graph": "图",
+    "graph": "拓扑",
     "graphLabel": "作业的图",
     "splitter": "调整编辑器和图的宽度",
     "zoomIn": "放大",
@@ -105,9 +116,9 @@
       "default": "默认值"
     },
     "kinds": {
-      "source": "Source",
-      "transform": "Transform",
-      "sink": "Sink"
+      "source": "数据源",
+      "transform": "转换",
+      "sink": "目标"
     },
     "schemaOf": "{node} 输出 {table}",
     "receives": "{node} 接收 {table}",

@@ -110,6 +110,7 @@ describe("JobEditorPage", () => {
     expect(await screen.findByText("Valid", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(requests.some((r) => r.path === "/api/v1/jobs/validate")).toBe(true);
     expect(requests.some((r) => r.path === "/api/v1/jobs/schema")).toBe(true);
+    await userEvent.click(screen.getByRole("tab", { name: /Problems/ }));
     const problems = screen.getByRole("tabpanel");
     expect(
       within(problems).getByText("env.sink.batch-size is not an option of any sink in the job"),

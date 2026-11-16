@@ -26,8 +26,8 @@ export { OptionForm, type OptionField, type OptionFormLabels } from "./OptionFor
 export { PageHeader } from "./PageHeader";
 export { RowButton } from "./RowButton";
 export { SegmentedControl, type Segment } from "./SegmentedControl";
-export { Skeleton } from "./Skeleton";
-export { Spinner } from "./Spinner";
+export { LoadingLogo } from "./LoadingLogo";
+export { LoadingPanel } from "./LoadingPanel";
 export { Splitter } from "./Splitter";
 export { Table, type Column } from "./Table";
 export { Tabs, type TabItem } from "./Tabs";

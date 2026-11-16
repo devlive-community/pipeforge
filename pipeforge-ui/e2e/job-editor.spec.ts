@@ -32,6 +32,9 @@ test("validates while typing, marks the problem and shows the plan once valid", 
   await page.goto("/editor");
   await expect(page.getByText("Valid", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "print, sink console" })).toBeVisible();
+  await expect(page.getByRole("tabpanel")).toBeHidden();
+  await page.getByRole("tab", { name: "Plan" }).click();
+  await page.getByRole("button", { name: "Hide results" }).click();
 
   await replaceDefinition(page, EXAMPLE_JOB.replace("type: console", "type: kafka"));
   await expect(page.getByText("1 problem(s)")).toBeVisible();
@@ -78,4 +81,22 @@ test("keeps the draft across reloads and exports it", async ({ page }) => {
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export" }).click();
   expect((await download).suggestedFilename()).toBe("kept-draft.yaml");
+});
+
+test("switches views on a narrow screen and jumps from topology to YAML", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/editor");
+  await expect(page.getByText("Valid", { exact: true })).toBeVisible();
+  const yaml = page.getByRole("textbox", { name: "Job definition (YAML)" });
+  await expect(yaml).toBeVisible();
+  await page.getByRole("radio", { name: "Topology" }).click();
+  await expect(yaml).toBeHidden();
+  await page.getByRole("button", { name: "print, sink console" }).click();
+  await expect(yaml).toBeFocused();
+  await expect(page.locator(".cm-activeLine")).toHaveText("  - id: print");
+  await expect(page.getByRole("button", { name: "Show results" })).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("button", { name: "Show results" }).click();
+  await expect(page.getByRole("tabpanel")).toContainText("No problems");
+  await page.getByRole("button", { name: "Hide results" }).click();
+  await expect(page.getByRole("tabpanel")).toBeHidden();
 });

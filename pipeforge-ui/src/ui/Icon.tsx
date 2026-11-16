@@ -8,6 +8,9 @@
 import type { SVGProps } from "react";
 
 const paths = {
+  chevronDown: "m6 9 6 6 6-6",
+  chevronUp: "m6 15 6-6 6 6",
+  topology: "M4 4h5v5H4zM15 15h5v5h-5zM15 4h5v5h-5zM9 6.5h6m-8.5 2.5v6a2.5 2.5 0 0 0 2.5 2.5h6",
   home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
   server: "M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01",
   plug: "M9 2v6m6-6v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5",

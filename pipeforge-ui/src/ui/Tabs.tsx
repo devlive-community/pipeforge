@@ -27,12 +27,16 @@ export function Tabs({
   value,
   onChange,
   className,
+  collapsed = false,
+  panelAction,
 }: {
   tabs: TabItem[];
   label: string;
   value?: string;
   onChange?: (id: string) => void;
   className?: string;
+  collapsed?: boolean;
+  panelAction?: (panelId: string) => ReactNode;
 }) {
   const id = useId();
   const [own, setOwn] = useState(tabs[0]?.id ?? "");
@@ -65,44 +69,48 @@ export function Tabs({
   const panel = tabs.find((t) => t.id === selected) ?? tabs[0];
   return (
     <div className={cx("flex min-h-0 flex-col", className)}>
-      <div
-        role="tablist"
-        aria-label={label}
-        onKeyDown={onKey}
-        className="flex shrink-0 gap-1 border-b border-border px-2"
-      >
-        {tabs.map((tab, index) => {
-          const active = tab.id === panel?.id;
-          return (
-            <button
-              key={tab.id}
-              ref={(element) => {
-                refs.current[index] = element;
-              }}
-              type="button"
-              role="tab"
-              id={`${id}-tab-${tab.id}`}
-              aria-selected={active}
-              aria-controls={`${id}-panel`}
-              tabIndex={active ? 0 : -1}
-              onClick={() => select(index)}
-              className={cx(
-                "-mb-px flex h-control-md items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 text-sm",
-                "transition-colors duration-fast ease-out",
-                active ? "border-primary font-medium text-fg" : "border-transparent text-fg-muted hover:text-fg",
-              )}
-            >
-              {tab.label}
-              {tab.badge}
-            </button>
-          );
-        })}
+      <div className="flex shrink-0 items-center border-b border-border bg-surface-2">
+        <div
+          role="tablist"
+          aria-label={label}
+          onKeyDown={onKey}
+          className="flex min-w-0 flex-1 gap-1 overflow-x-auto px-2"
+        >
+          {tabs.map((tab, index) => {
+            const active = tab.id === panel?.id;
+            return (
+              <button
+                key={tab.id}
+                ref={(element) => {
+                  refs.current[index] = element;
+                }}
+                type="button"
+                role="tab"
+                id={`${id}-tab-${tab.id}`}
+                aria-selected={active}
+                aria-controls={`${id}-panel`}
+                tabIndex={active ? 0 : -1}
+                onClick={() => select(index)}
+                className={cx(
+                  "-mb-px flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 text-sm",
+                  "transition-colors duration-fast ease-out",
+                  active ? "border-primary font-medium text-fg" : "border-transparent text-fg-muted hover:text-fg",
+                )}
+              >
+                {tab.label}
+                {tab.badge}
+              </button>
+            );
+          })}
+        </div>
+        {panelAction?.(`${id}-panel`)}
       </div>
       <div
         role="tabpanel"
         id={`${id}-panel`}
         aria-labelledby={panel ? `${id}-tab-${panel.id}` : undefined}
         tabIndex={0}
+        hidden={collapsed}
         className="min-h-0 flex-1 overflow-auto"
       >
         {panel?.content}

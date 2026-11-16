@@ -7,7 +7,7 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Badge, Button, Card, DescriptionList, Empty, PageHeader, Skeleton } from "@/ui";
+import { Badge, Button, Card, DescriptionList, Empty, LoadingPanel, PageHeader } from "@/ui";
 
 describe("Button", () => {
   it("clicks, and is disabled and busy while loading", async () => {
@@ -25,6 +25,7 @@ describe("Button", () => {
     const button = screen.getByRole("button", { name: "Save" });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button.querySelector("img")).toHaveAttribute("src", "/pipeforge-loading.svg");
     await userEvent.click(button);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
@@ -54,7 +55,7 @@ describe("display components", () => {
           <DescriptionList items={[{ label: "Version", value: "0.1.0" }]} />
         </Card>
         <Empty title="Nothing here" description="Add something" />
-        <Skeleton className="h-4" />
+        <LoadingPanel />
       </>,
     );
     expect(screen.getByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
@@ -63,6 +64,6 @@ describe("display components", () => {
     expect(screen.getByText("0.1.0").tagName).toBe("DD");
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Nothing here" })).toBeInTheDocument();
-    expect(document.querySelector('[aria-hidden="true"].animate-pulse-soft')).not.toBeNull();
+    expect(screen.getByRole("status").querySelector("img")).toHaveAttribute("src", "/pipeforge-loading.svg");
   });
 });

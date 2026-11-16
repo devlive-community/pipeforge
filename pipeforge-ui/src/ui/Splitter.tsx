@@ -51,7 +51,7 @@ export function Splitter({
 
   return (
     <div ref={container} className={cx("flex min-h-0 min-w-0", className)}>
-      <div className="min-w-0" style={{ flexBasis: `${size}%` }}>
+      <div className="splitter-pane min-w-0" style={{ flexBasis: `${size}%` }}>
         {first}
       </div>
       <div
@@ -65,9 +65,9 @@ export function Splitter({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onKeyDown={onKey}
-        className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors duration-fast ease-out hover:bg-primary focus-visible:bg-primary"
+        className="splitter-divider w-1.5 shrink-0 cursor-col-resize bg-border transition-colors duration-fast ease-out hover:bg-primary focus-visible:bg-primary"
       />
-      <div className="min-w-0 flex-1">{second}</div>
+      <div className="splitter-pane min-w-0 flex-1">{second}</div>
     </div>
   );
 }

@@ -10,7 +10,8 @@ import { useMemo, useState } from "react";
 import { useFunctions } from "@/api/queries";
 import { useScrollToHash } from "@/app/useScrollToHash";
 import { useT } from "@/i18n";
-import { Badge, Button, Card, Empty, Input, PageHeader, SegmentedControl, Skeleton } from "@/ui";
+import { Badge, Button, Card, Empty, Input, PageHeader, SegmentedControl } from "@/ui";
+import { LoadingPanel } from "@/ui/LoadingPanel";
 import { INITIAL_PLAYGROUND, Playground, type PlaygroundState } from "./Playground";
 
 type FunctionInfo = components["schemas"]["FunctionInfo"];
@@ -23,7 +24,7 @@ function FunctionCard({ fn, onTry }: { fn: FunctionInfo; onTry: (expression: str
     <article
       id={name.toLowerCase()}
       tabIndex={-1}
-      className="scroll-mt-4 rounded-card border border-border p-4 outline-none target:border-primary"
+      className="scroll-mt-4 rounded-card border border-border bg-surface p-4 outline-none target:border-primary"
     >
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="font-mono text-sm font-semibold text-fg">{name}</h2>
@@ -92,28 +93,32 @@ export function FunctionsPage() {
       <PageHeader title={t("functions.title")} description={t("functions.description")} />
       <div className="grid items-start gap-4 xl:grid-cols-[1fr_minmax(0,32rem)]">
         <div className="min-w-0 space-y-3">
-          <Input
-            label={t("functions.search")}
-            hideLabel
-            icon="search"
-            placeholder={t("functions.search")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <SegmentedControl
-            label={t("functions.category")}
-            value={category}
-            onChange={setCategory}
-            segments={[
-              { id: "all", label: t("functions.all") },
-              ...CATEGORIES.map((c) => ({ id: c, label: t(`functions.categories.${c}`) })),
-            ]}
-          />
+          <div className="filter-panel">
+            <Input
+              label={t("functions.search")}
+              hideLabel
+              icon="search"
+              placeholder={t("functions.search")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <SegmentedControl
+              label={t("functions.category")}
+              value={category}
+              onChange={setCategory}
+              segments={[
+                { id: "all", label: t("functions.all") },
+                ...CATEGORIES.map((c) => ({ id: c, label: t(`functions.categories.${c}`) })),
+              ]}
+            />
+          </div>
           <p className="text-sm text-fg-muted" aria-live="polite">
             {t("functions.count", { count: visible.length })}
           </p>
           {functions.isPending ? (
-            <Skeleton className="h-40 w-full" />
+            <Card>
+              <LoadingPanel />
+            </Card>
           ) : visible.length === 0 ? (
             <Card>
               <Empty icon="functions" title={t("functions.none")} />
@@ -130,7 +135,7 @@ export function FunctionsPage() {
             </div>
           )}
         </div>
-        <div className="xl:sticky xl:top-4">
+        <div className="xl:sticky xl:top-[calc(var(--workspace-header)+1rem)]">
           <Playground state={playground} onChange={setPlayground} functions={completable} />
         </div>
       </div>

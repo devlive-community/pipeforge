@@ -60,7 +60,7 @@ pipeforge-ui/
 | `DropdownMenu` | 由触发按钮打开的菜单；传入 `value` 时为单选菜单项 |
 | `Card`、`PageHeader` | 页面结构 |
 | `Badge`、`DescriptionList` | 状态标签和“标签—取值”列表 |
-| `Empty`、`Skeleton` | 空状态、错误状态和加载状态 |
+| `Empty`、`LoadingPanel`、`LoadingLogo` | 空状态、错误状态和品牌加载提示 |
 | `Tabs`、`Splitter` | 支持方向键切换的标签页；两栏布局，分隔条可拖动，也可用键盘移动 |
 | `Table` | 带说明文字和空状态文本的数据表格 |
 | `Input` | 带标签的文本框，可带图标；错误信息与输入框一起被读出；标签可以只对辅助技术可见 |
@@ -103,6 +103,8 @@ pnpm --filter @pipeforge/ui test          # UI 规则扫描、类型检查和 Vi
 pnpm --filter @pipeforge/ui e2e           # 针对生产构建的 Playwright 冒烟测试
 pnpm --filter @pipeforge/ui screenshots   # 文档截图：浅色和深色、en-US 和 zh-CN
 ```
+
+工作台使用共享主题令牌。页面和 API 加载时，`LoadingPanel` 显示 PipeForge 标志动画。系统启用减少动态效果时显示静态标志。
 
 开发服务器把 `/api` 转发到 `PIPEFORGE_SERVER`（默认 `http://127.0.0.1:8080`）。浏览器测试和截图会模拟 API，不需要启动服务。
 本地使用已安装的 Google Chrome；CI 中安装 Playwright 自带的 Chromium。

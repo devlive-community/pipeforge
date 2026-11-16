@@ -64,7 +64,7 @@ The documentation site runs the same rules, defined once in `@pipeforge/design-t
 | `DropdownMenu` | A menu from a trigger; radio items when given a `value` |
 | `Card`, `PageHeader` | Page structure |
 | `Badge`, `DescriptionList` | Status labels and label–value pairs |
-| `Empty`, `Skeleton` | Empty, error and loading states |
+| `Empty`, `LoadingPanel`, `LoadingLogo` | Empty states, errors and the branded loading indicator |
 | `Tabs`, `Splitter` | Tab panels with arrow-key navigation; two panes with a draggable, keyboard-movable divider |
 | `Table` | Data tables with a caption and an empty text |
 | `Input` | A labelled text field with an optional icon and an error that is announced with it; the label can be visually hidden |
@@ -118,5 +118,7 @@ pnpm --filter @pipeforge/ui screenshots   # documentation screenshots, light and
 ```
 
 The development server forwards `/api` to `PIPEFORGE_SERVER` (default `http://127.0.0.1:8080`).
+The workspace uses the shared theme tokens. `LoadingPanel` displays the animated PipeForge mark for page and API waits, and uses a static mark when the system requests reduced motion.
+
 The browser tests and screenshots mock the API, so they need no server. Locally they use the
 installed Google Chrome; CI installs Playwright's Chromium.
