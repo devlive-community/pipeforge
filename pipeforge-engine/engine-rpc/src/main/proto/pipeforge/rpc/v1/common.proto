@@ -117,4 +117,5 @@ message TaskMetrics {               // 累计值：丢失或重复上报都不�
   int32 queue_depth = 11;             // Sink 写队列中当前的批数
   int32 queue_capacity = 12;          // 写队列容量；没有写队列时为 0
   repeated DirtySample dirty_samples = 13;  // Task 最先跳过的坏行，最多 20 条
+  int64 throttle_wait_nanos = 14;     // 等待作业限流配额的时间
 }

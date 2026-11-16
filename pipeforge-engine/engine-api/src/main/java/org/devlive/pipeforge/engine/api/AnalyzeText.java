@@ -88,7 +88,13 @@ public final class AnalyzeText {
                 .append(duration(metrics.writerWaitMs()))
                 .append(" (source slow)  backpressured ")
                 .append(duration(metrics.backpressuredMs()))
-                .append(" (downstream slow)\n");
+                .append(" (downstream slow)");
+        if (metrics.throttleWaitMs() > 0) {
+            out.append("  throttled ")
+                    .append(duration(metrics.throttleWaitMs()))
+                    .append(" (rate limit)");
+        }
+        out.append('\n');
         if (!metrics.nodes().isEmpty()) {
             out.append('\n');
             List<String[]> rows = new ArrayList<>();
@@ -159,6 +165,7 @@ public final class AnalyzeText {
             case "readerWaitShare" -> "readers waited " + share + " of their time for the write queue";
             case "writerWaitShare" -> "write threads waited " + share + " of their time for rows";
             case "backpressuredShare" -> "tasks waited " + share + " of their time for network buffers";
+            case "throttleWaitShare" -> "readers waited " + share + " of their time for the rate limit";
             case "selfTimeRatio" -> evidence.node() + " busy " + share;
             case "exchangedBytes" -> String.format(Locale.ROOT, "%,.0f bytes exchanged", evidence.value());
             default -> evidence.metric() + (evidence.node() == null ? "" : " of " + evidence.node()) + " "

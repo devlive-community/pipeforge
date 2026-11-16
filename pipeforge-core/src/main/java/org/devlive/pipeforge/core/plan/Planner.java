@@ -136,7 +136,10 @@ public final class Planner {
                 job.variables(),
                 List.copyOf(planned.values()),
                 warnings,
-                dirty);
+                dirty,
+                new RateLimit(
+                        job.env().getOptional(EnvOptions.LIMIT_ROWS).orElse(0L),
+                        job.env().getOptional(EnvOptions.LIMIT_BYTES).orElse(0L)));
     }
 
     private DirtyPolicy dirty(JobDefinition job, List<String> warnings) {

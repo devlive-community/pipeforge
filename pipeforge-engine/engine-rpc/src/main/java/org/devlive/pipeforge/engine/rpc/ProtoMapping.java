@@ -157,7 +157,8 @@ public final class ProtoMapping {
                 .setBytesIn(metrics.bytesReceived())
                 .setQueueDepth(metrics.queueDepth())
                 .setQueueCapacity(metrics.queueCapacity())
-                .setMemoryBytes(metrics.memoryBytes());
+                .setMemoryBytes(metrics.memoryBytes())
+                .setThrottleWaitNanos(metrics.throttleWaitNanos());
         metrics.dirtySamples().forEach(sample -> builder.addDirtySamples(toProto(sample)));
         for (OperatorSnapshot operator : metrics.operators()) {
             builder.addOperators(OperatorMetrics.newBuilder()
@@ -198,7 +199,8 @@ public final class ProtoMapping {
                 metrics.getMemoryBytes(),
                 metrics.getDirtySamplesList().stream()
                         .map(ProtoMapping::fromProto)
-                        .toList());
+                        .toList(),
+                metrics.getThrottleWaitNanos());
     }
 
     public static org.devlive.pipeforge.engine.rpc.proto.DirtySample toProto(
@@ -275,6 +277,10 @@ public final class ProtoMapping {
             }
             case OperatorEvent.NoMoreSplits none -> builder.setNoMoreSplits(
                     org.devlive.pipeforge.engine.rpc.proto.NoMoreSplits.getDefaultInstance());
+            case OperatorEvent.RateLimit limit -> builder.setRateLimit(
+                    org.devlive.pipeforge.engine.rpc.proto.RateLimitQuota.newBuilder()
+                            .setRowsPerSecond(limit.rowsPerSecond())
+                            .setBytesPerSecond(limit.bytesPerSecond()));
         };
     }
 
@@ -291,6 +297,10 @@ public final class ProtoMapping {
                             .map(ProtoMapping::fromProto)
                             .toList());
             case NO_MORE_SPLITS -> new OperatorEvent.NoMoreSplits(event.getNodeId());
+            case RATE_LIMIT -> new OperatorEvent.RateLimit(
+                    event.getNodeId(),
+                    event.getRateLimit().getRowsPerSecond(),
+                    event.getRateLimit().getBytesPerSecond());
             default -> throw new IllegalArgumentException(
                     "Operator event " + event.getEventCase() + " is not handled by this engine version");
         };

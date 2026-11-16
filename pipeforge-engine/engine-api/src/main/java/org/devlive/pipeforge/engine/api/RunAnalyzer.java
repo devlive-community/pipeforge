@@ -19,6 +19,8 @@ import org.jspecify.annotations.Nullable;
  * holds is the conclusion; the documentation lists them, with the advice each gives:
  *
  * <ol>
+ *   <li>{@code THROTTLE}: tasks waited more than a fifth of their time for the rate limit of the
+ *       job;
  *   <li>{@code TARGET}: readers waited more than half of their time for the write queue of the sink;
  *       or tasks waited more than half of their time for network buffers while a sink was busy more
  *       than half of its time; or a sink was busy more than half of its time, at least as busy as
@@ -94,6 +96,10 @@ public final class RunAnalyzer {
             return share(last.writerWaitMs(), base.writerWaitMs());
         }
 
+        double throttled() {
+            return share(last.throttleWaitMs(), base.throttleWaitMs());
+        }
+
         double backpressured() {
             return share(last.backpressuredMs(), base.backpressuredMs());
         }
@@ -136,6 +142,17 @@ public final class RunAnalyzer {
         double sinkBusy = sink == null ? -1 : sink.selfTimeRatio();
         double sourceBusy = source == null ? -1 : source.selfTimeRatio();
         int parallelism = window.last().parallelism();
+        double throttled = window.throttled();
+        if (throttled > LOW) {
+            return new Bottleneck(
+                    Bottleneck.Kind.THROTTLE,
+                    source == null ? null : source.node(),
+                    List.of(new Bottleneck.Evidence("throttleWaitShare", null, throttled)),
+                    List.of(new Bottleneck.Advice(
+                            "rate-limit",
+                            "The rate limit of the job (env.limit) holds the readers back; raise it if the source"
+                                    + " and the target can take more")));
+        }
 
         List<Bottleneck.Evidence> shares = List.of(
                 new Bottleneck.Evidence("readerWaitShare", null, readerWait),

@@ -35,6 +35,7 @@ final class SourceOperator {
     private final ReaderContext context;
     private @Nullable SourceReader<SourceSplit> reader;
     private @Nullable VersionedSerializer<SourceSplit> splitSerializer;
+    private @Nullable Source<SourceSplit, ?> created;
 
     SourceOperator(
             PlannedNode node,
@@ -55,6 +56,7 @@ final class SourceOperator {
         SourceFactory factory = (SourceFactory) node.component().factory();
         Source<SourceSplit, ?> source = (Source<SourceSplit, ?>)
                 call.call("create the source", () -> factory.createSource(NodeContext.of(node, job, expressions)));
+        created = source;
         splitSerializer = call.call("get the split serializer", source::splitSerializer);
         reader = call.call("create the reader", () -> source.createReader(context));
     }
@@ -73,6 +75,18 @@ final class SourceOperator {
         return call.call("read", () -> current.pollNext(output));
     }
 
+    /**
+     * Hands the row quota to a source that limits its own rate; {@code false} when the engine must
+     * limit it.
+     */
+    boolean applyRateLimit(double rowsPerSecond) {
+        if (created instanceof org.devlive.pipeforge.api.capability.SupportsRateLimit own) {
+            call.run("apply the rate limit", () -> own.applyRateLimit(rowsPerSecond));
+            return true;
+        }
+        return false;
+    }
+
     void handle(OperatorEvent event) {
         SourceReader<SourceSplit> current = opened();
         switch (event) {
@@ -86,6 +100,9 @@ final class SourceOperator {
             }
             case OperatorEvent.NoMoreSplits ignored -> call.run(
                     "end the split assignment", current::notifyNoMoreSplits);
+            case OperatorEvent.RateLimit ignored -> {
+                // the chain applies quotas
+            }
         }
     }
 

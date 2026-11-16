@@ -23,6 +23,21 @@ public sealed interface OperatorEvent {
         }
     }
 
+    /**
+     * The share of the job's rate limit this reader may use until the next one; 0 means no limit.
+     *
+     * @param rowsPerSecond rows the reader may read per second
+     * @param bytesPerSecond bytes, estimated in memory, the reader may read per second
+     */
+    record RateLimit(String node, double rowsPerSecond, double bytesPerSecond) implements OperatorEvent {
+        public RateLimit {
+            Objects.requireNonNull(node, "node");
+            if (rowsPerSecond < 0 || bytesPerSecond < 0) {
+                throw new IllegalArgumentException("a rate limit must not be negative");
+            }
+        }
+    }
+
     /** The reader gets no more splits. */
     record NoMoreSplits(String node) implements OperatorEvent {
         public NoMoreSplits {

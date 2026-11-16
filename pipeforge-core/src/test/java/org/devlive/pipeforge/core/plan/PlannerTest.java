@@ -313,6 +313,19 @@ class PlannerTest {
     }
 
     @Test
+    void readsTheRateLimit() {
+        String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
+        assertThat(plan(job(nodes)).limit()).isEqualTo(RateLimit.NONE);
+        assertThat(plan(job(nodes)).limit().limited()).isFalse();
+        JobPlan limited = plan(job("env: { limit: { rows-per-second: 5000, bytes-per-second: 1048576 } }\n" + nodes));
+        assertThat(limited.limit()).isEqualTo(new RateLimit(5000, 1048576));
+        assertThat(limited.limit().limited()).isTrue();
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { limit: { rows-per-second: 0 } }\n" + nodes))))
+                .contains("limit.rows-per-second");
+    }
+
+    @Test
     void componentProblemsKeepTheirCodes() {
         assertThat(Errors.thrown(ErrorCode.PLUGIN_NOT_FOUND, () -> plan(LINEAR.replace("type: console", "type: kafka")))
                         .scope()

@@ -97,6 +97,7 @@ field pipeforge.rpc.v1.JobMetrics 22 parallelism int32
 field pipeforge.rpc.v1.JobMetrics 23 memory_bytes int64
 field pipeforge.rpc.v1.JobMetrics 24 rows_dirty int64
 field pipeforge.rpc.v1.JobMetrics 25 dirty_samples repeated pipeforge.rpc.v1.DirtySample
+field pipeforge.rpc.v1.JobMetrics 26 throttle_wait_ms int64
 field pipeforge.rpc.v1.JobMetrics 3 nodes repeated pipeforge.rpc.v1.NodeMetrics
 field pipeforge.rpc.v1.JobMetrics 4 splits_total int32
 field pipeforge.rpc.v1.JobMetrics 5 splits_finished int32
@@ -281,6 +282,7 @@ field pipeforge.rpc.v1.TaskMetrics 10 splits repeated pipeforge.rpc.v1.SplitProg
 field pipeforge.rpc.v1.TaskMetrics 11 queue_depth int32
 field pipeforge.rpc.v1.TaskMetrics 12 queue_capacity int32
 field pipeforge.rpc.v1.TaskMetrics 13 dirty_samples repeated pipeforge.rpc.v1.DirtySample
+field pipeforge.rpc.v1.TaskMetrics 14 throttle_wait_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 2 running_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 3 idle_nanos int64
 field pipeforge.rpc.v1.TaskMetrics 4 reader_wait_nanos int64

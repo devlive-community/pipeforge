@@ -197,6 +197,14 @@
     en-US: "Bad rows the job skipped under env.dirty.policy skip: rows a source could not read, a transform could not transform or a sink could not write."
     zh-CN: "env.dirty.policy 为 skip 时作业跳过的坏行：Source 无法读取、Transform 无法转换或 Sink 无法写入的行。"
 
+- name: throttleWaitMs
+  scope: job
+  type: timer
+  unit: ms
+  description:
+    en-US: "Time tasks waited for the rate limit of the job (env.limit), summed over tasks."
+    zh-CN: "Task 等待作业限流（env.limit）的时间，按 Task 求和。"
+
 - name: rowsIn
   scope: node
   type: counter

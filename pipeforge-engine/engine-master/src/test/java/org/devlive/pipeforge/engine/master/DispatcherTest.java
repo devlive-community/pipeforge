@@ -261,4 +261,33 @@ class DispatcherTest {
         }
         assertThat(released).hasSize(24).doesNotHaveDuplicates();
     }
+
+    @Test
+    void theRateLimitOfARunningRunCanBeChanged() throws Exception {
+        String probe = Probe.create();
+        // 300 rows at 20 per second would take 15 seconds
+        definitions.put(
+                "slow",
+                () -> TestConnectors.job(probe, "rows: 300, splits: 3", null, "", 1, "limit: { rows-per-second: 20 }"));
+        dispatcher.submit(submission("run-1", "slow", null));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (dispatcher.status("run-1").state() != State.RUNNING
+                || dispatcher.metrics("run-1").rowsRead() == 0) {
+            assertThat(System.nanoTime()).as("the run starts reading").isLessThan(deadline);
+            Thread.sleep(5);
+        }
+        long changed = System.nanoTime();
+        dispatcher.changeRateLimit("run-1", org.devlive.pipeforge.core.plan.RateLimit.NONE);
+
+        assertThat(awaitEnd("run-1").state()).isEqualTo(State.SUCCESS);
+        assertThat(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - changed))
+                .as("lifted, the rest is read at once")
+                .isLessThan(5);
+        assertThat(Probe.get(probe).rows).hasSize(300);
+        assertThat(dispatcher
+                        .changeRateLimit("run-1", new org.devlive.pipeforge.core.plan.RateLimit(5, 0))
+                        .state())
+                .as("a run that ended stays as it is")
+                .isEqualTo(State.SUCCESS);
+    }
 }

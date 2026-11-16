@@ -127,6 +127,59 @@ class RunAnalyzerTest {
         }
     }
 
+    /** {@code m} with {@code throttleWaitMs}. */
+    private static JobMetrics throttled(JobMetrics m, long throttleWaitMs) {
+        return new JobMetrics(
+                m.elapsedMs(),
+                m.rowsRead(),
+                m.rowsWritten(),
+                m.rowsFiltered(),
+                m.rowsExpanded(),
+                m.rowsFailed(),
+                m.rowsInFlight(),
+                m.readRowsPerSecond(),
+                m.writeRowsPerSecond(),
+                m.readerWaitMs(),
+                m.writerWaitMs(),
+                m.parallelism(),
+                m.tasksRunning(),
+                m.nodes(),
+                m.exchangedBytes(),
+                m.backpressuredMs(),
+                m.backpressuredRatio(),
+                m.queueDepth(),
+                m.queueCapacity(),
+                m.splitsAssigned(),
+                m.splitsFinished(),
+                m.runningMs(),
+                m.memoryBytes(),
+                m.rowsDirty(),
+                m.dirtySamples(),
+                throttleWaitMs);
+    }
+
+    @Test
+    void aRateLimitThatHoldsTheReadersBackComesFirst() {
+        // readers also wait for the write queue: the limit is still what decides the speed
+        JobMetrics limited = throttled(sample(10_000, 40_000, 28_000, 0, 0, 0, nodes(1000, 0.1, 0.9, 0)), 12_000);
+        Bottleneck bottleneck =
+                RunAnalyzer.analyze("j", JobStatus.SUCCESS, List.of(limited)).bottleneck();
+        assertThat(bottleneck.kind()).isEqualTo(Bottleneck.Kind.THROTTLE);
+        assertThat(bottleneck.node()).isEqualTo("src");
+        assertThat(bottleneck.evidence()).containsExactly(new Bottleneck.Evidence("throttleWaitShare", null, 0.3));
+        assertThat(bottleneck.advice()).extracting(Bottleneck.Advice::code).containsExactly("rate-limit");
+        assertThat(AnalyzeText.format("j", JobStatus.SUCCESS, limited))
+                .contains("throttled 12.0s (rate limit)")
+                .contains("Bottleneck  THROTTLE at src: readers waited 30% of their time for the rate limit");
+
+        JobMetrics barely = throttled(sample(10_000, 40_000, 28_000, 0, 0, 0, nodes(1000, 0.1, 0.9, 0)), 8_000);
+        assertThat(RunAnalyzer.analyze("j", JobStatus.SUCCESS, List.of(barely))
+                        .bottleneck()
+                        .kind())
+                .as("a fifth is not more than a fifth")
+                .isEqualTo(Bottleneck.Kind.TARGET);
+    }
+
     @Test
     void theEvidenceAndAdviceNameTheValuesAndTheNode() {
         Bottleneck target = RunAnalyzer.analyze(

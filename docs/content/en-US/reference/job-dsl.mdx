@@ -67,6 +67,8 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 | `delivery` | `at-least-once` or `exactly-once` | `at-least-once` |
 | `dirty.policy` | `fail` or `skip`, see [dirty data](../concepts/dirty-data) | `fail` |
 | `dirty.max-rows` | With `skip`: the bad rows a run may skip | no limit |
+| `limit.rows-per-second` | Rows all sources may read per second together, see [rate limits](../concepts/execution#rate-limits) | no limit |
+| `limit.bytes-per-second` | Bytes, as rows take them in memory, all sources may read per second together | no limit |
 | `timezone` | An IANA time zone such as `Asia/Shanghai` | `UTC` |
 | `variables` | A mapping of names to values, see [variables](./variables#job-variables) | none |
 | `source.*`, `transform.*`, `sink.*` | Defaults for the options of every node of that kind | none |

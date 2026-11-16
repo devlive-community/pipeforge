@@ -58,6 +58,18 @@ public final class EnvOptions {
             .withRange(0L, Long.MAX_VALUE)
             .withDescription("With dirty.policy skip: the job fails once it skipped more bad rows than this");
 
+    public static final Option<Long> LIMIT_ROWS = Options.key("limit.rows-per-second")
+            .longType()
+            .noDefault()
+            .withRange(1L, Long.MAX_VALUE)
+            .withDescription("Rows all sources of the job may read per second together");
+
+    public static final Option<Long> LIMIT_BYTES = Options.key("limit.bytes-per-second")
+            .longType()
+            .noDefault()
+            .withRange(1L, Long.MAX_VALUE)
+            .withDescription("Bytes, as rows take them in memory, all sources of the job may read per second together");
+
     /** Prefixes of node defaults: {@code source.*}, {@code transform.*} and {@code sink.*}. */
     public static final List<String> NODE_DEFAULT_PREFIXES = List.of("source", "transform", "sink");
 
@@ -65,7 +77,16 @@ public final class EnvOptions {
     public static final List<String> CLUSTER_PREFIXES = List.of("worker", "master", "server", "cluster");
 
     public static final OptionRule RULE = OptionRule.builder()
-            .optional(MODE, PARALLELISM, DELIVERY, TIMEZONE, VARIABLES, DIRTY_POLICY, DIRTY_MAX_ROWS)
+            .optional(
+                    MODE,
+                    PARALLELISM,
+                    DELIVERY,
+                    TIMEZONE,
+                    VARIABLES,
+                    DIRTY_POLICY,
+                    DIRTY_MAX_ROWS,
+                    LIMIT_ROWS,
+                    LIMIT_BYTES)
             .nativeNamespaces(NODE_DEFAULT_PREFIXES.toArray(String[]::new))
             .build();
 

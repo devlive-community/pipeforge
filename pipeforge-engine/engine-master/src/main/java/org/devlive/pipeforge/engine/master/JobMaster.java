@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -119,6 +120,13 @@ public final class JobMaster {
     private final ExpressionCompiler expressions;
     private final Map<ExecutionGraph.Task, TaskState> states = new LinkedHashMap<>();
     private final Set<Integer> readers = new LinkedHashSet<>();
+    /** How often the quotas of the rate limit are split again. */
+    static final Duration QUOTA_PERIOD = Duration.ofSeconds(1);
+
+    private org.devlive.pipeforge.core.plan.RateLimit limit;
+    private final QuotaAllocator.Usage usage = new QuotaAllocator.Usage();
+    /** The quota each reader has now: rows and bytes per second. */
+    private final Map<Integer, double[]> quotas = new HashMap<>();
     /**
      * Messages of readers that are not registered yet: state updates and reader messages travel as
      * separate calls, so a split request can arrive before the RUNNING it follows.
@@ -173,6 +181,7 @@ public final class JobMaster {
         for (JobGraph.Vertex vertex : graph.vertices()) {
             deployed.put(vertex.id(), described(chain(vertex), run));
         }
+        this.limit = plan.limit();
         this.settings = new TaskSettings(
                         options.asyncWriteBuffer(),
                         options.writeBatchSize(),
@@ -339,6 +348,8 @@ public final class JobMaster {
         refreshTasks();
         long interval = settings.metricsInterval().toMillis();
         thread.scheduleAtFixedRate(() -> run(this::publish), interval, interval, TimeUnit.MILLISECONDS);
+        long period = QUOTA_PERIOD.toMillis();
+        thread.scheduleAtFixedRate(() -> run(() -> sendQuotas(false)), period, period, TimeUnit.MILLISECONDS);
         LOG.info(
                 "Job {} ({}) is running with {} task(s) in {} vertices",
                 plan.name(),
@@ -404,6 +415,8 @@ public final class JobMaster {
             case RUNNING -> {
                 if (reader) {
                     readers.add(subtask);
+                    // the quota reaches the reader before its first split
+                    sendQuotas(false);
                     callEnumerator("register reader " + subtask, e -> e.addReader(subtask));
                     List<ReaderMessage> waiting = early.remove(subtask);
                     if (waiting != null) {
@@ -452,6 +465,74 @@ public final class JobMaster {
             case ReaderMessage.Custom custom -> callEnumerator(
                     "handle a reader event", e -> e.handleReaderEvent(subtask, custom.event()));
         }
+    }
+
+    /**
+     * Changes the rate limit of the running job; {@link org.devlive.pipeforge.core.plan.RateLimit#NONE}
+     * lifts it. The readers get their new quotas at once.
+     */
+    public void changeRateLimit(org.devlive.pipeforge.core.plan.RateLimit changed) {
+        post(() -> {
+            LOG.info("Job {} ({}) changes its rate limit to {}", plan.name(), id, changed);
+            limit = changed;
+            sendQuotas(true);
+        });
+    }
+
+    /** The rate limit the job runs with now. */
+    public org.devlive.pipeforge.core.plan.RateLimit rateLimit() {
+        return limit;
+    }
+
+    /**
+     * Splits the rate limit among the running readers and sends each its quota when it changed by
+     * more than a twentieth, or when {@code always}.
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // a lost event fails its task, which reports it
+    private void sendQuotas(boolean always) {
+        if (status.isTerminal() || (!limit.limited() && quotas.isEmpty())) {
+            return;
+        }
+        List<Integer> active = new ArrayList<>(readers);
+        quotas.keySet().retainAll(readers);
+        Map<Integer, long[]> counters = new HashMap<>();
+        for (int reader : active) {
+            TaskMetricsSnapshot latest = aggregator.latest(sourceVertex.id(), reader);
+            if (latest != null && !latest.operators().isEmpty()) {
+                counters.put(reader, new long[] {latest.operators().get(0).rowsIn(), latest.throttleWaitNanos()});
+            }
+        }
+        Set<Integer> throttled = new java.util.HashSet<>();
+        Map<Integer, Double> used = usage.since(counters, System.nanoTime(), throttled);
+        Map<Integer, Double> rows;
+        if (limit.rowsPerSecond() > 0) {
+            rows = QuotaAllocator.split(limit.rowsPerSecond(), active, used, throttled);
+        } else {
+            // without a row limit the shares are equal
+            rows = QuotaAllocator.split(active.size(), active, Map.of(), Set.of());
+        }
+        double rowsTotal =
+                rows.values().stream().mapToDouble(Double::doubleValue).sum();
+        for (int reader : active) {
+            double share = rowsTotal == 0 ? 0 : rows.get(reader) / rowsTotal;
+            double[] quota = {limit.rowsPerSecond() > 0 ? rows.get(reader) : 0, limit.bytesPerSecond() * share};
+            double[] before = quotas.get(reader);
+            if (always || before == null || changed(before[0], quota[0]) || changed(before[1], quota[1])) {
+                quotas.put(reader, quota);
+                gateway(readerTask(reader))
+                        .sendOperatorEvent(
+                                reader(reader),
+                                new OperatorEvent.RateLimit(sourceVertex.head().id(), quota[0], quota[1]));
+            }
+        }
+        if (!limit.limited()) {
+            // the limit was lifted and every reader heard it
+            quotas.clear();
+        }
+    }
+
+    private static boolean changed(double before, double after) {
+        return Math.abs(after - before) > Math.max(before, after) / 20;
     }
 
     /** Fails the job once its tasks skipped more bad rows than {@code env.dirty.max-rows}. */

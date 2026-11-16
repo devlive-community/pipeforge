@@ -52,6 +52,7 @@ final class OperatorChain {
     private final OperatorClock clock;
     private final TaskMemory memory;
     private final DirtyRows dirty;
+    private final Throttle throttle = new Throttle();
     private final ExpressionCompiler expressions;
     private final @Nullable NetworkEnvironment network;
     private final BooleanSupplier cancelled;
@@ -123,7 +124,7 @@ final class OperatorChain {
             source = new SourceOperator(
                     node, call(node, scope), job, deployment.id(), deployment.parallelism(), master, threads);
             sourceMetrics = new OperatorMetrics(node.id());
-            output = new ChainReaderOutput(next, sourceMetrics, memory, node.id(), dirty);
+            output = new ChainReaderOutput(next, sourceMetrics, memory, node.id(), dirty, throttle);
         } else {
             source = null;
             sourceMetrics = null;
@@ -248,9 +249,22 @@ final class OperatorChain {
     }
 
     void handle(OperatorEvent event) {
-        if (source != null) {
-            source.handle(event);
+        SourceOperator current = source;
+        if (current == null) {
+            return;
         }
+        if (event instanceof OperatorEvent.RateLimit limit) {
+            // a source that limits its own rate takes the rows; bytes are always the engine's
+            boolean own = current.applyRateLimit(limit.rowsPerSecond());
+            throttle.quota(own ? 0 : limit.rowsPerSecond(), limit.bytesPerSecond(), System.nanoTime());
+            return;
+        }
+        current.handle(event);
+    }
+
+    /** How long the task waits for its rate limit quota before it reads again; 0 to read now. */
+    long throttleNanos() {
+        return source == null ? 0 : throttle.waitNanos(System.nanoTime());
     }
 
     /** Ends the input: returns the sink's committable, or ends the outputs. */
@@ -380,19 +394,27 @@ final class OperatorChain {
         private final TaskMemory memory;
         private final String node;
         private final DirtyRows dirty;
+        private final Throttle throttle;
 
-        ChainReaderOutput(ChainOutput next, OperatorMetrics metrics, TaskMemory memory, String node, DirtyRows dirty) {
+        ChainReaderOutput(
+                ChainOutput next,
+                OperatorMetrics metrics,
+                TaskMemory memory,
+                String node,
+                DirtyRows dirty,
+                Throttle throttle) {
             this.next = next;
             this.metrics = metrics;
             this.memory = memory;
             this.node = node;
             this.dirty = dirty;
+            this.throttle = throttle;
         }
 
         @Override
         public void collect(Row row) {
             try {
-                memory.check(row, node);
+                throttle.took(memory.check(row, node));
             } catch (PipeForgeException e) {
                 // read, but too large to pass on
                 metrics.rowsIn.increment();

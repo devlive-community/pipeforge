@@ -119,6 +119,7 @@ message JobMetrics {
   int64 memory_bytes = 23;            // Task 当前记账的内存之和
   int64 rows_dirty = 24;              // 跳过的坏行
   repeated DirtySample dirty_samples = 25;  // 作业最先跳过的坏行，最多 20 条
+  int64 throttle_wait_ms = 26;        // Task 等待限流配额的时间之和
 }
 
 message ListJobsRequest {

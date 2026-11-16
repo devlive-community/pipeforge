@@ -267,6 +267,20 @@ public final class Dispatcher implements AutoCloseable {
     }
 
     /**
+     * Changes the rate limit of a running run; a run that ended is left as it is. The interface the
+     * server will offer to change a limit while a job runs.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
+     */
+    public RunStatus changeRateLimit(String runId, org.devlive.pipeforge.core.plan.RateLimit limit) {
+        Run run = find(runId);
+        if (!run.states.state().isTerminal()) {
+            run.master.changeRateLimit(limit);
+        }
+        return run.status();
+    }
+
+    /**
      * The run analysis of a run.
      *
      * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run

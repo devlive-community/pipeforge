@@ -66,6 +66,8 @@ sink:
 | `delivery` | `at-least-once` 或 `exactly-once` | `at-least-once` |
 | `dirty.policy` | `fail` 或 `skip`，见[脏数据](../concepts/dirty-data) | `fail` |
 | `dirty.max-rows` | `skip` 时一次运行最多可以跳过的坏行数 | 不限制 |
+| `limit.rows-per-second` | 所有 Source 合计每秒可以读取的行数，见[限流](../concepts/execution#限流) | 不限制 |
+| `limit.bytes-per-second` | 所有 Source 合计每秒可以读取的字节数，按行在内存中的大小计算 | 不限制 |
 | `timezone` | IANA 时区，例如 `Asia/Shanghai` | `UTC` |
 | `variables` | 名称到取值的映射，见[变量](./variables#作业变量) | 无 |
 | `source.*`、`transform.*`、`sink.*` | 同类所有节点的选项默认值 | 无 |

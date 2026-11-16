@@ -160,7 +160,7 @@ Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time f
 
 - **Window.** A running job is judged on its last 10 seconds, a job that ended on the whole run.
   The rates of the nodes (`in r/s`) are of the same window.
-- **Shares.** The waits are shares of the time tasks ran (`runningMs`): readers waiting for the
+- **Shares.** The waits are shares of the time tasks ran (`runningMs`): readers waiting for the rate limit (`throttleWaitMs`), readers waiting for the
   write queue of the sink (`readerWaitMs`), write threads waiting for rows (`writerWaitMs`) and tasks
   waiting for network buffers (`backpressuredMs`). `self%` is the share of its time a node is busy
   with its own work, over the whole run (see [metrics](../reference/metrics)).
@@ -169,6 +169,7 @@ Bottleneck  TARGET at out: out busy 68%; write threads waited 1% of their time f
 
 | Conclusion | When | Advice |
 |---|---|---|
+| `THROTTLE` | tasks wait more than a fifth of their time for the [rate limit](./execution#rate-limits) of the job | `rate-limit`: the limit works as configured; raise `env.limit` if the source and the target can take more |
 | `TARGET` | readers wait more than half of their time for the write queue; or tasks wait more than half of their time for network buffers while a sink is busy more than half of its time; or a sink is busy more than half of its time, at least as busy as the sources, while its write threads hardly wait for rows | `sink-parallelism`: raise the parallelism of the sink or its batch size; `check-target`: check the write latency and load of the target |
 | `NETWORK` | rows cross tasks and tasks wait more than half of their time for network buffers, while no sink is busy more than half of its time | `network-buffers`: raise `network.buffers-per-channel` or `network.floating-buffers-per-gate`; `check-network`: check the network between the workers |
 | `SOURCE` | write threads wait more than half of their time for rows; or a source is busy more than half of its time while readers and tasks hardly wait | `source-parallelism`: raise the parallelism of the source or let it read more splits; `check-source`: check the query latency and load of the source |
@@ -194,8 +195,7 @@ The JSON form holds `schemaVersion` (`1`), `job`, `status`, the window (`windowF
 
 ## Limitations
 
-- The run analysis judges the job and its nodes. Rate limits (`THROTTLE`) come with the rate limit
-  quotas of the engine; skew, edges and subtasks come in a later version, as do the server's
+- The run analysis judges the job and its nodes; skew, edges and subtasks come in a later version, as do the server's
   `explain --analyze` for a run and its Web UI.
 - The plan is the logical plan: optimization rules (projection and filter push-down, merging
   transforms), the execution graph and resource estimates come with the distributed engine.

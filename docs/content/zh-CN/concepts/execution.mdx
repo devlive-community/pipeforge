@@ -106,6 +106,16 @@ Task 线程：… → 攒批 ──► 有界队列 ──► 写线程：SinkWr
   所有通道共用；空闲的连接每 30 秒发送一次 ping，连续三个间隔没有任何消息的连接会被关闭。
 - 连接断开时，两端的 Task 都以 [`PF-CLUS-0010`](../reference/errors#pf-clus-0010) 失败。
 
+### 限流
+
+`env.limit.rows-per-second` 和 `env.limit.bytes-per-second` 限制作业所有 Source 合计的读取速度，用于保护源端系统或与其他作业
+共享它。JobMaster 每秒把限额分给运行中的 Reader，依据是每个 Reader 上一秒的用量：等待过配额的 Reader 得到其他 Reader 没用完的部分，
+空闲的 Reader 保留均分额的十分之一以便重新开始，新的 Reader 从均分额开始，已经结束的 Reader 交出它的份额。每个 Reader 用最多
+容纳 50 毫秒配额的令牌桶执行配额，因此不能突发追赶；字节按行在内存中占用的大小计算。
+
+Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流拖慢的作业报告为 `THROTTLE`。自己限制速度的 Source
+（`SupportsRateLimit`）直接得到它的行配额，引擎不再拖慢它。运行中的作业可以修改限额，Reader 立即得到新的配额。
+
 ### 输入结束时提交
 
 两阶段提交的 Sink 在 `prepareCommit` 中返回待提交内容（committable）。所有 Task 都结束后，JobMaster 先用 Sink 的 Committer、

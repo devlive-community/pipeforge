@@ -26,6 +26,7 @@ import java.util.List;
  * @param memoryBytes the memory the task accounts now: write buffer, network buffers, queued splits
  * @param dirtySamples the first bad rows the task skipped, at most {@link
  *     org.devlive.pipeforge.core.dirty.DirtySample#MAX_SAMPLES}
+ * @param throttleWaitNanos time the task thread waited for the rate limit of the job
  */
 public record TaskMetricsSnapshot(
         List<OperatorSnapshot> operators,
@@ -39,13 +40,44 @@ public record TaskMetricsSnapshot(
         int queueDepth,
         int queueCapacity,
         long memoryBytes,
-        List<org.devlive.pipeforge.core.dirty.DirtySample> dirtySamples) {
+        List<org.devlive.pipeforge.core.dirty.DirtySample> dirtySamples,
+        long throttleWaitNanos) {
 
     public static final TaskMetricsSnapshot EMPTY = new TaskMetricsSnapshot(List.of(), 0, 0, 0, 0);
 
     public TaskMetricsSnapshot {
         operators = List.copyOf(operators);
         dirtySamples = List.copyOf(dirtySamples);
+    }
+
+    /** A snapshot of a task that was not rate limited. */
+    public TaskMetricsSnapshot(
+            List<OperatorSnapshot> operators,
+            long runningNanos,
+            long idleNanos,
+            long readerWaitNanos,
+            long writerWaitNanos,
+            long backpressuredNanos,
+            long bytesSent,
+            long bytesReceived,
+            int queueDepth,
+            int queueCapacity,
+            long memoryBytes,
+            List<org.devlive.pipeforge.core.dirty.DirtySample> dirtySamples) {
+        this(
+                operators,
+                runningNanos,
+                idleNanos,
+                readerWaitNanos,
+                writerWaitNanos,
+                backpressuredNanos,
+                bytesSent,
+                bytesReceived,
+                queueDepth,
+                queueCapacity,
+                memoryBytes,
+                dirtySamples,
+                0);
     }
 
     /** A snapshot without bad rows. */

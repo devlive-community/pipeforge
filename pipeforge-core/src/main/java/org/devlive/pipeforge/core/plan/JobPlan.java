@@ -46,7 +46,38 @@ public record JobPlan(
         Map<String, String> variables,
         List<PlannedNode> nodes,
         List<String> warnings,
-        org.devlive.pipeforge.core.dirty.DirtyPolicy dirty) {
+        org.devlive.pipeforge.core.dirty.DirtyPolicy dirty,
+        RateLimit limit) {
+
+    /** A plan without a rate limit. */
+    public JobPlan(
+            String name,
+            @Nullable String description,
+            EngineKind engine,
+            JobMode mode,
+            boolean modeDerived,
+            Delivery delivery,
+            int parallelism,
+            ZoneId timeZone,
+            Map<String, String> variables,
+            List<PlannedNode> nodes,
+            List<String> warnings,
+            org.devlive.pipeforge.core.dirty.DirtyPolicy dirty) {
+        this(
+                name,
+                description,
+                engine,
+                mode,
+                modeDerived,
+                delivery,
+                parallelism,
+                timeZone,
+                variables,
+                nodes,
+                warnings,
+                dirty,
+                RateLimit.NONE);
+    }
 
     /** A plan that fails at the first bad row. */
     public JobPlan(
@@ -78,6 +109,7 @@ public record JobPlan(
 
     public JobPlan {
         java.util.Objects.requireNonNull(dirty, "dirty");
+        java.util.Objects.requireNonNull(limit, "limit");
         variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
         nodes = List.copyOf(nodes);
         warnings = List.copyOf(warnings);

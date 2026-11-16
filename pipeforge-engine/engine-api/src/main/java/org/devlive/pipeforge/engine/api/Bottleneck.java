@@ -22,6 +22,8 @@ public record Bottleneck(Kind kind, @Nullable String node, List<Evidence> eviden
 
     /** The conclusions, checked in this order; the first that holds is the result. */
     public enum Kind {
+        /** The rate limit of the job holds the readers back: it works as configured. */
+        THROTTLE,
         /** The target, or the sink writing to it, is slower than the rest. */
         TARGET,
         /** Tasks wait for network buffers while the tasks they send to are not busy. */

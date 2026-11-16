@@ -49,6 +49,7 @@ import org.devlive.pipeforge.core.dirty.DirtySample;
  * @param rowsDirty bad rows the job skipped ({@code env.dirty.policy: skip})
  * @param dirtySamples the first bad rows the job skipped, at most {@link DirtySample#MAX_SAMPLES},
  *     oldest first
+ * @param throttleWaitMs time tasks waited for the rate limit of the job, summed over tasks
  */
 public record JobMetrics(
         long elapsedMs,
@@ -75,7 +76,8 @@ public record JobMetrics(
         long runningMs,
         long memoryBytes,
         long rowsDirty,
-        List<DirtySample> dirtySamples) {
+        List<DirtySample> dirtySamples,
+        long throttleWaitMs) {
 
     /** No data yet. */
     public static final JobMetrics EMPTY = new JobMetrics(
@@ -86,6 +88,62 @@ public record JobMetrics(
         Objects.requireNonNull(writeRowsPerSecond, "writeRowsPerSecond");
         nodes = List.copyOf(nodes);
         dirtySamples = List.copyOf(dirtySamples);
+    }
+
+    /** Metrics of a job without a rate limit. */
+    public JobMetrics(
+            long elapsedMs,
+            long rowsRead,
+            long rowsWritten,
+            long rowsFiltered,
+            long rowsExpanded,
+            long rowsFailed,
+            long rowsInFlight,
+            Rate readRowsPerSecond,
+            Rate writeRowsPerSecond,
+            long readerWaitMs,
+            long writerWaitMs,
+            int parallelism,
+            int tasksRunning,
+            List<NodeMetrics> nodes,
+            long exchangedBytes,
+            long backpressuredMs,
+            double backpressuredRatio,
+            int queueDepth,
+            int queueCapacity,
+            int splitsAssigned,
+            int splitsFinished,
+            long runningMs,
+            long memoryBytes,
+            long rowsDirty,
+            List<DirtySample> dirtySamples) {
+        this(
+                elapsedMs,
+                rowsRead,
+                rowsWritten,
+                rowsFiltered,
+                rowsExpanded,
+                rowsFailed,
+                rowsInFlight,
+                readRowsPerSecond,
+                writeRowsPerSecond,
+                readerWaitMs,
+                writerWaitMs,
+                parallelism,
+                tasksRunning,
+                nodes,
+                exchangedBytes,
+                backpressuredMs,
+                backpressuredRatio,
+                queueDepth,
+                queueCapacity,
+                splitsAssigned,
+                splitsFinished,
+                runningMs,
+                memoryBytes,
+                rowsDirty,
+                dirtySamples,
+                0);
     }
 
     /** Metrics without bad rows. */

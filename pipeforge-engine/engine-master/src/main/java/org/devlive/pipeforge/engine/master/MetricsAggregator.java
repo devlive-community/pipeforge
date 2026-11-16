@@ -74,6 +74,12 @@ final class MetricsAggregator {
         tasks.put(vertex + "/" + subtask, metrics);
     }
 
+    /** The latest report of a task, or {@code null} before its first. */
+    @org.jspecify.annotations.Nullable
+    TaskMetricsSnapshot latest(String vertex, int subtask) {
+        return tasks.get(vertex + "/" + subtask);
+    }
+
     /** The bad rows the tasks skipped, from their latest reports. */
     long rowsDirty() {
         long total = 0;
@@ -119,6 +125,7 @@ final class MetricsAggregator {
         int queueDepth = 0;
         int queueCapacity = 0;
         long memory = 0;
+        long throttled = 0;
         for (Map.Entry<String, TaskMetricsSnapshot> entry : tasks.entrySet()) {
             TaskMetricsSnapshot task = entry.getValue();
             String vertex = entry.getKey().substring(0, entry.getKey().lastIndexOf('/'));
@@ -131,6 +138,7 @@ final class MetricsAggregator {
             queueDepth += task.queueDepth();
             queueCapacity += task.queueCapacity();
             memory += task.memoryBytes();
+            throttled += task.throttleWaitNanos();
             samples.addAll(task.dirtySamples());
             if (offset < nodes.size()) {
                 bytesIn[offset] += task.bytesReceived();
@@ -250,7 +258,8 @@ final class MetricsAggregator {
                 samples.stream()
                         .sorted(java.util.Comparator.comparingLong(org.devlive.pipeforge.core.dirty.DirtySample::atMs))
                         .limit(org.devlive.pipeforge.core.dirty.DirtySample.MAX_SAMPLES)
-                        .toList());
+                        .toList(),
+                TimeUnit.NANOSECONDS.toMillis(throttled));
     }
 
     private Sample secondToLast() {

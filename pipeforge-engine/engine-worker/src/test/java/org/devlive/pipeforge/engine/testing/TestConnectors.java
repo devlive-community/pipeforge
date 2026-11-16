@@ -131,6 +131,10 @@ public final class TestConnectors {
         return false;
     }
 
+    /** The source limits its own rate: it records the quotas it gets in the probe and reads freely. */
+    static final Option<Boolean> OWN_LIMIT =
+            Options.key("own-limit").booleanType().defaultValue(false);
+
     /** Pads the name of every row to this many characters. */
     static final Option<Integer> PAD = Options.key("pad").intType().defaultValue(0);
 
@@ -296,17 +300,37 @@ public final class TestConnectors {
                             UNBOUNDED,
                             PAD,
                             THREAD,
-                            BAD_RECORD_AT)
+                            BAD_RECORD_AT,
+                            OWN_LIMIT)
                     .build();
         }
 
         @Override
         public Source<?, ?> createSource(FactoryContext context) {
-            return new NumbersSource(context.options());
+            return context.options().get(OWN_LIMIT)
+                    ? new SelfLimitingNumbers(context.options())
+                    : new NumbersSource(context.options());
         }
     }
 
-    static final class NumbersSource implements Source<NumberSplit, String> {
+    /** A source that takes its quota itself, as a connector with a rate limit of its own does. */
+    static final class SelfLimitingNumbers extends NumbersSource
+            implements org.devlive.pipeforge.api.capability.SupportsRateLimit {
+        private static final long serialVersionUID = 1L;
+        private final transient Probe probe;
+
+        SelfLimitingNumbers(ReadonlyConfig config) {
+            super(config);
+            this.probe = Probe.get(config.get(PROBE));
+        }
+
+        @Override
+        public void applyRateLimit(double rowsPerSecond) {
+            probe.events.add("own limit " + Math.round(rowsPerSecond));
+        }
+    }
+
+    static class NumbersSource implements Source<NumberSplit, String> {
         private static final long serialVersionUID = 1L;
         private final transient ReadonlyConfig config;
 

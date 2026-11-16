@@ -138,6 +138,21 @@ channel per upstream subpartition.
 - If a connection breaks, the tasks on both ends fail with
   [`PF-CLUS-0010`](../reference/errors#pf-clus-0010).
 
+### Rate limits
+
+`env.limit.rows-per-second` and `env.limit.bytes-per-second` cap how fast all sources of a job read
+together, to protect the source system or share it with others. The job master splits the limit
+among the running readers once a second, after what each used in the last second: a reader that
+waited for its quota gets what the others do not use, an idle reader keeps a tenth of an equal
+share so that it can start again, a new reader starts with an equal share, and a reader that has
+finished gives its share up. Each reader keeps to its quota with a token bucket that holds at most
+50 ms of it, so it cannot catch up in a burst; bytes are counted as rows take them in memory.
+
+The time readers wait for their quota is `throttleWaitMs`, and the run analysis reports a job held
+back by its limit as `THROTTLE`. A source that limits its own rate (`SupportsRateLimit`) is given
+its row quota instead and is not held back by the engine. The limit of a running job can be
+changed; the readers get their new quotas at once.
+
 ### Commit at the end of the input
 
 A sink that commits in two phases returns a committable from `prepareCommit`. When every task has

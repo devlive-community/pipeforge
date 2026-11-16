@@ -70,6 +70,7 @@ final class Task implements Runnable {
     private volatile long runningSince;
     private volatile long endedAt;
     private final AtomicLong idleNanos = new AtomicLong();
+    private final AtomicLong throttleNanos = new AtomicLong();
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
     private final TaskMemory memory;
     private final DirtyRows dirty;
@@ -213,6 +214,14 @@ final class Task implements Runnable {
             if (cancelled) {
                 throw new CancelledException();
             }
+            long quota = operators.throttleNanos();
+            if (quota > 0) {
+                // over the rate limit: wait for the quota, and take mail meanwhile
+                long start = System.nanoTime();
+                mailbox.waitAndDrain(quota);
+                throttleNanos.addAndGet(System.nanoTime() - start);
+                continue;
+            }
             PollStatus status = operators.pollNext();
             switch (status) {
                 case MORE_AVAILABLE -> idle = MIN_IDLE_NANOS;
@@ -353,7 +362,8 @@ final class Task implements Runnable {
                 operators.queueDepth(),
                 operators.queueCapacity(),
                 memory.accounted(),
-                dirty.samples());
+                dirty.samples(),
+                throttleNanos.get());
     }
 
     private void transition(TaskState next) {

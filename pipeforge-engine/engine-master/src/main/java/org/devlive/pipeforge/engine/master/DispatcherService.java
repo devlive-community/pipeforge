@@ -180,7 +180,8 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 .setTasksRunning(metrics.tasksRunning())
                 .setParallelism(metrics.parallelism())
                 .setMemoryBytes(metrics.memoryBytes())
-                .setRowsDirty(metrics.rowsDirty());
+                .setRowsDirty(metrics.rowsDirty())
+                .setThrottleWaitMs(metrics.throttleWaitMs());
         metrics.dirtySamples().forEach(sample -> proto.addDirtySamples(ProtoMapping.toProto(sample)));
         for (NodeMetrics node : metrics.nodes()) {
             proto.addNodes(org.devlive.pipeforge.engine.rpc.proto.NodeMetrics.newBuilder()
