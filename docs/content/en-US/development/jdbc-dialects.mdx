@@ -1,0 +1,79 @@
+---
+title: JDBC dialects
+description: The JDBC connector base - what it does for every database, the dialect SPI a database plugin implements, and how to wire, test and document a dialect.
+order: 55
+---
+
+Plugins for relational databases share **`connector-jdbc`**, a library each of them ships in its
+package. It reads tables in splits, writes rows in batches and turns database errors into
+PipeForge errors; what differs between databases is the **dialect**. A database plugin implements
+a dialect, creates the source and sink of the base with it, and gets everything else for free.
+
+## What the base does
+
+| Part | What it does |
+|---|---|
+| Connections | Opens connections with the driver in the plugin's class loader, by `driver` or by the URL; driver properties merge the dialect's defaults, `username` and `password`, then `jdbc.properties.*`; properties the dialect controls are refused (`PF-CONF-0003`) |
+| Schema | Describes a table from JDBC metadata (columns, types, nullability, primary key), also when the database stores the name in upper or lower case; describes a `query` without running it |
+| Splits | With `split.mode: range`, probes MIN and MAX of the split column (`split.column`, else a primary key of one integer column) and cuts `split.count` ranges, the first and last open-ended, plus one split for NULLs; otherwise, or for a query, one split. Readers pull splits one at a time, so fast readers read more |
+| Reading | Streams each split with `fetch-size`; a value the dialect cannot read makes its row a bad row, and the reader goes on |
+| Writing | Batches of `batch-size` rows, each a transaction. A batch that fails for a transient reason is rolled back and retried `max-retries` times after `retry-backoff`, doubling; one that fails because of its data is rolled back and split in halves until each bad row is alone, which goes to the [dirty data policy](../concepts/dirty-data) while the good rows are written |
+| Errors | Connection, login, timeout and missing table become `PF-CONN-0001`–`0003`, `PF-AUTH-0001` and `PF-META-0001`, data errors bad rows (`PF-DATA-0009`), anything else `PF-SRC-0001` / `PF-SINK-0001` |
+
+Credentials never appear in messages: a URL is shown without its user info and password
+parameters.
+
+## The dialect SPI
+
+A dialect extends `AbstractJdbcDialect`, which implements ANSI SQL, and overrides what its database
+does differently:
+
+| Method | ANSI behavior | Override when |
+|---|---|---|
+| `name()` | — (required) | — |
+| `quote(identifier)` | `"name"` | the database quotes differently, e.g. `` `name` `` |
+| `catalogAndSchema(table)` | `db.t` is schema `db` | the first part is a catalog, as in MySQL |
+| `defaultProperties()` | none | the driver needs settings, e.g. batch rewriting |
+| `controlledProperties()` | none | a property breaks the writer's transactions or the reads; give the reason |
+| `toDataType(column)` | the `java.sql.Types` of the standard types | the database has types of its own, unsigned integers, JSON, arrays |
+| `read` / `write` | `getObject` / `setObject` with `java.time` types | the driver needs other getters or conversions |
+| `minMaxQuery`, `selectQuery`, `insertStatement` | ANSI SQL | the syntax differs |
+| `prepareStreaming(connection, statement, fetchSize)` | sets the fetch size | the driver streams another way, e.g. needs a transaction or a special fetch size |
+| `classify(error)` | by SQLState class: `08` connection, `28` login, `22`/`23` data, `40001`/`40P01` transient, `42S02`/`42P01` not found | the driver reports vendor codes |
+
+Dialects are stateless and serializable. `GenericDialect` is the ANSI dialect itself, for databases
+without one.
+
+## Wiring a plugin
+
+```java
+public final class AcmeSourceFactory implements SourceFactory {
+    static final JdbcDialect DIALECT = new AcmeDialect();
+
+    @Override
+    public String identifier() {
+        return "jdbc-acme";
+    }
+
+    @Override
+    public OptionRule optionRule() {
+        return JdbcOptions.sourceRule().build(); // url, table | query, splits, jdbc.properties.*
+    }
+
+    @Override
+    public JdbcSource createSource(FactoryContext context) {
+        return new JdbcSource(JdbcSourceConfig.of(context.options(), DIALECT, context.nodeName()), DIALECT);
+    }
+}
+```
+
+The sink is the same with `JdbcOptions.sinkRule()`, `JdbcSinkConfig` and `new JdbcSink(config,
+DIALECT, context.inputTables())`. Options a plugin adds go into `sourceRule(extra...)`.
+
+## Testing a dialect
+
+Run the testkit's source and sink contracts against the database (see [testkit](./testkit)): the
+connector creates the test table in `options(table)`, declares the types it supports, and offers
+`split.mode: none` and range splits as split strategies. Add unit tests for the type mapping, the
+SQL and the error classification of the dialect. The base itself is tested this way on H2 with
+the generic dialect.

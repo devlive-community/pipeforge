@@ -70,6 +70,8 @@
   docs: ["concepts/cluster"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/graph/**", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/JobMaster*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Placement.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ChainTopology.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/MetricsAggregator.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Dispatcher*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/RunStates.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/PluginPlanning.java"]
   docs: ["concepts/execution"]
+- paths: ["pipeforge-connectors/connector-jdbc/**"]
+  docs: ["development/jdbc-dialects"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
 # Plugins: every plugin module has its page; the conventions of plugin builds are part of packaging.

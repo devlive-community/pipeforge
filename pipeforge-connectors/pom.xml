@@ -22,6 +22,7 @@
     <description>Source and sink plugins</description>
 
     <modules>
+        <module>connector-jdbc</module>
         <module>connector-fake</module>
         <module>connector-console</module>
         <module>connector-blackhole</module>

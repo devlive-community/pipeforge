@@ -97,6 +97,11 @@ examples of its documentation page end to end: the console sink runs every examp
 `fake`, `field-mapper` and `console`, and the blackhole sink the examples of its page. Packages never contain other plugins, and at run time each
 plugin sees only its own class loader.
 
+Code that several plugins share lives in a **library module** without a descriptor and without the
+`pipeforge-maven-plugin` goals, such as `connector-jdbc` (see [JDBC dialects](./jdbc-dialects)). A
+plugin depends on it with the default scope, so the library is in the plugin's `lib/` like any other
+dependency, and each plugin gets its own copy in its own class loader.
+
 ## Goals
 
 | Goal | Default phase | What it does |

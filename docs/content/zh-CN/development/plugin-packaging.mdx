@@ -89,6 +89,10 @@ PipeForge 的 Source、Transform 和 Sink 插件是 `pipeforge-connectors` 的�
 插件可以把本仓库的其他插件作为测试依赖，例如端到端运行其文档页中的示例：console Sink 会运行所有只使用 `fake`、`field-mapper`
 和 `console` 的示例，blackhole Sink 会运行其文档页中的示例。插件包从不包含其他插件，运行时每个插件也只能看到自己的类加载器。
 
+多个插件共用的代码放在**库模块**中，它没有描述文件，也不使用 `pipeforge-maven-plugin` 的目标，例如 `connector-jdbc`（见
+[JDBC 方言](./jdbc-dialects)）。插件以默认范围依赖它，因此库和其他依赖一样位于插件的 `lib/` 中，每个插件在自己的类加载器里
+有一份自己的副本。
+
 ## 目标
 
 | 目标 | 默认阶段 | 作用 |

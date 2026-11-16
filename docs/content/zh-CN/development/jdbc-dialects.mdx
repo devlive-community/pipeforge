@@ -1,0 +1,73 @@
+---
+title: JDBC 方言
+description: JDBC 连接器基础库——它为每种数据库做了什么、数据库插件要实现的方言 SPI，以及如何接入、测试和编写方言的文档。
+order: 55
+---
+
+关系型数据库的插件共用 **`connector-jdbc`**，这是每个插件都打包在自己插件包中的一个库。它按分片读取表、按批写入行，并把
+数据库错误转换为 PipeForge 的错误；各数据库之间不同的部分是**方言**。数据库插件实现一个方言，用它创建基础库中的 Source 和
+Sink，其他功能都可以直接使用。
+
+## 基础库做了什么
+
+| 部分 | 内容 |
+|---|---|
+| 连接 | 用插件 ClassLoader 中的驱动打开连接，按 `driver` 或按 URL 查找；驱动属性依次合并方言默认值、`username` 和 `password`、`jdbc.properties.*`；方言控制的属性会被拒绝（`PF-CONF-0003`） |
+| Schema | 根据 JDBC 元数据描述表（列、类型、是否可空、主键），数据库把名称存为大写或小写时也能找到；不执行即可描述 `query` 的结果 |
+| 分片 | `split.mode: range` 时，探测分片列（`split.column`，否则为只有一个整数列的主键）的 MIN 和 MAX，切成 `split.count` 个范围，第一个和最后一个范围不设边界，另加一个读取 NULL 的分片；否则以及 `query` 时只有一个分片。Reader 每次拉取一个分片，读得快的 Reader 读得多 |
+| 读取 | 用 `fetch-size` 流式读取每个分片；方言无法读取的值让这一行成为坏行，Reader 继续读后面的行 |
+| 写入 | 每批 `batch-size` 行，每批一个事务。因暂时性原因失败的批次回滚后，在 `retry-backoff` 之后重试 `max-retries` 次，等待时间逐次加倍；因数据失败的批次回滚后对半拆分，直到每个坏行单独成批，坏行交给[脏数据策略](../concepts/dirty-data)，好的行照常写入 |
+| 错误 | 连接、登录、超时和表不存在分别转换为 `PF-CONN-0001`–`0003`、`PF-AUTH-0001` 和 `PF-META-0001`，数据错误转换为坏行（`PF-DATA-0009`），其他错误为 `PF-SRC-0001` / `PF-SINK-0001` |
+
+凭据不会出现在信息中：URL 显示时会去掉用户信息和密码参数。
+
+## 方言 SPI
+
+方言继承实现了 ANSI SQL 的 `AbstractJdbcDialect`，并覆盖自己数据库不同的部分：
+
+| 方法 | ANSI 行为 | 何时覆盖 |
+|---|---|---|
+| `name()` | —（必须实现） | — |
+| `quote(identifier)` | `"name"` | 数据库的引号不同，例如 `` `name` `` |
+| `catalogAndSchema(table)` | `db.t` 中 `db` 为 Schema | 第一部分是 Catalog，例如 MySQL |
+| `defaultProperties()` | 无 | 驱动需要特定设置，例如批量改写 |
+| `controlledProperties()` | 无 | 某个属性会破坏写入事务或读取；需要给出原因 |
+| `toDataType(column)` | 标准类型的 `java.sql.Types` | 数据库有自己的类型、无符号整数、JSON、数组 |
+| `read` / `write` | 用 `java.time` 类型的 `getObject` / `setObject` | 驱动需要其他取值方法或转换 |
+| `minMaxQuery`、`selectQuery`、`insertStatement` | ANSI SQL | 语法不同 |
+| `prepareStreaming(connection, statement, fetchSize)` | 设置 fetch size | 驱动以其他方式流式读取，例如需要事务或特殊的 fetch size |
+| `classify(error)` | 按 SQLState 类别：`08` 连接、`28` 登录、`22`/`23` 数据、`40001`/`40P01` 暂时性、`42S02`/`42P01` 不存在 | 驱动报告厂商错误码 |
+
+方言是无状态、可序列化的。`GenericDialect` 就是 ANSI 方言本身，供没有专属方言的数据库使用。
+
+## 接入插件
+
+```java
+public final class AcmeSourceFactory implements SourceFactory {
+    static final JdbcDialect DIALECT = new AcmeDialect();
+
+    @Override
+    public String identifier() {
+        return "jdbc-acme";
+    }
+
+    @Override
+    public OptionRule optionRule() {
+        return JdbcOptions.sourceRule().build(); // url、table | query、分片、jdbc.properties.*
+    }
+
+    @Override
+    public JdbcSource createSource(FactoryContext context) {
+        return new JdbcSource(JdbcSourceConfig.of(context.options(), DIALECT, context.nodeName()), DIALECT);
+    }
+}
+```
+
+Sink 的写法相同，使用 `JdbcOptions.sinkRule()`、`JdbcSinkConfig` 和 `new JdbcSink(config, DIALECT, context.inputTables())`。
+插件自己的选项通过 `sourceRule(extra...)` 加入。
+
+## 测试方言
+
+针对数据库运行 testkit 的 Source 和 Sink 契约测试（见 [testkit](./testkit)）：连接器在 `options(table)` 中创建测试表，声明自己
+支持的类型，并把 `split.mode: none` 和范围分片作为分片策略提供。再为方言的类型映射、SQL 和错误分类补充单元测试。基础库本身就是
+这样用通用方言在 H2 上测试的。

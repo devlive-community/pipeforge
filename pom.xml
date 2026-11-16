@@ -73,6 +73,7 @@
         <logback.version>1.5.38</logback.version>
         <jackson.version>2.21.7</jackson.version>
         <snakeyaml.version>2.6</snakeyaml.version>
+        <h2.version>2.2.224</h2.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <errorprone.version>2.36.0</errorprone.version>
         <calcite.version>1.40.0</calcite.version>
@@ -153,6 +154,12 @@
                 <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
                 <version>${snakeyaml.version}</version>
+            </dependency>
+            <!-- An embedded database for the tests of JDBC connectors -->
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>${h2.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.github.spotbugs</groupId>
