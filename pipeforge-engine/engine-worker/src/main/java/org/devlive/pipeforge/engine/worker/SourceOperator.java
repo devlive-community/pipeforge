@@ -42,10 +42,12 @@ final class SourceOperator {
             JobContext job,
             ExecutionAttemptId task,
             int parallelism,
-            JobMasterGateway master) {
+            JobMasterGateway master,
+            PluginThreads threads) {
         this.node = node;
         this.call = call;
-        this.context = new TaskReaderContext(job, task, parallelism, node.id(), call.classLoader(), master);
+        this.context = new TaskReaderContext(
+                job, task, parallelism, node.id(), call.classLoader(), master, threads.factory(call));
     }
 
     @SuppressWarnings("unchecked")
@@ -121,7 +123,8 @@ final class SourceOperator {
             int parallelism,
             String node,
             ClassLoader classLoader,
-            JobMasterGateway master)
+            JobMasterGateway master,
+            java.util.concurrent.ThreadFactory threadFactory)
             implements ReaderContext {
 
         @Override

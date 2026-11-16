@@ -1,6 +1,6 @@
 ---
 title: 隔离
-description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存以及记账的内容。
+description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、插件线程与取消超时。
 order: 40
 ---
 
@@ -37,6 +37,27 @@ Source 读取的每一行都按它在内存中的估算大小计量——对象�
 
 本地运行（`pipeforge run --local`）检查单行大小，但不限制 Task 内存。
 
+## 插件代码
+
+对插件的每次调用都以插件的 ClassLoader 作为线程上下文 ClassLoader。插件抛出的错误如果带有错误码则保留，否则对 Source 归为
+`PF-SRC-0001`、对 Sink 归为 `PF-SINK-0001`、对 Transform 归为 `PF-PLUG-0007`，并给出节点和当时的操作；插件需要却没有带上的类
+（`NoClassDefFoundError` 等链接错误）也按同样方式报告，而不会让 Worker 停止。
+
+**线程。** 插件从 Reader 或 Writer 上下文的 `threadFactory()` 获取的线程命名为 `plugin-<task>-<node>-<n>`，带有插件的
+ClassLoader 和 Task 的日志，并且是守护线程。其中任何一个抛出未捕获的异常都会让 Task 失败。Task 结束时，引擎中断仍然存活的线程；
+一秒后仍然存活的线程会在 Worker 日志中被报告为泄漏，并给出它停在哪里。用其他方式启动的线程不受跟踪。
+
+**取消。** 被取消的 Task 会被唤醒，它的 Reader 和 Writer 会被要求停止阻塞的 IO。超过 `task.cancel-timeout` 仍未停止的 Task
+会被中断线程；仍然不响应中断的 Task 在 `task.cancel-kill-timeout` 后被放弃：它以 [`PF-RES-0005`](../reference/errors#pf-res-0005)
+失败，Slot 被释放，它的线程被报告为残留，并给出它停在哪里。Worker 上的其他作业继续运行。
+
+| 配置项 | 文件 | 默认值 | 含义 |
+|---|---|---|---|
+| `task.cancel-timeout` | `master.yaml` | `30s` | 何时中断被取消的 Task 的线程；是 Master 运行的作业的默认值 |
+| `task.cancel-kill-timeout` | `worker.yaml` | `3min` | 何时放弃不响应取消和中断的 Task |
+
+本地运行在取消超时的两倍时放弃 Task。
+
 ## 可观测性
 
 每个 Task 随指标上报自己记账的内存；作业的 [`memoryBytes`](../reference/metrics) 是其运行中 Task 的总和。结束的 Task 不再占用内存：
@@ -46,4 +67,5 @@ Worker 作为泄漏记录到日志中，并给出占用者。
 ## 限制
 
 - 堆内存接近用满时让占用最多的 Task 变慢或失败的堆守护线程、ClassLoader 泄漏检测以及每个作业的磁盘配额在后续版本中提供。
+- 被放弃的 Task 的线程会保留到 Worker 重启；Worker 因残留线程自动重启在后续版本中提供。
 - Source 和 Sink 插件自身（例如它们的客户端库）占用的内存不计入记账。

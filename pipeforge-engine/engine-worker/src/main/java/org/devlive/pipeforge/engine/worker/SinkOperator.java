@@ -32,6 +32,7 @@ final class SinkOperator implements ChainOutput {
     private final String taskName;
     private final OperatorMetrics metrics;
     private final TaskMemory memory;
+    private final PluginThreads threads;
     private final OperatorClock clock;
     private final int slot;
     private final int handoffSlot;
@@ -51,8 +52,10 @@ final class SinkOperator implements ChainOutput {
             OperatorClock clock,
             int slot,
             int handoffSlot,
-            TaskMemory memory) {
+            TaskMemory memory,
+            PluginThreads threads) {
         this.memory = memory;
+        this.threads = threads;
         this.node = node;
         this.call = call;
         this.taskName = taskName;
@@ -78,7 +81,8 @@ final class SinkOperator implements ChainOutput {
         Sink<Object, Object> created = (Sink<Object, Object>)
                 call.call("create the sink", () -> factory.createSink(NodeContext.of(node, job, expressions)));
         sink = created;
-        WriterContext context = new TaskWriterContext(job, subtask, parallelism, call.classLoader());
+        WriterContext context =
+                new TaskWriterContext(job, subtask, parallelism, call.classLoader(), threads.factory(call));
         SinkWriter<Object, Object> opened =
                 call.call("create the writer", () -> created.createWriter(context, List.of()));
         writer = opened;
@@ -217,6 +221,11 @@ final class SinkOperator implements ChainOutput {
         return current;
     }
 
-    private record TaskWriterContext(JobContext job, int subtaskIndex, int parallelism, ClassLoader classLoader)
+    private record TaskWriterContext(
+            JobContext job,
+            int subtaskIndex,
+            int parallelism,
+            ClassLoader classLoader,
+            java.util.concurrent.ThreadFactory threadFactory)
             implements WriterContext {}
 }

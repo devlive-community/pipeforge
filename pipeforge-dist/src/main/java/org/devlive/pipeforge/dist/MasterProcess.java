@@ -90,7 +90,7 @@ public final class MasterProcess implements AutoCloseable {
                 new PluginPlanning(plugins),
                 plan -> Placement.cluster(scheduler, this::gateway, Map.of(), strategy, slotTimeout),
                 jobs,
-                SubmitOptions.defaults(),
+                SubmitOptions.defaults().withCancelTimeout(config.duration(Settings.CANCEL_TIMEOUT)),
                 threads,
                 Clock.systemUTC(),
                 1000);

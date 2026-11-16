@@ -35,9 +35,14 @@ import org.jspecify.annotations.Nullable;
  * <ol>
  *   <li>cancel: the task is woken up and its reader and writer interrupt blocking IO;
  *   <li>after {@code cancelTimeout}: the task thread is interrupted;
- *   <li>after twice {@code cancelTimeout}: the task is reported failed with {@code PF-RES-0005}
- *       and its thread is left behind.
+ *   <li>after the cancel kill timeout (twice {@code cancelTimeout} unless {@link
+ *       Options#cancelKillTimeout()} is set): the task is reported failed with {@code PF-RES-0005},
+ *       its thread is left behind and reported with where it hangs.
  * </ol>
+ *
+ * <p>Threads the plugins of a task started through their context and that are still alive {@link
+ * Options#leakGrace()} after the task ended are reported as leaked, as is the thread of a task that
+ * was given up.
  */
 public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, AutoCloseable {
 
@@ -48,6 +53,8 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final @Nullable NetworkEnvironment network;
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
     private final MemoryLimits limits;
+    private final Options options;
+    private final java.util.List<String> leaked = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final String name;
     private volatile java.util.function.Consumer<String> runEnded = run -> {};
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
@@ -92,14 +99,41 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             @Nullable SlotTable slots,
             @Nullable NetworkEnvironment network,
             org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs) {
-        this(name, master, slots, network, logs, MemoryLimits.DEFAULTS);
+        this(name, master, slots, network, logs, Options.DEFAULTS);
     }
 
     /**
-     * With memory limits for the tasks.
+     * What a worker sets for its tasks.
      *
-     * @param limits the largest row and the memory of a task's write buffer
+     * @param memory the largest row and the memory of a task's write buffer
+     * @param cancelKillTimeout how long after a cancel a task that did not stop is given up; {@code
+     *     null} for twice the cancel timeout of its job
+     * @param leakGrace how long after a task ended its plugin threads may take to end
      */
+    public record Options(MemoryLimits memory, @Nullable Duration cancelKillTimeout, Duration leakGrace) {
+
+        /** Default memory limits, the kill timeout of local runs, one second of grace. */
+        public static final Options DEFAULTS = new Options(MemoryLimits.DEFAULTS, null, Duration.ofSeconds(1));
+
+        public Options {
+            java.util.Objects.requireNonNull(memory, "memory");
+            java.util.Objects.requireNonNull(leakGrace, "leakGrace");
+        }
+
+        public static Options of(MemoryLimits memory) {
+            return new Options(memory, null, DEFAULTS.leakGrace());
+        }
+
+        public Options withCancelKillTimeout(Duration timeout) {
+            return new Options(memory, timeout, leakGrace);
+        }
+
+        public Options withLeakGrace(Duration grace) {
+            return new Options(memory, cancelKillTimeout, grace);
+        }
+    }
+
+    /** With options for the tasks. */
     @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
     public TaskExecutor(
             String name,
@@ -107,8 +141,9 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             @Nullable SlotTable slots,
             @Nullable NetworkEnvironment network,
             org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs,
-            MemoryLimits limits) {
-        this.limits = limits;
+            Options options) {
+        this.options = options;
+        this.limits = options.memory();
         this.name = name;
         this.logs = logs;
         this.master = master;
@@ -186,10 +221,11 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         Task task = tasks.get(id);
         if (task != null) {
             task.cancel();
-            Duration timeout = timeoutOf(task);
-            long millis = timeout.toMillis();
+            long millis = timeoutOf(task).toMillis();
+            Duration kill = options.cancelKillTimeout();
+            long killMillis = Math.max(millis, kill == null ? millis * 2 : kill.toMillis());
             watchdog.schedule(task::interrupt, millis, TimeUnit.MILLISECONDS);
-            watchdog.schedule(() -> giveUp(task, millis * 2), millis * 2, TimeUnit.MILLISECONDS);
+            watchdog.schedule(() -> giveUp(task, killMillis), killMillis, TimeUnit.MILLISECONDS);
         }
         return CompletableFuture.completedFuture(null);
     }
@@ -244,6 +280,12 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         if (reporter != null) {
             reporter.cancel(false);
         }
+        try {
+            var unused = watchdog.schedule(
+                    () -> reportLeakedThreads(task), options.leakGrace().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // the executor is closing
+        }
         String run = task.id().runId();
         if (tasks.keySet().stream().noneMatch(id -> id.runId().equals(run))) {
             try {
@@ -260,6 +302,39 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
      */
     public void onRunEnded(java.util.function.Consumer<String> listener) {
         this.runEnded = listener;
+    }
+
+    private void reportLeakedThreads(Task task) {
+        PluginThreads threads = task.threads();
+        if (threads == null) {
+            return;
+        }
+        for (Thread thread : threads.alive()) {
+            leaked.add(thread.getName());
+            LOG.warn(
+                    "Thread {} of task {} is still alive {} ms after the task ended; the plugin did not stop it: {}",
+                    thread.getName(),
+                    task.id(),
+                    options.leakGrace().toMillis(),
+                    where(thread));
+        }
+    }
+
+    /** The top of the stack of {@code thread}, to find where it hangs. */
+    static String where(Thread thread) {
+        StackTraceElement[] stack = thread.getStackTrace();
+        return java.util.Arrays.stream(stack)
+                .limit(8)
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(" <- "));
+    }
+
+    /**
+     * The threads reported as leaked: plugin threads alive after their task ended and the threads
+     * of tasks that were given up, by name.
+     */
+    public java.util.List<String> leakedThreads() {
+        return java.util.List.copyOf(leaked);
     }
 
     /** The tasks that have not reported a final state yet. */
@@ -299,6 +374,19 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
                 .param("timeoutMs", waitedMillis)
                 .scope(ErrorScope.node(id.vertexId()).withRun(id.runId()).withSubtask(id.subtask()))
                 .build();
-        task.giveUp(error);
+        if (task.giveUp(error)) {
+            Thread stuck = task.thread();
+            leaked.add(stuck.getName());
+            LOG.error(
+                    "Task {} ignored cancel and interrupt for {} ms; its thread {} is left behind at {}",
+                    id,
+                    waitedMillis,
+                    stuck.getName(),
+                    where(stuck));
+            PluginThreads threads = task.threads();
+            if (threads != null) {
+                threads.stop();
+            }
+        }
     }
 }

@@ -51,6 +51,9 @@
 # The memory for network buffers of the data exchange.
 # worker.memory.network:   # default: 10% of the maximum heap, at least 64MB and at most 1GB
 
+# How long after a cancel a task that ignores cancel and interrupt is given up: it fails with PF-RES-0005 and its thread is reported as left behind.
+# task.cancel-kill-timeout: 3min
+
 # The memory one task may hold in rows waiting for its sink; its reader waits when they reach it.
 # worker.memory.task:   # default: half of the heap left after the network memory, split over the slots, at least 16MB
 

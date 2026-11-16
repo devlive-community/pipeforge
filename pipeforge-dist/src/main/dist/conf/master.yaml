@@ -26,3 +26,6 @@
 
 # How long a job waits for free slots before it fails with PF-RES-0001.
 # scheduler.slot-request-timeout: 5min
+
+# How long a cancelled task may take to stop before its thread is interrupted; the default of the jobs this master runs.
+# task.cancel-timeout: 30s

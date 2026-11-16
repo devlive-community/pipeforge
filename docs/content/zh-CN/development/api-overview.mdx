@@ -76,6 +76,12 @@ Enumerator 在 JobMaster 中运行，而不是在 Worker 上，并遵守以下�
 `Sink` 在计划阶段校验输入表并创建 Writer。Writer 负责 `write`、`flush`，需要 exactly-once 时在 `prepareCommit`
 中产生待提交物，由 `SinkCommitter` 或 `GlobalCommitter` 在 checkpoint 完成后提交。
 
+### 插件的线程
+
+需要自己线程的 Reader 或 Writer（例如预取或后台写入）从 `context.threadFactory()` 获取线程。引擎以 Task 为它们命名，
+设置插件的 ClassLoader 和 Task 的日志，在 Task 结束时中断它们，之后仍然存活的线程会被报告为泄漏（见[隔离](../operations/isolation)）。
+其中任何一个线程抛出未捕获的异常都会让 Task 失败。请在 `close()` 中停止这些线程，并让它们在被中断时结束。
+
 ## 表达式
 
 需要用户写表达式的组件（例如字段映射的 `expr`、过滤条件）不需要自带解析器：`context.expressions()` 提供引擎的[表达式语言](../concepts/expressions)，

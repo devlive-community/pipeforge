@@ -66,7 +66,8 @@ final class OperatorCall {
         }
         try {
             return action.run();
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            // a LinkageError is a class the plugin needs and does not bring, not a broken JVM
             throw failure(operation, e);
         } finally {
             if (switched) {

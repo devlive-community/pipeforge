@@ -69,7 +69,8 @@ final class OperatorChain {
             JobMasterGateway master,
             @Nullable NetworkEnvironment network,
             BooleanSupplier cancelled,
-            TaskMemory memory) {
+            TaskMemory memory,
+            PluginThreads threads) {
         this.memory = memory;
         this.deployment = deployment;
         this.chain = deployment.chain();
@@ -94,7 +95,7 @@ final class OperatorChain {
         ChainOutput next;
         if (chain.hasSink()) {
             PlannedNode node = chain.sink();
-            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1, memory);
+            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1, memory, threads);
             deferred = null;
             next = sink;
         } else {
@@ -115,8 +116,8 @@ final class OperatorChain {
         first = next;
         if (chain.hasSource()) {
             PlannedNode node = chain.source();
-            source =
-                    new SourceOperator(node, call(node, scope), job, deployment.id(), deployment.parallelism(), master);
+            source = new SourceOperator(
+                    node, call(node, scope), job, deployment.id(), deployment.parallelism(), master, threads);
             sourceMetrics = new OperatorMetrics(node.id());
             output = new ChainReaderOutput(next, sourceMetrics, memory, node.id());
         } else {

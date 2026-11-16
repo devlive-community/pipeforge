@@ -72,6 +72,7 @@ final class Task implements Runnable {
     private final AtomicLong idleNanos = new AtomicLong();
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
     private final TaskMemory memory;
+    private volatile @Nullable PluginThreads threads;
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
         this(deployment, master, null, onTerminated);
@@ -157,8 +158,11 @@ final class Task implements Runnable {
 
     private void runLogged() {
         OperatorChain operators = null;
+        // created on the task thread, so that plugin threads take its log tags
+        PluginThreads started = new PluginThreads(name, this::failFromPluginThread);
+        threads = started;
         try {
-            operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled, memory);
+            operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled, memory, started);
             chain = operators;
             if (cancelled) {
                 throw new CancelledException();
@@ -173,6 +177,7 @@ final class Task implements Runnable {
             OperatorChain closing = operators;
             operators = null;
             closing.close();
+            stopThreads(started);
             memory.release();
             LOG.info("Task {} finished", deployment.id());
             report(TaskStateUpdate.finished(
@@ -181,6 +186,7 @@ final class Task implements Runnable {
             if (operators != null) {
                 closeQuietly(operators);
             }
+            stopThreads(started);
             memory.release();
             if (cancelled) {
                 LOG.info("Task {} was cancelled", deployment.id());
@@ -244,6 +250,38 @@ final class Task implements Runnable {
                 memory.splitsTaken(bytes);
             }
         });
+    }
+
+    Thread thread() {
+        return thread;
+    }
+
+    /** A plugin thread ended with an uncaught exception: the task fails at its next step. */
+    private void failFromPluginThread(PipeForgeException error) {
+        if (!state.get().isTerminal()) {
+            LOG.warn("A thread of task {} failed", deployment.id(), error);
+            mailbox.put(() -> {
+                throw error;
+            });
+        }
+    }
+
+    /** Interrupts the plugin threads the plugins did not stop when they closed. */
+    private void stopThreads(PluginThreads started) {
+        List<Thread> left = started.stop();
+        if (!left.isEmpty()) {
+            LOG.info(
+                    "Task {} interrupted {} plugin thread(s) left after closing: {}",
+                    deployment.id(),
+                    left.size(),
+                    left.stream().map(Thread::getName).toList());
+        }
+    }
+
+    /** The threads the plugins of the task started, or {@code null} before it ran. */
+    @Nullable
+    PluginThreads threads() {
+        return threads;
     }
 
     /** The memory the task holds. */

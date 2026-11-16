@@ -481,7 +481,105 @@ class TaskExecutorTest {
                     .containsEntry("subtask", 0)
                     .containsEntry("timeoutMs", 100L);
             assertThat(master.executor.runningTasks()).isEmpty();
+            assertThat(master.executor.leakedThreads())
+                    .as("the stuck thread is reported")
+                    .contains("task-src-0");
             Probe.get(probe).release.countDown();
+        }
+    }
+
+    @Test
+    void theCancelKillTimeoutDecidesWhenATaskIsGivenUp() throws Exception {
+        String probe = Probe.create();
+        TaskSettings quick =
+                new TaskSettings(true, 1024, 4, Duration.ofMillis(50), TaskSettings.DEFAULT_METRICS_INTERVAL);
+        try (ScriptedMaster master = ScriptedMaster.tenRowsWith(
+                TaskExecutor.Options.DEFAULTS.withCancelKillTimeout(Duration.ofMillis(400)))) {
+            master.executor
+                    .deployTask(
+                            ScriptedMaster.deployment(TestConnectors.job(probe, "block: forever", "", "", 1), quick))
+                    .get();
+            assertThat(Probe.get(probe).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+            long cancelled = System.nanoTime();
+            master.executor.cancelTask(master.id()).get();
+
+            TaskStateUpdate end = master.awaitEnd();
+            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - cancelled))
+                    .isGreaterThanOrEqualTo(380);
+            assertThat(end.error().code()).isEqualTo(ErrorCode.CANCEL_TIMEOUT);
+            assertThat(end.error().params()).containsEntry("timeoutMs", 400L);
+            Probe.get(probe).release.countDown();
+        }
+    }
+
+    @Test
+    void pluginThreadsAreNamedAfterTheTaskAndStoppedWhenItEnds() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master =
+                ScriptedMaster.tenRowsWith(TaskExecutor.Options.DEFAULTS.withLeakGrace(Duration.ofMillis(100)))) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "thread: ok", "", "", 1), ScriptedMaster.settings()))
+                    .get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.FINISHED);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (!Probe.get(probe).events.contains("thread interrupted")) {
+                assertThat(System.nanoTime())
+                        .as("the engine interrupts the thread")
+                        .isLessThan(deadline);
+                Thread.sleep(5);
+            }
+            assertThat(Probe.get(probe).events).contains("thread plugin-src-0-src-1 loader true");
+            Thread.sleep(300);
+            assertThat(master.executor.leakedThreads()).isEmpty();
+        }
+    }
+
+    @Test
+    void aPluginThreadThatOutlivesItsTaskIsReported() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master =
+                ScriptedMaster.tenRowsWith(TaskExecutor.Options.DEFAULTS.withLeakGrace(Duration.ofMillis(100)))) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "thread: leak", "", "", 1), ScriptedMaster.settings()))
+                    .get();
+            assertThat(master.awaitEnd().state())
+                    .as("a leak does not fail the task")
+                    .isEqualTo(TaskState.FINISHED);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (master.executor.leakedThreads().isEmpty()) {
+                assertThat(System.nanoTime()).as("the leak is reported").isLessThan(deadline);
+                Thread.sleep(5);
+            }
+            assertThat(master.executor.leakedThreads()).containsExactly("plugin-src-0-src-1");
+        } finally {
+            Probe.get(probe).release.countDown();
+        }
+    }
+
+    @Test
+    void anUncaughtExceptionInAPluginThreadFailsTheTask() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor
+                    // a slow sink on the task thread keeps the task running; it takes mail between rows
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "thread: fail", "", "slow-ms: 200", 1),
+                            new TaskSettings(
+                                    false, 1024, 4, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL)))
+                    .get();
+            TaskStateUpdate end = master.awaitEnd();
+
+            assertThat(end.state()).isEqualTo(TaskState.FAILED);
+            assertThat(end.error().code()).isEqualTo(ErrorCode.SOURCE_FAILED);
+            assertThat(end.error().scope().node()).isEqualTo("src");
+            assertThat(end.error().getMessage())
+                    .contains("run the thread plugin-src-0-src-1")
+                    .contains("boom in a reader thread");
+            assertThat(Probe.get(probe).rows)
+                    .as("it failed long before the last row")
+                    .hasSizeLessThan(10);
         }
     }
 

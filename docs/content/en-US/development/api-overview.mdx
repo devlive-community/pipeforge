@@ -85,6 +85,15 @@ A `Sink` validates its input tables while planning and creates writers. Writers 
 and, for exactly-once delivery, produce committables in `prepareCommit`; a `SinkCommitter` or
 `GlobalCommitter` commits them after the checkpoint completes.
 
+### Threads of a plugin
+
+A reader or writer that needs threads of its own, for example to fetch ahead or write in the
+background, takes them from `context.threadFactory()`. The engine names them after the task, gives
+them the plugin's class loader and the task's log, interrupts them when the task ends, and reports a
+thread that is still alive afterwards as leaked (see [isolation](../operations/isolation)). An
+uncaught exception in one of them fails the task. Stop the threads in `close()`, and let them end
+when they are interrupted.
+
 ## Expressions
 
 Components that take expressions from the user, such as the `expr` of a field mapping or a filter

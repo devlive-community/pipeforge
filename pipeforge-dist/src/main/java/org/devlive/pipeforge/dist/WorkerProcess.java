@@ -103,7 +103,8 @@ public final class WorkerProcess implements AutoCloseable {
                 table,
                 network,
                 logs,
-                memoryLimits(config, exchange, slots));
+                TaskExecutor.Options.of(memoryLimits(config, exchange, slots))
+                        .withCancelKillTimeout(config.duration(Settings.CANCEL_KILL_TIMEOUT)));
         plugins = new PluginCache(
                 new BlobClient(toMaster)::fetch,
                 home.resolve(config.string(Settings.WORKER_DIR)).resolve("plugins"),

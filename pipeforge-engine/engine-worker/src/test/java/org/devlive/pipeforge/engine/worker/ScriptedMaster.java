@@ -65,7 +65,7 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
             @org.jspecify.annotations.Nullable SlotTable slots,
             org.devlive.pipeforge.engine.network.@org.jspecify.annotations.Nullable NetworkEnvironment network,
             org.devlive.pipeforge.engine.worker.log.@org.jspecify.annotations.Nullable LogService logs) {
-        this(splits, slots, network, logs, MemoryLimits.DEFAULTS);
+        this(splits, slots, network, logs, TaskExecutor.Options.DEFAULTS);
     }
 
     /** With memory limits. */
@@ -74,16 +74,21 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
             @org.jspecify.annotations.Nullable SlotTable slots,
             org.devlive.pipeforge.engine.network.@org.jspecify.annotations.Nullable NetworkEnvironment network,
             org.devlive.pipeforge.engine.worker.log.@org.jspecify.annotations.Nullable LogService logs,
-            MemoryLimits limits) {
+            TaskExecutor.Options options) {
         this.splits.addAll(splits);
         endpoint = InProcessRpc.serve("test-master", this);
-        executor = new TaskExecutor("test", endpoint.gateway(), slots, network, logs, limits);
+        executor = new TaskExecutor("test", endpoint.gateway(), slots, network, logs, options);
     }
 
     /** Ten rows in two splits, for an executor with {@code limits}. */
     static ScriptedMaster tenRowsWithin(MemoryLimits limits) {
+        return tenRowsWith(TaskExecutor.Options.of(limits));
+    }
+
+    /** Ten rows in two splits, for an executor with {@code options}. */
+    static ScriptedMaster tenRowsWith(TaskExecutor.Options options) {
         return new ScriptedMaster(
-                List.of(TestConnectors.split("a", 0, 5), TestConnectors.split("b", 5, 10)), null, null, null, limits);
+                List.of(TestConnectors.split("a", 0, 5), TestConnectors.split("b", 5, 10)), null, null, null, options);
     }
 
     /** Ten rows in two splits. */

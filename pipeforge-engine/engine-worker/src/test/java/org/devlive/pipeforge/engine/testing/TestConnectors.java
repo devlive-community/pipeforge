@@ -105,6 +105,12 @@ public final class TestConnectors {
     /** An expression that replaces the name, evaluated with the expression language of the engine. */
     static final Option<String> EXPR = Options.key("expr").stringType().noDefault();
 
+    /**
+     * Starts a plugin thread through the reader context: {@code ok} sleeps until interrupted,
+     * {@code leak} ignores interrupts until the probe is released, {@code fail} throws.
+     */
+    static final Option<String> THREAD = Options.key("thread").stringType().defaultValue("");
+
     /** Pads the name of every row to this many characters. */
     static final Option<Integer> PAD = Options.key("pad").intType().defaultValue(0);
 
@@ -259,7 +265,8 @@ public final class TestConnectors {
                             FAIL_ENUMERATOR,
                             BLOCK_ENUMERATOR,
                             UNBOUNDED,
-                            PAD)
+                            PAD,
+                            THREAD)
                     .build();
         }
 
@@ -407,6 +414,34 @@ public final class TestConnectors {
 
         @Override
         public void start() {
+            String mode = config.get(THREAD);
+            if (!mode.isEmpty()) {
+                Thread thread = context.threadFactory().newThread(() -> {
+                    Thread self = Thread.currentThread();
+                    probe.events.add("thread " + self.getName() + " loader "
+                            + (self.getContextClassLoader() == context.classLoader()));
+                    switch (mode) {
+                        case "fail" -> throw new IllegalStateException("boom in a reader thread");
+                        case "leak" -> {
+                            while (probe.release.getCount() > 0) {
+                                try {
+                                    probe.release.await();
+                                } catch (InterruptedException e) {
+                                    // ignored on purpose: the thread must be reported
+                                }
+                            }
+                        }
+                        default -> {
+                            try {
+                                Thread.sleep(Long.MAX_VALUE);
+                            } catch (InterruptedException e) {
+                                probe.events.add("thread interrupted");
+                            }
+                        }
+                    }
+                });
+                thread.start();
+            }
             context.sendSplitRequest();
         }
 

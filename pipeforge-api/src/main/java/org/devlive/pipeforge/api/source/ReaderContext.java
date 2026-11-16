@@ -27,4 +27,14 @@ public interface ReaderContext {
 
     /** The class loader of the plugin. */
     ClassLoader classLoader();
+
+    /**
+     * Where the plugin gets its own threads, for example to fetch or write in the background. The
+     * engine names them after the task, gives them the plugin's class loader, and interrupts them
+     * when the task ends; a thread still alive after that is reported as leaked. An uncaught
+     * exception in one of them fails the task. Threads started any other way are not stopped.
+     */
+    default java.util.concurrent.ThreadFactory threadFactory() {
+        return java.util.concurrent.Executors.defaultThreadFactory();
+    }
 }

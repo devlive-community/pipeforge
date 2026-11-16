@@ -168,6 +168,18 @@
       "zh-CN" : "作业等待空闲 Slot 的最长时间，超过后以 PF-RES-0001 失败。"
     }
   }, {
+    "key" : "task.cancel-timeout",
+    "file" : "conf/master.yaml",
+    "type" : "duration",
+    "default" : "30s",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_TASK_CANCEL_TIMEOUT",
+    "description" : {
+      "en-US" : "How long a cancelled task may take to stop before its thread is interrupted; the default of the jobs this master runs.",
+      "zh-CN" : "被取消的 Task 停止前可以使用的时间，超过后中断它的线程；是本 Master 运行的作业的默认值。"
+    }
+  }, {
     "key" : "worker.master.address",
     "file" : "conf/worker.yaml",
     "type" : "address",
@@ -343,6 +355,18 @@
     "description" : {
       "en-US" : "The memory for network buffers of the data exchange.",
       "zh-CN" : "数据交换使用的网络缓冲内存。"
+    }
+  }, {
+    "key" : "task.cancel-kill-timeout",
+    "file" : "conf/worker.yaml",
+    "type" : "duration",
+    "default" : "3min",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_TASK_CANCEL_KILL_TIMEOUT",
+    "description" : {
+      "en-US" : "How long after a cancel a task that ignores cancel and interrupt is given up: it fails with PF-RES-0005 and its thread is reported as left behind.",
+      "zh-CN" : "取消后多久仍不响应取消和中断的 Task 会被放弃：它以 PF-RES-0005 失败，它的线程被报告为残留。"
     }
   }, {
     "key" : "worker.memory.task",

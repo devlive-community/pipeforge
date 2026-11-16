@@ -1,6 +1,6 @@
 ---
 title: Isolation
-description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold and what it accounts.
+description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, plugin threads and cancel timeouts.
 order: 40
 ---
 
@@ -44,6 +44,33 @@ the limit still passes. Network buffers are limited by the
 
 Local runs (`pipeforge run --local`) check the row size but do not limit task memory.
 
+## Plugin code
+
+Every call into a plugin runs with the plugin's class loader as the context class loader. An error
+it throws keeps its code when it has one, and otherwise becomes `PF-SRC-0001` for a source,
+`PF-SINK-0001` for a sink or `PF-PLUG-0007` for a transform, naming the node and what it was doing;
+a class the plugin needs but does not bring (`NoClassDefFoundError` and other linkage errors) is
+reported the same way instead of stopping the worker.
+
+**Threads.** Threads a plugin takes from `threadFactory()` of its reader or writer context are
+named `plugin-<task>-<node>-<n>`, carry the plugin's class loader and the task's log, and are daemon
+threads. An uncaught exception in one of them fails the task. When the task ends, the engine
+interrupts the ones still alive; one that is still alive a second later is reported as leaked in
+the worker's log, with where it hangs. Threads started any other way are not tracked.
+
+**Cancelling.** A cancelled task is woken up and its reader and writer are asked to stop blocking
+IO. A task that has not stopped after `task.cancel-timeout` has its thread interrupted. One that
+ignores the interrupt too is given up after `task.cancel-kill-timeout`: it fails with
+[`PF-RES-0005`](../reference/errors#pf-res-0005), its slot is freed, and its thread is reported as
+left behind, with where it hangs. Other jobs on the worker keep running.
+
+| Setting | File | Default | Meaning |
+|---|---|---|---|
+| `task.cancel-timeout` | `master.yaml` | `30s` | When the thread of a cancelled task is interrupted; the default of the jobs the master runs |
+| `task.cancel-kill-timeout` | `worker.yaml` | `3min` | When a task that ignores cancel and interrupt is given up |
+
+Local runs give a task up at twice its cancel timeout.
+
 ## Observability
 
 Every task reports the memory it accounts with its metrics; the job's
@@ -56,5 +83,7 @@ still accounted is logged by the worker as a leak, with what holds it.
 
 - The heap guard that slows down or fails the task holding the most memory when the heap runs
   full, the detection of leaked class loaders and the disk quota per job come in a later version.
+- A task that was given up keeps its thread until the worker restarts; restarting a worker with
+  stuck threads by itself comes in a later version.
 - The memory of the source and sink plugins themselves, such as their client libraries, is not
   accounted.

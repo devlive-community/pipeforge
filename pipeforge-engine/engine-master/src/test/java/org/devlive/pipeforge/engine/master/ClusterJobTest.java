@@ -65,7 +65,8 @@ class ClusterJobTest {
                     slots,
                     null,
                     null,
-                    new org.devlive.pipeforge.engine.worker.MemoryLimits(4096, Long.MAX_VALUE));
+                    TaskExecutor.Options.of(
+                            new org.devlive.pipeforge.engine.worker.MemoryLimits(4096, Long.MAX_VALUE)));
             this.endpoint = InProcessRpc.serve(address, executor);
         }
 

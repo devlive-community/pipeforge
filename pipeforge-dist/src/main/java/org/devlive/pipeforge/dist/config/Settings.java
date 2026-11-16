@@ -135,6 +135,15 @@ public final class Settings {
             "How long a job waits for free slots before it fails with PF-RES-0001.",
             "作业等待空闲 Slot 的最长时间，超过后以 PF-RES-0001 失败。");
 
+    public static final Setting CANCEL_TIMEOUT = define(
+            "task.cancel-timeout",
+            "master",
+            Setting.Type.DURATION,
+            "30s",
+            false,
+            "How long a cancelled task may take to stop before its thread is interrupted; the default of the jobs this master runs.",
+            "被取消的 Task 停止前可以使用的时间，超过后中断它的线程；是本 Master 运行的作业的默认值。");
+
     // conf/worker.yaml
     public static final Setting WORKER_MASTER = define(
             "worker.master.address",
@@ -248,6 +257,14 @@ public final class Settings {
             "最大堆的 10%，不少于 64MB、不超过 1GB",
             "The memory for network buffers of the data exchange.",
             "数据交换使用的网络缓冲内存。");
+    public static final Setting CANCEL_KILL_TIMEOUT = define(
+            "task.cancel-kill-timeout",
+            "worker",
+            Setting.Type.DURATION,
+            "3min",
+            false,
+            "How long after a cancel a task that ignores cancel and interrupt is given up: it fails with PF-RES-0005 and its thread is reported as left behind.",
+            "取消后多久仍不响应取消和中断的 Task 会被放弃：它以 PF-RES-0005 失败，它的线程被报告为残留。");
     public static final Setting TASK_MEMORY = derive(
             "worker.memory.task",
             "worker",
