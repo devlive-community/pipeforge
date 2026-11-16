@@ -55,6 +55,7 @@ public final class NettyTransport implements RemoteInputChannel.Connector, AutoC
     private final Map<InetSocketAddress, CompletableFuture<ClientConnection>> connections = new ConcurrentHashMap<>();
     private final List<Channel> accepted = new ArrayList<>();
     private @Nullable Channel server;
+    private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
 
     public NettyTransport(NetworkOptions options, String workerId, String token, int threads) {
         this.options = options;
@@ -177,8 +178,12 @@ public final class NettyTransport implements RemoteInputChannel.Connector, AutoC
         }
     }
 
+    /** Closes the connections and the server; closing it again does nothing. */
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         for (CompletableFuture<ClientConnection> connection : connections.values()) {
             if (connection.isDone() && !connection.isCompletedExceptionally()) {
                 connection.join().close();

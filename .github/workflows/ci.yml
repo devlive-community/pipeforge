@@ -90,6 +90,19 @@ jobs:
             echo "building affected modules: $MODULES"
             ./mvnw -B -ntp verify -pl "$MODULES" -am -amd
           fi
+      # Local runs start one worker by default; the connector suites must also pass on three
+      # workers whose tasks exchange rows over TCP (M1 plan, commit 15).
+      - name: Connector suites on three local workers
+        env:
+          MODULES: ${{ needs.changes.outputs.maven_modules }}
+        run: |
+          case "$MODULES" in
+            :all|*engine*|*connector*)
+              ./mvnw -B -ntp verify -Djacoco.skip=true -Dpipeforge.local.workers=3 -am \
+                -pl pipeforge-connector-testkit,pipeforge-connectors/connector-fake,pipeforge-connectors/connector-console,pipeforge-connectors/connector-blackhole
+              ;;
+            *) echo "no engine or connector module changed" ;;
+          esac
 
   build-checks:
     needs: changes

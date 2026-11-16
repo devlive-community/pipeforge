@@ -199,6 +199,17 @@ Names are separated by commas. A name that is not a group of the component under
 Groups declared in `skipped-testkit-groups` stay skipped with their reason. `pipeforge plugin test
 <project> --groups options,types` does the same for a whole plugin project.
 
+## Running on several workers
+
+The cases run on a local engine with one worker. To check that a plugin also works when its tasks
+run on several workers and exchange rows over the network, run them on three:
+
+```bash
+./mvnw test -Dpipeforge.local.workers=3
+```
+
+The CI of PipeForge runs the connectors of the repository both ways.
+
 ## Writing other tests
 
 The pieces of the contracts can be used on their own:

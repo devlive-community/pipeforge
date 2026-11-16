@@ -26,11 +26,16 @@ import org.junit.jupiter.api.Test;
 
 class LocalEngineTest {
 
-    private LocalEngine engine;
+    LocalEngine engine;
+
+    /** The engine of every test; subclasses run the same tests on more workers. */
+    LocalEngine create() {
+        return new LocalEngine(1);
+    }
 
     @BeforeEach
     void start() {
-        engine = new LocalEngine();
+        engine = create();
     }
 
     @AfterEach

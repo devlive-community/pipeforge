@@ -167,6 +167,15 @@
         "zh-CN" : "在当前进程中运行。本版本必须指定；在集群上运行随分布式运行时提供。"
       }
     }, {
+      "names" : [ "--workers" ],
+      "label" : "<n>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "With --local: how many workers run in this process (1 by default). Their tasks exchange rows over the loopback network, as on a cluster.",
+        "zh-CN" : "与 --local 一起使用：当前进程中运行的 Worker 数量（默认 1）。它们的 Task 像在集群上一样通过回环网络交换数据。"
+      }
+    }, {
       "names" : [ "--dry-run" ],
       "label" : null,
       "default" : null,

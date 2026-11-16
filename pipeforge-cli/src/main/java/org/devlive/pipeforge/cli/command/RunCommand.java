@@ -49,6 +49,10 @@ public final class RunCommand extends BaseCommand {
     @Option(names = "--local", descriptionKey = "run.local")
     boolean local;
 
+    @Option(names = "--workers", paramLabel = "<n>", descriptionKey = "run.workers", converter = WorkersConverter.class)
+    @Nullable
+    Integer workers;
+
     @Option(names = "--dry-run", descriptionKey = "run.dry-run")
     boolean dryRun;
 
@@ -78,6 +82,24 @@ public final class RunCommand extends BaseCommand {
             boolean reconciled,
             JobMetrics metrics,
             @Nullable ErrorInfo error) {}
+
+    /** A number of workers: 1 or more. */
+    static final class WorkersConverter implements picocli.CommandLine.ITypeConverter<Integer> {
+        @Override
+        public Integer convert(String value) {
+            int count;
+            try {
+                count = Integer.parseInt(value.trim());
+            } catch (NumberFormatException e) {
+                count = 0;
+            }
+            if (count < 1 || count > 64) {
+                throw new picocli.CommandLine.TypeConversionException(
+                        "'" + value + "' is not a number of workers from 1 to 64");
+            }
+            return count;
+        }
+    }
 
     /** Durations such as 30s, 5m, 2h or 500ms. */
     static final class DurationConverter implements picocli.CommandLine.ITypeConverter<Duration> {
@@ -120,7 +142,7 @@ public final class RunCommand extends BaseCommand {
                         text.endsWith("\n") ? text : text + "\n");
                 return ExitCode.SUCCESS;
             }
-            try (LocalEngine engine = new LocalEngine()) {
+            try (LocalEngine engine = workers == null ? new LocalEngine() : new LocalEngine(workers)) {
                 return run(session, engine, plan);
             }
         } finally {

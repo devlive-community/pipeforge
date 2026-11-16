@@ -56,7 +56,9 @@ Task：cdc[0]  doris[0] doris[1] doris[2] doris[3]    一个 Region，4 个 Slot
 只影响吞吐，缺少它却会打乱同一主键的变更顺序。
 
 不以 Source 开头的链，它的每个 Task 从前一条链的 Task 读取数据；不以 Sink 结尾的链，它的每个 Task 把数据写给下一条链的 Task——
-两端在同一个 Worker 上时在内存中交接，否则经过网络（见下文）。本地运行使用同样的作业图；所有 Task 都在一个进程中，因此在内存中交换数据。
+两端在同一个 Worker 上时在内存中交接，否则经过网络（见下文）。本地运行（`pipeforge run --local`）在进程中启动一个 Master 和一个 Worker，连接方式与集群相同：Worker 注册并发送心跳，调度器预留它的 Slot，
+Task 通过同样的协议向 JobMaster 报告。只有一个 Worker 时，Task 在内存中交换数据。`--workers 3`（testkit 使用系统属性 `pipeforge.local.workers`）
+启动三个 Worker，它们的 Task 像在集群上一样通过回环地址上的 TCP 交换数据；运行的输出和退出码不变。
 
 ### 拉模式分片
 

@@ -73,8 +73,16 @@ public final class Dispatcher implements AutoCloseable {
         Planned plan(Submission submission);
     }
 
-    /** A plan and what keeps its components loaded. */
-    public record Planned(JobPlan plan, AutoCloseable components) {}
+    /**
+     * A plan and what keeps its components loaded.
+     *
+     * @param options the engine settings of this run, or {@code null} for those of the dispatcher
+     */
+    public record Planned(JobPlan plan, AutoCloseable components, @Nullable SubmitOptions options) {
+        public Planned(JobPlan plan, AutoCloseable components) {
+            this(plan, components, null);
+        }
+    }
 
     /** Where the tasks of a run go. */
     @FunctionalInterface
@@ -191,7 +199,7 @@ public final class Dispatcher implements AutoCloseable {
                     new JobId(submission.runId()),
                     plan,
                     ChainTopology.graph(plan),
-                    options,
+                    planned.options() != null ? planned.options() : options,
                     placements.forRun(plan),
                     () -> jobs.remove(submission.runId()));
             run = new Run(submission, plan, master);
@@ -209,6 +217,21 @@ public final class Dispatcher implements AutoCloseable {
         started.master.start();
         LOG.info("Run {} of job {} accepted", submission.runId(), started.plan.name());
         return started.status();
+    }
+
+    /**
+     * The handle of a run, to wait for its result and follow its metrics in the same process.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
+     */
+    public synchronized org.devlive.pipeforge.engine.api.JobHandle handle(String runId) {
+        Run run = runs.get(runId);
+        if (run == null) {
+            throw PipeForgeException.of(ErrorCode.RUN_NOT_FOUND)
+                    .param("run", runId)
+                    .build();
+        }
+        return run.master.handle();
     }
 
     /**

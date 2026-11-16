@@ -71,8 +71,12 @@ reorder the changes of a key.
 Each task of a chain that does not start with a source reads its rows from the tasks of the chain
 before it, and each task of a chain that does not end with a sink writes them to the tasks of the
 next one — in memory when both run on the same worker, over the network otherwise (see below).
-Local runs use the same graph; all their tasks are in one process, so they exchange rows in
-memory.
+Local runs (`pipeforge run --local`) start a master and one worker in the process, connected the
+way a cluster is: the worker registers and sends heartbeats, the scheduler reserves its slots and
+the tasks report to their job master over the same protocol. With one worker the tasks exchange
+rows in memory. `--workers 3` (or the system property `pipeforge.local.workers` for the testkit)
+starts three workers whose tasks exchange rows over TCP on the loopback address, as on a cluster;
+the output and the exit code of a run stay the same.
 
 ### Splits are pulled
 

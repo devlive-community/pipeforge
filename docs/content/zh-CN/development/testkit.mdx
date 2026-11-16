@@ -183,6 +183,16 @@ skipped-testkit-groups:
 `-Dpipeforge.testkit.groups=resume` 不会悄悄通过。`skipped-testkit-groups` 中声明的用例组仍然按其原因跳过。`pipeforge plugin test <工程目录> --groups options,types`
 对整个插件工程做同样的事。
 
+## 在多个 Worker 上运行
+
+用例在只有一个 Worker 的本地引擎上运行。要检查插件在 Task 分布于多个 Worker、通过网络交换数据时也能工作，可以在三个 Worker 上运行：
+
+```bash
+./mvnw test -Dpipeforge.local.workers=3
+```
+
+PipeForge 的 CI 会用这两种方式运行仓库中的连接器。
+
 ## 编写其他测试
 
 契约测试的组成部分也可以单独使用：

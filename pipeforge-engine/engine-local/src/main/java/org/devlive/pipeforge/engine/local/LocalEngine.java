@@ -7,7 +7,6 @@
 package org.devlive.pipeforge.engine.local;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -22,41 +21,37 @@ import org.devlive.pipeforge.engine.api.JobHandle;
 import org.devlive.pipeforge.engine.api.JobId;
 import org.devlive.pipeforge.engine.api.JobResult;
 import org.devlive.pipeforge.engine.api.SubmitOptions;
-import org.devlive.pipeforge.engine.master.ChainTopology;
-import org.devlive.pipeforge.engine.master.JobMaster;
-import org.devlive.pipeforge.engine.master.JobMasters;
-import org.devlive.pipeforge.engine.master.Placement;
-import org.devlive.pipeforge.engine.master.graph.JobGraph;
-import org.devlive.pipeforge.engine.network.NetworkEnvironment;
-import org.devlive.pipeforge.engine.network.NetworkOptions;
-import org.devlive.pipeforge.engine.rpc.InProcessRpc;
-import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
-import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
-import org.devlive.pipeforge.engine.worker.TaskExecutor;
 
 /**
- * The native engine in one process: a master with one job master per job and a worker with a task
- * executor, connected by the in-process implementation of the same RPC interfaces a cluster uses.
+ * The native engine in one process: a master and one or more workers, connected the way a cluster
+ * is — services over in-process gRPC, registration and heartbeats, slots reserved by the scheduler,
+ * tasks that exchange rows through the data exchange of their worker (in memory with one worker,
+ * over TCP on the loopback between several).
  *
- * <p>A job is a pipeline: one source, its transforms and one sink in a line; each parallel instance
- * of a chain is a task on its own thread, and where the parallelism changes the tasks exchange
- * rows in memory, with the same buffers and credit as between workers. Checkpoints and restarts
- * come with the distributed engine.
+ * <p>A job is a pipeline: one source, its transforms and one sink in a line, with any parallelism
+ * per node. Checkpoints and restarts come with the distributed engine.
  */
 public final class LocalEngine implements Engine {
 
-    private final JobMasters jobs = new JobMasters();
-    private final InProcessRpc.Endpoint<JobMasterGateway> master;
-    private final NetworkEnvironment network;
-    private final TaskExecutor taskExecutor;
-    private final InProcessRpc.Endpoint<TaskExecutorGateway> worker;
+    /** The system property that sets the number of workers of {@link #LocalEngine()}. */
+    public static final String WORKERS = "pipeforge.local.workers";
 
+    private final LocalCluster cluster;
+    private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** With the number of workers of {@value #WORKERS}, 1 when it is not set. */
     public LocalEngine() {
-        master = InProcessRpc.serve("master", jobs);
-        network = new NetworkEnvironment("local", UUID.randomUUID().toString(), NetworkOptions.defaults());
-        network.startLocal();
-        taskExecutor = new TaskExecutor("local", master.gateway(), null, network);
-        worker = InProcessRpc.serve("worker", taskExecutor);
+        this(Integer.getInteger(WORKERS, 1));
+    }
+
+    /** With {@code workers} workers in this process. */
+    public LocalEngine(int workers) {
+        cluster = new LocalCluster(workers);
+    }
+
+    /** The number of workers that are registered. */
+    public int workers() {
+        return cluster.workers();
     }
 
     @Override
@@ -71,13 +66,7 @@ public final class LocalEngine implements Engine {
 
     @Override
     public JobHandle submit(JobPlan plan, SubmitOptions options) {
-        JobGraph graph = ChainTopology.graph(plan);
-        JobId id = JobId.random();
-        JobMaster job = new JobMaster(
-                id, plan, graph, options, Placement.local(worker.gateway()), () -> jobs.remove(id.value()));
-        jobs.add(job);
-        job.start();
-        return job.handle();
+        return cluster.submit(JobId.random().value(), plan, options);
     }
 
     @Override
@@ -85,10 +74,20 @@ public final class LocalEngine implements Engine {
         return new ExplainResult(PlanExplainer.document(plan), PlanExplainer.text(plan));
     }
 
-    /** Cancels the running jobs, waits up to 10 seconds for them to end and stops the threads. */
+    LocalCluster cluster() {
+        return cluster;
+    }
+
+    /**
+     * Cancels the running jobs, waits up to 10 seconds for them to end and stops the threads;
+     * closing it again does nothing.
+     */
     @Override
     public void close() {
-        List<CompletableFuture<JobResult>> ending = jobs.running().stream()
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        List<CompletableFuture<JobResult>> ending = cluster.jobs().running().stream()
                 .map(job -> {
                     job.cancel();
                     return job.handle().result();
@@ -101,9 +100,6 @@ public final class LocalEngine implements Engine {
         } catch (TimeoutException | ExecutionException e) {
             // stop anyway
         }
-        taskExecutor.close();
-        worker.close();
-        master.close();
-        network.close();
+        cluster.close();
     }
 }

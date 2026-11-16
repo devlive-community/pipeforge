@@ -119,6 +119,12 @@ public final class JobMaster {
     private final ExpressionCompiler expressions;
     private final Map<ExecutionGraph.Task, TaskState> states = new LinkedHashMap<>();
     private final Set<Integer> readers = new LinkedHashSet<>();
+    /**
+     * Messages of readers that are not registered yet: state updates and reader messages travel as
+     * separate calls, so a split request can arrive before the RUNNING it follows.
+     */
+    private final Map<Integer, List<ReaderMessage>> early = new LinkedHashMap<>();
+
     private final List<SerializedValue> committables = new ArrayList<>();
     private final Runnable onEnded;
     private volatile JobStatus status = JobStatus.CREATED;
@@ -393,6 +399,10 @@ public final class JobMaster {
                 if (reader) {
                     readers.add(subtask);
                     callEnumerator("register reader " + subtask, e -> e.addReader(subtask));
+                    List<ReaderMessage> waiting = early.remove(subtask);
+                    if (waiting != null) {
+                        waiting.forEach(this::handleReaderMessage);
+                    }
                 }
             }
             case FINISHED -> {
@@ -408,6 +418,7 @@ public final class JobMaster {
         }
         if (update.state().isTerminal() && reader) {
             readers.remove(subtask);
+            early.remove(subtask);
         }
         endIfDone();
     }
@@ -419,7 +430,14 @@ public final class JobMaster {
 
     private void handleReaderMessage(ReaderMessage message) {
         int subtask = message.task().subtask();
-        if (status.isTerminal() || !readers.contains(subtask) || !message.task().equals(reader(subtask))) {
+        if (status.isTerminal() || !message.task().equals(reader(subtask))) {
+            return;
+        }
+        if (!readers.contains(subtask)) {
+            TaskState state = states.get(readerTask(subtask));
+            if (state == TaskState.DEPLOYING) {
+                early.computeIfAbsent(subtask, s -> new ArrayList<>()).add(message);
+            }
             return;
         }
         switch (message) {

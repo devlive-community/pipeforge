@@ -111,14 +111,22 @@ class ClusterJobTest {
     }
 
     Worker addWorker(String address) {
-        Worker worker = new Worker(address, master.gateway());
+        return addWorker(address, master.gateway());
+    }
+
+    Worker addWorker(String address, JobMasterGateway reports) {
+        return addWorker(address, reports, Map.of());
+    }
+
+    Worker addWorker(String address, JobMasterGateway reports, Map<String, String> labels) {
+        Worker worker = new Worker(address, reports);
         worker.id = manager.register(new ResourceManager.WorkerSpec(
                         "0.1.0",
                         address,
                         address.replace("6124", "6125"),
                         new ResourceManager.Resources(2, 1L << 30, 0, 0),
                         2,
-                        Map.of(),
+                        labels,
                         "default",
                         new byte[32],
                         null))
@@ -274,6 +282,66 @@ class ClusterJobTest {
             assertThat(w.deployed).hasValue(0);
             assertThat(w.idle()).isTrue();
         });
+    }
+
+    /** Delays every RUNNING update, as when it travels on another call than the split requests. */
+    static JobMasterGateway runningLate(JobMasterGateway target, ScheduledExecutorService timer) {
+        return new JobMasterGateway() {
+            @Override
+            public CompletableFuture<Void> updateTaskState(org.devlive.pipeforge.engine.rpc.TaskStateUpdate update) {
+                if (update.state() != org.devlive.pipeforge.engine.rpc.TaskState.RUNNING) {
+                    return target.updateTaskState(update);
+                }
+                CompletableFuture<Void> sent = new CompletableFuture<>();
+                var unused = timer.schedule(
+                        () -> target.updateTaskState(update).whenComplete((v, e) -> sent.complete(null)),
+                        200,
+                        TimeUnit.MILLISECONDS);
+                return sent;
+            }
+
+            @Override
+            public CompletableFuture<Void> sendReaderMessage(org.devlive.pipeforge.engine.rpc.ReaderMessage message) {
+                return target.sendReaderMessage(message);
+            }
+
+            @Override
+            public CompletableFuture<Void> reportMetrics(
+                    ExecutionAttemptId task, org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot metrics) {
+                return target.reportMetrics(task, metrics);
+            }
+        };
+    }
+
+    @Test
+    void aSplitRequestThatArrivesBeforeTheReaderRunsIsServedOnceItDoes() throws Exception {
+        JobMasterGateway late = runningLate(master.gateway(), thread);
+        for (int i = 1; i <= 3; i++) {
+            addWorker("late-" + i + ":6124", late, Map.of("reports", "late"));
+        }
+        String probe = Probe.create();
+        JobPlan plan = TestConnectors.job(probe, "rows: 300, splits: 9", "", "", 3);
+        JobId id = JobId.random();
+        JobMaster job = new JobMaster(
+                id,
+                plan,
+                ChainTopology.graph(plan),
+                SubmitOptions.defaults(),
+                Placement.cluster(
+                        scheduler,
+                        slot -> workers.get(slot.workerId()),
+                        Map.of("reports", "late"),
+                        Scheduler.Strategy.SPREAD,
+                        Duration.ofSeconds(5)),
+                () -> jobs.remove(id.value()));
+        jobs.add(job);
+        job.start();
+        assertThat(end(job.handle()).status()).isEqualTo(JobStatus.SUCCESS);
+        assertThat(Probe.get(probe).rows).hasSize(300);
+        assertThat(job.splitOwners().values().stream()
+                        .mapToInt(java.util.Set::size)
+                        .sum())
+                .isEqualTo(9);
     }
 
     @Test
