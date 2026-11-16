@@ -217,7 +217,7 @@ The pieces of the contracts can be used on their own:
 | Class | Use |
 |---|---|
 | `TestkitExtension` | `@ExtendWith(TestkitExtension.class)` injects a `TestkitEngine` into test methods |
-| `TestJob` | Builds a job from factory instances and plans it like any other job |
+| `TestJob` | Builds a job from factory instances and plans it like any other job; `env(key, value)` sets an `env` option of the job, e.g. `env("dirty", Map.of("policy", "skip"))` |
 | `TestkitEngine` | Runs a `TestJob` on the local engine and returns a `TestRun` with the job result; `requireSuccess()` fails with the error, its hint and the run analysis |
 | `TestData` | Tables of every type, boundary values and rows generated from a seed |
 | `RowAssertions` | `assertSameRows(what, expected, actual)` |

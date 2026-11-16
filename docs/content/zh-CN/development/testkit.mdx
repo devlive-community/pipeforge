@@ -200,7 +200,7 @@ PipeForge 的 CI 会用这两种方式运行仓库中的连接器。
 | 类 | 用途 |
 |---|---|
 | `TestkitExtension` | `@ExtendWith(TestkitExtension.class)` 向测试方法注入 `TestkitEngine` |
-| `TestJob` | 用工厂实例构造作业，并像其他作业一样规划 |
+| `TestJob` | 用工厂实例构造作业，并像其他作业一样规划；`env(key, value)` 设置作业的 `env` 选项，例如 `env("dirty", Map.of("policy", "skip"))` |
 | `TestkitEngine` | 在本地引擎上运行 `TestJob`，返回带作业结果的 `TestRun`；`requireSuccess()` 失败时给出错误、排查建议和运行分析 |
 | `TestData` | 每种类型的表、边界值，以及由种子生成的行 |
 | `RowAssertions` | `assertSameRows(what, expected, actual)` |

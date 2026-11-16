@@ -47,6 +47,7 @@ public final class TestJob {
     private final String name;
     private final List<Node> nodes = new ArrayList<>();
     private int parallelism = 1;
+    private final Map<String, Object> env = new LinkedHashMap<>();
 
     private TestJob(String name) {
         this.name = name;
@@ -81,6 +82,12 @@ public final class TestJob {
         return this;
     }
 
+    /** An {@code env} setting of the job, e.g. {@code env("dirty", Map.of("policy", "skip"))}. */
+    public TestJob env(String key, Object value) {
+        env.put(key, value);
+        return this;
+    }
+
     public String name() {
         return name;
     }
@@ -95,7 +102,10 @@ public final class TestJob {
         Map<String, Object> job = new LinkedHashMap<>();
         job.put("version", JobParser.VERSION);
         job.put("name", name);
-        job.put("env", Map.of("parallelism", parallelism, "timezone", TIME_ZONE.getId()));
+        Map<String, Object> settings = new LinkedHashMap<>(env);
+        settings.put("parallelism", parallelism);
+        settings.put("timezone", TIME_ZONE.getId());
+        job.put("env", settings);
         for (String kind : List.of("source", "transform", "sink")) {
             List<Map<String, Object>> list = new ArrayList<>();
             for (Node node : nodes) {
