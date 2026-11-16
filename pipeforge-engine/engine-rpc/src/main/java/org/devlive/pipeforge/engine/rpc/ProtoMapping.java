@@ -154,7 +154,8 @@ public final class ProtoMapping {
                 .setBytesOut(metrics.bytesSent())
                 .setBytesIn(metrics.bytesReceived())
                 .setQueueDepth(metrics.queueDepth())
-                .setQueueCapacity(metrics.queueCapacity());
+                .setQueueCapacity(metrics.queueCapacity())
+                .setMemoryBytes(metrics.memoryBytes());
         for (OperatorSnapshot operator : metrics.operators()) {
             builder.addOperators(OperatorMetrics.newBuilder()
                     .setNodeId(operator.node())
@@ -188,7 +189,8 @@ public final class ProtoMapping {
                 metrics.getBytesOut(),
                 metrics.getBytesIn(),
                 metrics.getQueueDepth(),
-                metrics.getQueueCapacity());
+                metrics.getQueueCapacity(),
+                metrics.getMemoryBytes());
     }
 
     // ----------------------------------------------------------------------------- errors

@@ -31,6 +31,11 @@ import org.jspecify.annotations.Nullable;
  * The time the task thread blocks on a full queue and the time the write thread waits on an empty
  * one tell whether the source or the target is the bottleneck.
  *
+ * <p>The rows waiting to be written are accounted by their estimated size; once they reach the
+ * memory limit of the task, the task thread waits until the write thread has written some, as it
+ * waits for a full queue. A row is always taken when nothing waits, so a single row larger than
+ * the limit still passes.
+ *
  * <p>When the writer fails, the queue is cleared and the failure is rethrown on the task thread at
  * its next call, so a full queue never blocks it forever.
  */
@@ -45,7 +50,7 @@ final class AsyncWriteBuffer implements AutoCloseable {
 
     private sealed interface Element {}
 
-    private record Batch(List<Object> items) implements Element {}
+    private record Batch(List<Object> items, long bytes) implements Element {}
 
     private record Barrier(CompletableFuture<Void> written) implements Element {}
 
@@ -61,12 +66,27 @@ final class AsyncWriteBuffer implements AutoCloseable {
     private final java.util.@Nullable Map<String, String> logContext = org.slf4j.MDC.getCopyOfContextMap();
 
     private final AtomicLong producerWaitNanos = new AtomicLong();
+    /** When the task thread started its current wait, 0 when it does not wait. */
+    private volatile long waitingSince;
+
     private final AtomicLong writerWaitNanos = new AtomicLong();
     private final AtomicLong busyNanos = new AtomicLong();
     private volatile @Nullable PipeForgeException failure;
     private List<Object> current;
+    private long currentBytes;
+    private final long maxBytes;
+    /** Bytes of the items not written yet, in the current batch and in the queue. */
+    private final AtomicLong accounted = new AtomicLong();
+
+    private final Object room = new Object();
 
     AsyncWriteBuffer(String name, Target target, int batchSize, int capacity, ClassLoader loader) {
+        this(name, target, batchSize, capacity, Long.MAX_VALUE, loader);
+    }
+
+    /** @param maxBytes the bytes of unwritten items at which the task thread waits */
+    AsyncWriteBuffer(String name, Target target, int batchSize, int capacity, long maxBytes, ClassLoader loader) {
+        this.maxBytes = maxBytes;
         this.target = target;
         this.batchSize = batchSize;
         this.queue = new ArrayBlockingQueue<>(capacity);
@@ -79,11 +99,63 @@ final class AsyncWriteBuffer implements AutoCloseable {
 
     /** Adds a row or schema change; blocks while the queue is full. */
     void add(Object item) {
-        current.add(item);
-        if (current.size() >= batchSize) {
-            enqueue(new Batch(current));
-            current = new ArrayList<>(batchSize);
+        add(item, 0);
+    }
+
+    /**
+     * Adds a row or schema change of {@code bytes}; blocks while the queue is full or the unwritten
+     * items reach the memory limit.
+     */
+    void add(Object item, long bytes) {
+        if (bytes > 0 && full(bytes)) {
+            // what waits in the current batch must reach the writer, or nothing frees room
+            handOver();
+            awaitRoom(bytes);
         }
+        current.add(item);
+        currentBytes += bytes;
+        accounted.addAndGet(bytes);
+        if (current.size() >= batchSize) {
+            handOver();
+        }
+    }
+
+    private boolean full(long bytes) {
+        long held = accounted.get();
+        return held > 0 && held + bytes > maxBytes;
+    }
+
+    private void awaitRoom(long bytes) {
+        long start = startWaiting();
+        try {
+            synchronized (room) {
+                while (full(bytes)) {
+                    checkFailure();
+                    room.wait(TimeUnit.NANOSECONDS.toMillis(POLL_NANOS));
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the writer", e);
+        } finally {
+            stopWaiting(start);
+        }
+    }
+
+    private long startWaiting() {
+        long start = System.nanoTime();
+        waitingSince = start;
+        return start;
+    }
+
+    private void stopWaiting(long start) {
+        waitingSince = 0;
+        producerWaitNanos.addAndGet(System.nanoTime() - start);
+    }
+
+    /** Bytes of the rows not written yet; callable from any thread. */
+    long accountedBytes() {
+        return accounted.get();
     }
 
     /** Hands over the pending rows and waits until the writer has written and flushed everything. */
@@ -125,7 +197,7 @@ final class AsyncWriteBuffer implements AutoCloseable {
         thread.interrupt();
     }
 
-    /** Stops the write thread without writing what is left. */
+    /** Stops the write thread without writing what is left, and drops what is left. */
     @Override
     public void close() {
         if (thread.isAlive()) {
@@ -136,11 +208,21 @@ final class AsyncWriteBuffer implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+        if (!thread.isAlive()) {
+            queue.clear();
+            current = new ArrayList<>(batchSize);
+            currentBytes = 0;
+            accounted.set(0);
+        }
     }
 
-    /** Time the task thread spent blocked on a full queue. */
+    /**
+     * Time the task thread spent blocked on a full queue or on the memory limit, including a wait
+     * that has not ended, so that a reader blocked for long shows it while it waits.
+     */
     long producerWaitNanos() {
-        return producerWaitNanos.get();
+        long since = waitingSince;
+        return producerWaitNanos.get() + (since == 0 ? 0 : Math.max(0, System.nanoTime() - since));
     }
 
     /** Batches in the queue now; callable from any thread. */
@@ -165,8 +247,9 @@ final class AsyncWriteBuffer implements AutoCloseable {
 
     private void handOver() {
         if (!current.isEmpty()) {
-            enqueue(new Batch(current));
+            enqueue(new Batch(current, currentBytes));
             current = new ArrayList<>(batchSize);
+            currentBytes = 0;
         }
     }
 
@@ -175,7 +258,7 @@ final class AsyncWriteBuffer implements AutoCloseable {
         if (queue.offer(element)) {
             return;
         }
-        long start = System.nanoTime();
+        long start = startWaiting();
         try {
             while (!queue.offer(element, POLL_NANOS, TimeUnit.NANOSECONDS)) {
                 checkFailure();
@@ -184,7 +267,7 @@ final class AsyncWriteBuffer implements AutoCloseable {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting for the writer", e);
         } finally {
-            producerWaitNanos.addAndGet(System.nanoTime() - start);
+            stopWaiting(start);
         }
     }
 
@@ -212,6 +295,10 @@ final class AsyncWriteBuffer implements AutoCloseable {
                     case Batch batch -> {
                         batch.items().forEach(target::write);
                         busyNanos.addAndGet(System.nanoTime() - start);
+                        accounted.addAndGet(-batch.bytes());
+                        synchronized (room) {
+                            room.notifyAll();
+                        }
                     }
                     case Barrier barrier -> {
                         target.flush();

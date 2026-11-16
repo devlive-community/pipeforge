@@ -37,6 +37,11 @@ public final class SerializedValue {
         return version;
     }
 
+    /** The number of bytes, without copying them. */
+    public int size() {
+        return bytes.length;
+    }
+
     public byte[] bytes() {
         return bytes.clone();
     }

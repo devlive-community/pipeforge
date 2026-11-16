@@ -105,6 +105,9 @@ public final class TestConnectors {
     /** An expression that replaces the name, evaluated with the expression language of the engine. */
     static final Option<String> EXPR = Options.key("expr").stringType().noDefault();
 
+    /** Pads the name of every row to this many characters. */
+    static final Option<Integer> PAD = Options.key("pad").intType().defaultValue(0);
+
     static final Option<Integer> SLOW_MS = Options.key("slow-ms").intType().defaultValue(0);
     static final Option<String> COMMIT = Options.key("commit").stringType().defaultValue("none");
     /** Declares the source unbounded, as a stream would be; it still ends after its rows. */
@@ -255,7 +258,8 @@ public final class TestConnectors {
                             SCHEMA_CHANGE,
                             FAIL_ENUMERATOR,
                             BLOCK_ENUMERATOR,
-                            UNBOUNDED)
+                            UNBOUNDED,
+                            PAD)
                     .build();
         }
 
@@ -436,7 +440,10 @@ public final class TestConnectors {
             if (emitted == config.get(FAIL_AT)) {
                 throw failure(config, "reading row " + emitted);
             }
-            output.collect(GenericRow.of(NUMBERS, next, "name-" + next));
+            String name = "name-" + next;
+            int pad = config.get(PAD);
+            output.collect(
+                    GenericRow.of(NUMBERS, next, pad > name.length() ? name + "x".repeat(pad - name.length()) : name));
             emitted++;
             next++;
             if (next >= current.to()) {

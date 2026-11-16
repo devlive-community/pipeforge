@@ -54,7 +54,8 @@ class RunAnalyzerTest {
                 0,
                 0,
                 0,
-                running);
+                running,
+                0);
     }
 
     private record Case(

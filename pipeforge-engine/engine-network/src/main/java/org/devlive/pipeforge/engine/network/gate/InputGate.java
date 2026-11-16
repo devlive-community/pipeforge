@@ -233,6 +233,12 @@ public final class InputGate implements AutoCloseable {
         floatingFree++;
     }
 
+    /** Bytes of the network buffers the input holds now; 0 for an input of local channels only. */
+    public long bytesInUse() {
+        LocalBufferPool local = pool;
+        return local == null ? 0 : (long) local.buffersInUse() * bufferSize;
+    }
+
     public Metrics metrics() {
         List<Integer> credits = channels.stream().map(InputChannel::credit).toList();
         LocalBufferPool local = pool;

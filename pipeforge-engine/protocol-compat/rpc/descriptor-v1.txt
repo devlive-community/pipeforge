@@ -88,6 +88,7 @@ field pipeforge.rpc.v1.JobMetrics 2 timestamp_ms int64
 field pipeforge.rpc.v1.JobMetrics 20 queue_capacity int32
 field pipeforge.rpc.v1.JobMetrics 21 tasks_running int32
 field pipeforge.rpc.v1.JobMetrics 22 parallelism int32
+field pipeforge.rpc.v1.JobMetrics 23 memory_bytes int64
 field pipeforge.rpc.v1.JobMetrics 3 nodes repeated pipeforge.rpc.v1.NodeMetrics
 field pipeforge.rpc.v1.JobMetrics 4 splits_total int32
 field pipeforge.rpc.v1.JobMetrics 5 splits_finished int32

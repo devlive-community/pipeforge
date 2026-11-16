@@ -116,6 +116,7 @@ message JobMetrics {
   int32 queue_capacity = 20;
   int32 tasks_running = 21;
   int32 parallelism = 22;
+  int64 memory_bytes = 23;            // Task 当前记账的内存之和
 }
 
 message ListJobsRequest {

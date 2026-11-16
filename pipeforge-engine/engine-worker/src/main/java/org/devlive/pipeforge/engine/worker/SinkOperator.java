@@ -31,6 +31,7 @@ final class SinkOperator implements ChainOutput {
     private final OperatorCall call;
     private final String taskName;
     private final OperatorMetrics metrics;
+    private final TaskMemory memory;
     private final OperatorClock clock;
     private final int slot;
     private final int handoffSlot;
@@ -43,7 +44,15 @@ final class SinkOperator implements ChainOutput {
      * @param handoffSlot the clock slot for handing rows to the write thread, which is not the
      *     writer's own time
      */
-    SinkOperator(PlannedNode node, OperatorCall call, String taskName, OperatorClock clock, int slot, int handoffSlot) {
+    SinkOperator(
+            PlannedNode node,
+            OperatorCall call,
+            String taskName,
+            OperatorClock clock,
+            int slot,
+            int handoffSlot,
+            TaskMemory memory) {
+        this.memory = memory;
         this.node = node;
         this.call = call;
         this.taskName = taskName;
@@ -89,7 +98,10 @@ final class SinkOperator implements ChainOutput {
                     },
                     settings.writeBatchSize(),
                     settings.writeQueueCapacity(),
+                    memory.limits().taskBytes(),
                     call.classLoader());
+            AsyncWriteBuffer async = buffer;
+            memory.writeBuffer(async::accountedBytes);
         }
     }
 
@@ -111,7 +123,8 @@ final class SinkOperator implements ChainOutput {
         int token = clock.enter(async != null ? handoffSlot : slot);
         try {
             if (async != null) {
-                async.add(item);
+                // rows a transform made larger are checked here, before the buffer holds them
+                async.add(item, item instanceof Row row ? memory.check(row, node.id()) : 0);
             } else {
                 writeNow(opened(), item);
             }

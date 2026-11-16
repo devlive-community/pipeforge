@@ -51,6 +51,9 @@
 # The memory for network buffers of the data exchange.
 # worker.memory.network:   # default: 10% of the maximum heap, at least 64MB and at most 1GB
 
+# The memory one task may hold in rows waiting for its sink; its reader waits when they reach it.
+# worker.memory.task:   # default: half of the heap left after the network memory, split over the slots, at least 16MB
+
 # The size of a network buffer.
 # network.buffer-size: 32KB
 
@@ -63,5 +66,5 @@
 # After how long a buffer that is not full is sent anyway.
 # network.buffer-timeout: 100ms
 
-# The largest row a task may exchange with another task.
+# The largest row a task takes, estimated in memory, and the largest it exchanges with another task; a larger row fails its job with PF-DATA-0007.
 # task.max-row-bytes: 64MB

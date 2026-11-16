@@ -23,6 +23,7 @@ import java.util.List;
  * @param bytesReceived bytes of rows the task received from other tasks
  * @param queueDepth batches in the write queue of the sink now
  * @param queueCapacity the batches the write queue holds; 0 without one
+ * @param memoryBytes the memory the task accounts now: write buffer, network buffers, queued splits
  */
 public record TaskMetricsSnapshot(
         List<OperatorSnapshot> operators,
@@ -34,7 +35,8 @@ public record TaskMetricsSnapshot(
         long bytesSent,
         long bytesReceived,
         int queueDepth,
-        int queueCapacity) {
+        int queueCapacity,
+        long memoryBytes) {
 
     public static final TaskMetricsSnapshot EMPTY = new TaskMetricsSnapshot(List.of(), 0, 0, 0, 0);
 
@@ -49,6 +51,32 @@ public record TaskMetricsSnapshot(
             long idleNanos,
             long readerWaitNanos,
             long writerWaitNanos) {
-        this(operators, runningNanos, idleNanos, readerWaitNanos, writerWaitNanos, 0, 0, 0, 0, 0);
+        this(operators, runningNanos, idleNanos, readerWaitNanos, writerWaitNanos, 0, 0, 0, 0, 0, 0);
+    }
+
+    /** A snapshot without accounted memory. */
+    public TaskMetricsSnapshot(
+            List<OperatorSnapshot> operators,
+            long runningNanos,
+            long idleNanos,
+            long readerWaitNanos,
+            long writerWaitNanos,
+            long backpressuredNanos,
+            long bytesSent,
+            long bytesReceived,
+            int queueDepth,
+            int queueCapacity) {
+        this(
+                operators,
+                runningNanos,
+                idleNanos,
+                readerWaitNanos,
+                writerWaitNanos,
+                backpressuredNanos,
+                bytesSent,
+                bytesReceived,
+                queueDepth,
+                queueCapacity,
+                0);
     }
 }

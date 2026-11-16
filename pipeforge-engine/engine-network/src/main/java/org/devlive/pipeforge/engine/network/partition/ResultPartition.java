@@ -205,6 +205,11 @@ public final class ResultPartition {
         return done == subpartitions.length;
     }
 
+    /** Bytes of the network buffers the output holds now: its share of the worker's network memory. */
+    public long bytesInUse() {
+        return (long) pool.buffersInUse() * bufferSize;
+    }
+
     public Metrics metrics() {
         return new Metrics(rows, bytes, buffers, pool.waitNanos() / 1_000_000, pool.usage());
     }

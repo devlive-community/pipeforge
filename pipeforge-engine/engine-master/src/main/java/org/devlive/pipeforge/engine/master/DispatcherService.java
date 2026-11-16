@@ -178,7 +178,8 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 .setQueueDepth(metrics.queueDepth())
                 .setQueueCapacity(metrics.queueCapacity())
                 .setTasksRunning(metrics.tasksRunning())
-                .setParallelism(metrics.parallelism());
+                .setParallelism(metrics.parallelism())
+                .setMemoryBytes(metrics.memoryBytes());
         for (NodeMetrics node : metrics.nodes()) {
             proto.addNodes(org.devlive.pipeforge.engine.rpc.proto.NodeMetrics.newBuilder()
                     .setNodeId(node.node())

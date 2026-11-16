@@ -248,6 +248,14 @@ public final class Settings {
             "最大堆的 10%，不少于 64MB、不超过 1GB",
             "The memory for network buffers of the data exchange.",
             "数据交换使用的网络缓冲内存。");
+    public static final Setting TASK_MEMORY = derive(
+            "worker.memory.task",
+            "worker",
+            Setting.Type.SIZE,
+            "half of the heap left after the network memory, split over the slots, at least 16MB",
+            "扣除网络内存后剩余堆的一半，按 Slot 平分，不少于 16MB",
+            "The memory one task may hold in rows waiting for its sink; its reader waits when they reach it.",
+            "一个 Task 等待写入 Sink 的行最多占用的内存；达到后它的 Reader 会等待。");
     public static final Setting BUFFER_SIZE = define(
             "network.buffer-size",
             "worker",
@@ -286,8 +294,8 @@ public final class Settings {
             Setting.Type.SIZE,
             "64MB",
             false,
-            "The largest row a task may exchange with another task.",
-            "Task 之间交换的单行大小上限。");
+            "The largest row a task takes, estimated in memory, and the largest it exchanges with another task; a larger row fails its job with PF-DATA-0007.",
+            "Task 接收的单行大小上限（按内存估算），也是 Task 之间交换的单行大小上限；更大的行会让它的作业以 PF-DATA-0007 失败。");
 
     private Settings() {}
 

@@ -35,6 +35,7 @@ import org.devlive.pipeforge.engine.rpc.grpc.Retry;
 import org.devlive.pipeforge.engine.rpc.grpc.SecretBox;
 import org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorService;
 import org.devlive.pipeforge.engine.worker.MasterConnection;
+import org.devlive.pipeforge.engine.worker.MemoryLimits;
 import org.devlive.pipeforge.engine.worker.PluginCache;
 import org.devlive.pipeforge.engine.worker.SlotTable;
 import org.devlive.pipeforge.engine.worker.TaskExecutor;
@@ -70,7 +71,8 @@ public final class WorkerProcess implements AutoCloseable {
         String host = config.optional(Settings.WORKER_HOST).orElseGet(WorkerProcess::hostName);
         int rpcPort = config.integer(Settings.WORKER_RPC_PORT);
         String name = host + ":" + rpcPort;
-        network = new NetworkEnvironment(name, config.string(Settings.CLUSTER_TOKEN), networkOptions(config));
+        NetworkOptions exchange = networkOptions(config);
+        network = new NetworkEnvironment(name, config.string(Settings.CLUSTER_TOKEN), exchange);
         InetSocketAddress data;
         try {
             data = network.start("0.0.0.0", config.integer(Settings.WORKER_DATA_PORT));
@@ -95,7 +97,13 @@ public final class WorkerProcess implements AutoCloseable {
                         config.integer(Settings.WORKER_LOG_MAX_FILES),
                         config.duration(Settings.WORKER_LOG_RETENTION)));
         threads.scheduleWithFixedDelay(this::cleanLogs, 1, 60, TimeUnit.MINUTES);
-        executor = new TaskExecutor(name, new JobMasterClient(toMaster, "the master", retry), table, network, logs);
+        executor = new TaskExecutor(
+                name,
+                new JobMasterClient(toMaster, "the master", retry),
+                table,
+                network,
+                logs,
+                memoryLimits(config, exchange, slots));
         plugins = new PluginCache(
                 new BlobClient(toMaster)::fetch,
                 home.resolve(config.string(Settings.WORKER_DIR)).resolve("plugins"),
@@ -154,6 +162,13 @@ public final class WorkerProcess implements AutoCloseable {
                 defaults.pingInterval(),
                 defaults.partitionRequestTimeout(),
                 defaults.connectTimeout());
+    }
+
+    /** The memory limits of the tasks, with the task memory derived from the heap when it is not set. */
+    static MemoryLimits memoryLimits(Configuration config, NetworkOptions exchange, int slots) {
+        long left = Math.max(0, Runtime.getRuntime().maxMemory() - exchange.memoryBytes());
+        long derived = Math.max(16L << 20, left / 2 / Math.max(1, slots));
+        return new MemoryLimits(config.size(Settings.MAX_ROW_BYTES), config.size(Settings.TASK_MEMORY, derived));
     }
 
     static String hostName() {

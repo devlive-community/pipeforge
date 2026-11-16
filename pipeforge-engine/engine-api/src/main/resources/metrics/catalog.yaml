@@ -181,6 +181,14 @@
     en-US: "Time tasks ran, summed over tasks; readerWaitMs, writerWaitMs and backpressuredMs are shares of it."
     zh-CN: "Task 的运行时间，按 Task 求和；readerWaitMs、writerWaitMs 和 backpressuredMs 是它的一部分。"
 
+- name: memoryBytes
+  scope: job
+  type: gauge
+  unit: bytes
+  description:
+    en-US: "The memory the tasks hold now, summed over tasks: rows in write buffers, network buffers and split assignments not yet handed to readers."
+    zh-CN: "各 Task 当前占用的内存之和：写缓冲中的行、网络缓冲和尚未交给 Reader 的分片。"
+
 - name: rowsIn
   scope: node
   type: counter

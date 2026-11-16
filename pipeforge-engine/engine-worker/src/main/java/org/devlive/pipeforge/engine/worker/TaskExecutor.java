@@ -47,6 +47,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final @Nullable SlotTable slots;
     private final @Nullable NetworkEnvironment network;
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
+    private final MemoryLimits limits;
     private final String name;
     private volatile java.util.function.Consumer<String> runEnded = run -> {};
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
@@ -85,13 +86,29 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
      *
      * @param logs the task logs, which the caller closes; {@code null} for none
      */
-    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
     public TaskExecutor(
             String name,
             JobMasterGateway master,
             @Nullable SlotTable slots,
             @Nullable NetworkEnvironment network,
             org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs) {
+        this(name, master, slots, network, logs, MemoryLimits.DEFAULTS);
+    }
+
+    /**
+     * With memory limits for the tasks.
+     *
+     * @param limits the largest row and the memory of a task's write buffer
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // runs until the watchdog stops
+    public TaskExecutor(
+            String name,
+            JobMasterGateway master,
+            @Nullable SlotTable slots,
+            @Nullable NetworkEnvironment network,
+            org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs,
+            MemoryLimits limits) {
+        this.limits = limits;
         this.name = name;
         this.logs = logs;
         this.master = master;
@@ -151,7 +168,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
                 return CompletableFuture.failedFuture(e);
             }
         }
-        Task task = new Task(deployment, master, network, logs, this::terminated);
+        Task task = new Task(deployment, master, network, logs, limits, this::terminated);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Task " + deployment.id() + " is already deployed"));
@@ -208,8 +225,21 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         }
     }
 
+    /** The memory the running tasks hold, in bytes. */
+    public long accountedMemory() {
+        return tasks.values().stream().mapToLong(t -> t.memory().accounted()).sum();
+    }
+
     private void terminated(Task task) {
         tasks.remove(task.id(), task);
+        long left = task.memory().accounted();
+        if (left != 0) {
+            LOG.warn(
+                    "Task {} ended but still holds {} bytes: {}",
+                    task.id(),
+                    left,
+                    task.memory().byHolder());
+        }
         ScheduledFuture<?> reporter = reporters.remove(task.id());
         if (reporter != null) {
             reporter.cancel(false);

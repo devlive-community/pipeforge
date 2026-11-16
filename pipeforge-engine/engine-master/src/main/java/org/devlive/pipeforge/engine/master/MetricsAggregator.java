@@ -105,6 +105,7 @@ final class MetricsAggregator {
         long exchanged = 0;
         int queueDepth = 0;
         int queueCapacity = 0;
+        long memory = 0;
         for (Map.Entry<String, TaskMetricsSnapshot> entry : tasks.entrySet()) {
             TaskMetricsSnapshot task = entry.getValue();
             String vertex = entry.getKey().substring(0, entry.getKey().lastIndexOf('/'));
@@ -116,6 +117,7 @@ final class MetricsAggregator {
             exchanged += task.bytesSent();
             queueDepth += task.queueDepth();
             queueCapacity += task.queueCapacity();
+            memory += task.memoryBytes();
             if (offset < nodes.size()) {
                 bytesIn[offset] += task.bytesReceived();
             }
@@ -221,7 +223,8 @@ final class MetricsAggregator {
                 queueCapacity,
                 splitsAssigned,
                 splitsFinished,
-                TimeUnit.NANOSECONDS.toMillis(running));
+                TimeUnit.NANOSECONDS.toMillis(running),
+                memory);
     }
 
     private Sample secondToLast() {

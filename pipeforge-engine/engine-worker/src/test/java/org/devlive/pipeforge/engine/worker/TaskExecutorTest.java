@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.api.table.AddColumn;
+import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.JobPlan;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
@@ -193,6 +194,62 @@ class TaskExecutorTest {
         assertThat(end.metrics().operators().get(2).rowsOut()).isEqualTo(20);
         assertThat(end.metrics().readerWaitNanos()).isZero();
         assertThat(end.metrics().writerWaitNanos()).isZero();
+    }
+
+    @Test
+    void aRowLargerThanTheLimitFailsTheTaskAtTheSource() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master = ScriptedMaster.tenRowsWithin(new MemoryLimits(2_000, Long.MAX_VALUE))) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "pad: 5000", "", "", 1), ScriptedMaster.settings()))
+                    .get();
+            TaskStateUpdate end = master.awaitEnd();
+
+            assertThat(end.state()).isEqualTo(TaskState.FAILED);
+            PipeForgeException error = end.error();
+            assertThat(error.code()).isEqualTo(ErrorCode.ROW_TOO_LARGE);
+            assertThat(error.scope().node()).isEqualTo("src");
+            assertThat(error.params()).containsEntry("limit", 2_000L).containsEntry("table", "demo.numbers");
+            assertThat((Long) error.params().get("bytes")).isGreaterThan(10_000L);
+            assertThat(Probe.get(probe).rows).isEmpty();
+        }
+    }
+
+    @Test
+    void theWriteBufferHoldsAtMostTheTaskMemoryAndNothingAfterTheEnd() throws Exception {
+        String probe = Probe.create();
+        TaskSettings often = new TaskSettings(true, 1024, 4, Duration.ofSeconds(30), Duration.ofMillis(20));
+        try (ScriptedMaster master = ScriptedMaster.tenRowsWithin(new MemoryLimits(64L * 1024 * 1024, 2_000))) {
+            // rows of about 450 bytes into a sink that blocks on its first row
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "pad: 200", "", "block: cancel", 1), often))
+                    .get();
+            assertThat(Probe.get(probe).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+            // a reader that is still waiting reports its wait so far
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            TaskMetricsSnapshot report;
+            do {
+                report = master.metrics.poll(10, TimeUnit.SECONDS);
+                assertThat(report).isNotNull();
+                assertThat(System.nanoTime()).as("the reader wait shows").isLessThan(deadline);
+            } while (report.readerWaitNanos() == 0);
+
+            long held = master.executor.accountedMemory();
+            assertThat(held).as("rows wait for the writer").isPositive();
+            assertThat(held).as("the reader waits at the limit").isLessThanOrEqualTo(2_000 + 500);
+            assertThat(report.memoryBytes()).isPositive();
+            assertThat(Probe.get(probe).rows).isEmpty();
+
+            master.executor.cancelTask(master.id()).get();
+            TaskStateUpdate end = master.awaitEnd();
+            assertThat(end.state()).isEqualTo(TaskState.CANCELED);
+            assertThat(end.metrics().memoryBytes())
+                    .as("the task holds nothing once it ended")
+                    .isZero();
+            assertThat(master.executor.accountedMemory()).isZero();
+        }
     }
 
     @Test

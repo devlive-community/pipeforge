@@ -238,7 +238,7 @@ handle.result().get().status();   // CANCELLED
 - **速率。** 读写速率每个周期采样一次：最近 5 秒的瞬时速率、全程平均速率和 1 秒内的峰值。
 - **自身耗时。** `selfTimeRatio` 是节点自身代码（不含其下游节点）占运行时间的比例。每 16 次读取测量一次，热路径上不必每行都读取时钟；
   开启写缓冲的 Sink 取写线程的忙碌时间。
-- **等待。** `readerWaitMs` 是 Task 因写队列已满而阻塞的时间（目标端慢），`writerWaitMs` 是写线程等待数据的时间（源端慢），
+- **等待。** `readerWaitMs` 是 Task 因写队列已满或达到 [Task 内存](../operations/isolation)上限而阻塞的时间（目标端慢），`writerWaitMs` 是写线程等待数据的时间（源端慢），
   `backpressuredMs` 是 Task 等待网络缓冲的时间（它发送数据的下游 Task 更慢），`backpressuredRatio` 是它占运行时间的比例。
 - **数据交换。** `exchangedBytes` 统计 Task 发给其他 Task 的行的字节数；按节点看，`bytesOut` 是一条链的最后一个节点发出的字节数，
   `bytesIn` 是下一条链的第一个节点收到的字节数。

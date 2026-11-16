@@ -52,6 +52,51 @@ class AsyncWriteBufferTest {
     }
 
     @Test
+    void blocksTheProducerWhileTheUnwrittenRowsReachTheMemoryLimit() throws Exception {
+        GatedTarget target = new GatedTarget();
+        // batches of 10 and a long queue: only the 250-byte limit can hold the producer back
+        try (AsyncWriteBuffer buffer =
+                new AsyncWriteBuffer("w-test", target, 10, 100, 250, getClass().getClassLoader())) {
+            buffer.add("a", 100);
+            buffer.add("b", 100);
+            assertThat(buffer.accountedBytes()).isEqualTo(200);
+            CountDownLatch added = new CountDownLatch(1);
+            Thread producer = new Thread(() -> {
+                buffer.add("c", 100);
+                added.countDown();
+            });
+            producer.start();
+
+            // the waiting producer hands the current batch over, so the writer can make room
+            assertThat(target.writing.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(added.await(200, TimeUnit.MILLISECONDS)).isFalse();
+            target.open.countDown();
+            assertThat(added.await(5, TimeUnit.SECONDS)).isTrue();
+            producer.join();
+            assertThat(buffer.accountedBytes()).isEqualTo(100);
+            buffer.add("huge", 10_000);
+            buffer.finish();
+
+            assertThat(target.written).containsExactly("a", "b", "c", "huge");
+            assertThat(buffer.accountedBytes()).as("all written").isZero();
+            assertThat(buffer.producerWaitNanos()).isGreaterThanOrEqualTo(TimeUnit.MILLISECONDS.toNanos(150));
+        }
+    }
+
+    @Test
+    void closingDropsWhatWasNotWritten() throws Exception {
+        GatedTarget target = new GatedTarget();
+        AsyncWriteBuffer buffer =
+                new AsyncWriteBuffer("w-test", target, 1, 4, 1_000, getClass().getClassLoader());
+        buffer.add("a", 100);
+        assertThat(target.writing.await(5, TimeUnit.SECONDS)).isTrue();
+        buffer.add("b", 100);
+        assertThat(buffer.accountedBytes()).isEqualTo(200);
+        buffer.close();
+        assertThat(buffer.accountedBytes()).isZero();
+    }
+
+    @Test
     void blocksTheProducerWhileTheQueueIsFull() throws Exception {
         GatedTarget target = new GatedTarget();
         try (AsyncWriteBuffer buffer =

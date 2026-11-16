@@ -137,6 +137,15 @@ final class NetworkOutput implements ChainOutput {
         }
     }
 
+    /** Bytes of the network buffers the outputs hold now. */
+    long memoryBytes() {
+        long total = 0;
+        for (Edge edge : edges) {
+            total += edge.partition().bytesInUse();
+        }
+        return total;
+    }
+
     /** Bytes of rows written to the outputs. */
     long bytesSent() {
         long total = 0;

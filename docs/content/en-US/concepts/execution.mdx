@@ -298,7 +298,8 @@ runs, refreshed every `metricsInterval`.
 - **Self time.** `selfTimeRatio` is the share of the running time a node spends in its own code,
   without the nodes after it. It is measured on every 16th read, so that the hot path does not read
   the clock for every row; for a sink with the write buffer it is the busy time of the write thread.
-- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue (the target is slow),
+- **Waiting.** `readerWaitMs` is the time tasks blocked on a full write queue or on the
+  [task memory](../operations/isolation) (the target is slow),
   `writerWaitMs` the time write threads waited for rows (the source is slow), `backpressuredMs`
   the time tasks waited for network buffers (the tasks they send to are slower), also as
   `backpressuredRatio` of the running time.

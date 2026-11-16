@@ -108,6 +108,11 @@ final class NetworkInput {
         return PollStatus.MORE_AVAILABLE;
     }
 
+    /** Bytes of the network buffers the input holds now. */
+    long memoryBytes() {
+        return gate.bytesInUse();
+    }
+
     long bytesReceived() {
         return gate.metrics().bytes();
     }

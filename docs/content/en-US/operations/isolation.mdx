@@ -1,0 +1,60 @@
+---
+title: Isolation
+description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold and what it accounts.
+order: 40
+---
+
+Jobs share the workers of a cluster: the tasks of several jobs run in the same worker process, each
+in a slot of its own. A job must not take down the others, so every task is held to limits that
+fail or slow down that task only.
+
+## Row size
+
+Every row a source reads is measured by its estimated size in memory — object headers, references
+and the content of its values, two bytes per character of text. A row larger than
+`task.max-row-bytes` (64MB by default) fails its job with
+[`PF-DATA-0007`](../reference/errors#pf-data-0007), naming the node, the table, the size and the
+limit. Rows that a transform made larger are checked again before the write buffer holds them, and
+rows sent to another task are checked by their encoded size.
+
+The job fails as a whole for now; the other jobs on the worker keep running. A policy for bad rows,
+which can skip such a row or keep it aside, comes in a later version.
+
+## Task memory
+
+Each task accounts the memory it holds:
+
+| Holder | What is counted |
+|---|---|
+| Write buffer | Rows waiting for the sink's write thread, by their estimated size |
+| Network buffers | The buffers of its outputs and inputs, from the worker's network memory |
+| Split queue | Split assignments that wait until the task hands them to the reader |
+
+Rows waiting in the write buffer are limited by `worker.memory.task`: when they reach it, the reader
+waits until the write thread has written some, the same backpressure as a full write queue, and the
+wait counts as `readerWaitMs`. A single row is always taken when nothing waits, so a row larger than
+the limit still passes. Network buffers are limited by the
+[data exchange](../concepts/execution) settings; a task waits for them instead of growing.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `worker.memory.task` | half of the heap left after the network memory, split over the slots, at least 16MB | Rows a task may hold for its sink |
+| `task.max-row-bytes` | `64MB` | The largest row |
+| `worker.memory.network` | 10% of the heap, 64MB to 1GB | The network buffers of all tasks |
+
+Local runs (`pipeforge run --local`) check the row size but do not limit task memory.
+
+## Observability
+
+Every task reports the memory it accounts with its metrics; the job's
+[`memoryBytes`](../reference/metrics) is the sum over its running tasks. A task that ended holds
+nothing: its write buffer is empty or dropped, its network buffers belong to the data exchange
+until other tasks read them, and splits it never took are dropped. A task that ends with memory
+still accounted is logged by the worker as a leak, with what holds it.
+
+## Limitations
+
+- The heap guard that slows down or fails the task holding the most memory when the heap runs
+  full, the detection of leaked class loaders and the disk quota per job come in a later version.
+- The memory of the source and sink plugins themselves, such as their client libraries, is not
+  accounted.

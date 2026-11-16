@@ -58,7 +58,14 @@ class ClusterJobTest {
         Worker(String address, JobMasterGateway master) {
             this.address = address;
             this.slots = new SlotTable(address, 2);
-            this.executor = new TaskExecutor(address, master, slots);
+            // rows up to 4KB, so that a test can send larger ones cheaply
+            this.executor = new TaskExecutor(
+                    address,
+                    master,
+                    slots,
+                    null,
+                    null,
+                    new org.devlive.pipeforge.engine.worker.MemoryLimits(4096, Long.MAX_VALUE));
             this.endpoint = InProcessRpc.serve(address, executor);
         }
 
@@ -179,6 +186,34 @@ class ClusterJobTest {
             assertThat(System.nanoTime()).as("slots given back").isLessThan(deadline);
             Thread.sleep(10);
         }
+    }
+
+    @Test
+    void aRowTooLargeFailsItsJobOnlyAndItsTasksHoldNothingAfterwards() throws Exception {
+        String good = Probe.create();
+        String bad = Probe.create();
+        // both jobs share the three workers
+        JobHandle large =
+                submit(TestConnectors.job(bad, "rows: 30, splits: 3, pad: 10000", "", "", 3), Duration.ofSeconds(5));
+        JobHandle normal =
+                submit(TestConnectors.job(good, "rows: 3000, splits: 6, pad: 500", "", "", 3), Duration.ofSeconds(5));
+
+        JobResult failed = end(large);
+        assertThat(failed.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(failed.error().code()).isEqualTo(ErrorCode.ROW_TOO_LARGE);
+        assertThat(failed.error().scope().node()).isEqualTo("src");
+        assertThat(failed.error().getMessage()).contains("more than task.max-row-bytes (4096)");
+        assertThat(Probe.get(bad).rows).isEmpty();
+
+        JobResult succeeded = end(normal);
+        assertThat(succeeded.status()).as(String.valueOf(succeeded.error())).isEqualTo(JobStatus.SUCCESS);
+        assertThat(Probe.get(good).rows).hasSize(3000);
+        assertThat(succeeded.metrics().memoryBytes())
+                .as("the tasks hold nothing once they ended")
+                .isZero();
+        assertThat(workers.values())
+                .allSatisfy(w -> assertThat(w.executor.accountedMemory()).isZero());
+        awaitSlotsBack();
     }
 
     @Test

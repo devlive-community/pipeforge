@@ -44,6 +44,7 @@ import java.util.Optional;
  * @param splitsAssigned splits the enumerator gave to readers
  * @param splitsFinished splits of readers that have finished
  * @param runningMs time tasks ran, summed over tasks: the base of the wait shares
+ * @param memoryBytes the memory the tasks account now, summed over tasks
  */
 public record JobMetrics(
         long elapsedMs,
@@ -67,11 +68,12 @@ public record JobMetrics(
         int queueCapacity,
         int splitsAssigned,
         int splitsFinished,
-        long runningMs) {
+        long runningMs,
+        long memoryBytes) {
 
     /** No data yet. */
-    public static final JobMetrics EMPTY =
-            new JobMetrics(0, 0, 0, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 0, 0, List.of(), 0, 0, -1, 0, 0, 0, 0, 0);
+    public static final JobMetrics EMPTY = new JobMetrics(
+            0, 0, 0, 0, 0, 0, 0, Rate.ZERO, Rate.ZERO, 0, 0, 0, 0, List.of(), 0, 0, -1, 0, 0, 0, 0, 0, 0);
 
     public JobMetrics {
         Objects.requireNonNull(readRowsPerSecond, "readRowsPerSecond");

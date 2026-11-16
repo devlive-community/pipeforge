@@ -50,6 +50,7 @@ final class OperatorChain {
     private final @Nullable ReaderOutput output;
     private final @Nullable OperatorMetrics sourceMetrics;
     private final OperatorClock clock;
+    private final TaskMemory memory;
     private final ExpressionCompiler expressions;
     private final @Nullable NetworkEnvironment network;
     private final BooleanSupplier cancelled;
@@ -67,7 +68,9 @@ final class OperatorChain {
             String taskName,
             JobMasterGateway master,
             @Nullable NetworkEnvironment network,
-            BooleanSupplier cancelled) {
+            BooleanSupplier cancelled,
+            TaskMemory memory) {
+        this.memory = memory;
         this.deployment = deployment;
         this.chain = deployment.chain();
         this.network = network;
@@ -91,7 +94,7 @@ final class OperatorChain {
         ChainOutput next;
         if (chain.hasSink()) {
             PlannedNode node = chain.sink();
-            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1);
+            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1, memory);
             deferred = null;
             next = sink;
         } else {
@@ -115,7 +118,7 @@ final class OperatorChain {
             source =
                     new SourceOperator(node, call(node, scope), job, deployment.id(), deployment.parallelism(), master);
             sourceMetrics = new OperatorMetrics(node.id());
-            output = new ChainReaderOutput(next, sourceMetrics);
+            output = new ChainReaderOutput(next, sourceMetrics, memory, node.id());
         } else {
             source = null;
             sourceMetrics = null;
@@ -156,6 +159,11 @@ final class OperatorChain {
         } else {
             input = new NetworkInput(network(), deployment, chain.head().inputTables());
         }
+        memory.network(() -> {
+            NetworkOutput out = outputs;
+            NetworkInput in = input;
+            return (out == null ? 0 : out.memoryBytes()) + (in == null ? 0 : in.memoryBytes());
+        });
     }
 
     private NetworkEnvironment network() {
@@ -350,14 +358,19 @@ final class OperatorChain {
     private static final class ChainReaderOutput implements ReaderOutput {
         private final ChainOutput next;
         private final OperatorMetrics metrics;
+        private final TaskMemory memory;
+        private final String node;
 
-        ChainReaderOutput(ChainOutput next, OperatorMetrics metrics) {
+        ChainReaderOutput(ChainOutput next, OperatorMetrics metrics, TaskMemory memory, String node) {
             this.next = next;
             this.metrics = metrics;
+            this.memory = memory;
+            this.node = node;
         }
 
         @Override
         public void collect(Row row) {
+            memory.check(row, node);
             metrics.rowsIn.increment();
             metrics.rowsOut.increment();
             next.row(row);

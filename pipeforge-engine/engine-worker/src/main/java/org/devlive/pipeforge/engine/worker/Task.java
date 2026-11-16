@@ -71,6 +71,7 @@ final class Task implements Runnable {
     private volatile long endedAt;
     private final AtomicLong idleNanos = new AtomicLong();
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
+    private final TaskMemory memory;
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
         this(deployment, master, null, onTerminated);
@@ -81,7 +82,7 @@ final class Task implements Runnable {
             JobMasterGateway master,
             @Nullable NetworkEnvironment network,
             Consumer<Task> onTerminated) {
-        this(deployment, master, network, null, onTerminated);
+        this(deployment, master, network, null, MemoryLimits.DEFAULTS, onTerminated);
     }
 
     /**
@@ -93,9 +94,11 @@ final class Task implements Runnable {
             JobMasterGateway master,
             @Nullable NetworkEnvironment network,
             org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs,
+            MemoryLimits limits,
             Consumer<Task> onTerminated) {
         this.network = network;
         this.logs = logs;
+        this.memory = new TaskMemory(limits);
         this.deployment = deployment;
         this.master = master;
         this.onTerminated = onTerminated;
@@ -155,7 +158,7 @@ final class Task implements Runnable {
     private void runLogged() {
         OperatorChain operators = null;
         try {
-            operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled);
+            operators = new OperatorChain(deployment, scope, name, master, network, () -> cancelled, memory);
             chain = operators;
             if (cancelled) {
                 throw new CancelledException();
@@ -170,6 +173,7 @@ final class Task implements Runnable {
             OperatorChain closing = operators;
             operators = null;
             closing.close();
+            memory.release();
             LOG.info("Task {} finished", deployment.id());
             report(TaskStateUpdate.finished(
                     deployment.id(), committable.map(List::of).orElse(List.of())));
@@ -177,6 +181,7 @@ final class Task implements Runnable {
             if (operators != null) {
                 closeQuietly(operators);
             }
+            memory.release();
             if (cancelled) {
                 LOG.info("Task {} was cancelled", deployment.id());
                 report(TaskStateUpdate.of(deployment.id(), TaskState.CANCELED));
@@ -224,12 +229,26 @@ final class Task implements Runnable {
 
     /** Delivers an event to the source; it runs on the task thread between two reads. */
     void deliver(OperatorEvent event) {
+        long bytes = event instanceof OperatorEvent.AddSplits add
+                ? add.splits().stream().mapToLong(SerializedValue::size).sum()
+                : 0;
+        // the splits wait in the mailbox until the task thread hands them to the reader
+        memory.splitsQueued(bytes);
         mailbox.put(() -> {
-            OperatorChain operators = chain;
-            if (operators != null) {
-                operators.handle(event);
+            try {
+                OperatorChain operators = chain;
+                if (operators != null) {
+                    operators.handle(event);
+                }
+            } finally {
+                memory.splitsTaken(bytes);
             }
         });
+    }
+
+    /** The memory the task holds. */
+    TaskMemory memory() {
+        return memory;
     }
 
     /**
@@ -290,7 +309,8 @@ final class Task implements Runnable {
                 operators.bytesSent(),
                 operators.bytesReceived(),
                 operators.queueDepth(),
-                operators.queueCapacity());
+                operators.queueCapacity(),
+                memory.accounted());
     }
 
     private void transition(TaskState next) {
