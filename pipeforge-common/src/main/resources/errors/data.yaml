@@ -6,6 +6,24 @@
 #
 # Data errors: one row or record is bad; handled by the dirty data policy.
 
+- code: PF-DATA-0001
+  name: TYPE_CONVERSION
+  message:
+    en-US: "Column '{column}' cannot be converted to {type}: {reason}"
+    zh-CN: "列 '{column}' 无法转换为 {type}：{reason}"
+  hint:
+    en-US: "Check the type the source reports for the column, and map it to the type you need explicitly, for example with a cast in a field mapper."
+    zh-CN: "请检查源端报告的列类型，并显式映射为所需的类型，例如在字段映射中使用类型转换。"
+
+- code: PF-DATA-0002
+  name: VALUE_OUT_OF_RANGE
+  message:
+    en-US: "The value of column '{column}' is out of the range of {type}: {reason}"
+    zh-CN: "列 '{column}' 的值超出了 {type} 的范围：{reason}"
+  hint:
+    en-US: "Widen the type, for example a DECIMAL with more precision, or convert the value before it reaches this node."
+    zh-CN: "请放宽类型，例如使用精度更高的 DECIMAL，或者在值到达该节点之前先进行转换。"
+
 - code: PF-DATA-0004
   name: CONSTRAINT_VIOLATION
   message:

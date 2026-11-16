@@ -82,6 +82,10 @@ public final class ErrorCode {
             define("PF-PLUG-0011", "PLUGIN_PACKAGE_CORRUPT", "plugin", "expected", "actual");
 
     // Data
+    public static final ErrorCode TYPE_CONVERSION =
+            define("PF-DATA-0001", "TYPE_CONVERSION", "column", "type", "reason");
+    public static final ErrorCode VALUE_OUT_OF_RANGE =
+            define("PF-DATA-0002", "VALUE_OUT_OF_RANGE", "column", "type", "reason");
     public static final ErrorCode CONSTRAINT_VIOLATION =
             define("PF-DATA-0004", "CONSTRAINT_VIOLATION", "table", "column", "reason");
     public static final ErrorCode EXPRESSION_ERROR = define("PF-DATA-0006", "EXPRESSION_ERROR", "expression", "reason");

@@ -73,6 +73,48 @@ the `ChainDescriptor` message inside an envelope that the worker checks before i
 Local runs write the description of every task and read it back before the task starts, so the
 whole test suite runs through this format.
 
+## Row format
+
+Rows travel between tasks in a compact binary format (`RowCodec` in `pipeforge-engine/engine-network`).
+A data buffer holds rows one after another; each row is:
+
+```text
++------------+------------+----------+-----------------+--------------------+------------------+
+| row length | row header | table    | null bitmap     | slots              | variable section |
+| varint     | 1 byte     | varint   | 1 bit per column| 8 bytes per column | the rest         |
++------------+------------+----------+-----------------+--------------------+------------------+
+```
+
+- The **row length** counts the bytes after it. The **header** holds the row kind in bits 0–1
+  (`0` insert, `1` update before, `2` update after, `3` delete) and, in bit 2, whether the row has
+  an event time; that time is then the first 8 bytes of the variable section, in milliseconds.
+- The **table** is the number of the row's table in the table directory of the task description;
+  rows carry no column names or types, so they are read with the columns of that table.
+- Bit *i* of the **null bitmap** (low bit first) is set when column *i* is NULL.
+- Every column has an 8-byte **slot**. Integers, booleans, floats (their IEEE 754 bits), dates
+  (days since 1970-01-01), times (nanoseconds of the day), timestamps up to precision 6
+  (microseconds since 1970-01-01, `TIMESTAMP` taken as UTC) and decimals up to precision 18 (the
+  unscaled `long`) are stored in the slot itself.
+- Strings, JSON and bytes of up to 7 bytes are stored **inline**: the first byte of the slot is
+  `0x80` plus the length, the content follows. Longer values, decimals above precision 18,
+  timestamps above precision 6 (microseconds plus the nanoseconds within them) and arrays, maps and
+  nested rows are stored in the variable section; their slot holds the **offset** (high 32 bits,
+  from the header) and **length** (low 32 bits).
+- A nested row is a null bitmap, slots and variable section; an array is its element count
+  (varint) followed by the same; a map is an array of keys followed by an array of values. Their
+  offsets count from the start of the nested value.
+- All integers are big-endian.
+
+A value that does not match its column fails the row with
+[`PF-DATA-0001`](../reference/errors#pf-data-0001) (a value of another type) or
+[`PF-DATA-0002`](../reference/errors#pf-data-0002) (for example a decimal with more digits than its
+precision), naming the column, such as `address.city` or `tags[]`. Timestamps of precision 6 or less
+keep microseconds; finer digits are dropped. Bytes that are not a row of a known table are refused
+as an internal error. A sample of every format version is kept in
+`pipeforge-engine/protocol-compat/row/`; each build checks that it still reads it and still writes
+it byte for byte. Rows are not yet sent between processes: the data exchange that uses this format
+comes in a later step of the distributed runtime.
+
 ## Transport
 
 Processes call each other with gRPC over HTTP/2 (Netty). Every call is protected and made safe to

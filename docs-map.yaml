@@ -60,7 +60,7 @@
 # modules register their own entry; pipeforge-engine/pom.xml only lists the modules.
 - paths: ["pipeforge-engine/engine-api/**", "pipeforge-engine/engine-worker/**", "pipeforge-engine/engine-local/**"]
   docs: ["concepts/execution"]
-- paths: ["pipeforge-engine/engine-rpc/**", "pipeforge-engine/protocol-compat/**"]
+- paths: ["pipeforge-engine/engine-rpc/**", "pipeforge-engine/engine-network/**", "pipeforge-engine/protocol-compat/**"]
   docs: ["development/engine-protocol"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ResourceManager*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Scheduler.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/SlotTable.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MasterConnection.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/PluginCache.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/PluginBlobs.java"]
   docs: ["concepts/cluster"]
