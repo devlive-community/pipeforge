@@ -6,7 +6,7 @@
  */
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import { SiteLink } from "@/components/layout/SiteLink";
 import { notFound } from "next/navigation";
 import { DocShell } from "@/components/layout/DocShell";
 import { REPOSITORY_URL } from "@/components/layout/SiteHeader";
@@ -55,54 +55,64 @@ export default async function DocPage({ params }: { params: Promise<Params> }) {
   const content = await renderMdx(page.body, { lang, pageId: id });
   const { previous, next } = neighbours(lang, id);
   const tocHeadings = page.headings.filter((h) => h.depth <= 3);
+  const section = id.split("/")[0] as keyof typeof dict.sections;
+  const editHref = `${REPOSITORY_URL}/edit/dev/docs/content/${page.file}`;
 
   return (
     <DocShell
       lang={lang}
+      version={version}
       sections={navigation(lang)}
       currentId={id}
       otherLangHref={pageUrl(otherLang(lang), version, id)}
-      aside={<Toc headings={tocHeadings} title={dict.onThisPage} />}
+      aside={tocHeadings.length ? <Toc headings={tocHeadings} title={dict.onThisPage} /> : undefined}
     >
-      <article className="mx-auto max-w-3xl">
-        <p className="text-sm font-medium text-primary">
-          {dict.sections[id.split("/")[0] as keyof typeof dict.sections]}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-fg">{page.frontmatter.title}</h1>
-        <p className="mt-3 text-lg text-fg-muted">{page.frontmatter.description}</p>
-        <div className="prose mt-8">{content}</div>
-        <div className="mt-12 flex items-center justify-between gap-4 border-t border-border pt-6 text-sm">
-          {previous ? (
-            <Link href={previous.url} className="group flex items-center gap-2 text-fg-muted hover:text-fg">
-              <Icon name="arrowLeft" className="transition-transform duration-fast group-hover:-translate-x-0.5" />
-              <span>
-                <span className="block text-xs text-fg-subtle">{dict.previous}</span>
-                {previous.title}
-              </span>
-            </Link>
-          ) : (
-            <span />
-          )}
-          {next ? (
-            <Link href={next.url} className="group flex items-center gap-2 text-right text-fg-muted hover:text-fg">
-              <span>
-                <span className="block text-xs text-fg-subtle">{dict.next}</span>
-                {next.title}
-              </span>
-              <Icon name="arrowRight" className="transition-transform duration-fast group-hover:translate-x-0.5" />
-            </Link>
-          ) : null}
-        </div>
-        <p className="mt-6 text-sm">
-          <a
-            href={`${REPOSITORY_URL}/edit/main/docs/content/${page.file}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-fg-muted underline underline-offset-2 hover:text-fg"
-          >
-            {dict.editPage}
-          </a>
-        </p>
+      <article className="docs-article">
+        <header className="docs-article-header">
+          <nav aria-label={dict.breadcrumb} className="docs-breadcrumb">
+            <SiteLink href={`/${lang}/${version}/`}>{dict.docs}</SiteLink>
+            <Icon name="chevron" size={12} />
+            <SiteLink href={`/${lang}/${version}/#${section}`}>{dict.sections[section]}</SiteLink>
+          </nav>
+          <h1>{page.frontmatter.title}</h1>
+          <p>{page.frontmatter.description}</p>
+        </header>
+        {tocHeadings.length ? (
+          <details className="docs-inline-toc">
+            <summary>
+              <Icon name="list" size={17} /> {dict.onThisPage}
+            </summary>
+            <Toc headings={tocHeadings} title={dict.onThisPage} compact />
+          </details>
+        ) : null}
+        <div className="prose docs-prose">{content}</div>
+        <a href={editHref} target="_blank" rel="noreferrer" className="docs-edit">
+          <Icon name="edit" size={15} />
+          {dict.editPage}
+          <Icon name="arrowUpRight" size={13} />
+        </a>
+        {previous || next ? (
+          <nav className="docs-pagination" aria-label={dict.pageNavigation}>
+            {previous ? (
+              <SiteLink href={previous.url} rel="prev">
+                <span>{dict.previous}</span>
+                <strong>
+                  <Icon name="arrowLeft" size={16} />
+                  {previous.title}
+                </strong>
+              </SiteLink>
+            ) : null}
+            {next ? (
+              <SiteLink href={next.url} rel="next">
+                <span>{dict.next}</span>
+                <strong>
+                  {next.title}
+                  <Icon name="arrowRight" size={16} />
+                </strong>
+              </SiteLink>
+            ) : null}
+          </nav>
+        ) : null}
       </article>
     </DocShell>
   );

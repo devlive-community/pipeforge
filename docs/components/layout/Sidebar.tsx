@@ -7,7 +7,7 @@
 
 "use client";
 
-import Link from "next/link";
+import { SiteLink } from "@/components/layout/SiteLink";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { NavSection } from "@/lib/content";
 import { Button } from "../ui/Button";
@@ -23,11 +23,13 @@ export function Sidebar({
   currentId,
   labels,
   onNavigate,
+  navLabel = "Documentation",
 }: {
   sections: NavSection[];
   currentId?: string;
   labels: Record<string, string>;
   onNavigate?: () => void;
+  navLabel?: string;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [bar, setBar] = useState<{ top: number; height: number } | null>(null);
@@ -46,15 +48,15 @@ export function Sidebar({
   }, [currentId, collapsed]);
 
   return (
-    <nav ref={navRef} aria-label="Documentation" className="relative">
+    <nav ref={navRef} aria-label={navLabel} className="docs-sidebar-nav">
       {bar ? (
         <span
           aria-hidden="true"
-          className="absolute left-0 w-0.5 rounded-full bg-primary transition-transform duration-normal ease-out"
+          className="pointer-events-none absolute z-10 left-0 w-0.5 rounded-full bg-primary transition-transform duration-normal ease-out"
           style={{ height: bar.height, transform: `translateY(${bar.top}px)` }}
         />
       ) : null}
-      <ul className="space-y-4">
+      <ul className="space-y-3">
         {sections.map((section) => {
           const open = !collapsed[section.key];
           return (
@@ -65,7 +67,7 @@ export function Sidebar({
                 justify="between"
                 aria-expanded={open}
                 onClick={() => setCollapsed((c) => ({ ...c, [section.key]: open }))}
-                className="w-full px-3 font-semibold text-fg"
+                className="docs-section-toggle"
               >
                 {labels[section.key] ?? section.key}
                 <Icon
@@ -85,17 +87,14 @@ export function Sidebar({
                     const current = item.id === currentId;
                     return (
                       <li key={item.id}>
-                        <Link
+                        <SiteLink
                           href={item.url}
                           onClick={onNavigate}
                           aria-current={current ? "page" : undefined}
-                          className={cx(
-                            "block rounded-control py-1.5 pr-2 pl-4 text-sm transition-colors duration-fast",
-                            current ? "font-medium text-primary" : "text-fg-muted hover:text-fg",
-                          )}
+                          className="docs-sidebar-item"
                         >
                           {item.title}
-                        </Link>
+                        </SiteLink>
                       </li>
                     );
                   })}

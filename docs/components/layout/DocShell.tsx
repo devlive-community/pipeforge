@@ -5,17 +5,20 @@
  * project root for full license text.
  */
 
+import { SiteLink } from "@/components/layout/SiteLink";
 import type { ReactNode } from "react";
 import type { NavSection } from "@/lib/content";
 import { t, type Lang } from "@/lib/i18n";
+import { Icon } from "../ui/Icon";
+import { cx } from "../ui/cx";
 import { PageTransition } from "./PageTransition";
 import { Sidebar } from "./Sidebar";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 
-/** Header, sidebar navigation, main content and an optional right column. */
 export function DocShell({
   lang,
+  version,
   sections,
   currentId,
   otherLangHref,
@@ -23,6 +26,7 @@ export function DocShell({
   children,
 }: {
   lang: Lang;
+  version: string;
   sections: NavSection[];
   currentId?: string;
   otherLangHref: string;
@@ -32,21 +36,37 @@ export function DocShell({
   const dict = t(lang);
   return (
     <>
-      <SiteHeader lang={lang} otherLangHref={otherLangHref} sections={sections} currentId={currentId} />
-      <div className="mx-auto flex max-w-screen-2xl gap-10 px-4 sm:px-6">
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-64 shrink-0 overflow-y-auto py-8 lg:block">
-          <Sidebar sections={sections} currentId={currentId} labels={dict.sections} />
+      <SiteHeader
+        lang={lang}
+        version={version}
+        otherLangHref={otherLangHref}
+        sections={sections}
+        currentId={currentId}
+        area="docs"
+      />
+      <div className={cx("docs-container docs-layout", Boolean(aside) && "docs-layout-with-toc")}>
+        <aside className="docs-sidebar">
+          <SiteLink
+            href={`/${lang}/${version}/`}
+            className="docs-sidebar-home"
+            aria-current={!currentId ? "page" : undefined}
+          >
+            <span className="docs-sidebar-home-icon">
+              <Icon name="book" />
+            </span>
+            <span>
+              {dict.docs}
+              <small>{version === "next" ? dict.docsSeries : version}</small>
+            </span>
+          </SiteLink>
+          <Sidebar sections={sections} currentId={currentId} labels={dict.sections} navLabel={dict.docs} />
         </aside>
-        <main id="content" className="min-w-0 flex-1 py-10">
+        <main id="content" className="docs-main">
           <PageTransition>{children}</PageTransition>
         </main>
-        {aside ? (
-          <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 overflow-y-auto py-10 xl:block">
-            {aside}
-          </aside>
-        ) : null}
+        {aside ? <aside className="docs-outline">{aside}</aside> : null}
       </div>
-      <SiteFooter lang={lang} />
+      <SiteFooter lang={lang} version={version} />
     </>
   );
 }

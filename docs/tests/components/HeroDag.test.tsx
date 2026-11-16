@@ -5,37 +5,25 @@
  * project root for full license text.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { EDGES, NODES, lineage } from "@/components/home/dag";
+import { render, screen } from "@testing-library/react";
 import { FeatureGrid } from "@/components/home/FeatureGrid";
 import { HeroDag } from "@/components/home/HeroDag";
+import { t } from "@/lib/i18n";
 
-describe("home page DAG", () => {
-  it("computes the upstream and downstream lineage of a node", () => {
-    expect([...lineage("mysql")].sort()).toEqual(["doris", "iceberg", "mapper", "mysql"]);
-    expect([...lineage("doris")].sort()).toEqual(["doris", "kafka", "mapper", "mysql"]);
-    expect(lineage("mapper").size).toBe(NODES.length);
+describe("home page", () => {
+  it("links the shipped pipeline stages to their plugin documentation", () => {
+    const dict = t("en-US");
+    render(<HeroDag lang="en-US" label={dict.playground} stages={dict.pipelineStages} />);
+    expect(screen.getByRole("figure", { name: dict.playground })).toBeInTheDocument();
+    const nodes = screen.getAllByRole("link");
+    expect(nodes.map((node) => node.getAttribute("href")?.replace(/\/$/, ""))).toEqual([
+      "/en-US/next/plugins/source/fake",
+      "/en-US/next/plugins/transform/field-mapper",
+      "/en-US/next/plugins/sink/console",
+    ]);
   });
 
-  it("connects every edge to existing nodes", () => {
-    const ids = new Set(NODES.map((n) => n.id));
-    for (const edge of EDGES) {
-      expect(ids.has(edge.from) && ids.has(edge.to)).toBe(true);
-      expect(edge.path).toMatch(/^M [\d.]+ [\d.]+ C /);
-    }
-  });
-
-  it("dims nodes outside the lineage of the hovered node", () => {
-    render(<HeroDag label="Source to sink" />);
-    expect(screen.getByRole("img", { name: "Source to sink" })).toBeInTheDocument();
-    fireEvent.mouseEnter(screen.getByText("Doris"));
-    expect(screen.getByText("Doris").className).toContain("opacity-100");
-    expect(screen.getByText("Iceberg").className).toContain("opacity-40");
-    fireEvent.mouseLeave(screen.getByText("Doris"));
-    expect(screen.getByText("Iceberg").className).toContain("opacity-100");
-  });
-
-  it("reveals feature cards one after another", () => {
+  it("renders the product features immediately", () => {
     render(
       <FeatureGrid
         features={[
@@ -44,9 +32,6 @@ describe("home page DAG", () => {
         ]}
       />,
     );
-    const cards = screen.getAllByRole("listitem");
-    // Without IntersectionObserver (jsdom) the cards are shown immediately.
-    expect(cards[1]).toHaveClass("animate-fade-up");
-    expect(cards[1]).toHaveStyle({ animationDelay: "60ms" });
+    expect(screen.getAllByRole("listitem")[1]).toHaveTextContent("Bb");
   });
 });

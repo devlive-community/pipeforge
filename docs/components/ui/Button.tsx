@@ -5,7 +5,7 @@
  * project root for full license text.
  */
 
-import Link from "next/link";
+import { SiteLink } from "@/components/layout/SiteLink";
 import type { ComponentProps, ReactNode } from "react";
 import { cx } from "./cx";
 
@@ -74,8 +74,8 @@ export function ButtonLink({
     );
   }
   return (
-    <Link href={href} className={buttonClass(variant, size, className)}>
+    <SiteLink href={href} className={buttonClass(variant, size, className)}>
       {children}
-    </Link>
+    </SiteLink>
   );
 }

@@ -45,18 +45,20 @@ const labels = {
   searchPlaceholder: "Search the documentation",
   searchEmpty: "No results",
   searchHint: "hint",
+  searchLoading: "Loading search index",
+  searchUnavailable: "Search unavailable",
 };
 
 beforeEach(() => {
   push.mockReset();
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: () => Promise.resolve(documents) }));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(documents) }));
 });
 
 async function openSearch() {
   render(<Search lang="en-US" labels={labels} />);
   await userEvent.click(screen.getByRole("button", { name: /Search/ }));
   const input = await screen.findByRole("combobox", { name: "Search the documentation" });
-  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/search/en-US.json"));
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/search/en-US.json", { signal: expect.any(AbortSignal) }));
   return input;
 }
 
@@ -77,6 +79,20 @@ describe("Search", () => {
     await userEvent.keyboard("{Enter}");
     expect(push).toHaveBeenCalledWith("/en-US/next/development/local-environment/");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows results when the index arrives after typing", async () => {
+    let finish!: (data: typeof documents) => void;
+    const pending = new Promise<typeof documents>((resolve) => {
+      finish = resolve;
+    });
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: () => pending } as Response);
+    const input = await openSearch();
+    expect(screen.getByRole("status")).toHaveTextContent(labels.searchLoading);
+    await userEvent.type(input, "binlog");
+    finish(documents);
+    expect(await screen.findByRole("option")).toHaveTextContent("Local development environment");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("moves the highlight with the arrow keys", async () => {

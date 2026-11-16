@@ -14,6 +14,7 @@ export const SITE_URL = (process.env.DOCS_SITE_URL ?? "https://devlive-community
 );
 
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+export const BRAND_MARK = `${BASE_PATH}/pipeforge.svg`;
 
 /** hreflang alternates for a path that exists in every language, e.g. "/next/concepts/x/". */
 export function alternates(lang: string, pathAfterLang: string) {

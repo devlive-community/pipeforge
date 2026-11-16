@@ -6,7 +6,7 @@
  */
 
 import { evaluate } from "@mdx-js/mdx";
-import Link from "next/link";
+import { SiteLink } from "@/components/layout/SiteLink";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import * as runtime from "react/jsx-runtime";
 import remarkGfm from "remark-gfm";
@@ -53,7 +53,7 @@ function DocLink({ href = "", children, lang, pageId, ...rest }: ComponentProps<
   }
   if (target.kind === "page") {
     const url = pageUrl(lang, CURRENT_VERSION, target.id) + (target.anchor ? `#${target.anchor}` : "");
-    return <Link href={target.id === pageId && target.anchor ? `#${target.anchor}` : url}>{children}</Link>;
+    return <SiteLink href={target.id === pageId && target.anchor ? `#${target.anchor}` : url}>{children}</SiteLink>;
   }
   return <a {...rest}>{children}</a>;
 }

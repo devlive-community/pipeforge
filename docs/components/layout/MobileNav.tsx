@@ -7,7 +7,8 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { SiteLink } from "@/components/layout/SiteLink";
+import { useEffect, useRef, useState } from "react";
 import type { NavSection } from "@/lib/content";
 import { IconButton } from "../ui/IconButton";
 import { Sidebar } from "./Sidebar";
@@ -18,32 +19,54 @@ export function MobileNav({
   currentId,
   labels,
   menuLabel,
+  docsHref,
+  docsLabel,
 }: {
   sections: NavSection[];
   currentId?: string;
   labels: Record<string, string>;
   menuLabel: string;
+  docsHref: string;
+  docsLabel: string;
 }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    drawer.current?.querySelector("a")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || document.querySelector('[role="dialog"]')) return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   return (
-    <div className="lg:hidden">
+    <div className="docs-mobile-nav">
       <IconButton
+        ref={trigger}
         icon={open ? "close" : "menu"}
         label={menuLabel}
         aria-expanded={open}
+        aria-controls={open ? "docs-drawer" : undefined}
         onClick={() => setOpen(!open)}
       />
       {open ? (
-        <div className="fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto border-t border-border bg-surface p-4 animate-fade-in">
-          <Sidebar sections={sections} currentId={currentId} labels={labels} onNavigate={() => setOpen(false)} />
+        <div ref={drawer} id="docs-drawer" className="docs-drawer">
+          <SiteLink href={docsHref} className="docs-sidebar-home" onClick={() => setOpen(false)}>
+            {docsLabel}
+          </SiteLink>
+          <Sidebar
+            navLabel={docsLabel}
+            sections={sections}
+            currentId={currentId}
+            labels={labels}
+            onNavigate={() => setOpen(false)}
+          />
         </div>
       ) : null}
     </div>

@@ -5,11 +5,14 @@
  * project root for full license text.
  */
 
-import Link from "next/link";
+import { SiteLink } from "@/components/layout/SiteLink";
 import type { NavSection } from "@/lib/content";
+import { CURRENT_VERSION } from "@/lib/content-core.mjs";
 import { t, type Lang } from "@/lib/i18n";
+import { cx } from "../ui/cx";
 import { Icon } from "../ui/Icon";
 import { MobileNav } from "./MobileNav";
+import { SiteBrand } from "./SiteBrand";
 import { Search } from "./Search";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -20,63 +23,57 @@ export function SiteHeader({
   otherLangHref,
   sections,
   currentId,
+  area,
+  version = CURRENT_VERSION,
 }: {
   lang: Lang;
   otherLangHref: string;
   sections: NavSection[];
   currentId?: string;
+  area: "home" | "docs";
+  version?: string;
 }) {
   const dict = t(lang);
+  const home = area === "home";
+  const docsHref = `/${lang}/${version}/`;
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-3 px-4 sm:px-6">
-        <MobileNav sections={sections} currentId={currentId} labels={dict.sections} menuLabel={dict.menu} />
-        <Link href={`/${lang}/`} className="flex items-center gap-2 font-semibold text-fg">
-          <Logo />
-          {dict.siteName}
-        </Link>
-        <div className="ml-auto flex items-center gap-1.5">
-          <Search
-            lang={lang}
-            labels={{
-              search: dict.search,
-              searchPlaceholder: dict.searchPlaceholder,
-              searchEmpty: dict.searchEmpty,
-              searchHint: dict.searchHint,
-            }}
-          />
-          <Link
+    <header className="site-header">
+      <div className={cx("site-header-inner", home ? "site-container" : "docs-container")}>
+        <MobileNav
+          sections={sections}
+          currentId={currentId}
+          labels={dict.sections}
+          menuLabel={dict.menu}
+          docsHref={docsHref}
+          docsLabel={dict.docs}
+        />
+        <SiteBrand lang={lang} />
+        <SiteLink href={docsHref} className="site-docs-link" aria-current={!home && !currentId ? "page" : undefined}>
+          {dict.docs}
+        </SiteLink>
+        <div className="site-header-tools">
+          <Search key={lang} lang={lang} labels={dict} />
+          <SiteLink
             href={otherLangHref}
             hrefLang={lang === "en-US" ? "zh-CN" : "en-US"}
             aria-label={dict.languageLabel}
-            className="inline-flex h-control-md items-center gap-1.5 rounded-control px-2 text-sm text-fg-muted transition-colors duration-fast hover:bg-surface-2 hover:text-fg"
+            className="site-icon-link"
           >
-            <Icon name="globe" size={15} />
-            <span className="hidden sm:inline">{dict.language}</span>
-          </Link>
+            <Icon name="globe" size={17} />
+            <span className="hidden md:inline">{dict.language}</span>
+          </SiteLink>
           <ThemeToggle dict={dict} />
           <a
             href={REPOSITORY_URL}
             target="_blank"
             rel="noreferrer"
             aria-label={dict.viewSource}
-            className="inline-flex size-control-md items-center justify-center rounded-control text-fg-muted transition-colors duration-fast hover:bg-surface-2 hover:text-fg"
+            className="site-icon-link"
           >
-            <Icon name="github" size={17} />
+            <Icon name="github" size={18} />
           </a>
         </div>
       </div>
     </header>
-  );
-}
-
-function Logo() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className="text-primary">
-      <circle cx="5" cy="12" r="3" fill="currentColor" />
-      <circle cx="19" cy="6" r="3" fill="currentColor" opacity="0.7" />
-      <circle cx="19" cy="18" r="3" fill="currentColor" opacity="0.7" />
-      <path d="M8 12h4l4-5M12 12l4 5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-    </svg>
   );
 }

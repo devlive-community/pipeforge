@@ -9,10 +9,11 @@ import { themeInitScript } from "@pipeforge/design-tokens";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "@/styles/index.css";
-import { SITE_URL } from "@/lib/site";
+import { BRAND_MARK, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  icons: { icon: { url: BRAND_MARK, type: "image/svg+xml" } },
   title: "PipeForge",
   description: "PipeForge documentation: pluggable distributed data integration.",
 };

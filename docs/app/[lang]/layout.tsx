@@ -7,11 +7,19 @@
 
 import { themeInitScript } from "@pipeforge/design-tokens";
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import "@/styles/index.css";
 import { LANGUAGES } from "@/lib/content-core.mjs";
 import { t, toLang } from "@/lib/i18n";
-import { SITE_URL } from "@/lib/site";
+import { BRAND_MARK, SITE_URL } from "@/lib/site";
+
+const geist = localFont({
+  src: "../../styles/fonts/geist-latin.woff2",
+  variable: "--site-font-geist",
+  weight: "100 900",
+  display: "swap",
+});
 
 export const dynamicParams = false;
 
@@ -23,6 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
   const dict = t(toLang((await params).lang));
   return {
     metadataBase: new URL(SITE_URL),
+    icons: { icon: { url: BRAND_MARK, type: "image/svg+xml" } },
     title: { default: dict.siteName, template: `%s · ${dict.siteName}` },
     description: dict.tagline,
   };
@@ -44,7 +53,7 @@ export default async function LangLayout({
 }) {
   const lang = toLang((await params).lang);
   return (
-    <html lang={lang} suppressHydrationWarning>
+    <html lang={lang} className={geist.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

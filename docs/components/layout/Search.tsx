@@ -8,19 +8,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { Lang } from "@/lib/i18n";
 import { buildSearch, type SearchResult } from "@/lib/search";
 import { Button } from "../ui/Button";
 import { cx } from "../ui/cx";
 import { Icon } from "../ui/Icon";
 import { TextInput } from "../ui/TextInput";
+import { LoadingIndicator } from "./LoadingIndicator";
 
 interface Labels {
   search: string;
   searchPlaceholder: string;
   searchEmpty: string;
   searchHint: string;
+  searchLoading: string;
+  searchUnavailable: string;
 }
 
 type Searcher = (query: string) => SearchResult[];
@@ -34,10 +37,11 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searcher, setSearcher] = useState<Searcher | null>(null);
+  const [failed, setFailed] = useState(false);
+  const results = useMemo(() => (query.trim() && searcher ? searcher(query) : []), [query, searcher]);
   const [active, setActive] = useState(0);
   const [highlight, setHighlight] = useState<{ top: number; height: number } | null>(null);
-  const searcher = useRef<Searcher | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
@@ -45,7 +49,8 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
   const close = useCallback(() => {
     setOpen(false);
     setQuery("");
-    setResults([]);
+    setFailed(false);
+    setActive(0);
     trigger.current?.focus();
   }, []);
 
@@ -63,23 +68,27 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
   useEffect(() => {
     if (!open) return;
     input.current?.focus();
-    if (searcher.current) return;
-    const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-    fetch(`${base}/search/${lang}.json`)
-      .then((response) => response.json())
-      .then((documents) => {
-        searcher.current = buildSearch(documents);
-        setQuery((q) => q);
-      })
-      .catch(() => {
-        searcher.current = () => [];
-      });
-  }, [open, lang]);
+  }, [open]);
 
   useEffect(() => {
-    setResults(query.trim() && searcher.current ? searcher.current(query) : []);
-    setActive(0);
-  }, [query, open]);
+    if (!open || searcher) return;
+    const controller = new AbortController();
+    const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    fetch(`${base}/search/${lang}.json`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load search index");
+        return response.json();
+      })
+      .then((documents) => {
+        if (controller.signal.aborted) return;
+        const search = buildSearch(documents);
+        setSearcher(() => search);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFailed(true);
+      });
+    return () => controller.abort();
+  }, [open, lang, searcher]);
 
   useLayoutEffect(() => {
     const item = list.current?.children[active] as HTMLElement | undefined;
@@ -119,12 +128,18 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
         variant="secondary"
         size="sm"
         onClick={() => setOpen(true)}
+        aria-label={labels.search}
         aria-haspopup="dialog"
-        className="w-9 px-0 text-fg-muted sm:w-48 sm:justify-start sm:px-2.5"
+        className="h-8 w-8 bg-surface-2 px-0 text-fg-muted sm:w-44 sm:justify-start sm:px-2.5"
       >
         <Icon name="search" size={15} />
         <span className="hidden sm:inline">{labels.search}</span>
-        <kbd className="ml-auto hidden rounded-control border border-border px-1.5 font-sans text-xs sm:inline">⌘K</kbd>
+        <kbd
+          aria-hidden="true"
+          className="ml-auto hidden rounded-control border border-border px-1.5 font-sans text-xs sm:inline"
+        >
+          ⌘K
+        </kbd>
       </Button>
       {open ? (
         <div
@@ -147,7 +162,10 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
                 label={labels.searchPlaceholder}
                 placeholder={labels.searchPlaceholder}
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setActive(0);
+                }}
                 role="combobox"
                 aria-expanded={results.length > 0}
                 aria-controls="search-results"
@@ -185,8 +203,15 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
                   </li>
                 ))}
               </ul>
-              {query.trim() && results.length === 0 ? (
-                <p className="px-3 py-6 text-center text-sm text-fg-muted">{labels.searchEmpty}</p>
+              {!searcher && !failed ? (
+                <div className="px-3 py-6">
+                  <LoadingIndicator label={labels.searchLoading} size={40} />
+                </div>
+              ) : null}
+              {failed || (searcher && query.trim() && results.length === 0) ? (
+                <p className="px-3 py-6 text-center text-sm text-fg-muted" role="status">
+                  {failed ? labels.searchUnavailable : labels.searchEmpty}
+                </p>
               ) : null}
             </div>
             <p className="border-t border-border px-4 py-2 text-xs text-fg-subtle">↑ ↓ {labels.searchHint}</p>

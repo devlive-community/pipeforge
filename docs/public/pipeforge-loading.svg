@@ -1,0 +1,63 @@
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">
+  <title>PipeForge</title>
+  <style>
+    .track {
+      opacity: 0.34;
+    }
+    .pulse {
+      opacity: 0;
+      stroke-dasharray: 24 100;
+    }
+    .inlet {
+      animation: inlet 1.65s linear infinite;
+    }
+    .outlet {
+      animation: outlet 1.65s linear infinite;
+    }
+
+    @keyframes inlet {
+      0% { stroke-dashoffset: 24; opacity: 0; }
+      9% { opacity: 1; }
+      43% { stroke-dashoffset: -88; opacity: 1; }
+      58%, 100% { stroke-dashoffset: -100; opacity: 0; }
+    }
+
+    @keyframes outlet {
+      0%, 43% { stroke-dashoffset: 24; opacity: 0; }
+      52% { opacity: 1; }
+      85% { stroke-dashoffset: -85; opacity: 1; }
+      97%, 100% { stroke-dashoffset: -100; opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .track { opacity: 1; }
+      .pulse { animation: none; }
+    }
+  </style>
+  <defs>
+    <linearGradient id="inlet" x1="14" y1="24" x2="53" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a093fc" />
+      <stop offset="1" stop-color="#6555db" />
+    </linearGradient>
+    <linearGradient id="outlet" x1="14" y1="64" x2="74" y2="23" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4635c9" />
+      <stop offset="1" stop-color="#7664f3" />
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-width="14" stroke-linecap="round">
+    <!-- The track follows the mark in pipeforge.svg. Its lower curve splits at the junction for the pulses. -->
+    <g class="track">
+      <path d="M14 24C30 24 42 29 51 44" stroke="url(#inlet)" />
+      <path d="M14 64C33 64 40 60 51 44S65 24 74 24" stroke="url(#outlet)" />
+    </g>
+    <path class="pulse inlet" pathLength="100" d="M14 24C30 24 42 29 51 44" stroke="url(#inlet)" />
+    <path class="pulse inlet" pathLength="100" d="M14 64C33 64 40 60 51 44" stroke="url(#outlet)" />
+    <path class="pulse outlet" pathLength="100" d="M51 44C62 28 65 24 74 24" stroke="url(#outlet)" />
+  </g>
+</svg>
