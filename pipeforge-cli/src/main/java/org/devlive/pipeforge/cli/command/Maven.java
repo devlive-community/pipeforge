@@ -75,7 +75,7 @@ final class Maven {
         command.addAll(arguments);
         session.note(session.messages().get("plugin.running", String.join(" ", command)));
         try {
-            return session.environment().launcher().launch(command, project, line -> {
+            return session.environment().launcher().launch(command, project, java.util.Map.of(), line -> {
                 session.err().println(line);
                 session.err().flush();
             });

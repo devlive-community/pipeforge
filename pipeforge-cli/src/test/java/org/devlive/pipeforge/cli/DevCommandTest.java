@@ -100,6 +100,60 @@ class DevCommandTest {
     }
 
     @Test
+    void upWithTheClusterRunsTheDistributionOfTheCheckout() throws Exception {
+        Path older = checkout.resolve("pipeforge-dist/target/pipeforge-0.0.9");
+        Path built = checkout.resolve("pipeforge-dist/target/pipeforge-0.1.0");
+        for (Path dist : List.of(older, built)) {
+            java.nio.file.Files.createDirectories(dist.resolve("bin"));
+            java.nio.file.Files.writeString(dist.resolve("bin/pipeforge-master.sh"), "#!/bin/sh\n");
+        }
+        java.nio.file.Files.setLastModifiedTime(older, java.nio.file.attribute.FileTime.fromMillis(1000));
+        java.nio.file.Files.createDirectories(checkout.resolve("pipeforge-dist/target/classes"));
+        Shell.Result result = shell.run("dev", "up", "--cluster");
+        assertThat(result.exit()).as(result.err()).isZero();
+        Path env = checkout.resolve("dev");
+        assertThat(shell.commands)
+                .contains(append(compose(env), "--profile", "cluster", "up", "-d", "--wait", "--wait-timeout", "300"));
+        assertThat(shell.environments).containsExactly(java.util.Map.of("PIPEFORGE_DIST", built.toString()));
+
+        shell.environments.clear();
+        shell.variables.put("PIPEFORGE_DIST", dir.resolve("elsewhere").toString());
+        assertThat(shell.run("dev", "up", "--cluster").exit()).isZero();
+        assertThat(shell.environments)
+                .containsExactly(java.util.Map.of(
+                        "PIPEFORGE_DIST", dir.resolve("elsewhere").toString()));
+
+        shell.environments.clear();
+        shell.run("dev", "up");
+        assertThat(shell.environments).containsExactly(java.util.Map.of());
+    }
+
+    @Test
+    void upWithTheClusterRunsTheReleaseItBelongsTo() throws Exception {
+        Path release = dir.resolve("pipeforge-0.1.0");
+        environment(release.resolve("dev"));
+        java.nio.file.Files.createDirectories(release.resolve("bin"));
+        java.nio.file.Files.writeString(release.resolve("bin/pipeforge-master.sh"), "#!/bin/sh\n");
+        assertThat(shell.run(
+                                "dev",
+                                "up",
+                                "--cluster",
+                                "--dir",
+                                release.resolve("dev").toString())
+                        .exit())
+                .isZero();
+        assertThat(shell.environments).containsExactly(java.util.Map.of("PIPEFORGE_DIST", release.toString()));
+    }
+
+    @Test
+    void upWithTheClusterNeedsADistribution() {
+        Shell.Result result = shell.run("dev", "up", "--cluster");
+        assertThat(result.exit()).isEqualTo(6);
+        assertThat(result.err()).contains("PF-CONF-0008").contains("no PipeForge distribution to run");
+        assertThat(shell.launched).isEmpty();
+    }
+
+    @Test
     void statusReadsTheArrayOfOlderComposeVersionsAsJson() {
         ps = "[" + String.join(",", PS_LINES.lines().toList()) + "]";
         Shell.Result result = shell.run("dev", "status", "-o", "json");
@@ -110,7 +164,9 @@ class DevCommandTest {
                 .contains("\"service\" : \"toxiproxy\"")
                 .contains("\"ports\" : [ \"38474->8474\", \"43306->23306\" ]");
         Path env = checkout.resolve("dev");
-        assertThat(shell.commands).contains(append(compose(env), "--profile", "s3", "ps", "--all", "--format", "json"));
+        assertThat(shell.commands)
+                .contains(append(
+                        compose(env), "--profile", "s3", "--profile", "cluster", "ps", "--all", "--format", "json"));
     }
 
     @Test
@@ -147,7 +203,15 @@ class DevCommandTest {
         assertThat(result.exit()).as(result.err()).isZero();
         Path env = checkout.resolve("dev");
         assertThat(shell.commands)
-                .contains(append(compose(env), "--profile", "s3", "down", "--remove-orphans", "--volumes"));
+                .contains(append(
+                        compose(env),
+                        "--profile",
+                        "s3",
+                        "--profile",
+                        "cluster",
+                        "down",
+                        "--remove-orphans",
+                        "--volumes"));
         assertThat(result.out())
                 .isEqualTo("Stopped the development environment in " + env + " and deleted its volumes\n");
         assertThat(shell.run("dev", "down", "-o", "json").out()).contains("\"volumesRemoved\" : false");
@@ -193,7 +257,16 @@ class DevCommandTest {
         outside.variables.put("PIPEFORGE_HOME", home.toString());
         assertThat(outside.run("dev", "status").exit()).isZero();
         assertThat(outside.commands)
-                .contains(append(compose(home.resolve("dev")), "--profile", "s3", "ps", "--all", "--format", "json"));
+                .contains(append(
+                        compose(home.resolve("dev")),
+                        "--profile",
+                        "s3",
+                        "--profile",
+                        "cluster",
+                        "ps",
+                        "--all",
+                        "--format",
+                        "json"));
 
         Path other = dir.resolve("other");
         java.nio.file.Files.createDirectories(other);

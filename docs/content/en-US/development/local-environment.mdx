@@ -46,16 +46,16 @@ toxiproxy   running  healthy  38474->8474, 43306->23306, 45432->25432
 
 | Command | What it does |
 |---|---|
-| `pipeforge dev up [--s3] [--timeout 5m] [<service>...]` | Starts the services and waits until they are healthy, then shows the status. The output of docker compose goes to the standard error. |
+| `pipeforge dev up [--s3] [--cluster] [--timeout 5m] [<service>...]` | Starts the services and waits until they are healthy, then shows the status. The output of docker compose goes to the standard error. |
 | `pipeforge dev status` | Shows every service. Exits with 0 when all of them are healthy, and with 1 when nothing runs or a service is not healthy, so scripts can wait for it. |
-| `pipeforge dev down [--volumes]` | Stops every service, those of the `s3` profile included. |
+| `pipeforge dev down [--volumes]` | Stops every service, those of the `s3` and `cluster` profiles included. |
 
 All of them accept `-o json` and `--dir <dir>`. Without `--dir`, the command uses `dev/` of the
 source checkout around the current directory, then `dev/` of the installation: the distribution
 contains the same environment, so plugin authors can use it without a checkout. A one-off service
 whose name ends in `-init`, such as `minio-init`, counts as healthy once it has exited with 0.
 
-Without the command, the scripts do the same: `./dev/up.sh [--s3] [<service>...]`,
+Without the command, the scripts do the same: `./dev/up.sh [--s3] [--cluster] [<service>...]`,
 `./dev/down.sh [--volumes]`.
 
 ## Configuration
@@ -68,6 +68,8 @@ Without the command, the scripts do the same: `./dev/up.sh [--s3] [<service>...]
 | Toxiproxy | API 38474, MySQL 43306, PostgreSQL 45432 | Inject latency, bandwidth limits and disconnects | — |
 | Prometheus | 39090 | Scrapes a PipeForge process on the host at port 9250 | — |
 | Grafana | 33000 | Prometheus data source provisioned | `admin` / `pipeforge` |
+| Master (profile `cluster`) | 36123 | The master of a cluster of the locally built distribution | cluster token `pipeforge-dev-token` |
+| `worker-1` … `worker-3` (profile `cluster`) | — | Workers with 2 slots each and the labels `zone=a`, `zone=b`, `zone=c` | — |
 
 Every host port can be changed: copy `dev/.env.example` to `dev/.env` and edit the values.
 The MinIO project no longer publishes community images on Docker Hub; set
@@ -101,6 +103,34 @@ curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":false}'
 curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":true}'
 ```
 
+### Run a job on a three-worker cluster
+
+The `cluster` profile runs the distribution you built: a master and three workers in containers
+of `PIPEFORGE_JAVA_IMAGE` (`eclipse-temurin:21-jre`). Build it, start the cluster and submit a job:
+
+```bash
+./mvnw -B -pl pipeforge-dist -am package -DskipTests
+pipeforge dev up --cluster
+dev/submit.sh dev/cluster/fake-to-blackhole.yaml
+```
+
+```text
+Submitted run 6b1f… to localhost:36123.
+  QUEUE
+  RUNNING
+  SUCCESS
+  users: 30000 in, 30000 out
+  drop: 30000 in, 30000 out
+```
+
+The job reads with three tasks and writes with two, so its rows travel between the workers.
+`dev/submit.sh` is the client of the development environment until the server and `pipeforge run`
+submit jobs to a cluster; it exits with 0 when the run succeeds. In an unpacked release the
+profile runs that release; in a checkout the newest one in `pipeforge-dist/target/`, or the one
+`PIPEFORGE_DIST` names. `dev/check.sh` runs this job too when the cluster is up. The logs of a
+process are in its container: `docker compose -f dev/docker-compose.yaml exec worker-1 cat
+/opt/pipeforge/logs/pipeforge-worker.log`.
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -111,6 +141,7 @@ curl -s -X POST localhost:38474/proxies/mysql -d '{"enabled":true}'
 | `PF-CONF-0008` … `pass --dir` | The command found no environment: run it inside the source checkout, from an installation, or pass `--dir`. |
 | Sample data is missing | Init scripts only run on an empty volume: `pipeforge dev down --volumes`, then start again. |
 | `pipeforge dev up --s3` cannot pull the MinIO image | Set `PIPEFORGE_MINIO_IMAGE` in `dev/.env` to an image you can pull. |
+| `PF-CONF-0008` … `no PipeForge distribution to run` | `--cluster` found no built distribution: build it with `./mvnw -pl pipeforge-dist -am package -DskipTests`, or set `PIPEFORGE_DIST`. |
 
 ## Limitations
 

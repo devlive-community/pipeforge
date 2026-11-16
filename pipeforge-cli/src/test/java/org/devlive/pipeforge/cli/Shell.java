@@ -47,6 +47,8 @@ final class Shell {
     boolean launchFails;
 
     final List<Path> launched = new ArrayList<>();
+    /** The extra environment of every launched program. */
+    final List<java.util.Map<String, String>> environments = new ArrayList<>();
 
     Shell(Path directory) throws IOException {
         this.directory = Files.createDirectories(directory);
@@ -79,7 +81,8 @@ final class Shell {
                     }
                     return command.get(0).equals("docker") ? docker : Optional.empty();
                 },
-                (command, workingDirectory, output) -> {
+                (command, workingDirectory, variables, output) -> {
+                    environments.add(variables);
                     if (launchFails) {
                         throw new IOException("Cannot run program \"" + command.get(0) + "\"");
                     }

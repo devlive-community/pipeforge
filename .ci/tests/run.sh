@@ -139,6 +139,10 @@ check "Dependabot config runs nothing" "" "$(components_for .github/dependabot.y
 check "dev compose file runs java and dev-env" "java dev-env" "$(components_for dev/docker-compose.yaml)"
 check "dev scripts run dev-env only" "dev-env" "$(components_for dev/up.sh)"
 check "example jobs run java" "java" "$(components_for examples/fake-to-console.yaml)"
+check "engine runs java, dev-env and docs" "java dev-env docs" \
+    "$(components_for pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/JobMaster.java)"
+check "distribution runs java, dev-env and docs" "java dev-env docs" \
+    "$(components_for pipeforge-dist/src/main/dist/conf/worker.yaml)"
 check "dev command runs java, dev-env and docs" "java dev-env docs" \
     "$(components_for pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/DevCommand.java)"
 check "community files run nothing" "" \

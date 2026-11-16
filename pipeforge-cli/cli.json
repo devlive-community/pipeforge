@@ -515,6 +515,15 @@
         "zh-CN" : "同时启动 s3 profile 中的服务：MinIO 及其存储桶。"
       }
     }, {
+      "names" : [ "--cluster" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Also start the services of the cluster profile: a master and three workers of the locally built distribution.",
+        "zh-CN" : "同时启动 cluster profile 的服务：本地构建的发行包中的一个 Master 和三个 Worker。"
+      }
+    }, {
       "names" : [ "--timeout" ],
       "label" : "<duration>",
       "default" : "5m",

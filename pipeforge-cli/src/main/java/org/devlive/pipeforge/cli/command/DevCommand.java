@@ -50,6 +50,8 @@ public final class DevCommand implements java.util.concurrent.Callable<Integer> 
     /** The profile of the optional services; down and status always include it. */
     static final String S3_PROFILE = "s3";
 
+    static final String CLUSTER_PROFILE = "cluster";
+
     /** The suffix of one-off setup services, such as minio-init: they end once they are done. */
     static final String ONE_OFF_SUFFIX = "-init";
 
@@ -171,10 +173,16 @@ public final class DevCommand implements java.util.concurrent.Callable<Integer> 
      * @throws Failure {@link ErrorCode#DEV_ENVIRONMENT_FAILED} with exit code 1 when it fails
      */
     static void launch(Session session, Path dir, String action, List<String> command) throws InterruptedException {
+        launch(session, dir, action, command, java.util.Map.of());
+    }
+
+    static void launch(
+            Session session, Path dir, String action, List<String> command, java.util.Map<String, String> environment)
+            throws InterruptedException {
         session.note(session.messages().get("dev.running", String.join(" ", command)));
         int exit;
         try {
-            exit = session.environment().launcher().launch(command, dir, line -> {
+            exit = session.environment().launcher().launch(command, dir, environment, line -> {
                 if (!session.quiet()) {
                     session.err().println(line);
                     session.err().flush();
@@ -213,7 +221,8 @@ public final class DevCommand implements java.util.concurrent.Callable<Integer> 
     /** The services of the environment, from {@code docker compose ps}. */
     static StatusResult status(Session session, Path dir) {
         List<String> command = compose(dir);
-        command.addAll(List.of("--profile", S3_PROFILE, "ps", "--all", "--format", "json"));
+        command.addAll(
+                List.of("--profile", S3_PROFILE, "--profile", CLUSTER_PROFILE, "ps", "--all", "--format", "json"));
         String output = session.environment()
                 .runner()
                 .run(command, Duration.ofSeconds(30))
@@ -325,6 +334,9 @@ public final class DevCommand implements java.util.concurrent.Callable<Integer> 
         @Option(names = "--s3", descriptionKey = "dev.up.s3")
         boolean s3;
 
+        @Option(names = "--cluster", descriptionKey = "dev.up.cluster")
+        boolean cluster;
+
         @Option(
                 names = "--timeout",
                 paramLabel = "<duration>",
@@ -344,12 +356,56 @@ public final class DevCommand implements java.util.concurrent.Callable<Integer> 
             if (s3) {
                 command.addAll(List.of("--profile", S3_PROFILE));
             }
+            java.util.Map<String, String> environment = java.util.Map.of();
+            if (cluster) {
+                command.addAll(List.of("--profile", CLUSTER_PROFILE));
+                environment = java.util.Map.of(
+                        "PIPEFORGE_DIST", distribution(session, dir).toString());
+            }
             command.addAll(
                     List.of("up", "-d", "--wait", "--wait-timeout", String.valueOf(Math.max(1, timeout.toSeconds()))));
             command.addAll(services);
-            launch(session, dir, "up", command);
+            launch(session, dir, "up", command, environment);
             return print(session, status(session, dir));
         }
+    }
+
+    /**
+     * The distribution the cluster profile runs: PIPEFORGE_DIST, the installation around {@code
+     * dir} in an unpacked release, or the newest one built in pipeforge-dist/target/ of a checkout.
+     *
+     * @throws Failure {@link ErrorCode#FILE_NOT_READABLE} when there is none
+     */
+    static Path distribution(Session session, Path dir) {
+        String variable = session.environment().variable("PIPEFORGE_DIST");
+        if (variable != null && !variable.isBlank()) {
+            return Path.of(variable).toAbsolutePath().normalize();
+        }
+        Path parent = dir.toAbsolutePath().normalize().getParent();
+        if (parent != null && Files.isRegularFile(parent.resolve("bin/pipeforge-master.sh"))) {
+            return parent;
+        }
+        Path target = parent == null ? dir.resolve("pipeforge-dist/target") : parent.resolve("pipeforge-dist/target");
+        Path newest = null;
+        if (Files.isDirectory(target)) {
+            try (java.util.stream.Stream<Path> dirs = Files.list(target)) {
+                for (Path candidate : dirs.filter(
+                                p -> String.valueOf(p.getFileName()).startsWith("pipeforge-")
+                                        && Files.isRegularFile(p.resolve("bin/pipeforge-master.sh")))
+                        .toList()) {
+                    if (newest == null
+                            || Files.getLastModifiedTime(candidate).compareTo(Files.getLastModifiedTime(newest)) > 0) {
+                        newest = candidate;
+                    }
+                }
+            } catch (IOException e) {
+                newest = null;
+            }
+        }
+        if (newest == null) {
+            throw JobFiles.unreadable(target, session.messages().get("dev.no-distribution"));
+        }
+        return newest;
     }
 
     /** {@code pipeforge dev down}: stops the environment, optional services included. */
@@ -372,7 +428,7 @@ public final class DevCommand implements java.util.concurrent.Callable<Integer> 
             Path dir = location.resolve(session);
             requireDocker(session);
             List<String> command = compose(dir);
-            command.addAll(List.of("--profile", S3_PROFILE, "down", "--remove-orphans"));
+            command.addAll(List.of("--profile", S3_PROFILE, "--profile", CLUSTER_PROFILE, "down", "--remove-orphans"));
             if (volumes) {
                 command.add("--volumes");
             }

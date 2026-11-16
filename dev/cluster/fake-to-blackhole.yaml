@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# The job dev/check.sh runs on the cluster of the development environment: 30,000 rows read by
+# three tasks, rebalanced over the network to two writers.
+#
+#   dev/submit.sh dev/cluster/fake-to-blackhole.yaml
+
+version: 1
+name: fake-to-blackhole
+source:
+  - id: users
+    type: fake
+    table: crm.users
+    columns:
+      - id INT64 NOT NULL
+      - name STRING(12)
+    primary-key: [id]
+    rows: 30000
+    splits: 6
+    parallelism: 3
+sink:
+  - id: drop
+    type: blackhole
+    parallelism: 2

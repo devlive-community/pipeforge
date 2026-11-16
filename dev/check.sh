@@ -7,14 +7,15 @@
 #
 # Verifies that the running development environment is usable, beyond the container health
 # checks: binlog and GTID on MySQL, logical decoding on PostgreSQL, the MinIO buckets, the
-# Toxiproxy proxies, Prometheus and the Grafana data source.
+# Toxiproxy proxies, Prometheus and the Grafana data source; and, when the cluster profile runs, a
+# job on its three workers.
 #
-# Usage: dev/check.sh    (MinIO is checked when it is running)
+# Usage: dev/check.sh    (MinIO and the cluster are checked when they are running)
 
 set -euo pipefail
 
 DEV_DIR="$(cd "$(dirname "$0")" && pwd)"
-compose=(docker compose --project-directory "$DEV_DIR" -f "$DEV_DIR/docker-compose.yaml" --profile s3)
+compose=(docker compose --project-directory "$DEV_DIR" -f "$DEV_DIR/docker-compose.yaml" --profile s3 --profile cluster)
 failed=0
 
 expect() { # <name> <expected> <actual>
@@ -71,6 +72,27 @@ echo "grafana:"
 datasource="$("${compose[@]}" exec -T grafana wget -qO- http://admin:pipeforge@localhost:3000/api/datasources \
     2>/dev/null | grep -o '"name":"Prometheus"' || true)"
 expect "Prometheus data source" '"name":"Prometheus"' "$datasource"
+
+if [ -n "$("${compose[@]}" ps -q master 2>/dev/null)" ]; then
+    echo "cluster:"
+    registered=0
+    for _ in $(seq 1 30); do
+        registered="$("${compose[@]}" exec -T master sh -c \
+            'grep -c " registered with " /opt/pipeforge/logs/pipeforge-master.log' 2>/dev/null | tr -d '\r' || true)"
+        [ "$registered" = "3" ] && break
+        sleep 1
+    done
+    expect "three workers registered" "3" "$registered"
+    if output="$("$DEV_DIR/submit.sh" "$DEV_DIR/cluster/fake-to-blackhole.yaml" --timeout 3min 2>&1)"; then
+        expect "fake-to-blackhole on the cluster" "SUCCESS" "$(echo "$output" | grep -o SUCCESS | head -1)"
+    else
+        echo "$output" | sed 's/^/        /'
+        expect "fake-to-blackhole on the cluster" "SUCCESS" "failed"
+    fi
+    expect "rows written" "drop: 30000 in, 30000 out" "$(echo "$output" | grep -o 'drop: .*' | head -1)"
+else
+    echo "cluster: not running (start it with dev/up.sh --cluster)"
+fi
 
 if [ "$failed" -gt 0 ]; then
     echo "$failed check(s) failed" >&2

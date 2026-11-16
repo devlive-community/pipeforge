@@ -44,11 +44,15 @@ public record Environment(
 
     /**
      * Runs a program in a directory and hands every line it prints to {@code output}; returns its
-     * exit code. The program sees the environment of this process.
+     * exit code. The program sees the environment of this process and {@code environment}.
      */
     @FunctionalInterface
     public interface Launcher {
-        int launch(List<String> command, Path directory, java.util.function.Consumer<String> output)
+        int launch(
+                List<String> command,
+                Path directory,
+                Map<String, String> environment,
+                java.util.function.Consumer<String> output)
                 throws IOException, InterruptedException;
     }
 
@@ -119,12 +123,16 @@ public record Environment(
         }
     }
 
-    static int launchProcess(List<String> command, Path directory, java.util.function.Consumer<String> output)
+    static int launchProcess(
+            List<String> command,
+            Path directory,
+            Map<String, String> environment,
+            java.util.function.Consumer<String> output)
             throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-                .directory(directory.toFile())
-                .redirectErrorStream(true)
-                .start();
+        ProcessBuilder builder =
+                new ProcessBuilder(command).directory(directory.toFile()).redirectErrorStream(true);
+        builder.environment().putAll(environment);
+        Process process = builder.start();
         process.getOutputStream().close();
         try (java.io.BufferedReader reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {

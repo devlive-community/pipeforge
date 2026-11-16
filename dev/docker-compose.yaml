@@ -12,6 +12,9 @@
 # MinIO runs only with the "s3" profile (dev/up.sh --s3). The MinIO project no longer
 # publishes community images on Docker Hub, so the image is configurable through
 # PIPEFORGE_MINIO_IMAGE; it must contain both the minio server and the mc client.
+#
+# The "cluster" profile (dev/up.sh --cluster) runs a master and three workers of the locally built
+# distribution; dev/submit.sh submits a job to them.
 
 name: pipeforge-dev
 
@@ -162,6 +165,62 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+
+  # The cluster profile: a master and three workers of the locally built distribution, which is
+  # mounted read-only from PIPEFORGE_DIST (dev/up.sh --cluster and pipeforge dev up --cluster set
+  # it) and copied into each container, since every process writes its own run/, logs/ and data/.
+  master:
+    image: ${PIPEFORGE_JAVA_IMAGE:-eclipse-temurin:21-jre}
+    profiles: [cluster]
+    command: ["sh", "-c", "cp -R /dist/. /opt/pipeforge && exec /opt/pipeforge/bin/pipeforge-master.sh run"]
+    environment: &cluster
+      PIPEFORGE_CLUSTER_TOKEN: ${PIPEFORGE_CLUSTER_TOKEN:-pipeforge-dev-token}
+      PIPEFORGE_WORKER_MASTER_ADDRESS: master:6123
+      JAVA_OPTS: -Xms128m -Xmx512m
+    volumes:
+      - ${PIPEFORGE_DIST:-..}:/dist:ro
+    ports:
+      - "${PIPEFORGE_MASTER_PORT:-36123}:6123"
+    healthcheck:
+      test: ["CMD", "/opt/pipeforge/bin/pipeforge-master.sh", "status"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  worker-1: &worker
+    image: ${PIPEFORGE_JAVA_IMAGE:-eclipse-temurin:21-jre}
+    profiles: [cluster]
+    command: ["sh", "-c", "cp -R /dist/. /opt/pipeforge && exec /opt/pipeforge/bin/pipeforge-worker.sh run --labels zone=a"]
+    environment:
+      <<: *cluster
+      PIPEFORGE_WORKER_HOST: worker-1
+      PIPEFORGE_WORKER_SLOTS: "2"
+    volumes:
+      - ${PIPEFORGE_DIST:-..}:/dist:ro
+    depends_on:
+      master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/opt/pipeforge/bin/pipeforge-worker.sh", "status"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  worker-2:
+    <<: *worker
+    command: ["sh", "-c", "cp -R /dist/. /opt/pipeforge && exec /opt/pipeforge/bin/pipeforge-worker.sh run --labels zone=b"]
+    environment:
+      <<: *cluster
+      PIPEFORGE_WORKER_HOST: worker-2
+      PIPEFORGE_WORKER_SLOTS: "2"
+
+  worker-3:
+    <<: *worker
+    command: ["sh", "-c", "cp -R /dist/. /opt/pipeforge && exec /opt/pipeforge/bin/pipeforge-worker.sh run --labels zone=c"]
+    environment:
+      <<: *cluster
+      PIPEFORGE_WORKER_HOST: worker-3
+      PIPEFORGE_WORKER_SLOTS: "2"
 
 volumes:
   mysql-data:

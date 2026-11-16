@@ -8,7 +8,6 @@ package org.devlive.pipeforge.dist;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.grpc.ManagedChannel;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
@@ -23,13 +22,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
-import org.devlive.pipeforge.engine.rpc.grpc.ClusterToken;
-import org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport;
-import org.devlive.pipeforge.engine.rpc.grpc.Headers;
-import org.devlive.pipeforge.engine.rpc.proto.DispatcherServiceGrpc;
-import org.devlive.pipeforge.engine.rpc.proto.JobRequest;
-import org.devlive.pipeforge.engine.rpc.proto.RunState;
-import org.devlive.pipeforge.engine.rpc.proto.SubmitJobRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -117,37 +109,21 @@ class DistributionIT {
         assertThat(status.exit()).isZero();
         assertThat(status.out()).startsWith("The worker is running (pid ");
 
-        String definition = Files.readString(Path.of("..", "examples", "fake-to-console.yaml"));
-        ManagedChannel channel = GrpcTransport.channel(
-                "localhost:" + masterPort,
-                new GrpcTransport.Security(new ClusterToken(environment.get("PIPEFORGE_CLUSTER_TOKEN")), null));
-        try {
-            var dispatcher = DispatcherServiceGrpc.newBlockingStub(channel);
-            dispatcher.submitJob(SubmitJobRequest.newBuilder()
-                    .setHeader(header())
-                    .setJobId("fake-to-console")
-                    .setRunId("run-1")
-                    .setDefinition(definition)
-                    .setDefinitionFormat("yaml")
-                    .build());
-            RunState state = RunState.RUN_STATE_UNSPECIFIED;
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
-            while (System.nanoTime() < deadline) {
-                var run = dispatcher.getJobStatus(JobRequest.newBuilder()
-                        .setHeader(header())
-                        .setRunId("run-1")
-                        .build());
-                state = run.getState();
-                if (state == RunState.RUN_STATE_SUCCESS || state == RunState.RUN_STATE_FAILED) {
-                    assertThat(state).as(run.getError().getMessage()).isEqualTo(RunState.RUN_STATE_SUCCESS);
-                    break;
-                }
-                Thread.sleep(200);
-            }
-            assertThat(state).isEqualTo(RunState.RUN_STATE_SUCCESS);
-        } finally {
-            channel.shutdownNow();
-        }
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        java.io.ByteArrayOutputStream err = new java.io.ByteArrayOutputStream();
+        int submitted = SubmitMain.run(
+                new String[] {
+                    "../examples/fake-to-console.yaml", "--master", "localhost:" + masterPort, "--timeout", "1min"
+                },
+                environment,
+                home,
+                new java.io.PrintStream(out, true, StandardCharsets.UTF_8),
+                new java.io.PrintStream(err, true, StandardCharsets.UTF_8));
+        assertThat(submitted).as(err.toString(StandardCharsets.UTF_8)).isZero();
+        assertThat(out.toString(StandardCharsets.UTF_8))
+                .contains("Submitted run ")
+                .contains("  SUCCESS")
+                .contains("users: 5 in, 5 out");
         // the worker downloaded the plugins of the job from the master and printed its rows
         try (Stream<Path> blobs = Files.list(home.resolve("data/worker/plugins/blobs"))) {
             assertThat(blobs.count()).isGreaterThanOrEqualTo(2);
@@ -202,9 +178,5 @@ class DistributionIT {
         process.destroy();
         assertThat(process.waitFor(60, TimeUnit.SECONDS)).isTrue();
         assertThat(pid).as("removed on SIGTERM").doesNotExist();
-    }
-
-    static org.devlive.pipeforge.engine.rpc.proto.Header header() {
-        return Headers.create(Headers.Epochs.FIRST, Duration.ofSeconds(10), System::currentTimeMillis);
     }
 }

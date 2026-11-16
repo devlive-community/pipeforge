@@ -211,7 +211,12 @@ public final class Configuration {
         }
     }
 
-    static Duration duration(String text) {
+    /**
+     * A duration such as {@code 500ms}, {@code 30s}, {@code 5min} or {@code 2h}.
+     *
+     * @throws IllegalArgumentException for other text
+     */
+    public static Duration duration(String text) {
         Matcher m = DURATION.matcher(text.toLowerCase(Locale.ROOT));
         if (!m.matches()) {
             throw new IllegalArgumentException("'" + text + "' is not a duration such as 500ms, 30s, 5min or 2h");

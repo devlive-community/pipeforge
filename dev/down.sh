@@ -23,4 +23,4 @@ for arg in "$@"; do
     esac
 done
 
-docker compose --project-directory "$DEV_DIR" -f "$DEV_DIR/docker-compose.yaml" --profile s3 down --remove-orphans ${args[@]+"${args[@]}"}
+docker compose --project-directory "$DEV_DIR" -f "$DEV_DIR/docker-compose.yaml" --profile s3 --profile cluster down --remove-orphans ${args[@]+"${args[@]}"}

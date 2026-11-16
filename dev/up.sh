@@ -7,9 +7,10 @@
 #
 # Starts the local development environment and waits until every service is healthy.
 #
-# Usage: dev/up.sh [--s3] [service ...]
+# Usage: dev/up.sh [--s3] [--cluster] [service ...]
 #
 #   --s3        also start MinIO (S3-compatible object storage)
+#   --cluster   also start a master and three workers of the locally built distribution
 #   service     start only these services (default: all services of the active profiles)
 
 set -euo pipefail
@@ -20,6 +21,11 @@ services=()
 for arg in "$@"; do
     case "$arg" in
         --s3) compose+=(--profile s3) ;;
+        --cluster)
+            compose+=(--profile cluster)
+            PIPEFORGE_DIST="$("$DEV_DIR/distribution.sh")"
+            export PIPEFORGE_DIST
+            ;;
         -*)
             echo "unknown option: $arg" >&2
             exit 2

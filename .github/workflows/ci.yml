@@ -150,13 +150,15 @@ jobs:
           distribution: temurin
           java-version-file: .java-version
           cache: maven
-      - run: ./mvnw -B -ntp package -pl pipeforge-cli -am -DskipTests -Djacoco.skip=true -Dinvoker.skip=true
-      - run: echo "PIPEFORGE=$(echo "$PWD"/pipeforge-cli/target/pipeforge-*/bin/pipeforge)" >> "$GITHUB_ENV"
-      - run: $PIPEFORGE dev up --s3
+      - run: ./mvnw -B -ntp package -pl pipeforge-dist -am -DskipTests -Djacoco.skip=true -Dinvoker.skip=true
+      - run: echo "PIPEFORGE=$(echo "$PWD"/pipeforge-dist/target/pipeforge-*/bin/pipeforge)" >> "$GITHUB_ENV"
+      # the cluster profile runs the distribution just built: a master and three workers; dev/check.sh
+      # submits a fake -> blackhole job to them
+      - run: $PIPEFORGE dev up --s3 --cluster
       - run: dev/check.sh
       - run: $PIPEFORGE dev status
       - if: failure()
-        run: docker compose -f dev/docker-compose.yaml --profile s3 logs --no-color --tail 200
+        run: docker compose -f dev/docker-compose.yaml --profile s3 --profile cluster logs --no-color --tail 200
       - if: always()
         run: $PIPEFORGE dev down --volumes
       - if: always()
