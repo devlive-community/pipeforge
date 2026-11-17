@@ -176,7 +176,9 @@
     "tabs": {
       "overview": "Overview",
       "metrics": "Metrics",
-      "plan": "Execution plan"
+      "plan": "Execution plan",
+      "splits": "Splits",
+      "logs": "Logs"
     },
     "facts": {
       "state": "State",
@@ -256,6 +258,43 @@
       "rateIn": "Rate in",
       "rateOut": "Rate out",
       "noDefinition": "The server has no definition of this run, so there is no graph to show."
+    },
+    "logs": {
+      "taskLabel": "Task",
+      "task": "{vertex} #{subtask} · {worker} · {state}",
+      "taskAttempt": "{vertex} #{subtask}, attempt {attempt} · {worker} · {state}",
+      "level": "Lowest level",
+      "levels": {
+        "all": "All",
+        "DEBUG": "Debug",
+        "INFO": "Info",
+        "WARN": "Warn",
+        "ERROR": "Error"
+      },
+      "search": "Find in the log",
+      "follow": "Follow",
+      "download": "Download",
+      "view": "Log of the task",
+      "empty": "The log is empty.",
+      "noMatch": "No entry matches the filters.",
+      "noTasks": "No task has started yet.",
+      "tasksFailed": "The tasks cannot be loaded: {message}",
+      "failed": "The log cannot be read: {message}",
+      "ended": "The task ended; this is the end of its log.",
+      "following": "New entries appear every two seconds."
+    },
+    "splitList": {
+      "caption": "Splits of the run's sources",
+      "node": "Source",
+      "split": "Split",
+      "reader": "Reader",
+      "state": "State",
+      "assigned": "Reading",
+      "finished": "Read",
+      "progress": "{finished} of {total} splits read",
+      "none": "No split yet",
+      "noneHint": "Sources hand out their splits once the run starts; a source that is not split has none.",
+      "failed": "The splits cannot be loaded: {message}"
     }
   },
   "plugins": {

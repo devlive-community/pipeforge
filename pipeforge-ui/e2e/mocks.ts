@@ -410,7 +410,61 @@ function runHistory() {
   });
 }
 
+function runSplits() {
+  const ranges = Array.from({ length: 16 }, (_, i) => i);
+  return ranges
+    .map((i) => ({
+      node: "orders",
+      split: `orders[id ${i * 250_000}..${(i + 1) * 250_000})`,
+      subtask: i % 4,
+      state: i < 9 ? "FINISHED" : i < 13 ? "ASSIGNED" : "PENDING",
+    }))
+    .filter((split) => split.state !== "PENDING");
+}
+
+function runTasks() {
+  return ["orders", "enrich", "warehouse"].flatMap((vertex) =>
+    [0, 1, 2, 3].map((subtask) => ({
+      vertex,
+      subtask,
+      attempt: 0,
+      state: "RUNNING",
+      worker: `worker-${(subtask % 2) + 1}`,
+    })),
+  );
+}
+
+const TASK_LOG = [
+  "2026-11-17 08:09:53.104 INFO  [orders-0] o.d.p.c.jdbc.JdbcSourceReader - reading orders[id 0..250000)",
+  "2026-11-17 08:10:21.877 INFO  [orders-0] o.d.p.c.jdbc.JdbcSourceReader - finished orders[id 0..250000): 250000 rows in 28.8 s",
+  "2026-11-17 08:10:21.879 INFO  [orders-0] o.d.p.c.jdbc.JdbcSourceReader - reading orders[id 1000000..1250000)",
+  "2026-11-17 08:10:47.312 WARN  [orders-0] o.d.p.e.w.TaskExecutor - the write queue was full for 4.2 s; the sink is slower than the source",
+  "2026-11-17 08:10:52.006 INFO  [orders-0] o.d.p.c.jdbc.JdbcSourceReader - finished orders[id 1000000..1250000): 250000 rows in 30.1 s",
+  "2026-11-17 08:10:52.008 INFO  [orders-0] o.d.p.c.jdbc.JdbcSourceReader - reading orders[id 2000000..2250000)",
+  "2026-11-17 08:11:03.551 ERROR [orders-0] o.d.p.c.jdbc.JdbcSourceReader - a read failed and is retried (1 of 3)",
+  "java.sql.SQLTransientConnectionException: Communications link failure",
+  "\tat com.mysql.cj.jdbc.exceptions.SQLError.createCommunicationsException(SQLError.java:175)",
+  "2026-11-17 08:11:04.602 INFO  [orders-0] o.d.p.c.jdbc.JdbcSourceReader - reconnected; reading orders[id 2000000..2250000) from row 81200",
+  "",
+].join("\n");
+
+/** The log of a task: the whole text on the first read, nothing new afterwards. */
+function taskLog(url: URL) {
+  const offset = Number(url.searchParams.get("offset") ?? "0");
+  const contains = url.searchParams.get("contains") ?? "";
+  const text =
+    offset < 0
+      ? TASK_LOG.split("\n")
+          .filter((line) => line.includes(contains))
+          .join("\n")
+      : "";
+  return { text: text && !text.endsWith("\n") ? `${text}\n` : text, offset: TASK_LOG.length, eof: false };
+}
+
 export const SERVER: Record<string, unknown> = {
+  [`/api/v1/runs/${RUN_ID}/splits`]: () => runSplits(),
+  [`/api/v1/runs/${RUN_ID}/tasks`]: () => runTasks(),
+  [`/api/v1/runs/${RUN_ID}/logs`]: (_body: string, _language: string, url: URL) => taskLog(url),
   "/api/v1/runs": () => runs(),
   [`/api/v1/runs/${RUN_ID}`]: () => runDetail(),
   [`/api/v1/runs/${RUN_ID}/metrics`]: () => runMetrics(),
@@ -468,7 +522,11 @@ export async function mockServer(page: Page, answers: Record<string, unknown> = 
     const language = (await request.allHeaders())["accept-language"] ?? "en-US";
     const answer =
       typeof handler === "function"
-        ? (handler as (body: string, language: string) => unknown)(request.postData() ?? "", language)
+        ? (handler as (body: string, language: string, url: URL) => unknown)(
+            request.postData() ?? "",
+            language,
+            new URL(request.url()),
+          )
         : handler;
     if (typeof answer === "number") {
       await route.fulfill({ status: answer, json: { code: "PF-SYS-0001", message: "down" } });

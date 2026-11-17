@@ -17,7 +17,9 @@ import { Card, DescriptionList, Empty, PageHeader, Table, Tabs } from "@/ui";
 import { LoadingPanel } from "@/ui/LoadingPanel";
 import { rates, waitShare, type RunAnalysis } from "./analysis";
 import { BottleneckCard } from "./Bottleneck";
+import { LogsTab } from "./LogsTab";
 import { PlanTab } from "./PlanTab";
+import { SplitsTab } from "./SplitsTab";
 
 const TERMINAL: RunState[] = ["SUCCESS", "FAILED", "CANCELLED", "TIMEOUT"];
 
@@ -190,10 +192,14 @@ export function RunDetailPage() {
   const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const requested = params.get("tab");
-  const tab = requested === "metrics" || requested === "plan" ? requested : "overview";
-  const select = (node: string) => {
+  const tab =
+    requested === "metrics" || requested === "plan" || requested === "splits" || requested === "logs"
+      ? requested
+      : "overview";
+  /** Keeps a choice of the current tab (a node, a task) in the address. */
+  const choose = (key: "node" | "task", value: string) => {
     const changed = new URLSearchParams(params);
-    changed.set("node", node);
+    changed.set(key, value);
     setParams(changed, { replace: true });
   };
   const detail = useRun(id);
@@ -262,6 +268,7 @@ export function RunDetailPage() {
           if (next === "overview") changed.delete("tab");
           else changed.set("tab", next);
           changed.delete("node");
+          changed.delete("task");
           setParams(changed, { replace: true });
         }}
         tabs={[
@@ -289,7 +296,25 @@ export function RunDetailPage() {
                 metrics={metrics.data}
                 analysis={analysis.isError ? undefined : (analysis.data as unknown as RunAnalysis | undefined)}
                 selected={params.get("node")}
-                onSelect={select}
+                onSelect={(node) => choose("node", node)}
+              />
+            ),
+          },
+          {
+            id: "splits",
+            label: t("runDetail.tabs.splits"),
+            content: <SplitsTab id={id} live={live} />,
+          },
+          {
+            id: "logs",
+            label: t("runDetail.tabs.logs"),
+            content: (
+              <LogsTab
+                id={id}
+                job={run.job ?? "run"}
+                live={live}
+                selected={params.get("task")}
+                onSelect={(task) => choose("task", task)}
               />
             ),
           },

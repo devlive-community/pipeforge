@@ -176,7 +176,9 @@
     "tabs": {
       "overview": "概览",
       "metrics": "指标",
-      "plan": "执行计划"
+      "plan": "执行计划",
+      "splits": "分片",
+      "logs": "日志"
     },
     "facts": {
       "state": "状态",
@@ -256,6 +258,43 @@
       "rateIn": "输入速率",
       "rateOut": "输出速率",
       "noDefinition": "服务端没有这次运行的定义，无法显示执行图。"
+    },
+    "logs": {
+      "taskLabel": "Task",
+      "task": "{vertex} #{subtask} · {worker} · {state}",
+      "taskAttempt": "{vertex} #{subtask}，第 {attempt} 次重试 · {worker} · {state}",
+      "level": "最低级别",
+      "levels": {
+        "all": "全部",
+        "DEBUG": "Debug",
+        "INFO": "Info",
+        "WARN": "Warn",
+        "ERROR": "Error"
+      },
+      "search": "在日志中查找",
+      "follow": "跟随",
+      "download": "下载",
+      "view": "Task 的日志",
+      "empty": "日志为空。",
+      "noMatch": "没有符合筛选条件的日志。",
+      "noTasks": "还没有 Task 启动。",
+      "tasksFailed": "无法加载 Task：{message}",
+      "failed": "无法读取日志：{message}",
+      "ended": "Task 已结束，日志到此为止。",
+      "following": "新日志每两秒刷新一次。"
+    },
+    "splitList": {
+      "caption": "运行中 Source 的分片",
+      "node": "Source",
+      "split": "分片",
+      "reader": "读取器",
+      "state": "状态",
+      "assigned": "读取中",
+      "finished": "已读完",
+      "progress": "已读完 {finished} / {total} 个分片",
+      "none": "还没有分片",
+      "noneHint": "运行开始后 Source 才会分发分片；不分片的 Source 没有分片。",
+      "failed": "无法加载分片：{message}"
     }
   },
   "plugins": {

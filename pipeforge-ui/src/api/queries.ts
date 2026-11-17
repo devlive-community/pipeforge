@@ -87,6 +87,22 @@ export function useRunAnalysis(id: string, live: boolean) {
   });
 }
 
+export function useRunSplits(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-splits", id],
+    queryFn: () => api.listRunSplits(id),
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
+export function useRunTasks(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-tasks", id],
+    queryFn: () => api.listRunTasks(id),
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
 export function useJobSchema() {
   return useQuery({ queryKey: ["job-schema"], queryFn: api.getJobSchema, staleTime: Infinity });
 }

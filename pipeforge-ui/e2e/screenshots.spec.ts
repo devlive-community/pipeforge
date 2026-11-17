@@ -66,6 +66,19 @@ const PAGES: Shot[] = [
     path: `/runs/${RUN_ID}?tab=plan&node=warehouse`,
     ready: { "en-US": "Bytes out", "zh-CN": "输出字节" },
   },
+  {
+    name: "run-splits",
+    path: `/runs/${RUN_ID}?tab=splits`,
+    ready: { "en-US": "9 of 13 splits read", "zh-CN": "已读完 9 / 13 个分片" },
+  },
+  {
+    name: "run-logs",
+    path: `/runs/${RUN_ID}?tab=logs`,
+    ready: {
+      "en-US": "java.sql.SQLTransientConnectionException: Communications link failure",
+      "zh-CN": "java.sql.SQLTransientConnectionException: Communications link failure",
+    },
+  },
   { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
   {
     name: "field-mapping",

@@ -81,3 +81,25 @@ waits of the whole run.
 
 <Screenshot name="run-plan" alt="The execution plan of a run with the bottleneck marked" />
 
+The **Splits** tab (`/runs/<id>?tab=splits`) shows how far each source got: the splits read of
+those handed out, and every split with the reader (subtask) that has it and whether it was read.
+Splits appear once the run starts; a source that is not split has none.
+
+<Screenshot name="run-splits" alt="The splits of a run" />
+
+The **Logs** tab (`/runs/<id>?tab=logs`) reads a task's log from the worker it ran on, through the
+master:
+
+- choose the task (its vertex, subtask and attempt, the worker and its state) in the menu; the choice
+  is part of the address
+- the lowest level to show and text to find filter the log on the worker, so they work on logs of
+  any size; matches are marked
+- the log starts with its last 64 KB and follows new entries every two seconds until the task ended;
+  it scrolls along while the view is at its end, stops when you scroll up and continues when you
+  scroll back down or press **Follow**
+- **Download** saves the whole log, unfiltered, up to 64 MB
+
+Lines are colored by level, and the lines of a stack trace take the level of their entry.
+
+<Screenshot name="run-logs" alt="The log of a task" />
+

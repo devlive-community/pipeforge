@@ -107,3 +107,14 @@ test("opens a run from the list and switches to its metrics", async ({ page }) =
   await expect(page).toHaveURL(/tab=plan&node=warehouse/);
   await expect(page.getByText("The run analysis finds this node to be the bottleneck; see below.")).toBeVisible();
 });
+
+test("reads a task's log and finds text in it", async ({ page }) => {
+  await page.goto("/runs/3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01?tab=logs");
+  const log = page.getByRole("log", { name: "Log of the task" });
+  await expect(log.getByText(/Communications link failure/)).toBeVisible();
+  await page.getByRole("textbox", { name: "Find in the log" }).fill("reconnected");
+  await expect(log.locator("mark")).toHaveText("reconnected");
+  await expect(log.getByText(/Communications link failure/)).toHaveCount(0);
+  await page.getByRole("tab", { name: "Splits" }).click();
+  await expect(page.getByText("9 of 13 splits read")).toBeVisible();
+});
