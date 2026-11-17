@@ -131,3 +131,21 @@
   hint:
     en-US: "The schema was left at the last migration that succeeded. Fix the cause, for example the user's privileges, and start the server again; never edit a migration that was applied."
     zh-CN: "表结构停留在最后一个成功的迁移。请修正原因（例如用户权限）后重新启动服务端；不要修改已经执行过的迁移脚本。"
+
+- code: PF-CLUS-0015
+  name: MASTER_NOT_CONFIGURED
+  message:
+    en-US: "The server has no master to run jobs on"
+    zh-CN: "服务端没有可以运行作业的 Master"
+  hint:
+    en-US: "Set pipeforge.master.address to the host:port of the cluster's master, with the cluster token in pipeforge.master.token."
+    zh-CN: "请把 pipeforge.master.address 设置为集群 Master 的 host:port，并在 pipeforge.master.token 中设置集群令牌。"
+
+- code: PF-CLUS-0016
+  name: RUN_LOST
+  message:
+    en-US: "The master {master} no longer knows run {run}"
+    zh-CN: "Master {master} 已经不知道运行 {run}"
+  hint:
+    en-US: "The master restarted, or another master took its place, while the run was going on; the run did not finish. Submit the job again."
+    zh-CN: "运行期间 Master 重启了，或者被另一个 Master 取代，运行没有完成。请重新提交作业。"

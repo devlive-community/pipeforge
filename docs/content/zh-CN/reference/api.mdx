@@ -14,8 +14,9 @@ data: api
 | 状态码 | 错误 |
 |---|---|
 | 400 | `PF-CONF-0007`：请求本身不合法（缺少字段、JSON 格式错误） |
-| 404 | `PF-PLUG-0001`：组件未安装；接口不存在时为 `PF-CONF-0007` |
+| 404 | `PF-PLUG-0001`：组件未安装；`PF-CONF-0010`：运行不存在；接口不存在时为 `PF-CONF-0007` |
 | 422 | 作业、表达式或插件选项不合法（`CONF`、`PLAN`、`PLUG`、`DATA` 类错误码） |
+| 503 | `PF-CLUS-0015`：服务端没有配置 Master；`PF-CLUS-0008`：无法连接 Master |
 | 500 | `PF-SYS-0001`：内部错误 |
 
 - OpenAPI 文档位于 `/api/v1/openapi.json`。Web UI 使用的 TypeScript 客户端 `@pipeforge/client` 由它生成，每个接口都有一个以 operation id

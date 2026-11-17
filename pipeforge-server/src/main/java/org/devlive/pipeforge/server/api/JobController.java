@@ -19,14 +19,8 @@ import org.devlive.pipeforge.common.error.ErrorInfo;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.explain.ExplainDocument;
 import org.devlive.pipeforge.core.explain.PlanExplainer;
-import org.devlive.pipeforge.core.job.JobDefinition;
-import org.devlive.pipeforge.core.job.JobParser;
 import org.devlive.pipeforge.core.plan.JobPlan;
-import org.devlive.pipeforge.core.plan.Planner;
-import org.devlive.pipeforge.core.plan.PluginComponents;
-import org.devlive.pipeforge.core.variable.VariableContext;
-import org.devlive.pipeforge.plugin.PluginManager;
-import org.devlive.pipeforge.server.config.ServerConfiguration.JobDefaults;
+import org.devlive.pipeforge.server.config.JobPlanning;
 import org.devlive.pipeforge.server.web.Languages;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
@@ -42,12 +36,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "jobs", description = "Job validation and plans")
 public class JobController {
 
-    private final PluginManager plugins;
-    private final JobDefaults defaults;
+    private final JobPlanning planning;
 
-    public JobController(PluginManager plugins, JobDefaults defaults) {
-        this.plugins = plugins;
-        this.defaults = defaults;
+    public JobController(JobPlanning planning) {
+        this.planning = planning;
     }
 
     /**
@@ -120,9 +112,12 @@ public class JobController {
 
     /** A request without a definition is a client error (400), not a validation result. */
     private static void checkRequest(@Nullable JobRequest request) {
-        if (request == null
-                || request.definition() == null
-                || request.definition().isBlank()) {
+        if (request == null) {
+            throw PipeForgeException.of(ErrorCode.REQUEST_INVALID)
+                    .param("reason", "definition must hold the job in YAML or JSON")
+                    .build();
+        }
+        if (request.definition() == null || request.definition().isBlank()) {
             throw PipeForgeException.of(ErrorCode.REQUEST_INVALID)
                     .param("reason", "definition must hold the job in YAML or JSON")
                     .build();
@@ -131,16 +126,6 @@ public class JobController {
 
     private JobPlan plan(JobRequest request) {
         checkRequest(request);
-        VariableContext.Builder context = VariableContext.builder().defaultTimeZone(defaults.timeZone());
-        if (request.variables() != null) {
-            context.overrides(request.variables());
-        }
-        if (request.scheduledTime() != null) {
-            context.scheduledTime(request.scheduledTime());
-        }
-        JobDefinition job = JobParser.parse(request.definition(), context.build());
-        try (PluginComponents components = new PluginComponents(plugins, "api:" + job.name())) {
-            return new Planner(components, defaults.cluster()).plan(job);
-        }
+        return planning.plan(request.definition(), request.variables(), request.scheduledTime());
     }
 }

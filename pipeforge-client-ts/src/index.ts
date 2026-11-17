@@ -22,6 +22,19 @@ export type ValidationResult = Schemas["ValidationResult"];
 export type ExplainResult = Schemas["ExplainResult"];
 export type EvaluationRequest = Schemas["EvaluationRequest"];
 export type EvaluationResult = Schemas["EvaluationResult"];
+export type SubmitRequest = Schemas["SubmitRequest"];
+export type Run = Schemas["Run"];
+export type RunDetail = Schemas["RunDetail"];
+export type RunPage = Schemas["RunPage"];
+export type RunState = NonNullable<Run["status"]>;
+
+/** Which runs to list: some states, one job, and the page. */
+export interface RunQuery {
+  status?: RunState[];
+  job?: string;
+  limit?: number;
+  page?: string;
+}
 
 /** The languages of messages the server provides. */
 export type Language = "en-US" | "zh-CN";
@@ -92,6 +105,11 @@ export function createClient(options: ClientOptions = {}) {
     validateJob: (body: JobRequest) => unwrap(raw.POST("/api/v1/jobs/validate", { body })),
     explainJob: (body: JobRequest) => unwrap(raw.POST("/api/v1/explain", { body })),
     evaluateExpression: (body: EvaluationRequest) => unwrap(raw.POST("/api/v1/expressions/evaluate", { body })),
+    submitRun: (body: SubmitRequest) => unwrap(raw.POST("/api/v1/runs", { body })),
+    listRuns: (query: RunQuery = {}) => unwrap(raw.GET("/api/v1/runs", { params: { query } })),
+    getRun: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}", { params: { path: { id } } })),
+    cancelRun: (id: string, reason?: string) =>
+      unwrap(raw.POST("/api/v1/runs/{id}/cancel", { params: { path: { id } }, body: reason ? { reason } : {} })),
   };
 }
 

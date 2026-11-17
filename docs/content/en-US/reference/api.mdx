@@ -16,8 +16,9 @@ data: api
 | Status | Errors |
 |---|---|
 | 400 | `PF-CONF-0007`: the request itself is invalid (missing field, malformed JSON) |
-| 404 | `PF-PLUG-0001`: the component is not installed; `PF-CONF-0007` for an unknown endpoint |
+| 404 | `PF-PLUG-0001`: the component is not installed; `PF-CONF-0010`: the run does not exist; `PF-CONF-0007` for an unknown endpoint |
 | 422 | The job, expression or plugin options are invalid (`CONF`, `PLAN`, `PLUG`, `DATA` codes) |
+| 503 | `PF-CLUS-0015`: the server has no master; `PF-CLUS-0008`: the master cannot be reached |
 | 500 | `PF-SYS-0001`: an internal error |
 
 - The OpenAPI document is served at `/api/v1/openapi.json`. The TypeScript client

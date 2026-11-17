@@ -144,6 +144,8 @@ public final class ErrorCode {
             define("PF-CLUS-0013", "METASTORE_UNAVAILABLE", "url", "reason");
     public static final ErrorCode METASTORE_MIGRATION_FAILED =
             define("PF-CLUS-0014", "METASTORE_MIGRATION_FAILED", "url", "reason");
+    public static final ErrorCode MASTER_NOT_CONFIGURED = define("PF-CLUS-0015", "MASTER_NOT_CONFIGURED");
+    public static final ErrorCode RUN_LOST = define("PF-CLUS-0016", "RUN_LOST", "run", "master");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

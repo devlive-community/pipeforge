@@ -19,9 +19,40 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param plugin where plugins are installed
  * @param job defaults for the jobs the server plans
  * @param metastore the database the server keeps its records in
+ * @param master the master the server submits runs to
  */
 @ConfigurationProperties("pipeforge")
-public record ServerProperties(@DefaultValue Plugin plugin, @DefaultValue Job job, @DefaultValue Metastore metastore) {
+public record ServerProperties(
+        @DefaultValue Plugin plugin,
+        @DefaultValue Job job,
+        @DefaultValue Metastore metastore,
+        @DefaultValue Master master) {
+
+    /**
+     * @param address {@code host:port} of the master's RPC port; without it runs cannot be submitted
+     * @param token the cluster token ({@code cluster.token} of the cluster)
+     * @param tls the TLS settings of the cluster, when it uses TLS
+     * @param pollInterval how often the server asks the master about the runs that have not ended
+     */
+    public record Master(
+            @Nullable String address,
+            @DefaultValue("") String token,
+            @DefaultValue Tls tls,
+            @DefaultValue("1s") java.time.Duration pollInterval) {}
+
+    /**
+     * @param enabled whether the cluster uses TLS
+     * @param keyStore the server's key store (PKCS#12)
+     * @param keyStorePassword its password
+     * @param trustStore the store of the certificates the server trusts
+     * @param trustStorePassword its password
+     */
+    public record Tls(
+            @DefaultValue("false") boolean enabled,
+            @Nullable Path keyStore,
+            @DefaultValue("") String keyStorePassword,
+            @Nullable Path trustStore,
+            @DefaultValue("") String trustStorePassword) {}
 
     /**
      * @param url the JDBC URL: H2, MySQL or PostgreSQL

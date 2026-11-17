@@ -24,6 +24,9 @@
     "description" : "Installed plugins and their components",
     "name" : "plugins"
   }, {
+    "description" : "Runs of jobs on the cluster",
+    "name" : "runs"
+  }, {
     "description" : "Server information",
     "name" : "system"
   } ],
@@ -546,6 +549,294 @@
         }
       }
     },
+    "/api/v1/runs" : {
+      "get" : {
+        "description" : "Runs newest first, optionally of some states or of one job. A page ends with the token of the next one in next.",
+        "operationId" : "listRuns",
+        "parameters" : [ {
+          "description" : "States to list; every state when none",
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "string",
+              "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+            }
+          }
+        }, {
+          "description" : "The name of a job",
+          "in" : "query",
+          "name" : "job",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        }, {
+          "description" : "Runs per page, at most 200",
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        }, {
+          "description" : "The token of a page, from next",
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RunPage"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List runs",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "按提交时间从新到旧列出运行，可以只看某些状态或某个作业。每页的 next 是下一页的令牌。",
+          "summary" : "列出运行"
+        }
+      },
+      "post" : {
+        "description" : "Plans the job, records a run and submits it to the master. An invalid job is an error response and no run is recorded. The run starts in QUEUE; GET /api/v1/runs/{id} follows it.",
+        "operationId" : "submitRun",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SubmitRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Run"
+                }
+              }
+            },
+            "description" : "Created"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Run a job",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "计划作业、记录一次运行并提交给 Master。作业不合法时返回错误响应，不记录运行。运行从 QUEUE 开始；用 GET /api/v1/runs/{id} 跟踪它。",
+          "summary" : "运行作业"
+        }
+      }
+    },
+    "/api/v1/runs/{id}" : {
+      "get" : {
+        "description" : "The run with its job definition and every change of its state, oldest first.",
+        "operationId" : "getRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RunDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "运行及其作业定义，以及按时间顺序排列的每一次状态变化。",
+          "summary" : "查看运行"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/cancel" : {
+      "post" : {
+        "description" : "Asks the master to cancel a run that has not ended; the run moves to CANCELLING, then CANCELLED. An ended run is returned as it is.",
+        "operationId" : "cancelRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CancelRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Run"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Cancel a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "请 Master 取消一个尚未结束的运行；运行先进入 CANCELLING，然后是 CANCELLED。已结束的运行原样返回。",
+          "summary" : "取消运行"
+        }
+      }
+    },
     "/api/v1/version" : {
       "get" : {
         "description" : "The PipeForge version, the connector API version and the Java runtime.",
@@ -603,6 +894,14 @@
   },
   "components" : {
     "schemas" : {
+      "CancelRequest" : {
+        "type" : "object",
+        "properties" : {
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
       "Column" : {
         "type" : "object",
         "properties" : {
@@ -1117,6 +1416,104 @@
           }
         }
       },
+      "Run" : {
+        "type" : "object",
+        "properties" : {
+          "endedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "error" : {
+            "$ref" : "#/components/schemas/RunError"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "job" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+          },
+          "submittedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "submittedBy" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "RunDetail" : {
+        "type" : "object",
+        "properties" : {
+          "definition" : {
+            "type" : "string"
+          },
+          "run" : {
+            "$ref" : "#/components/schemas/Run"
+          },
+          "transitions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Transition"
+            }
+          }
+        }
+      },
+      "RunError" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RunPage" : {
+        "type" : "object",
+        "properties" : {
+          "next" : {
+            "type" : "string"
+          },
+          "runs" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Run"
+            }
+          }
+        }
+      },
+      "SubmitRequest" : {
+        "type" : "object",
+        "properties" : {
+          "definition" : {
+            "type" : "string"
+          },
+          "scheduledTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "variables" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "definition" ]
+      },
       "Table" : {
         "type" : "object",
         "properties" : {
@@ -1140,6 +1537,30 @@
             "items" : {
               "type" : "string"
             }
+          }
+        }
+      },
+      "Transition" : {
+        "type" : "object",
+        "properties" : {
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "from" : {
+            "type" : "string",
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "to" : {
+            "type" : "string",
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
           }
         }
       },

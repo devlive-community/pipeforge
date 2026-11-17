@@ -86,6 +86,10 @@ as `--name=value`, or set them as environment variables (`PIPEFORGE_JOB_TIMEZONE
 | `pipeforge.job.timezone` | `UTC` | Time zone of jobs that do not set `env.timezone` |
 | `pipeforge.job.defaults.*` | none | Cluster defaults for node options, in the env form, e.g. `pipeforge.job.defaults.source.fetch-size` |
 | `pipeforge.metastore.*` | an H2 file in `~/.pipeforge/metastore` | The database of the server's records; see [metastore](./metastore) |
+| `pipeforge.master.address` | none | `host:port` of the cluster master's RPC port; without it runs cannot be submitted |
+| `pipeforge.master.token` | none | The cluster token (`cluster.token` of the cluster), required with a master |
+| `pipeforge.master.tls.*` | off | `enabled`, `key-store`, `key-store-password`, `trust-store`, `trust-store-password`, as `security.tls.*` of the cluster |
+| `pipeforge.master.poll-interval` | `1s` | How often the server asks the master about the runs that have not ended |
 
 ```yaml
 pipeforge:
@@ -100,6 +104,33 @@ pipeforge:
 Plugins are loaded when the server starts, and the log names every plugin directory with its
 absolute path and the number of plugins in it; packages that cannot be used are listed by
 `GET /api/v1/plugins` under `unavailable`, with the reason.
+
+## Running jobs on a cluster
+
+With `pipeforge.master.*` set, the server runs jobs on the cluster (see [deployment](./deployment)):
+
+```yaml
+pipeforge:
+  master:
+    address: master.example.com:6123
+    token: ${PIPEFORGE_CLUSTER_TOKEN}
+```
+
+`POST /api/v1/runs` plans the job on the server first, so an invalid job is refused before it
+becomes a run; then the server records the run in the [metastore](./metastore) and submits it to the
+master with the plugin versions it planned with. Every `poll-interval` the server asks the master
+about the runs that have not ended and records each change of state with its time and reason:
+
+```text
+QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
+          └──── CANCELLING → CANCELLED
+```
+
+`GET /api/v1/runs` lists runs newest first, filtered by state and job and paged with the `next`
+token; `GET /api/v1/runs/{id}` shows a run with its definition and its changes of state;
+`POST /api/v1/runs/{id}/cancel` asks the master to cancel it. While the master cannot be reached,
+runs keep their state; a run the master no longer knows, because it restarted, fails with
+`PF-CLUS-0016`.
 
 ## Security
 

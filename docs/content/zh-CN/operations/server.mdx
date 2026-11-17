@@ -72,6 +72,10 @@ Found 1 plugin(s) in /work/pipeforge
 | `pipeforge.job.timezone` | `UTC` | 没有设置 `env.timezone` 的作业使用的时区 |
 | `pipeforge.job.defaults.*` | 无 | 节点选项的集群默认值，采用 env 写法，例如 `pipeforge.job.defaults.source.fetch-size` |
 | `pipeforge.metastore.*` | `~/.pipeforge/metastore` 中的 H2 文件 | 服务端保存记录的数据库；见[元数据库](./metastore) |
+| `pipeforge.master.address` | 无 | 集群 Master 的 RPC 端口 `host:port`；没有它就无法提交运行 |
+| `pipeforge.master.token` | 无 | 集群令牌（集群的 `cluster.token`），配置 Master 时必填 |
+| `pipeforge.master.tls.*` | 关闭 | `enabled`、`key-store`、`key-store-password`、`trust-store`、`trust-store-password`，与集群的 `security.tls.*` 相同 |
+| `pipeforge.master.poll-interval` | `1s` | 服务端向 Master 查询尚未结束的运行的间隔 |
 
 ```yaml
 pipeforge:
@@ -84,6 +88,29 @@ pipeforge:
 ```
 
 插件在服务启动时加载，日志会列出每个插件目录的绝对路径和其中的插件数；无法使用的插件包会出现在 `GET /api/v1/plugins` 的 `unavailable` 中，并附带原因。
+
+## 在集群上运行作业
+
+配置了 `pipeforge.master.*` 后，服务端在集群上运行作业（见[部署](./deployment)）：
+
+```yaml
+pipeforge:
+  master:
+    address: master.example.com:6123
+    token: ${PIPEFORGE_CLUSTER_TOKEN}
+```
+
+`POST /api/v1/runs` 先在服务端计划作业，不合法的作业在成为运行之前就被拒绝；然后服务端把运行记录到[元数据库](./metastore)，
+并按计划时选定的插件版本提交给 Master。服务端每隔 `poll-interval` 向 Master 查询尚未结束的运行，记录每一次状态变化及其时间和原因：
+
+```text
+QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
+          └──── CANCELLING → CANCELLED
+```
+
+`GET /api/v1/runs` 按提交时间从新到旧列出运行，可以按状态和作业筛选，用 `next` 令牌翻页；`GET /api/v1/runs/{id}` 显示运行及其定义和状态变化；
+`POST /api/v1/runs/{id}/cancel` 请 Master 取消运行。无法连接 Master 时，运行保持原来的状态；Master 已经不知道的运行（因为 Master 重启）
+以 `PF-CLUS-0016` 失败。
 
 ## 安全
 

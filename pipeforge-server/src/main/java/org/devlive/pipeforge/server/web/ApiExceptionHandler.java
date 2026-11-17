@@ -31,7 +31,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * <table>
  *   <caption>HTTP status by error</caption>
  *   <tr><td>{@code PF-CONF-0007} REQUEST_INVALID</td><td>400 (404, 405, 415 for unknown paths, methods, media types)</td></tr>
- *   <tr><td>{@code PF-PLUG-0001} PLUGIN_NOT_FOUND</td><td>404</td></tr>
+ *   <tr><td>{@code PF-PLUG-0001} PLUGIN_NOT_FOUND, {@code PF-CONF-0010} RUN_NOT_FOUND</td><td>404</td></tr>
+ *   <tr><td>{@code PF-CLUS-0015} MASTER_NOT_CONFIGURED, {@code PF-CLUS-0008} RPC_UNAVAILABLE</td><td>503</td></tr>
  *   <tr><td>other CONF, PLAN, PLUG and DATA errors</td><td>422</td></tr>
  *   <tr><td>everything else</td><td>500</td></tr>
  * </table>
@@ -86,8 +87,11 @@ public class ApiExceptionHandler {
         if (code.equals(ErrorCode.REQUEST_INVALID)) {
             return HttpStatus.BAD_REQUEST;
         }
-        if (code.equals(ErrorCode.PLUGIN_NOT_FOUND)) {
+        if (code.equals(ErrorCode.PLUGIN_NOT_FOUND) || code.equals(ErrorCode.RUN_NOT_FOUND)) {
             return HttpStatus.NOT_FOUND;
+        }
+        if (code.equals(ErrorCode.MASTER_NOT_CONFIGURED) || code.equals(ErrorCode.RPC_UNAVAILABLE)) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
         }
         ErrorCategory category = code.category();
         return switch (category) {
