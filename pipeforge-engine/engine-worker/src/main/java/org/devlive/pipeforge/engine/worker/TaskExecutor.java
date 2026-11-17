@@ -374,9 +374,12 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
                 .param("timeoutMs", waitedMillis)
                 .scope(ErrorScope.node(id.vertexId()).withRun(id.runId()).withSubtask(id.subtask()))
                 .build();
-        if (task.giveUp(error)) {
-            Thread stuck = task.thread();
-            leaked.add(stuck.getName());
+        // recorded before the end is reported, so that whoever learns of the end also sees the thread
+        Thread stuck = task.thread();
+        leaked.add(stuck.getName());
+        if (!task.giveUp(error)) {
+            leaked.remove(stuck.getName());
+        } else {
             LOG.error(
                     "Task {} ignored cancel and interrupt for {} ms; its thread {} is left behind at {}",
                     id,
