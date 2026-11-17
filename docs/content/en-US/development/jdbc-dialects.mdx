@@ -15,7 +15,8 @@ a dialect, creates the source and sink of the base with it, and gets everything 
 |---|---|
 | Connections | Opens connections with the driver in the plugin's class loader, by `driver` or by the URL; driver properties merge the dialect's defaults, `username` and `password`, then `jdbc.properties.*`; properties the dialect controls are refused (`PF-CONF-0003`) |
 | Schema | Describes a table from JDBC metadata (columns, types, nullability, primary key), also when the database stores the name in upper or lower case; describes a `query` without running it |
-| Splits | With `split.mode: range`, probes MIN and MAX of the split column (`split.column`, else a primary key of one integer column) and cuts `split.count` ranges, the first and last open-ended, plus one split for NULLs; otherwise, or for a query, one split. Readers pull splits one at a time, so fast readers read more |
+| Tables | One `table`, a `query`, or every table whose qualified name (`db.table`) matches one of the regular expressions of `tables.include` and none of `tables.exclude`, found in the metadata when the job is planned and again when it starts, system schemas aside; each row carries the name of its table |
+| Splits | Every table is split on its own, and the splits of all tables share one queue. With `split.mode: range`, probes MIN and MAX of the split column (`split.column`, else a primary key of one integer column) and cuts `split.count` ranges, the first and last open-ended, plus one split for NULLs; otherwise, or for a query, one split. Readers pull splits one at a time, so fast readers read more |
 | Reading | Streams each split with `fetch-size`; a value the dialect cannot read makes its row a bad row, and the reader goes on |
 | Writing | Batches of `batch-size` rows, each a transaction. A batch that fails for a transient reason is rolled back and retried `max-retries` times after `retry-backoff`, doubling; one that fails because of its data is rolled back and split in halves until each bad row is alone, which goes to the [dirty data policy](../concepts/dirty-data) while the good rows are written |
 | Errors | Connection, login, timeout and missing table become `PF-CONN-0001`–`0003`, `PF-AUTH-0001` and `PF-META-0001`, data errors bad rows (`PF-DATA-0009`), anything else `PF-SRC-0001` / `PF-SINK-0001` |
@@ -33,6 +34,8 @@ does differently:
 | `name()` | — (required) | — |
 | `quote(identifier)` | `"name"` | the database quotes differently, e.g. `` `name` `` |
 | `catalogAndSchema(table)` | `db.t` is schema `db` | the first part is a catalog, as in MySQL |
+| `tableId(catalog, schema, table)` | `schema.table` | metadata lists tables under a catalog |
+| `systemSchemas()` | `INFORMATION_SCHEMA` | the database has more system schemas, which `tables.include` must not reach |
 | `defaultProperties()` | none | the driver needs settings, e.g. batch rewriting |
 | `controlledProperties()` | none | a property breaks the writer's transactions or the reads; give the reason |
 | `toDataType(column)` | the `java.sql.Types` of the standard types | the database has types of its own, unsigned integers, JSON, arrays |

@@ -11,8 +11,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.source.EnumeratorContext;
 import org.devlive.pipeforge.api.source.SplitEnumerator;
 import org.devlive.pipeforge.api.table.CatalogTable;
@@ -28,9 +30,11 @@ import org.slf4j.LoggerFactory;
  * Makes the splits of a JDBC source when it starts, on the job master, and hands them out one at a
  * time to the readers that ask, so that fast readers read more.
  *
- * <p>With {@code split.mode: range} the split column is the configured one, else the primary key
- * when it is a single integer column. Its MIN and MAX are probed and cut into ranges; without such
- * a column, or for a query, the source reads in one split.
+ * <p>Each table is split on its own; with {@code tables.include} the tables are found when the
+ * enumerator starts, and the splits of all of them share one queue. With {@code split.mode: range}
+ * the split column is the configured one, else the primary key when it is a single integer column.
+ * Its MIN and MAX are probed and cut into ranges; without such a column a table is read in one
+ * split, as is a query.
  */
 public final class JdbcSplitEnumerator implements SplitEnumerator<JdbcSplit, List<JdbcSplit>> {
 
@@ -70,33 +74,48 @@ public final class JdbcSplitEnumerator implements SplitEnumerator<JdbcSplit, Lis
     }
 
     List<JdbcSplit> splits() {
-        if (config.query() != null || config.table() == null || config.splitMode() == JdbcSplitMode.NONE) {
-            return List.of(JdbcSplit.all());
+        if (config.query() != null) {
+            return List.of(JdbcSplit.all(null));
         }
         try (Connection connection = JdbcConnections.open(config.connection(), dialect, loader, config.node())) {
-            JdbcSchemas.Described described = JdbcSchemas.describe(
-                    connection, dialect, config.table(), config.connection().target());
-            Column column = splitColumn(described.table());
-            if (column == null) {
-                return List.of(JdbcSplit.all());
+            List<TableId> tables = config.manyTables()
+                    ? JdbcTables.discover(connection, dialect, config.include(), config.exclude())
+                    : List.of(java.util.Objects.requireNonNull(config.table()));
+            List<JdbcSplit> splits = new ArrayList<>();
+            for (TableId table : tables) {
+                splits.addAll(splits(connection, table));
             }
-            Long min = null;
-            Long max = null;
-            try (Statement statement = connection.createStatement();
-                    ResultSet rs = statement.executeQuery(dialect.minMaxQuery(described.physical(), column.name()))) {
-                if (rs.next()) {
-                    long low = rs.getLong(1);
-                    min = rs.wasNull() ? null : low;
-                    long high = rs.getLong(2);
-                    max = rs.wasNull() ? null : high;
-                }
-            }
-            int count = config.splitCount() > 0 ? config.splitCount() : 4 * context.parallelism();
-            return JdbcSplitter.ranges(
-                    column.name(), min, max, count, column.type().isNullable());
+            return splits;
         } catch (SQLException e) {
             throw JdbcErrors.of(e, dialect, config.connection(), false, config.table(), config.node(), true);
         }
+    }
+
+    /** The splits of one table. */
+    private List<JdbcSplit> splits(Connection connection, TableId table) throws SQLException {
+        if (config.splitMode() == JdbcSplitMode.NONE) {
+            return List.of(JdbcSplit.all(table));
+        }
+        JdbcSchemas.Described described = JdbcSchemas.describe(
+                connection, dialect, table, config.connection().target());
+        Column column = splitColumn(described.table());
+        if (column == null) {
+            return List.of(JdbcSplit.all(table));
+        }
+        Long min = null;
+        Long max = null;
+        try (Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(dialect.minMaxQuery(described.physical(), column.name()))) {
+            if (rs.next()) {
+                long low = rs.getLong(1);
+                min = rs.wasNull() ? null : low;
+                long high = rs.getLong(2);
+                max = rs.wasNull() ? null : high;
+            }
+        }
+        int count = config.splitCount() > 0 ? config.splitCount() : 4 * context.parallelism();
+        return JdbcSplitter.ranges(
+                table, column.name(), min, max, count, column.type().isNullable());
     }
 
     /** The split column: the configured one, else a primary key of one integer column. */

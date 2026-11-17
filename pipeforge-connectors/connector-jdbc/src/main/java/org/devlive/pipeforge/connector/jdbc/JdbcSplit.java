@@ -13,6 +13,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.serialization.VersionedSerializer;
 import org.devlive.pipeforge.api.source.SourceSplit;
 import org.jspecify.annotations.Nullable;
@@ -21,13 +22,20 @@ import org.jspecify.annotations.Nullable;
  * A part of a table to read: a range of the split column, its NULLs, or everything.
  *
  * @param splitId unique within the source
+ * @param table the table the split reads, or {@code null} for a query
  * @param kind which part
  * @param column the split column of {@link Kind#RANGE} and {@link Kind#NULLS}; {@code null} for {@link
  *     Kind#ALL}
  * @param lower with {@link Kind#RANGE}: the smallest value, inclusive; {@code null} for no bound
  * @param upper with {@link Kind#RANGE}: the bound, exclusive; {@code null} for no bound
  */
-public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nullable Long lower, @Nullable Long upper)
+public record JdbcSplit(
+        String splitId,
+        @Nullable TableId table,
+        Kind kind,
+        @Nullable String column,
+        @Nullable Long lower,
+        @Nullable Long upper)
         implements SourceSplit {
 
     public enum Kind {
@@ -39,8 +47,10 @@ public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nul
         NULLS
     }
 
-    public static JdbcSplit all() {
-        return new JdbcSplit("all", Kind.ALL, null, null, null);
+    /** All of {@code table}, or of the query when it is {@code null}. */
+    public static JdbcSplit all(@Nullable TableId table) {
+        return new JdbcSplit(
+                table == null ? "all" : table.toQualifiedName() + "/all", table, Kind.ALL, null, null, null);
     }
 
     /** The WHERE clause on the split column, with {@code ?} for the bounds; {@code null} for none. */
@@ -75,13 +85,13 @@ public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nul
         return values;
     }
 
-    /** Writes splits; version 1. */
+    /** Writes splits; version 2 adds the table. */
     public static final class Serializer implements VersionedSerializer<JdbcSplit> {
         public static final Serializer INSTANCE = new Serializer();
 
         @Override
         public int version() {
-            return 1;
+            return 2;
         }
 
         @Override
@@ -96,12 +106,20 @@ public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nul
         @Override
         public JdbcSplit deserialize(int version, byte[] bytes) throws IOException {
             try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes))) {
-                return read(in);
+                return read(in, version);
             }
         }
 
         static void write(DataOutputStream out, JdbcSplit split) throws IOException {
             out.writeUTF(split.splitId());
+            TableId table = split.table();
+            out.writeBoolean(table != null);
+            if (table != null) {
+                writeName(out, table.catalog());
+                writeName(out, table.database());
+                writeName(out, table.schema());
+                out.writeUTF(table.table());
+            }
             out.writeUTF(split.kind().name());
             out.writeBoolean(split.column() != null);
             if (split.column() != null) {
@@ -111,11 +129,26 @@ public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nul
             writeBound(out, split.upper());
         }
 
-        static JdbcSplit read(DataInputStream in) throws IOException {
+        static JdbcSplit read(DataInputStream in, int version) throws IOException {
             String id = in.readUTF();
+            TableId table = null;
+            if (version >= 2 && in.readBoolean()) {
+                table = new TableId(readName(in), readName(in), readName(in), in.readUTF());
+            }
             Kind kind = Kind.valueOf(in.readUTF());
             String column = in.readBoolean() ? in.readUTF() : null;
-            return new JdbcSplit(id, kind, column, readBound(in), readBound(in));
+            return new JdbcSplit(id, table, kind, column, readBound(in), readBound(in));
+        }
+
+        private static void writeName(DataOutputStream out, @Nullable String name) throws IOException {
+            out.writeBoolean(name != null);
+            if (name != null) {
+                out.writeUTF(name);
+            }
+        }
+
+        private static @Nullable String readName(DataInputStream in) throws IOException {
+            return in.readBoolean() ? in.readUTF() : null;
         }
 
         private static void writeBound(DataOutputStream out, @Nullable Long bound) throws IOException {
@@ -130,13 +163,13 @@ public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nul
         }
     }
 
-    /** Writes the remaining splits of an enumerator; version 1. */
+    /** Writes the remaining splits of an enumerator; version 2 adds their tables. */
     public static final class ListSerializer implements VersionedSerializer<List<JdbcSplit>> {
         public static final ListSerializer INSTANCE = new ListSerializer();
 
         @Override
         public int version() {
-            return 1;
+            return 2;
         }
 
         @Override
@@ -157,7 +190,7 @@ public record JdbcSplit(String splitId, Kind kind, @Nullable String column, @Nul
                 int count = in.readInt();
                 List<JdbcSplit> splits = new ArrayList<>(count);
                 for (int i = 0; i < count; i++) {
-                    splits.add(Serializer.read(in));
+                    splits.add(Serializer.read(in, version));
                 }
                 return splits;
             }

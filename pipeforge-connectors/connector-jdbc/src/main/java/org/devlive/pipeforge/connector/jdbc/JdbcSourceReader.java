@@ -13,7 +13,9 @@ import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.devlive.pipeforge.api.row.GenericRow;
 import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.source.PollStatus;
@@ -26,7 +28,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Reads the splits it gets one after another, streaming each result with the fetch size, and asks
- * for the next split when one is done. One connection serves all splits of the reader.
+ * for the next split when one is done. One connection serves all splits of the reader; each table
+ * is described once, when its first split opens.
  *
  * <p>A value the dialect cannot read makes that row a bad row; the reader goes on with the next.
  */
@@ -35,19 +38,28 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
     /** Rows emitted per poll, so that the task can take its mail between them. */
     static final int ROWS_PER_POLL = 256;
 
+    /** A table as the reader reads it: its produced schema, its name in SQL and its column types. */
+    private record Target(CatalogTable table, @Nullable TableId physical, List<DataType> types) {
+        static Target of(CatalogTable table, @Nullable TableId physical) {
+            List<DataType> types = new ArrayList<>();
+            table.columns().forEach(c -> types.add(c.type()));
+            return new Target(table, physical, List.copyOf(types));
+        }
+    }
+
     private final JdbcSourceConfig config;
     private final JdbcDialect dialect;
     private final ReaderContext context;
     private final Deque<JdbcSplit> splits = new ArrayDeque<>();
+    private final Map<TableId, Target> tables = new HashMap<>();
     private boolean noMore;
     private boolean requested;
     private @Nullable Connection connection;
-    private @Nullable CatalogTable table;
-    private @Nullable TableId physical;
-    private List<DataType> types = List.of();
+    private @Nullable Target query;
     private volatile @Nullable PreparedStatement statement;
     private @Nullable ResultSet rows;
     private @Nullable JdbcSplit current;
+    private @Nullable Target target;
 
     JdbcSourceReader(JdbcSourceConfig config, JdbcDialect dialect, ReaderContext context) {
         this.config = config;
@@ -93,34 +105,36 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
                 }
                 result = open(next);
             }
-            CatalogTable produced = described();
+            Target reading = java.util.Objects.requireNonNull(target);
             for (int i = 0; i < ROWS_PER_POLL; i++) {
                 if (!result.next()) {
                     closeSplit();
                     request();
                     return PollStatus.MORE_AVAILABLE;
                 }
-                Object[] values = new Object[types.size()];
+                Object[] values = new Object[reading.types().size()];
                 for (int c = 0; c < values.length; c++) {
-                    values[c] = dialect.read(result, c + 1, types.get(c));
+                    values[c] = dialect.read(result, c + 1, reading.types().get(c));
                 }
-                output.collect(GenericRow.of(produced.id(), values));
+                output.collect(GenericRow.of(reading.table().id(), values));
             }
             return PollStatus.MORE_AVAILABLE;
         } catch (SQLException e) {
-            throw JdbcErrors.of(e, dialect, config.connection(), false, config.table(), config.node(), true);
+            JdbcSplit split = current;
+            TableId table = split != null && split.table() != null ? split.table() : config.table();
+            throw JdbcErrors.of(e, dialect, config.connection(), false, table, config.node(), true);
         }
     }
 
     private ResultSet open(JdbcSplit split) throws SQLException {
         Connection open = connection();
-        CatalogTable produced = described();
-        String sql;
-        if (config.query() != null) {
-            sql = "SELECT * FROM (" + config.query() + ") pipeforge_query";
-        } else {
-            sql = dialect.selectQuery(physical(), produced.columnNames(), split.predicate(dialect));
-        }
+        Target opened = target(open, split);
+        String sql = split.table() == null
+                ? "SELECT * FROM (" + config.query() + ") pipeforge_query"
+                : dialect.selectQuery(
+                        java.util.Objects.requireNonNull(opened.physical()),
+                        opened.table().columnNames(),
+                        split.predicate(dialect));
         PreparedStatement prepared =
                 open.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
         statement = prepared;
@@ -132,46 +146,41 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
         ResultSet result = prepared.executeQuery();
         rows = result;
         current = split;
+        target = opened;
         return result;
     }
 
-    private Connection connection() throws SQLException {
+    /** The table of a split, described when its first split opens; the query when it has none. */
+    private Target target(Connection open, JdbcSplit split) throws SQLException {
+        TableId table = split.table();
+        if (table == null) {
+            Target described = query;
+            if (described == null) {
+                described = Target.of(
+                        JdbcSchemas.describeQuery(
+                                open, dialect, java.util.Objects.requireNonNull(config.query()), config.produced()),
+                        null);
+                query = described;
+            }
+            return described;
+        }
+        Target described = tables.get(table);
+        if (described == null) {
+            JdbcSchemas.Described found = JdbcSchemas.describe(
+                    open, dialect, table, config.connection().target());
+            described = Target.of(found.table(), found.physical());
+            tables.put(table, described);
+        }
+        return described;
+    }
+
+    private Connection connection() {
         Connection open = connection;
         if (open == null) {
             open = JdbcConnections.open(config.connection(), dialect, context.classLoader(), config.node());
             connection = open;
-            if (config.query() != null) {
-                table = JdbcSchemas.describeQuery(open, dialect, config.query(), config.produced());
-            } else {
-                JdbcSchemas.Described described = JdbcSchemas.describe(
-                        open,
-                        dialect,
-                        java.util.Objects.requireNonNull(config.table()),
-                        config.connection().target());
-                table = described.table();
-                physical = described.physical();
-            }
-            List<DataType> columnTypes = new ArrayList<>();
-            described().columns().forEach(c -> columnTypes.add(c.type()));
-            types = List.copyOf(columnTypes);
         }
         return open;
-    }
-
-    private CatalogTable described() {
-        CatalogTable known = table;
-        if (known == null) {
-            throw new IllegalStateException("the table is described when the first split opens");
-        }
-        return known;
-    }
-
-    private TableId physical() {
-        TableId known = physical;
-        if (known == null) {
-            throw new IllegalStateException("the table is described when the first split opens");
-        }
-        return known;
     }
 
     private void closeSplit() throws SQLException {
@@ -180,6 +189,7 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
         rows = null;
         statement = null;
         current = null;
+        target = null;
         try {
             if (result != null) {
                 result.close();

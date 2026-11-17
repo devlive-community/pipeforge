@@ -9,6 +9,7 @@ package org.devlive.pipeforge.connector.jdbc;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import org.devlive.pipeforge.api.row.TableId;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -23,6 +24,7 @@ public final class JdbcSplitter {
     /**
      * The splits.
      *
+     * @param table the table
      * @param column the split column
      * @param min the smallest value, or {@code null} when the column has none (an empty table)
      * @param max the largest value
@@ -30,11 +32,12 @@ public final class JdbcSplitter {
      * @param nullable whether the column may be NULL
      */
     public static List<JdbcSplit> ranges(
-            String column, @Nullable Long min, @Nullable Long max, int count, boolean nullable) {
+            TableId table, String column, @Nullable Long min, @Nullable Long max, int count, boolean nullable) {
+        String prefix = table.toQualifiedName() + "/";
         List<JdbcSplit> splits = new ArrayList<>();
         if (min == null || max == null) {
             // nothing to cut: one split reads whatever is there
-            splits.add(new JdbcSplit("range-0", JdbcSplit.Kind.RANGE, column, null, null));
+            splits.add(new JdbcSplit(prefix + "range-0", table, JdbcSplit.Kind.RANGE, column, null, null));
         } else {
             BigInteger span =
                     BigInteger.valueOf(max).subtract(BigInteger.valueOf(min)).add(BigInteger.ONE);
@@ -47,7 +50,8 @@ public final class JdbcSplitter {
                 boolean first = index == 0;
                 boolean last = upper.compareTo(BigInteger.valueOf(max)) > 0;
                 splits.add(new JdbcSplit(
-                        "range-" + index,
+                        prefix + "range-" + index,
+                        table,
                         JdbcSplit.Kind.RANGE,
                         column,
                         first ? null : lower.longValueExact(),
@@ -57,7 +61,7 @@ public final class JdbcSplitter {
             }
         }
         if (nullable) {
-            splits.add(new JdbcSplit("nulls", JdbcSplit.Kind.NULLS, column, null, null));
+            splits.add(new JdbcSplit(prefix + "nulls", table, JdbcSplit.Kind.NULLS, column, null, null));
         }
         return splits;
     }

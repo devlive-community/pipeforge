@@ -9,6 +9,8 @@ package org.devlive.pipeforge.connector.jdbc;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import org.devlive.pipeforge.api.capability.SupportsMultiTable;
+import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.serialization.VersionedSerializer;
 import org.devlive.pipeforge.api.source.Boundedness;
 import org.devlive.pipeforge.api.source.EnumeratorContext;
@@ -18,12 +20,14 @@ import org.devlive.pipeforge.api.source.SourceContext;
 import org.devlive.pipeforge.api.source.SourceReader;
 import org.devlive.pipeforge.api.source.SplitEnumerator;
 import org.devlive.pipeforge.api.table.CatalogTable;
+import org.devlive.pipeforge.common.error.ErrorCode;
+import org.devlive.pipeforge.common.error.PipeForgeException;
 
 /**
- * A bounded JDBC source of one table or query. Plugins create it with their dialect from the
+ * A bounded JDBC source of one table, of the tables {@code tables.include} selects, or of a query. Plugins create it with their dialect from the
  * options of {@link JdbcOptions#sourceRule}.
  */
-public class JdbcSource implements Source<JdbcSplit, List<JdbcSplit>> {
+public class JdbcSource implements Source<JdbcSplit, List<JdbcSplit>>, SupportsMultiTable {
 
     private static final long serialVersionUID = 1L;
 
@@ -52,12 +56,24 @@ public class JdbcSource implements Source<JdbcSplit, List<JdbcSplit>> {
             if (config.query() != null) {
                 return List.of(JdbcSchemas.describeQuery(connection, dialect, config.query(), config.produced()));
             }
-            return List.of(JdbcSchemas.describe(
-                            connection,
-                            dialect,
-                            java.util.Objects.requireNonNull(config.table()),
-                            config.connection().target())
-                    .table());
+            List<TableId> tables = config.manyTables()
+                    ? JdbcTables.discover(connection, dialect, config.include(), config.exclude())
+                    : List.of(java.util.Objects.requireNonNull(config.table()));
+            if (tables.isEmpty()) {
+                throw PipeForgeException.of(ErrorCode.OPTION_INVALID)
+                        .param("option", JdbcOptions.TABLES_INCLUDE.key())
+                        .param("node", config.node())
+                        .param("value", String.join(", ", config.include()))
+                        .param("reason", "no table of " + config.connection().target() + " matches")
+                        .build();
+            }
+            List<CatalogTable> produced = new java.util.ArrayList<>();
+            for (TableId table : tables) {
+                produced.add(JdbcSchemas.describe(
+                                connection, dialect, table, config.connection().target())
+                        .table());
+            }
+            return produced;
         } catch (SQLException e) {
             throw JdbcErrors.of(e, dialect, config.connection(), false, config.table(), config.node(), true);
         }

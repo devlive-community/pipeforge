@@ -217,6 +217,55 @@ class JdbcJobsTest {
     }
 
     @Test
+    void readsEveryTableThePatternsSelect(TestkitEngine engine) throws Exception {
+        h2.execute(
+                "CREATE SCHEMA IF NOT EXISTS \"crm\"",
+                "DROP TABLE IF EXISTS \"shop\".\"people_bak\"",
+                "DROP TABLE IF EXISTS \"crm\".\"people\"",
+                "CREATE TABLE \"shop\".\"people_bak\" (\"id\" BIGINT PRIMARY KEY)",
+                "INSERT INTO \"shop\".\"people_bak\" VALUES (1)",
+                "CREATE TABLE \"crm\".\"people\" (\"id\" BIGINT PRIMARY KEY)",
+                "INSERT INTO \"crm\".\"people\" VALUES (1)");
+        people(30);
+        h2.insert(ACCOUNTS_TABLE, accounts(20).rows());
+        Map<String, Object> options = new LinkedHashMap<>(h2.options(PEOPLE));
+        options.remove("table");
+        options.put("tables.include", List.of("shop\\..*"));
+        options.put("tables.exclude", List.of(".*_bak"));
+        options.put("split.count", 3);
+        List<Row> rows = read(engine, options, 2);
+
+        assertThat(rows).hasSize(50);
+        assertThat(rows).filteredOn(r -> r.table().equals(PEOPLE)).hasSize(30);
+        assertThat(rows).filteredOn(r -> r.table().equals(ACCOUNTS)).hasSize(20);
+
+        TestJob job = TestJob.named("planned")
+                .source(new TestFactories.Source(), options)
+                .sink(TestkitConnectors.collect(), Map.of("dataset", "x"));
+        assertThat(job.plan().nodes().get(0).outputTables())
+                .extracting(t -> t.id().toQualifiedName())
+                .containsExactly("shop.accounts", "shop.people");
+
+        options.put("tables.include", List.of("nothing\\..*"));
+        TestJob none = TestJob.named("none")
+                .source(new TestFactories.Source(), options)
+                .sink(TestkitConnectors.collect(), Map.of("dataset", "x"));
+        assertThatThrownBy(none::plan).isInstanceOfSatisfying(PipeForgeException.class, e -> {
+            assertThat(e.code()).isEqualTo(ErrorCode.OPTION_INVALID);
+            assertThat(e.getMessage()).contains("no table of").contains("matches");
+        });
+    }
+
+    @Test
+    void theSystemTablesAreNeverSelected() throws Exception {
+        try (java.sql.Connection connection = h2.connect()) {
+            assertThat(JdbcTables.discover(connection, H2.DIALECT, List.of(".*"), List.of()))
+                    .isNotEmpty()
+                    .allSatisfy(t -> assertThat(t.database()).isNotEqualToIgnoringCase("INFORMATION_SCHEMA"));
+        }
+    }
+
+    @Test
     void aSplitColumnMustBeAnInteger(TestkitEngine engine) throws Exception {
         people(10);
         Map<String, Object> options = new LinkedHashMap<>(h2.options(PEOPLE));

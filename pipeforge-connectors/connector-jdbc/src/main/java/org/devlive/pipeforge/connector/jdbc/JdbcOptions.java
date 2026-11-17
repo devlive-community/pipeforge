@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.connector.jdbc;
 
 import java.time.Duration;
+import java.util.List;
 import org.devlive.pipeforge.api.option.Option;
 import org.devlive.pipeforge.api.option.OptionRule;
 import org.devlive.pipeforge.api.option.Options;
@@ -49,6 +50,17 @@ public final class JdbcOptions {
             .stringType()
             .noDefault()
             .withDescription("A query whose result is read instead of a table, in one split");
+
+    public static final Option<List<String>> TABLES_INCLUDE = Options.key("tables.include")
+            .listType()
+            .noDefault()
+            .withDescription(
+                    "Regular expressions of qualified table names, e.g. shop\\..*; every matching table is read");
+
+    public static final Option<List<String>> TABLES_EXCLUDE = Options.key("tables.exclude")
+            .listType()
+            .defaultValue(List.of())
+            .withDescription("Regular expressions of qualified table names that tables.include does not read");
 
     public static final Option<String> SPLIT_COLUMN = Options.key("split.column")
             .stringType()
@@ -95,8 +107,8 @@ public final class JdbcOptions {
     public static OptionRule.Builder sourceRule(Option<?>... extra) {
         return OptionRule.builder()
                 .required(URL)
-                .exclusive(TABLE, QUERY)
-                .optional(USERNAME, PASSWORD, DRIVER, SPLIT_COLUMN, SPLIT_MODE, SPLIT_COUNT, FETCH_SIZE)
+                .exclusive(TABLE, QUERY, TABLES_INCLUDE)
+                .optional(USERNAME, PASSWORD, DRIVER, TABLES_EXCLUDE, SPLIT_COLUMN, SPLIT_MODE, SPLIT_COUNT, FETCH_SIZE)
                 .optional(extra)
                 .nativeNamespaces(PROPERTIES);
     }

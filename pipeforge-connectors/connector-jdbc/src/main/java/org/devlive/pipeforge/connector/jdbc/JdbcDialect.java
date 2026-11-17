@@ -39,6 +39,18 @@ public interface JdbcDialect extends java.io.Serializable {
      */
     String[] catalogAndSchema(TableId table);
 
+    /** The name of a table JDBC metadata lists under a catalog and a schema; ANSI: {@code schema.table}. */
+    default TableId tableId(@Nullable String catalog, @Nullable String schema, String table) {
+        return schema != null
+                ? TableId.of(schema, table)
+                : catalog != null ? TableId.of(catalog, table) : TableId.of(table);
+    }
+
+    /** Schemas or databases of the system, which {@code tables.include} never matches; in upper case. */
+    default java.util.Set<String> systemSchemas() {
+        return java.util.Set.of("INFORMATION_SCHEMA");
+    }
+
     /** Driver properties the dialect sets unless the user sets them, e.g. to enable batch rewriting. */
     default Map<String, String> defaultProperties() {
         return Map.of();

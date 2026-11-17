@@ -15,8 +15,10 @@ import org.jspecify.annotations.Nullable;
  * The settings of a JDBC source node.
  *
  * @param connection how to connect
- * @param table the table to read, or {@code null} for a query
- * @param query the query to read, or {@code null} for a table
+ * @param table the table to read, or {@code null} for a query or many tables
+ * @param query the query to read, or {@code null} for tables
+ * @param include with many tables: the patterns of the names to read; empty otherwise
+ * @param exclude with many tables: the patterns of the names not to read
  * @param produced the name of the table the source produces: the table, or the node for a query
  * @param splitColumn the configured split column, or {@code null} for the primary key
  * @param splitMode how to split
@@ -28,6 +30,8 @@ public record JdbcSourceConfig(
         JdbcConnectionConfig connection,
         @Nullable TableId table,
         @Nullable String query,
+        java.util.List<String> include,
+        java.util.List<String> exclude,
         TableId produced,
         @Nullable String splitColumn,
         JdbcSplitMode splitMode,
@@ -36,6 +40,16 @@ public record JdbcSourceConfig(
         String node)
         implements Serializable {
 
+    public JdbcSourceConfig {
+        include = java.util.List.copyOf(include);
+        exclude = java.util.List.copyOf(exclude);
+    }
+
+    /** Whether the source reads the tables {@code tables.include} selects. */
+    public boolean manyTables() {
+        return !include.isEmpty();
+    }
+
     public static JdbcSourceConfig of(ReadonlyConfig config, JdbcDialect dialect, String node) {
         String table = config.get(JdbcOptions.TABLE);
         TableId id = table == null ? null : TableId.parse(table);
@@ -43,6 +57,8 @@ public record JdbcSourceConfig(
                 JdbcConnectionConfig.of(config, dialect, node),
                 id,
                 config.get(JdbcOptions.QUERY),
+                config.getOptional(JdbcOptions.TABLES_INCLUDE).orElse(java.util.List.of()),
+                config.get(JdbcOptions.TABLES_EXCLUDE),
                 id != null ? id : TableId.of(node),
                 config.get(JdbcOptions.SPLIT_COLUMN),
                 config.get(JdbcOptions.SPLIT_MODE),
