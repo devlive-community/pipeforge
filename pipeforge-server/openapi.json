@@ -2281,6 +2281,14 @@
           "job" : {
             "type" : "string"
           },
+          "rowsRead" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsWritten" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "startedAt" : {
             "type" : "string",
             "format" : "date-time"

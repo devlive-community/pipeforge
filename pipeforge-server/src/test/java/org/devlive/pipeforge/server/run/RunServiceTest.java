@@ -179,4 +179,47 @@ class RunServiceTest {
         assertThat(empty.slots()).isZero();
         assertThat(empty.usage()).isZero();
     }
+
+    @Test
+    void aRunShowsTheRowCountsOfItsLastSample() {
+        runs.insert("counted", "job", "yaml", null, now);
+        assertThat(runs.find("counted").orElseThrow().rowsRead())
+                .as("no sample yet")
+                .isNull();
+        RunMetrics first = RunMetrics.none(now.plusSeconds(1));
+        RunMetrics later = new RunMetrics(
+                now.plusSeconds(2),
+                2000,
+                70,
+                60,
+                0,
+                0,
+                1,
+                0,
+                9,
+                35,
+                30,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                1,
+                1,
+                0,
+                java.util.List.of(),
+                java.util.List.of());
+        runs.sample("counted", first, "{}");
+        runs.sample("counted", later, "{}");
+        Runs.Run run = runs.list(java.util.EnumSet.noneOf(RunState.class), "job", 10, null).runs().stream()
+                .filter(r -> r.id().equals("counted"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(run.rowsRead()).isEqualTo(70);
+        assertThat(run.rowsWritten()).isEqualTo(60);
+    }
 }

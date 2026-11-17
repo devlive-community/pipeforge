@@ -152,6 +152,53 @@ class MetastoreMigrationsTest {
                     .hasSize(2)
                     .isSorted()
                     .doesNotHaveDuplicates();
+
+            // the queries of the run endpoints, on this database
+            var repository = new org.devlive.pipeforge.server.run.RunRepository(
+                    dataSource,
+                    new org.springframework.transaction.support.TransactionTemplate(
+                            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource)));
+            repository.insert("r2", "orders", "yaml", null, Instant.parse("2026-11-17T08:00:01Z"));
+            repository.sample(
+                    "r2",
+                    new org.devlive.pipeforge.server.run.RunMetrics(
+                            Instant.parse("2026-11-17T08:00:02Z"),
+                            1000,
+                            40,
+                            30,
+                            0,
+                            0,
+                            0,
+                            0,
+                            10,
+                            40,
+                            30,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            1,
+                            1,
+                            1,
+                            0,
+                            List.of(),
+                            List.of()),
+                    "{}");
+            var all = java.util.EnumSet.noneOf(org.devlive.pipeforge.server.run.RunState.class);
+            var page = repository.list(all, null, 1, null);
+            assertThat(page.runs()).singleElement().satisfies(run -> {
+                assertThat(run.id()).isEqualTo("r2");
+                assertThat(run.rowsRead()).isEqualTo(40);
+                assertThat(run.rowsWritten()).isEqualTo(30);
+            });
+            assertThat(repository.list(all, null, 1, page.next()).runs())
+                    .extracting(org.devlive.pipeforge.server.run.Runs.Run::id)
+                    .containsExactly("r1");
+            assertThat(repository.latestMetrics("r2")).contains("{}");
         }
     }
 

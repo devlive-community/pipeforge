@@ -128,7 +128,7 @@ QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
 ```
 
 `GET /api/v1/runs` lists runs newest first, filtered by state and job and paged with the `next`
-token; `GET /api/v1/runs/{id}` shows a run with its definition and its changes of state;
+token, each with the rows read and written as of its last metrics sample; `GET /api/v1/runs/{id}` shows a run with its definition and its changes of state;
 `POST /api/v1/runs/{id}/cancel` asks the master to cancel it. While the master cannot be reached,
 runs keep their state; a run the master no longer knows, because it restarted, fails with
 `PF-CLUS-0016`.

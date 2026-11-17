@@ -23,6 +23,9 @@ public final class Runs {
      * @param status where the run is
      * @param submittedBy who submitted it; empty until the server has users
      * @param error why the run failed, for runs that ended without success
+     * @param rowsRead rows the sources read, as of the last sample of the run's metrics; {@code
+     *     null} before the first sample
+     * @param rowsWritten rows the sinks wrote, as of the same sample
      */
     public record Run(
             String id,
@@ -33,7 +36,9 @@ public final class Runs {
             @Nullable Instant startedAt,
             @Nullable Instant endedAt,
             Instant updatedAt,
-            @Nullable RunError error) {}
+            @Nullable RunError error,
+            @Nullable Long rowsRead,
+            @Nullable Long rowsWritten) {}
 
     /** An error of a run: its code and its message in English; the code's page tells more. */
     public record RunError(String code, String message) {}

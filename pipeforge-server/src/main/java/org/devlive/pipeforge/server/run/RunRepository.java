@@ -36,9 +36,14 @@ public class RunRepository {
     /** The most runs of a page. */
     public static final int MAX_LIMIT = 200;
 
+    /** The last sample of a run's metrics, for its row counts. */
+    private static final String LAST_SAMPLE =
+            " FROM job_run_metrics m WHERE m.run_id = job_run.id ORDER BY m.sampled_at DESC LIMIT 1)";
+
     private static final String COLUMNS =
             "id, job_name, status, submitted_by, submitted_at, started_at, ended_at, updated_at, error_code,"
-                    + " error_message";
+                    + " error_message, (SELECT m.rows_read" + LAST_SAMPLE + " AS rows_read, (SELECT m.rows_written"
+                    + LAST_SAMPLE + " AS rows_written";
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transactions;
@@ -67,7 +72,9 @@ public class RunRepository {
                 instant(rs.getObject("started_at", LocalDateTime.class)),
                 instant(rs.getObject("ended_at", LocalDateTime.class)),
                 instant(rs.getObject("updated_at", LocalDateTime.class)),
-                code == null ? null : new Runs.RunError(code, String.valueOf(rs.getString("error_message"))));
+                code == null ? null : new Runs.RunError(code, String.valueOf(rs.getString("error_message"))),
+                rs.getObject("rows_read", Long.class),
+                rs.getObject("rows_written", Long.class));
     };
 
     /** Records a submitted run in {@code QUEUE}, with its first attempt and its first transition. */

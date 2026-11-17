@@ -109,7 +109,7 @@ QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
           └──── CANCELLING → CANCELLED
 ```
 
-`GET /api/v1/runs` 按提交时间从新到旧列出运行，可以按状态和作业筛选，用 `next` 令牌翻页；`GET /api/v1/runs/{id}` 显示运行及其定义和状态变化；
+`GET /api/v1/runs` 按提交时间从新到旧列出运行，可以按状态和作业筛选，用 `next` 令牌翻页，每个运行带有截至最近一次指标采样的读取和写入行数；`GET /api/v1/runs/{id}` 显示运行及其定义和状态变化；
 `POST /api/v1/runs/{id}/cancel` 请 Master 取消运行。无法连接 Master 时，运行保持原来的状态；Master 已经不知道的运行（因为 Master 重启）
 以 `PF-CLUS-0016` 失败。
 

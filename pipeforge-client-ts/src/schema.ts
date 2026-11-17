@@ -685,6 +685,10 @@ export interface components {
             error?: components["schemas"]["RunError"];
             id?: string;
             job?: string;
+            /** Format: int64 */
+            rowsRead?: number;
+            /** Format: int64 */
+            rowsWritten?: number;
             /** Format: date-time */
             startedAt?: string;
             /** @enum {string} */
