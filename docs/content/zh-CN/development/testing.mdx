@@ -14,6 +14,7 @@ order: 65
 | 端到端测试 | `pipeforge-e2e`，`*IT` | 打包之后，`./mvnw verify -pl pipeforge-e2e`；没有 Docker 时跳过 |
 | Web UI | `pipeforge-ui`：Vitest、Playwright | `pnpm test`、`pnpm e2e` |
 | CI 脚本 | `.ci/tests` | `.ci/tests/run.sh` |
+| 验收基准 | `pipeforge-e2e`，`*Benchmark` | `tools/benchmark/m1.sh`，见[基准测试](./benchmarks)；不在 CI 中运行 |
 
 ## 端到端测试
 

@@ -14,6 +14,7 @@ order: 65
 | End-to-end tests | `pipeforge-e2e`, `*IT` | `./mvnw verify -pl pipeforge-e2e`, after packaging; skipped without Docker |
 | Web UI | `pipeforge-ui`: Vitest, Playwright | `pnpm test`, `pnpm e2e` |
 | CI scripts | `.ci/tests` | `.ci/tests/run.sh` |
+| Acceptance benchmark | `pipeforge-e2e`, `*Benchmark` | `tools/benchmark/m1.sh`, see [benchmarks](./benchmarks); not in CI |
 
 ## End-to-end tests
 

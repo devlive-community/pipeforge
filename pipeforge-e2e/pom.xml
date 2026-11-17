@@ -26,6 +26,8 @@
 
     <properties>
         <pipeforge.e2e.skip>false</pipeforge.e2e.skip>
+        <!-- the end-to-end tests; the benchmark profile turns them off -->
+        <pipeforge.e2e.its.skip>${pipeforge.e2e.skip}</pipeforge.e2e.its.skip>
     </properties>
 
     <dependencies>
@@ -122,7 +124,7 @@
                             <goal>test</goal>
                         </goals>
                         <configuration>
-                            <skip>${pipeforge.e2e.skip}</skip>
+                            <skip>${pipeforge.e2e.its.skip}</skip>
                             <excludes combine.self="override"/>
                             <includes>
                                 <include>**/*IT.java</include>
@@ -136,4 +138,45 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+          The M1 acceptance benchmark (development/benchmarks): -Pbenchmark runs *Benchmark instead of the
+          end-to-end tests, with its settings as -Dpipeforge.benchmark.* properties.
+        -->
+        <profile>
+            <id>benchmark</id>
+            <properties>
+                <pipeforge.e2e.its.skip>true</pipeforge.e2e.its.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>benchmark</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <excludes combine.self="override"/>
+                                    <includes>
+                                        <include>**/*Benchmark.java</include>
+                                    </includes>
+                                    <systemPropertyVariables>
+                                        <pipeforge.dist>${project.build.directory}/dist/pipeforge-${project.version}</pipeforge.dist>
+                                    </systemPropertyVariables>
+                                    <!-- a hundred million rows take a while; no time limit of the fork -->
+                                    <forkedProcessTimeoutInSeconds>0</forkedProcessTimeoutInSeconds>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

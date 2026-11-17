@@ -1,0 +1,75 @@
+---
+title: Benchmarks
+description: The M1 acceptance benchmark - MySQL to PostgreSQL on a cluster of three workers - how to run it, what it checks and how to read its report.
+order: 66
+---
+
+The M1 acceptance benchmark copies a table of orders from MySQL to PostgreSQL on a cluster made
+of the packaged distribution: a master, three workers and the server, as in the [end-to-end
+tests](./testing#end-to-end-tests). It is not part of CI; it runs by hand and nightly.
+
+## The dataset and the job
+
+`bench.orders` has 20 columns of an order (numbers, text, decimals, a double, dates and times with
+milliseconds, `NULL`s, non-ASCII text) and about 300 bytes a row. MySQL makes it itself in chunks
+of a million rows; a later run keeps it when it has the rows asked for, since a hundred million
+rows take a while to make. The job reads it in `split.count` splits at the given parallelism and
+writes it to `public.orders` in PostgreSQL, which is made anew for each run.
+
+## Running it
+
+```bash
+tools/benchmark/m1.sh --rows 10000000
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--rows` | 100,000,000 | Rows of the dataset |
+| `--parallelism` | 8 | Parallelism of the job, the 8 slots of the performance target |
+| `--slots-per-worker` | 4 | Slots each of the three workers offers |
+| `--split-count` | 4 × parallelism | Splits of the source |
+| `--enforce-target` | off | Fail when the throughput target is not met |
+| `--skip-build` | off | Use the distribution of the last build |
+
+Without other settings MySQL 8.4 and PostgreSQL 16 run in Docker on the same host. To use other
+databases, as the benchmark environment does, set `PIPEFORGE_BENCH_MYSQL_URL`, `_USER`,
+`_PASSWORD` and the same for `PIPEFORGE_BENCH_POSTGRES_*`. The script builds the distribution and
+runs `./mvnw verify -pl pipeforge-e2e -Pbenchmark` with the settings as `-Dpipeforge.benchmark.*`
+properties.
+
+The **Benchmark** workflow runs it nightly with 10 million rows on a hosted runner, which has no
+disk for more, and by hand with any number of rows on any runner; its database secrets are
+`BENCH_MYSQL_URL` and so on. The report is the run's summary and an artifact, with the logs of every
+process.
+
+## Checks
+
+| Check | Fails the run |
+|---|---|
+| The run succeeded | yes |
+| PostgreSQL has as many rows as MySQL, the same sums of `id`, `amount` and `quantity`, as many notes and the same latest update | yes |
+| The server counted every row read and written | yes |
+| Every split was read, and split progress only grew while the run ran | yes |
+| The read rates the server reported agree with the measured throughput within 30% (when the run was long enough to compare) | yes |
+| The run analysis concluded a bottleneck | yes |
+| At least 300,000 rows/s | only with `--enforce-target` |
+
+The throughput target is the one PipeForge sets for MySQL to PostgreSQL on 8 slots in its
+benchmark environment: three workers of 16 cores and 64 GB, the databases on their own machines.
+On other hosts the report shows it, but it does not decide the run.
+
+## The report
+
+Each run writes `pipeforge-e2e/target/benchmark/m1-<time>.json` and `.md`, and `latest.json`
+and `latest.md`:
+
+- **Result**: rows, run time, throughput in total and per slot, rows read and written, splits, the
+  bottleneck and the time to make the dataset
+- **Checks**: each with its outcome and what was measured
+- **Advice** of the run analysis
+- **Timeline**: every five seconds the rows read and written, the read rate and the splits read
+- **Environment**: commit, host, Java, the databases and where they run
+
+The JSON form (`schemaVersion` 1) has the same content and the run's metrics as the server returned
+them, for comparing runs over time. The processes' output is in
+`pipeforge-e2e/target/benchmark-run/logs/`.

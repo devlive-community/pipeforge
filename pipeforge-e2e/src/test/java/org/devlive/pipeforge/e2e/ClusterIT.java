@@ -14,15 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
@@ -65,11 +60,11 @@ class ClusterIT {
 
         Path dist = Path.of(System.getProperty("pipeforge.dist"));
         Path dir = dist.getParent().getParent().resolve("e2e-run");
-        deleteTree(dir);
+        Support.deleteTree(dir);
         Files.createDirectories(dir);
         cluster = new Cluster(dist, dir);
         Path master = cluster.startMaster(Duration.ofSeconds(6));
-        installDriverPlugin(master.resolve("plugins"));
+        Support.installDriverPlugin(master.resolve("plugins"));
         cluster.startWorker("worker-1", 4, "zone=a");
         cluster.startWorker("worker-2", 4, "zone=b");
         cluster.startWorker("worker-3", 4, "zone=c");
@@ -95,7 +90,7 @@ class ClusterIT {
     void copiesAMillionRowsFromMySqlToPostgreSqlRowForRow() throws Exception {
         JsonNode run = cluster.post("/api/v1/runs", Map.of("definition", job("orders-to-postgres", "orders", "")));
         String id = run.path("id").asText();
-        JsonNode detail = cluster.await("/api/v1/runs/" + id, ClusterIT::ended, Duration.ofMinutes(10));
+        JsonNode detail = cluster.await("/api/v1/runs/" + id, Support::ended, Duration.ofMinutes(10));
         assertThat(detail.path("run").path("status").asText())
                 .as("%s\n%s", detail, cluster.outputs())
                 .isEqualTo("SUCCESS");
@@ -103,14 +98,14 @@ class ClusterIT {
         // the same rows on both sides: counts, sums, NULLs, ranges and a sample compared value by value
         String summary = "SELECT COUNT(*), SUM(id), SUM(amount), COUNT(status), COUNT(note), MIN(created_at),"
                 + " MAX(created_at), SUM(LENGTH(customer)) FROM ";
-        assertThat(rows(postgres(), summary + "public.orders"))
-                .isEqualTo(rows(mysql(), summary + "shop.orders"))
+        assertThat(Support.rows(postgres(), summary + "public.orders"))
+                .isEqualTo(Support.rows(mysql(), summary + "shop.orders"))
                 .first()
                 .satisfies(row -> assertThat(row.get(0)).isEqualTo(String.valueOf(ROWS)));
         String sample = "SELECT id, customer, amount, status, created_at, note FROM %s WHERE id %% 997 = 0 ORDER BY id";
-        List<List<String>> expected = rows(mysql(), sample.formatted("shop.orders"));
+        List<List<String>> expected = Support.rows(mysql(), sample.formatted("shop.orders"));
         assertThat(expected).hasSizeGreaterThan(1000);
-        assertThat(rows(postgres(), sample.formatted("public.orders"))).isEqualTo(expected);
+        assertThat(Support.rows(postgres(), sample.formatted("public.orders"))).isEqualTo(expected);
 
         // the server kept the metrics, their history and the analysis of the run
         JsonNode metrics = cluster.get("/api/v1/runs/" + id + "/metrics");
@@ -158,7 +153,7 @@ class ClusterIT {
         String victim = cluster.workerAt(address);
         cluster.kill(victim);
 
-        JsonNode detail = cluster.await("/api/v1/runs/" + id, ClusterIT::ended, Duration.ofMinutes(2));
+        JsonNode detail = cluster.await("/api/v1/runs/" + id, Support::ended, Duration.ofMinutes(2));
         JsonNode error = detail.path("run").path("error");
         assertThat(detail.path("run").path("status").asText()).as("%s", detail).isEqualTo("FAILED");
         // the reason names the lost worker: no heartbeat, or the data connection to it broke
@@ -166,11 +161,6 @@ class ClusterIT {
         assertThat(error.path("message").asText()).as("%s", error).containsAnyOf(workerId, address, dataAddress);
         // the cluster carries on without it
         cluster.await("/api/v1/cluster", c -> c.path("workers").size() == 2, Duration.ofMinutes(1));
-    }
-
-    static boolean ended(JsonNode detail) {
-        return Set.of("SUCCESS", "FAILED", "CANCELLED", "TIMEOUT")
-                .contains(detail.path("run").path("status").asText());
     }
 
     String job(String name, String target, String env) {
@@ -242,79 +232,6 @@ class ClusterIT {
                 statement.execute("CREATE TABLE public." + table + " (id BIGINT PRIMARY KEY, customer VARCHAR(40)"
                         + " NOT NULL, amount NUMERIC(12, 2) NOT NULL, status VARCHAR(10),"
                         + " created_at TIMESTAMP(3) NOT NULL, note TEXT)");
-            }
-        }
-    }
-
-    /** The mysql-connector-j driver plugin, from the Connector/J jar of the tests. */
-    static void installDriverPlugin(Path plugins) throws Exception {
-        Path jar = Path.of(com.mysql.cj.jdbc.Driver.class
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation()
-                .toURI());
-        Path plugin = plugins.resolve("mysql-connector-j");
-        Files.createDirectories(plugin.resolve("lib"));
-        Files.copy(jar, plugin.resolve("lib").resolve(String.valueOf(jar.getFileName())));
-        Files.writeString(
-                plugin.resolve("plugin.yaml"),
-                """
-                id: mysql-connector-j
-                name: MySQL Connector/J
-                version: 8.4.0
-                api-version: "0.x"
-                provides:
-                  - { type: driver, identifier: mysql-connector-j, class: com.mysql.cj.jdbc.Driver }
-                """);
-    }
-
-    /** Every row of a query, each value as text: numbers without trailing zeros, times to the millisecond. */
-    static List<List<String>> rows(Connection connection, String sql) throws Exception {
-        try (connection;
-                Statement statement = connection.createStatement();
-                ResultSet result = statement.executeQuery(sql)) {
-            ResultSetMetaData meta = result.getMetaData();
-            List<List<String>> rows = new ArrayList<>();
-            while (result.next()) {
-                List<String> row = new ArrayList<>();
-                for (int i = 1; i <= meta.getColumnCount(); i++) {
-                    Object value = result.getObject(i);
-                    row.add(text(value));
-                }
-                rows.add(row);
-            }
-            return rows;
-        }
-    }
-
-    static String text(Object value) {
-        if (value == null) {
-            return "NULL";
-        }
-        if (value instanceof java.math.BigDecimal decimal) {
-            return decimal.stripTrailingZeros().toPlainString();
-        }
-        if (value instanceof Number number) {
-            return new java.math.BigDecimal(number.toString())
-                    .stripTrailingZeros()
-                    .toPlainString();
-        }
-        if (value instanceof java.sql.Timestamp timestamp) {
-            return timestamp.toLocalDateTime().toString();
-        }
-        if (value instanceof java.time.LocalDateTime time) {
-            return time.toString();
-        }
-        return value.toString();
-    }
-
-    static void deleteTree(Path dir) throws Exception {
-        if (!Files.exists(dir)) {
-            return;
-        }
-        try (Stream<Path> files = Files.walk(dir)) {
-            for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
-                Files.delete(file);
             }
         }
     }

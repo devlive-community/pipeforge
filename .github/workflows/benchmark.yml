@@ -1,0 +1,74 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# The M1 acceptance benchmark (development/benchmarks): MySQL to PostgreSQL on a cluster of three
+# workers, with a report as an artifact. Not part of CI. Nightly it copies the medium dataset (10
+# million rows) on a hosted runner, which has no room for more; started by hand it can copy the
+# hundred million rows of the acceptance on a runner of the benchmark environment, and hold the
+# run to the throughput target there.
+
+name: Benchmark
+
+on:
+  schedule:
+    - cron: '30 19 * * *'
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: Rows to copy
+        default: '100000000'
+      runner:
+        description: Runner label; the throughput target holds for the benchmark environment only
+        default: ubuntu-latest
+      enforce-target:
+        description: Fail when the throughput target is not met
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
+
+jobs:
+  m1:
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+          cache: maven
+      - name: Run the benchmark
+        env:
+          ROWS: ${{ inputs.rows || '10000000' }}
+          ENFORCE: ${{ inputs.enforce-target && '--enforce-target' || '' }}
+          PIPEFORGE_BENCH_MYSQL_URL: ${{ secrets.BENCH_MYSQL_URL }}
+          PIPEFORGE_BENCH_MYSQL_USER: ${{ secrets.BENCH_MYSQL_USER }}
+          PIPEFORGE_BENCH_MYSQL_PASSWORD: ${{ secrets.BENCH_MYSQL_PASSWORD }}
+          PIPEFORGE_BENCH_POSTGRES_URL: ${{ secrets.BENCH_POSTGRES_URL }}
+          PIPEFORGE_BENCH_POSTGRES_USER: ${{ secrets.BENCH_POSTGRES_USER }}
+          PIPEFORGE_BENCH_POSTGRES_PASSWORD: ${{ secrets.BENCH_POSTGRES_PASSWORD }}
+        run: tools/benchmark/m1.sh --rows "$ROWS" $ENFORCE
+      - name: Add the report to the summary
+        if: always()
+        run: |
+          if [ -f pipeforge-e2e/target/benchmark/latest.md ]; then
+            cat pipeforge-e2e/target/benchmark/latest.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-m1-${{ github.run_id }}
+          path: |
+            pipeforge-e2e/target/benchmark/
+            pipeforge-e2e/target/benchmark-run/logs/
+          if-no-files-found: ignore
+          retention-days: 90

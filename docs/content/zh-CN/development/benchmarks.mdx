@@ -1,0 +1,64 @@
+---
+title: 基准测试
+description: M1 验收基准：在三个 Worker 的集群上从 MySQL 同步到 PostgreSQL；如何运行、检查什么以及如何阅读报告。
+order: 66
+---
+
+M1 验收基准在由打包后的发行版组成的集群上，把一张订单表从 MySQL 复制到 PostgreSQL：一个 Master、三个 Worker 和服务端，
+与[端到端测试](./testing#端到端测试)相同。它不属于 CI，手动运行或每晚运行。
+
+## 数据集与作业
+
+`bench.orders` 有订单的 20 列（数字、文本、小数、双精度数、毫秒精度的日期和时间、`NULL`、非 ASCII 文本），每行约 300 字节。
+MySQL 以每块一百万行的方式自己生成数据；之后的运行在行数符合要求时直接复用，因为生成一亿行需要一段时间。作业按给定的并行度、
+以 `split.count` 个分片读取它，写入 PostgreSQL 的 `public.orders`，这张表每次运行都会重新创建。
+
+## 运行
+
+```bash
+tools/benchmark/m1.sh --rows 10000000
+```
+
+| 选项 | 默认值 | 含义 |
+|---|---|---|
+| `--rows` | 100,000,000 | 数据集的行数 |
+| `--parallelism` | 8 | 作业的并行度，即性能目标中的 8 个 Slot |
+| `--slots-per-worker` | 4 | 三个 Worker 各自提供的 Slot 数 |
+| `--split-count` | 4 × 并行度 | Source 的分片数 |
+| `--enforce-target` | 关闭 | 未达到吞吐目标时判定失败 |
+| `--skip-build` | 关闭 | 使用上一次构建的发行版 |
+
+没有其他设置时，MySQL 8.4 和 PostgreSQL 16 在本机的 Docker 中运行。要使用其他数据库（基准环境就是如此），请设置
+`PIPEFORGE_BENCH_MYSQL_URL`、`_USER`、`_PASSWORD`，以及对应的 `PIPEFORGE_BENCH_POSTGRES_*`。脚本会构建发行版，
+然后以 `-Dpipeforge.benchmark.*` 属性传入设置，运行 `./mvnw verify -pl pipeforge-e2e -Pbenchmark`。
+
+**Benchmark** 工作流每晚在托管 Runner 上以 1000 万行运行（托管 Runner 的磁盘放不下更多），也可以手动在任意 Runner 上以任意行数运行；
+数据库的 Secret 为 `BENCH_MYSQL_URL` 等。报告会作为运行摘要和制品保存，并附带每个进程的日志。
+
+## 检查项
+
+| 检查 | 是否导致失败 |
+|---|---|
+| 运行成功 | 是 |
+| PostgreSQL 与 MySQL 的行数相同，`id`、`amount`、`quantity` 的和相同，备注数相同，最新更新时间相同 | 是 |
+| 服务端统计到每一行的读取和写入 | 是 |
+| 所有分片都已读完，运行期间分片进度只增不减 | 是 |
+| 服务端报告的读取速率与实测吞吐相差不超过 30%（运行时间足够长、可以比较时） | 是 |
+| 运行分析得出了瓶颈结论 | 是 |
+| 至少 30 万行/秒 | 仅在使用 `--enforce-target` 时 |
+
+吞吐目标是 PipeForge 为基准环境下 8 个 Slot 的 MySQL 到 PostgreSQL 同步设定的目标：三台 16 核、64 GB 的 Worker，数据库各自运行在独立的机器上。
+在其他主机上报告会显示这项结果，但不以它判定运行是否通过。
+
+## 报告
+
+每次运行写出 `pipeforge-e2e/target/benchmark/m1-<时间>.json` 和 `.md`，以及 `latest.json` 和 `latest.md`：
+
+- **结果**：行数、运行时间、总吞吐和每个 Slot 的吞吐、读写行数、分片、瓶颈，以及生成数据集所用的时间
+- **检查项**：每项的结果和实测值
+- 运行分析给出的**建议**
+- **时间线**：每五秒一次的读写行数、读取速率和已读完的分片数
+- **环境**：提交、主机、Java、数据库及其运行位置
+
+JSON 形式（`schemaVersion` 1）内容相同，并附带服务端返回的运行指标，用于跨时间比较多次运行。各进程的输出位于
+`pipeforge-e2e/target/benchmark-run/logs/`。
