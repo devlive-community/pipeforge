@@ -101,6 +101,27 @@ class IsolationTest {
                 .isEmpty();
     }
 
+    @Test
+    void trustsOnlyTheReviewedClassesOfOfficialClients() throws IOException {
+        Path jar = dir.resolve("driver.jar");
+        try (OutputStream out = Files.newOutputStream(jar);
+                ZipOutputStream zip = new ZipOutputStream(out);
+                InputStream in = Probe.class.getResourceAsStream("IsolationTest$Probe.class")) {
+            byte[] probe = in.readAllBytes();
+            for (String name :
+                    List.of("org/postgresql/util/PGJDBCMain.class", "org/postgresql/util/PGJDBCMainX.class")) {
+                zip.putNextEntry(new ZipEntry(name));
+                zip.write(probe);
+                zip.closeEntry();
+            }
+        }
+        assertThat(ForbiddenCalls.TRUSTED_CLASSES).containsKey("org.postgresql.util.PGJDBCMain");
+        assertThat(ForbiddenCalls.scanJar(jar, List.of()))
+                .as("matched by exact name: the other class of the library is still checked")
+                .containsExactly(new ForbiddenCalls.Violation(
+                        "java.util.TimeZone.setDefault", "org.postgresql.util.PGJDBCMainX"));
+    }
+
     /** References a forbidden method without ever running it. */
     static final class Probe {
         static void change(boolean really) {

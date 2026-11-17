@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -27,6 +28,10 @@ import org.jspecify.annotations.Nullable;
  * the JVM, system properties, default time zone and locale, security providers and properties,
  * the standard streams and other JVM-wide handlers. A plugin that references one of them is not
  * loaded; packages of trusted official clients can be allowed.
+ *
+ * <p>The classes of {@link #TRUSTED_CLASSES} are never reported: each is a reviewed entry point of an
+ * official client that the engine never calls, such as a driver's command-line {@code main}.
+ * They are listed by exact name, so other classes of the same library are still checked.
  */
 public final class ForbiddenCalls {
 
@@ -50,6 +55,15 @@ public final class ForbiddenCalls {
             "java/security/Security.removeProvider",
             "java/lang/Thread.setDefaultUncaughtExceptionHandler",
             "java/net/URL.setURLStreamHandlerFactory");
+
+    /**
+     * Classes of official clients that may reference forbidden calls, by exact name, with the reason
+     * they are harmless. Add one only after reading the class.
+     */
+    public static final Map<String, String> TRUSTED_CLASSES = Map.of(
+            "org.postgresql.util.PGJDBCMain",
+            "the PostgreSQL JDBC driver's command-line main, which prints its version and exits; never called by"
+                    + " the driver itself");
 
     /** A forbidden call found in a class. */
     public record Violation(String call, String location) {}
@@ -119,6 +133,9 @@ public final class ForbiddenCalls {
     }
 
     private static void check(byte[] classFile, String className, List<Violation> violations) throws IOException {
+        if (TRUSTED_CLASSES.containsKey(className)) {
+            return;
+        }
         for (String call : referencedMethods(classFile)) {
             if (FORBIDDEN.contains(call)) {
                 violations.add(new Violation(call.replace('/', '.'), className));
