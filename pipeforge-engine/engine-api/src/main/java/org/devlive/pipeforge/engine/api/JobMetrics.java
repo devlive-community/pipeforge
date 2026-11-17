@@ -42,8 +42,10 @@ import org.devlive.pipeforge.core.dirty.DirtySample;
  *     from 0 to 1; -1 before any task ran
  * @param queueDepth batches in the write queues of the sinks now
  * @param queueCapacity the batches the write queues of the sinks hold
- * @param splitsAssigned splits the enumerator gave to readers
- * @param splitsFinished splits of readers that have finished
+ * @param splitsAssigned splits in all: those the enumerator makes, once it says how many, else those
+ *     it gave to readers so far
+ * @param splitsFinished splits read: those their readers reported as read, and those of readers
+ *     that have finished
  * @param runningMs time tasks ran, summed over tasks: the base of the wait shares
  * @param memoryBytes the memory the tasks account now, summed over tasks
  * @param rowsDirty bad rows the job skipped ({@code env.dirty.policy: skip})

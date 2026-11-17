@@ -85,6 +85,13 @@ class RpcTest {
         ReaderEvent event = new ReaderEvent() {};
         assertThat(new ReaderMessage.Custom(TASK, "src", event).event()).isSameAs(event);
         assertThat(new ReaderMessage.SplitRequest(TASK, "src").task()).isEqualTo(TASK);
+        // the split request and the finished splits travel over the protocol
+        for (ReaderMessage message : List.<ReaderMessage>of(
+                new ReaderMessage.SplitRequest(TASK, "src"),
+                new ReaderMessage.SplitsFinished(TASK, "src", List.of("split-1", "split-2")))) {
+            assertThat(ProtoMapping.fromProto(ProtoMapping.toProto(message).build()))
+                    .isEqualTo(message);
+        }
         assertThatThrownBy(() -> new ReaderMessage.Custom(TASK, "src", null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new TaskSettings(
                         true, 0, 1, java.time.Duration.ofSeconds(1), TaskSettings.DEFAULT_METRICS_INTERVAL))

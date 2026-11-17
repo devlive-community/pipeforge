@@ -32,6 +32,16 @@ public interface SplitEnumerator<SplitT extends SourceSplit, StateT> extends Aut
 
     default void handleReaderEvent(int readerId, ReaderEvent event) {}
 
+    /**
+     * How many splits the enumerator makes in all, once it knows, for the progress of the job; the
+     * engine asks after each call to the enumerator. Empty when it cannot know, as for unbounded
+     * sources or sources that discover their splits as they go; the progress then counts the splits
+     * assigned so far.
+     */
+    default java.util.OptionalInt totalSplits() {
+        return java.util.OptionalInt.empty();
+    }
+
     @Override
     default void close() throws Exception {}
 }

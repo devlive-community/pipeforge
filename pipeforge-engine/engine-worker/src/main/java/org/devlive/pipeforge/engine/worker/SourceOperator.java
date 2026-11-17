@@ -158,5 +158,10 @@ final class SourceOperator {
         public void sendReaderEvent(ReaderEvent event) {
             master.sendReaderMessage(new ReaderMessage.Custom(task, node, event));
         }
+
+        @Override
+        public void splitFinished(String splitId) {
+            master.sendReaderMessage(new ReaderMessage.SplitsFinished(task, node, java.util.List.of(splitId)));
+        }
     }
 }

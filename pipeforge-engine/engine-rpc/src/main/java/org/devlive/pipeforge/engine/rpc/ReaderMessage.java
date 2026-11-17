@@ -6,6 +6,7 @@
  */
 package org.devlive.pipeforge.engine.rpc;
 
+import java.util.List;
 import java.util.Objects;
 import org.devlive.pipeforge.api.source.ReaderEvent;
 
@@ -23,6 +24,15 @@ public sealed interface ReaderMessage {
         public SplitRequest {
             Objects.requireNonNull(task, "task");
             Objects.requireNonNull(node, "node");
+        }
+    }
+
+    /** The reader read these splits to their end. */
+    record SplitsFinished(ExecutionAttemptId task, String node, List<String> splitIds) implements ReaderMessage {
+        public SplitsFinished {
+            Objects.requireNonNull(task, "task");
+            Objects.requireNonNull(node, "node");
+            splitIds = List.copyOf(splitIds);
         }
     }
 

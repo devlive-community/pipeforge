@@ -58,6 +58,13 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 The state of a split records the position already handed to the output, so a restored reader
 continues exactly there.
 
+Two optional calls feed the split progress that the run pages, the REST API and the run metrics
+show. A reader calls `ReaderContext.splitFinished(splitId)` once it has emitted the last row of a
+split, which then counts as read at once; without it, a reader's splits count as read only when its
+task finishes. An enumerator that knows how many splits it makes in all returns them from
+`SplitEnumerator.totalSplits()`, which the engine asks after every call; without it, the total is
+the splits assigned so far.
+
 ### Where the enumerator runs
 
 The enumerator runs in the job master, not on the workers, under these rules:

@@ -319,6 +319,9 @@ public final class ProtoMapping {
         return switch (message) {
             case ReaderMessage.SplitRequest request -> builder.setSplitRequest(
                     org.devlive.pipeforge.engine.rpc.proto.SplitRequest.getDefaultInstance());
+            case ReaderMessage.SplitsFinished finished -> builder.setSplitsFinished(
+                    org.devlive.pipeforge.engine.rpc.proto.SplitsFinished.newBuilder()
+                            .addAllSplitIds(finished.splitIds()));
             case ReaderMessage.Custom custom -> throw new IllegalArgumentException("Custom reader events of node '"
                     + custom.node() + "' cannot be sent to another process yet; they need a serializer of the source");
         };
@@ -332,6 +335,12 @@ public final class ProtoMapping {
     public static ReaderMessage fromProto(org.devlive.pipeforge.engine.rpc.proto.ReaderEvent event) {
         if (event.getEventCase() == org.devlive.pipeforge.engine.rpc.proto.ReaderEvent.EventCase.SPLIT_REQUEST) {
             return new ReaderMessage.SplitRequest(fromProto(event.getSource()), event.getNodeId());
+        }
+        if (event.getEventCase() == org.devlive.pipeforge.engine.rpc.proto.ReaderEvent.EventCase.SPLITS_FINISHED) {
+            return new ReaderMessage.SplitsFinished(
+                    fromProto(event.getSource()),
+                    event.getNodeId(),
+                    event.getSplitsFinished().getSplitIdsList());
         }
         throw new IllegalArgumentException(
                 "Reader event " + event.getEventCase() + " is not handled by this engine version");

@@ -25,6 +25,13 @@ public interface ReaderContext {
 
     void sendReaderEvent(ReaderEvent event);
 
+    /**
+     * Tells the engine that the reader read split {@code splitId} to its end, for the progress of the
+     * job: the split counts as read at once. A reader that does not tell has its splits counted as
+     * read when its task finishes. Call it once per split, after the split's last row was emitted.
+     */
+    default void splitFinished(String splitId) {}
+
     /** The class loader of the plugin. */
     ClassLoader classLoader();
 

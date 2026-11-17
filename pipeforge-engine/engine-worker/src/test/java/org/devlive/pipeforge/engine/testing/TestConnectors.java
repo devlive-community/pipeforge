@@ -89,6 +89,10 @@ public final class TestConnectors {
     static final Option<Integer> FAIL_AT = Options.key("fail-at").intType().defaultValue(-1);
     static final Option<String> FAIL_WITH =
             Options.key("fail-with").stringType().defaultValue("runtime");
+    /** The reader waits for the probe's release once it has read this many splits; 0 never. */
+    static final Option<Integer> PAUSE_AFTER_SPLITS =
+            Options.key("pause-after-splits").intType().defaultValue(0);
+
     static final Option<String> BLOCK = Options.key("block").stringType().defaultValue("none");
     static final Option<Boolean> SCHEMA_CHANGE =
             Options.key("schema-change").booleanType().defaultValue(false);
@@ -294,6 +298,7 @@ public final class TestConnectors {
                             FAIL_AT,
                             FAIL_WITH,
                             BLOCK,
+                            PAUSE_AFTER_SPLITS,
                             SCHEMA_CHANGE,
                             FAIL_ENUMERATOR,
                             BLOCK_ENUMERATOR,
@@ -380,6 +385,7 @@ public final class TestConnectors {
         private final EnumeratorContext<NumberSplit> context;
         private final Deque<NumberSplit> pending = new ArrayDeque<>();
         private final Probe probe;
+        private int made = -1;
 
         NumbersEnumerator(ReadonlyConfig config, EnumeratorContext<NumberSplit> context) {
             this.config = config;
@@ -412,6 +418,12 @@ public final class TestConnectors {
                     pending.add(new NumberSplit("split-" + i, from, to));
                 }
             }
+            made = pending.size();
+        }
+
+        @Override
+        public java.util.OptionalInt totalSplits() {
+            return made < 0 ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(made);
         }
 
         @Override
@@ -459,6 +471,7 @@ public final class TestConnectors {
         private boolean noMore;
         private boolean schemaChangeSent;
         private int emitted;
+        private int finishedSplits;
 
         NumbersReader(ReadonlyConfig config, ReaderContext context) {
             this.config = config;
@@ -533,8 +546,7 @@ public final class TestConnectors {
                 // the record is skipped by moving past it before refusing it
                 long bad = next++;
                 if (next >= current.to()) {
-                    current = null;
-                    context.sendSplitRequest();
+                    finishSplit();
                 }
                 throw new org.devlive.pipeforge.api.row.BadRowException("record " + bad + " is not readable");
             }
@@ -545,10 +557,22 @@ public final class TestConnectors {
             emitted++;
             next++;
             if (next >= current.to()) {
-                current = null;
-                context.sendSplitRequest();
+                finishSplit();
             }
             return PollStatus.MORE_AVAILABLE;
+        }
+
+        /** The current split was read: tells the engine, pauses if asked, then asks for the next. */
+        private void finishSplit() throws InterruptedException {
+            NumberSplit done = java.util.Objects.requireNonNull(current);
+            current = null;
+            context.splitFinished(done.splitId());
+            finishedSplits++;
+            if (finishedSplits == config.get(PAUSE_AFTER_SPLITS)) {
+                probe.blocking.countDown();
+                probe.release.await();
+            }
+            context.sendSplitRequest();
         }
 
         @Override

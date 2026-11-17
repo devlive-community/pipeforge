@@ -322,8 +322,10 @@ runs, refreshed every `metricsInterval`.
   `bytesOut` is what the last node of a chain sent and `bytesIn` what the first node of the next
   chain received.
 - **Queues and splits.** `queueDepth` and `queueCapacity` show how full the write queues of the
-  sinks are now. `splitsAssigned` counts the splits the enumerator gave out, `splitsFinished` those
-  of readers that have ended: readers do not report single splits.
+  sinks are now. `splitsAssigned` counts the splits in all — those the enumerator makes, once it
+  says how many, else those it gave out so far — and `splitsFinished` those read: each as soon as
+  its reader reports it, or all of a reader's splits when its task ends, for readers that do not
+  report single splits.
 
 `AnalyzeText` prints the [run analysis](./plan-and-explain#run-analysis) the way `explain --analyze` shows a run:
 

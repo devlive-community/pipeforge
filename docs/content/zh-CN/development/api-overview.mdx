@@ -54,6 +54,11 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 没有数据时 `pollNext` 返回 `NOTHING_AVAILABLE` 而不是阻塞，由引擎负责退避后再次读取。分片状态记录已经交给下游的位置，
 因此恢复后的 Reader 能从这里精确继续。
 
+有两个可选调用用于分片进度（运行页面、REST API 和运行指标中显示）。Reader 在发出某个分片的最后一行后调用
+`ReaderContext.splitFinished(splitId)`，该分片立即计为已读完；不调用时，Reader 的分片要等它的 Task 结束才计为已读完。
+知道自己一共产生多少个分片的 Enumerator 通过 `SplitEnumerator.totalSplits()` 返回这个数，引擎在每次调用它之后询问；
+不实现时，总数为目前已分配的分片数。
+
 
 ### Enumerator 在哪里运行
 

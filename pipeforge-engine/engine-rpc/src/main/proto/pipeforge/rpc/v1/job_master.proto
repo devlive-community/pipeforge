@@ -33,6 +33,12 @@ message TaskStateUpdate {
 
 message SplitRequest {}
 
+// The reader read these splits to their end (SourceReader → ReaderContext.splitFinished); the job
+// master counts them as read for the progress of the job. Added after v1 was frozen (compatible).
+message SplitsFinished {
+  repeated string split_ids = 1;
+}
+
 message ReaderEvent {
   Header header = 1;
   ExecutionAttemptId source = 2;
@@ -41,6 +47,7 @@ message ReaderEvent {
   oneof event {
     SplitRequest split_request = 5;
     Versioned custom = 6;
+    SplitsFinished splits_finished = 7;
   }
 }
 

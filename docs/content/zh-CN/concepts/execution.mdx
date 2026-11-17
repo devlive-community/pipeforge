@@ -252,8 +252,9 @@ handle.result().get().status();   // CANCELLED
   `backpressuredMs` 是 Task 等待网络缓冲的时间（它发送数据的下游 Task 更慢），`backpressuredRatio` 是它占运行时间的比例。
 - **数据交换。** `exchangedBytes` 统计 Task 发给其他 Task 的行的字节数；按节点看，`bytesOut` 是一条链的最后一个节点发出的字节数，
   `bytesIn` 是下一条链的第一个节点收到的字节数。
-- **队列与分片。** `queueDepth` 和 `queueCapacity` 显示 Sink 写队列当前的占用。`splitsAssigned` 统计分片分配器分出的分片数，
-  `splitsFinished` 统计已结束的 Reader 的分片数：Reader 不会单独报告每个分片。
+- **队列与分片。** `queueDepth` 和 `queueCapacity` 显示 Sink 写队列当前的占用。`splitsAssigned` 统计全部分片数——分片分配器说明总数后取该值，
+  否则取目前已分出的分片数；`splitsFinished` 统计已读完的分片：Reader 上报某个分片后立即计入，不单独上报分片的 Reader 在其 Task
+  结束时整体计入。
 
 `AnalyzeText` 按 `explain --analyze` 展示运行结果的格式输出[运行分析](./plan-and-explain#运行分析)：
 

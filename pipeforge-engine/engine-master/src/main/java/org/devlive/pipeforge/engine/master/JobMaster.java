@@ -155,6 +155,10 @@ public final class JobMaster {
     private volatile boolean enumeratorStuck;
     /** The splits every reader was given; a restarted reader's splits go back to the enumerator (M2). */
     private final Map<Integer, Set<String>> owners = new ConcurrentHashMap<>();
+    /** Splits the readers reported as read to their end. */
+    private final Set<String> finishedSplits = ConcurrentHashMap.newKeySet();
+    /** The splits the enumerator makes in all, or -1 while it does not know. */
+    private volatile int totalSplits = -1;
 
     private @Nullable Source<SourceSplit, ?> source;
 
@@ -319,6 +323,7 @@ public final class JobMaster {
             enumerator = opened;
             onEnumerator("start the enumerator", () -> {
                 opened.start();
+                totalSplits = opened.totalSplits().orElse(-1);
                 return null;
             });
         } catch (PipeForgeException e) {
@@ -466,6 +471,11 @@ public final class JobMaster {
                     "handle a split request", e -> e.handleSplitRequest(subtask));
             case ReaderMessage.Custom custom -> callEnumerator(
                     "handle a reader event", e -> e.handleReaderEvent(subtask, custom.event()));
+                // only splits the reader was given count
+            case ReaderMessage.SplitsFinished done -> {
+                Set<String> owned = owners.getOrDefault(subtask, Set.of());
+                done.splitIds().stream().filter(owned::contains).forEach(finishedSplits::add);
+            }
         }
     }
 
@@ -674,6 +684,7 @@ public final class JobMaster {
         try {
             onEnumerator(operation, () -> {
                 action.run(current);
+                totalSplits = current.totalSplits().orElse(-1);
                 return null;
             });
         } catch (PipeForgeException e) {
@@ -870,7 +881,7 @@ public final class JobMaster {
     /**
      * A split and where it is.
      *
-     * @param finished whether its reader has finished, so that the split was read
+     * @param finished whether the split was read: its reader reported it, or the reader finished
      */
     public record SplitView(String node, String split, int subtask, boolean finished) {}
 
@@ -886,7 +897,8 @@ public final class JobMaster {
         String node = sourceVertex.head().id();
         splitOwners().forEach((reader, owned) -> owned.stream()
                 .sorted()
-                .forEach(split -> splits.add(new SplitView(node, split, reader, finished.contains(reader)))));
+                .forEach(split -> splits.add(new SplitView(
+                        node, split, reader, finished.contains(reader) || finishedSplits.contains(split)))));
         return splits;
     }
 
@@ -980,17 +992,23 @@ public final class JobMaster {
         return attempt(readerTask(subtask));
     }
 
-    /** Gives the aggregator the splits assigned, and those of readers that have finished. */
+    /**
+     * Gives the aggregator the splits in all (those the enumerator makes, once it says, else those
+     * assigned so far) and the splits read: reported by their readers, or of readers that finished.
+     */
     private void countSplits() {
         int assigned = 0;
         int finished = 0;
         for (Map.Entry<Integer, Set<String>> owned : owners.entrySet()) {
             assigned += owned.getValue().size();
-            if (states.get(readerTask(owned.getKey())) == TaskState.FINISHED) {
-                finished += owned.getValue().size();
+            boolean readerDone = states.get(readerTask(owned.getKey())) == TaskState.FINISHED;
+            for (String split : owned.getValue()) {
+                if (readerDone || finishedSplits.contains(split)) {
+                    finished++;
+                }
             }
         }
-        aggregator.splits(assigned, finished);
+        aggregator.splits(Math.max(assigned, totalSplits), finished);
     }
 
     /** Publishes the current metrics; runs once per metrics interval while the job runs. */

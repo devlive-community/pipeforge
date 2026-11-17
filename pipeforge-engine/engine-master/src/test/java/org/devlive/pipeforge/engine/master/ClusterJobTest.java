@@ -218,6 +218,35 @@ class ClusterJobTest {
     }
 
     @Test
+    void splitsCountAsReadWhenTheirReadersSayAndTheTotalComesFromTheEnumerator() throws Exception {
+        String probe = Probe.create();
+        JobMaster job = start(
+                TestConnectors.job(probe, "rows: 600, splits: 6, pause-after-splits: 2", "", "", 1),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults());
+        assertThat(Probe.get(probe).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+        // the reader runs on, but has read two splits: they count before the reader finishes
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (job.handle().metrics().splitsFinished() < 2) {
+            assertThat(System.nanoTime()).as("two splits counted as read").isLessThan(deadline);
+            Thread.sleep(20);
+        }
+        assertThat(job.handle().metrics().splitsFinished()).isEqualTo(2);
+        assertThat(job.handle().metrics().splitsAssigned())
+                .as("the enumerator's total, not the splits assigned so far")
+                .isEqualTo(6);
+        // the reader paused before asking for its third split: two assigned, both read
+        assertThat(job.splits()).hasSize(2).allMatch(JobMaster.SplitView::finished);
+
+        Probe.get(probe).release.countDown();
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertThat(result.metrics().splitsFinished()).isEqualTo(6);
+        assertThat(result.metrics().splitsAssigned()).isEqualTo(6);
+        awaitSlotsBack();
+    }
+
+    @Test
     void runsAJobOnEveryWorkerAndGivesTheSlotsBack() throws Exception {
         String probe = Probe.create();
         JobResult result =

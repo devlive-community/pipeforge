@@ -205,6 +205,7 @@ field pipeforge.rpc.v1.ReaderEvent 3 node_id string
 field pipeforge.rpc.v1.ReaderEvent 4 sequence int64
 field pipeforge.rpc.v1.ReaderEvent 5 split_request pipeforge.rpc.v1.SplitRequest oneof event
 field pipeforge.rpc.v1.ReaderEvent 6 custom pipeforge.rpc.v1.Versioned oneof event
+field pipeforge.rpc.v1.ReaderEvent 7 splits_finished pipeforge.rpc.v1.SplitsFinished oneof event
 field pipeforge.rpc.v1.RegisterWorkerRequest 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.RegisterWorkerRequest 10 previous_worker_id string
 field pipeforge.rpc.v1.RegisterWorkerRequest 2 engine_version string
@@ -260,6 +261,7 @@ field pipeforge.rpc.v1.SplitInfo 4 state pipeforge.rpc.v1.SplitState
 field pipeforge.rpc.v1.SplitProgress 1 split_id string
 field pipeforge.rpc.v1.SplitProgress 2 rows int64
 field pipeforge.rpc.v1.SplitProgress 3 finished bool
+field pipeforge.rpc.v1.SplitsFinished 1 split_ids repeated string
 field pipeforge.rpc.v1.SubmitJobRequest 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.SubmitJobRequest 2 job_id string
 field pipeforge.rpc.v1.SubmitJobRequest 3 run_id string
@@ -413,6 +415,7 @@ message pipeforge.rpc.v1.SlotStatus
 message pipeforge.rpc.v1.SplitInfo
 message pipeforge.rpc.v1.SplitProgress
 message pipeforge.rpc.v1.SplitRequest
+message pipeforge.rpc.v1.SplitsFinished
 message pipeforge.rpc.v1.SubmitJobRequest
 message pipeforge.rpc.v1.SubmitJobRequest.VariablesEntry
 message pipeforge.rpc.v1.SubmitJobResponse
