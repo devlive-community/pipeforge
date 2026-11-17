@@ -127,3 +127,13 @@ test("shows the cluster with its workers", async ({ page }) => {
   await expect(page.getByRole("img", { name: "Slots of worker-1: 7 of 8 in use" })).toBeVisible();
   await expect(page.getByText("Late")).toBeVisible();
 });
+
+test("dry-runs the job in the editor", async ({ page }) => {
+  await page.goto("/editor");
+  await expect(page.getByText("Valid", { exact: true })).toBeVisible();
+  const request = page.waitForRequest((r) => r.url().endsWith("/api/v1/jobs/preview"));
+  await page.getByRole("button", { name: "Dry run", exact: true }).click();
+  expect(JSON.parse((await request).postData() ?? "{}")).not.toHaveProperty("node");
+  await expect(page.getByRole("table", { name: "Rows of demo.orders" })).toBeVisible();
+  await expect(page.getByText("Stopped at the row limit")).toBeVisible();
+});

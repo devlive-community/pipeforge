@@ -90,6 +90,13 @@ const PAGES: Shot[] = [
     click: { button: { "en-US": "amount_cents, DECIMAL(14, 2)", "zh-CN": "amount_cents，DECIMAL(14, 2)" } },
   },
   {
+    name: "job-editor-preview",
+    path: "/editor",
+    ready: { "en-US": "Valid", "zh-CN": "合法" },
+    draft: EXAMPLE_JOB,
+    click: { button: { "en-US": "Dry run", "zh-CN": "试运行" }, then: "Margaret" },
+  },
+  {
     name: "job-editor-problem",
     path: "/editor",
     ready: { "en-US": "1 problem(s)", "zh-CN": "1 个问题" },

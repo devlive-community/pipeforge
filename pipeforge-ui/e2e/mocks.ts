@@ -461,6 +461,31 @@ function taskLog(url: URL) {
   return { text: text && !text.endsWith("\n") ? `${text}\n` : text, offset: TASK_LOG.length, eof: false };
 }
 
+/** The rows of the example job: a dry run stops at 100 rows of demo.orders. */
+function preview(body: string) {
+  const request = JSON.parse(body) as { node?: string };
+  const names = ["Ada", "Grace", "Linus", null, "Margaret", "Ken", "Barbara", "Dennis"];
+  const rows = names.map((name, i) => [i + 1, name, i === 5 ? null : ((i * 37.5 + 12.25) % 400).toFixed(2)]);
+  return {
+    node: request.node ?? "print",
+    outcome: "LIMIT",
+    elapsedMs: 184,
+    rowsRead: 100,
+    tables: [
+      {
+        table: "demo.orders",
+        columns: [
+          { name: "id", type: "INT64" },
+          { name: "name", type: "STRING(20)" },
+          { name: "amount", type: "DECIMAL(10, 2)" },
+        ],
+        rows,
+        truncated: true,
+      },
+    ],
+  };
+}
+
 /** A cluster of three workers with eight slots each; the running run holds 12 of them. */
 function cluster() {
   const GiB = 1024 ** 3;
@@ -545,6 +570,7 @@ export const SERVER: Record<string, unknown> = {
   "/api/v1/jobs/schema": JOB_SCHEMA,
   "/api/v1/jobs/validate": validate,
   "/api/v1/explain": explain,
+  "/api/v1/jobs/preview": (body: string) => preview(body),
 };
 
 /**

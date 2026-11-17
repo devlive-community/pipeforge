@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MappingEditor } from "@/features/field-mapping/MappingEditor";
+import { api } from "@/api/client";
 import { useJobSchema } from "@/api/queries";
 import { useT } from "@/i18n";
 import { CodeEditor } from "@/ui/CodeEditor";
@@ -32,6 +33,7 @@ import {
 import { suggest, yamlContext } from "./completion";
 import { EXAMPLE_JOB } from "./example";
 import { PlanView } from "./PlanView";
+import { DRY_RUN, PreviewPanel, type PreviewState } from "./PreviewPanel";
 import { ProblemList } from "./ProblemList";
 import { diagnosticsOf, problemsOf } from "./problems";
 import { readSchema } from "./schema";
@@ -60,6 +62,9 @@ export function JobEditorPage() {
   const [resultsOpen, setResultsOpen] = useState(false);
   const [view, setView] = useState("yaml");
   const [focusedLine, setFocusedLine] = useState<{ number: number } | null>(null);
+  const [previewNode, setPreviewNode] = useState(DRY_RUN);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const previewing = useRef(0);
 
   useLayoutEffect(() => {
     if (focusedLine) editor.current?.focusLine(focusedLine.number);
@@ -137,6 +142,21 @@ export function JobEditorPage() {
     setResultsOpen(true);
   }
 
+  const canPreview = definition.trim() !== "" && Boolean(validation.data?.valid);
+  /** Runs a preview of `node` (or a dry run) on the server; a later preview replaces an earlier one. */
+  async function runPreview(node: string) {
+    const ticket = ++previewing.current;
+    setPreviewNode(node);
+    openResult("preview");
+    setPreview({ node, definition, pending: true });
+    try {
+      const result = await api.previewJob({ definition, ...(node === DRY_RUN ? {} : { node }) });
+      if (ticket === previewing.current) setPreview({ node, definition, result, pending: false });
+    } catch (error) {
+      if (ticket === previewing.current) setPreview({ node, definition, error: error as Error, pending: false });
+    }
+  }
+
   return (
     <div className="editor-workspace">
       <header className="editor-heading">
@@ -149,6 +169,9 @@ export function JobEditorPage() {
           <FileButton accept=".yaml,.yml,.json" onFile={(_, text) => setDefinition(text)}>
             {t("editor.import")}
           </FileButton>
+          <Button icon="play" disabled={!canPreview} onClick={() => void runPreview(DRY_RUN)}>
+            {t("editor.preview.dryRun")}
+          </Button>
           <Button icon="download" onClick={() => download(`${name}.yaml`, definition)}>
             {t("editor.export")}
           </Button>
@@ -205,6 +228,8 @@ export function JobEditorPage() {
                     labels={{ zoomIn: t("editor.zoomIn"), zoomOut: t("editor.zoomOut"), fit: t("editor.fit") }}
                     onSelect={(id) => {
                       const selected = structure.find((n) => n.id === id);
+                      // a source or transform becomes what the preview shows; running it stays a choice
+                      if (selected && selected.kind !== "sink") setPreviewNode(id);
                       if (selected?.type === "field-mapper") {
                         setChosenMapper(id);
                         openResult("mapping");
@@ -224,7 +249,8 @@ export function JobEditorPage() {
         <Tabs
           className={cx(
             "editor-results border-t border-border",
-            resultsOpen && (activeTab === "mapping" ? "editor-results-mapping" : "editor-results-open"),
+            resultsOpen &&
+              (activeTab === "mapping" || activeTab === "preview" ? "editor-results-mapping" : "editor-results-open"),
           )}
           collapsed={!resultsOpen}
           panelAction={(panelId) => (
@@ -302,6 +328,21 @@ export function JobEditorPage() {
                   },
                 ]
               : []),
+            {
+              id: "preview",
+              label: t("editor.preview.tab"),
+              content: (
+                <PreviewPanel
+                  structure={structure}
+                  definition={definition}
+                  node={previewNode}
+                  onNode={setPreviewNode}
+                  onRun={() => void runPreview(previewNode)}
+                  state={preview}
+                  canRun={canPreview}
+                />
+              ),
+            },
             {
               id: "text",
               label: t("editor.text"),

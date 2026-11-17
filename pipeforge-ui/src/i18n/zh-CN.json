@@ -131,7 +131,29 @@
     "warnings": "警告",
     "nodeLabel": "{id}，{kind} {type}",
     "nodeError": "{id}，{kind} {type}，有问题",
-    "hint": "提示：{hint}"
+    "hint": "提示：{hint}",
+    "preview": {
+      "tab": "预览",
+      "dryRun": "试运行",
+      "node": "{id}（{type}）",
+      "what": "预览对象",
+      "run": "运行",
+      "invalid": "请先修复作业中的问题。",
+      "hint": "试运行可以查看将要到达 Sink 的数据；也可以选择一个 Source 或 Transform 查看它输出的数据。作业在服务端以并行度 1 运行，不写入任何数据。",
+      "running": "正在服务端运行作业，最多需要 30 秒…",
+      "failed": "无法运行预览：{message}",
+      "stale": "作业在这次预览之后已修改；重新运行即可查看当前作业的数据。",
+      "summary": "{elapsed} 内读取 {rows} 行",
+      "caption": "{table} 的数据",
+      "noRows": "没有数据",
+      "truncated": "前 {count} 行。",
+      "outcomes": {
+        "COMPLETE": "已读完",
+        "LIMIT": "已达到行数上限",
+        "TIMEOUT": "已超时",
+        "FAILED": "失败"
+      }
+    }
   },
   "runs": {
     "title": "运行",

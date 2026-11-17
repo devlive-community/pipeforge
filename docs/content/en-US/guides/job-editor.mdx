@@ -63,6 +63,23 @@ and variables, the nodes with their plugins, parallelism and inputs, the options
 where every value comes from, and the tables each node produces. The **Text** tab shows the same
 plan as text. See [plan and explain](../concepts/plan-and-explain) for what it contains.
 
+## Dry run and data preview
+
+**Dry run** in the toolbar runs the job in the server and shows the rows that would reach its
+sinks, without writing them anywhere: the sinks are replaced and not even planned. To see what one
+node produces instead, open the **Preview** tab, choose a source or transform (choosing a node in
+the graph does the same) and press **Run**.
+
+<Screenshot name="job-editor-preview" alt="A dry run of the example job with its first rows" />
+
+The job runs at parallelism 1 in the server's own process, with the server's plugins and its access
+to the sources, until 100 rows of a table were read, the sources were read to the end, or 30
+seconds passed. The tab shows how it ended, how many rows were read in how long, and the first rows
+of every table with its columns and types; `NULL` stands for missing values. When the job fails,
+its error code and message take the place of the rows. A preview of an earlier version of the job
+is marked once you change the definition. Both need a job without problems. See [previews and dry
+runs](../operations/server#previews-and-dry-runs) for the limits on the server.
+
 ## The graph
 
 The graph shows the nodes from left to right in the order data flows, and follows the definition
@@ -83,3 +100,4 @@ but it is not shared with other browsers.
 | "The job cannot be checked" | The server does not answer; check that it is running |
 | A plugin is not installed (`PF-PLUG-0001`) | Install it into the server's plugin directory, see [server](../operations/server) |
 | No completion for options | Completion needs the node's `type` written in block style; options come from the installed plugins |
+| A dry run cannot connect to a source | The server reads the sources from its own host; it needs the same network access and drivers as a worker |

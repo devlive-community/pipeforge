@@ -131,7 +131,29 @@
     "warnings": "Warnings",
     "nodeLabel": "{id}, {kind} {type}",
     "nodeError": "{id}, {kind} {type}, has a problem",
-    "hint": "Hint: {hint}"
+    "hint": "Hint: {hint}",
+    "preview": {
+      "tab": "Preview",
+      "dryRun": "Dry run",
+      "node": "{id} ({type})",
+      "what": "What to preview",
+      "run": "Run",
+      "invalid": "Fix the problems of the job first.",
+      "hint": "Run a dry run to see the rows that would reach the sinks, or choose a source or transform to see its rows. The job runs in the server at parallelism 1 and writes nothing.",
+      "running": "Running the job in the server; this takes at most 30 seconds…",
+      "failed": "The preview cannot run: {message}",
+      "stale": "The job changed since this preview; run it again to see the rows of the current job.",
+      "summary": "{rows} rows read in {elapsed}",
+      "caption": "Rows of {table}",
+      "noRows": "No rows",
+      "truncated": "The first {count} rows.",
+      "outcomes": {
+        "COMPLETE": "Read to the end",
+        "LIMIT": "Stopped at the row limit",
+        "TIMEOUT": "Timed out",
+        "FAILED": "Failed"
+      }
+    }
   },
   "runs": {
     "title": "Runs",
