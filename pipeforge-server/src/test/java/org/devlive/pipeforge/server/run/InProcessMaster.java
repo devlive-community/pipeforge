@@ -42,6 +42,10 @@ final class InProcessMaster implements AutoCloseable {
     private Dispatcher dispatcher;
     private Server server;
     private final PluginManager plugins;
+    /** The workers of the cluster; tests register their own. */
+    final org.devlive.pipeforge.engine.master.ResourceManager manager =
+            new org.devlive.pipeforge.engine.master.ResourceManager(
+                    org.devlive.pipeforge.engine.master.ResourceManager.Settings.DEFAULTS);
     /** The task logs of the worker. */
     final org.devlive.pipeforge.engine.worker.log.LogService logs;
 
@@ -72,7 +76,7 @@ final class InProcessMaster implements AutoCloseable {
                 100);
         try {
             server = InProcessServerBuilder.forName(name)
-                    .addService(new DispatcherService(dispatcher))
+                    .addService(new DispatcherService(dispatcher, manager::workers))
                     .build()
                     .start();
         } catch (IOException e) {

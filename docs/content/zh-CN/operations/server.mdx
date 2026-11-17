@@ -118,6 +118,9 @@ QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
 因此 Master 忘记该运行之后两者仍然可以查看。只要 Master 还保留该运行，`/splits` 列出分片及其读取器，`/tasks` 列出 Task 及其所在的 Worker。
 `/logs` 经 Master 从 Task 所在的 Worker 读取日志，服务端不需要访问 Worker。跟踪日志时，从上一次返回的 `offset` 再次读取，直到 `eof`。
 
+`GET /api/v1/cluster` 显示 Master 所看到的集群：Master 的版本和启动时间，以及每个已注册 Worker 的地址、标签、资源组、CPU 和内存、
+各个 Slot 及占用它的作业、正在运行的 Task 和距离最近一次心跳的时间，并给出整个集群的 Slot 使用率。没有 Master 或无法连接 Master 时返回 503。
+
 ## 安全
 
 服务目前还没有认证，因此只监听回环接口。不要把 `server.address` 设置为公网接口；如果其他人需要访问，请在前面放一个带认证的反向代理。

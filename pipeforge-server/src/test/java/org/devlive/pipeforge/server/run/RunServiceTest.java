@@ -169,4 +169,14 @@ class RunServiceTest {
         assertThat(runs.find("old").orElseThrow().status()).isEqualTo(RunState.FAILED);
         assertThat(runs.find("running").orElseThrow().error().code()).isEqualTo(ErrorCode.RUN_LOST.id());
     }
+
+    @Test
+    void withoutAMasterTheClusterIsUnavailable() {
+        assertThatThrownBy(() -> MasterClient.none().cluster())
+                .isInstanceOfSatisfying(
+                        PipeForgeException.class, e -> assertThat(e.code()).isEqualTo(ErrorCode.MASTER_NOT_CONFIGURED));
+        ClusterView empty = new StubMaster().cluster();
+        assertThat(empty.slots()).isZero();
+        assertThat(empty.usage()).isZero();
+    }
 }

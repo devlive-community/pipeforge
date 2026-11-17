@@ -148,6 +148,46 @@ public final class GrpcMasterClient implements MasterClient {
     }
 
     @Override
+    public ClusterView cluster() {
+        org.devlive.pipeforge.engine.rpc.proto.ClusterStatus status;
+        try {
+            status = call().getCluster(org.devlive.pipeforge.engine.rpc.proto.ClusterRequest.newBuilder()
+                    .setHeader(header())
+                    .build());
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, address);
+        }
+        List<ClusterView.Worker> workers = status.getWorkersList().stream()
+                .map(w -> new ClusterView.Worker(
+                        w.getWorkerId(),
+                        w.getEngineVersion(),
+                        w.getRpcAddress(),
+                        w.getDataAddress(),
+                        w.getLabelsMap(),
+                        w.getResourceGroup(),
+                        w.getResources().getCpuCores(),
+                        w.getResources().getTaskHeapBytes(),
+                        w.getResources().getNetworkBytes(),
+                        w.getResources().getManagedBytes(),
+                        w.getSlotsList().stream()
+                                .map(s -> new ClusterView.Slot(
+                                        s.getIndex(),
+                                        s.getAllocated(),
+                                        s.getJobId().isEmpty() ? null : s.getJobId()))
+                                .toList(),
+                        w.getTasksRunning(),
+                        w.getSinceHeartbeatMs()))
+                .toList();
+        return ClusterView.of(
+                new ClusterView.Master(
+                        address,
+                        status.getEngineVersion(),
+                        status.getProtocolVersion(),
+                        Instant.ofEpochMilli(status.getStartedMs())),
+                workers);
+    }
+
+    @Override
     public Optional<String> analysis(String runId) {
         return known(() -> call().analyze(request(runId)).getJson());
     }

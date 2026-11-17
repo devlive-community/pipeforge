@@ -32,6 +32,7 @@ export type MetricSample = Schemas["Sample"];
 export type RunSplit = Schemas["Split"];
 export type RunTask = Schemas["Task"];
 export type LogChunk = Schemas["LogChunk"];
+export type ClusterView = Schemas["ClusterView"];
 
 /** Which part of a task's log to read. */
 export interface LogQuery {
@@ -125,6 +126,7 @@ export function createClient(options: ClientOptions = {}) {
     submitRun: (body: SubmitRequest) => unwrap(raw.POST("/api/v1/runs", { body })),
     listRuns: (query: RunQuery = {}) => unwrap(raw.GET("/api/v1/runs", { params: { query } })),
     getRun: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}", { params: { path: { id } } })),
+    getCluster: () => unwrap(raw.GET("/api/v1/cluster")),
     getRunMetrics: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/metrics", { params: { path: { id } } })),
     getRunMetricsHistory: (id: string, since?: string) =>
       unwrap(raw.GET("/api/v1/runs/{id}/metrics/history", { params: { path: { id }, query: since ? { since } : {} } })),

@@ -73,6 +73,13 @@ public interface MasterClient extends AutoCloseable {
     /** The metrics of a run now; empty when the master does not know it. */
     Optional<RunMetrics> metrics(String runId);
 
+    /**
+     * The master and its workers.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0008} when the master cannot be reached
+     */
+    ClusterView cluster();
+
     /** The run analysis as JSON (design 29); empty when the master does not know the run. */
     Optional<String> analysis(String runId);
 
@@ -114,6 +121,11 @@ public interface MasterClient extends AutoCloseable {
 
             @Override
             public Optional<RunMetrics> metrics(String runId) {
+                throw missing();
+            }
+
+            @Override
+            public ClusterView cluster() {
                 throw missing();
             }
 

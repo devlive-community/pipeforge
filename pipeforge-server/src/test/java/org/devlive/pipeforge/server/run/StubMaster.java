@@ -34,6 +34,11 @@ class StubMaster implements MasterClient {
     }
 
     @Override
+    public ClusterView cluster() {
+        return ClusterView.of(new ClusterView.Master(address(), "test", "1.0", java.time.Instant.EPOCH), List.of());
+    }
+
+    @Override
     public Optional<String> analysis(String runId) {
         return Optional.empty();
     }

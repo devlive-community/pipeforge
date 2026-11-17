@@ -12,6 +12,9 @@
     "url" : "/"
   } ],
   "tags" : [ {
+    "description" : "The master and the workers of the cluster",
+    "name" : "cluster"
+  }, {
     "description" : "Error code registry",
     "name" : "errors"
   }, {
@@ -31,6 +34,60 @@
     "name" : "system"
   } ],
   "paths" : {
+    "/api/v1/cluster" : {
+      "get" : {
+        "description" : "The master and every registered worker with its slots, labels, resources and last heartbeat, and how many slots runs hold. HTTP 503 without a master or when it cannot be reached.",
+        "operationId" : "getCluster",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClusterView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get the cluster",
+        "tags" : [ "cluster" ],
+        "x-zh-CN" : {
+          "description" : "Master 以及每个已注册的 Worker：Slot、标签、资源和最近一次心跳，以及运行占用的 Slot 数。没有 Master 或无法连接 Master 时返回 HTTP 503。",
+          "summary" : "查看集群"
+        }
+      }
+    },
     "/api/v1/components/{type}/{identifier}" : {
       "get" : {
         "description" : "The options of a source, transform or sink: types, defaults, requirements and the rules between them.",
@@ -1366,6 +1423,32 @@
           }
         }
       },
+      "ClusterView" : {
+        "type" : "object",
+        "properties" : {
+          "master" : {
+            "$ref" : "#/components/schemas/Master"
+          },
+          "slots" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "slotsUsed" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "usage" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "workers" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Worker"
+            }
+          }
+        }
+      },
       "Column" : {
         "type" : "object",
         "properties" : {
@@ -1827,6 +1910,24 @@
           }
         }
       },
+      "Master" : {
+        "type" : "object",
+        "properties" : {
+          "address" : {
+            "type" : "string"
+          },
+          "protocol" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      },
       "Node" : {
         "type" : "object",
         "properties" : {
@@ -2215,6 +2316,21 @@
           }
         }
       },
+      "Slot" : {
+        "type" : "object",
+        "properties" : {
+          "allocated" : {
+            "type" : "boolean"
+          },
+          "index" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "job" : {
+            "type" : "string"
+          }
+        }
+      },
       "Split" : {
         "type" : "object",
         "properties" : {
@@ -2363,6 +2479,62 @@
           },
           "java" : {
             "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Worker" : {
+        "type" : "object",
+        "properties" : {
+          "cpuCores" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "dataAddress" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "labels" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "managedBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "networkBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "resourceGroup" : {
+            "type" : "string"
+          },
+          "rpcAddress" : {
+            "type" : "string"
+          },
+          "sinceHeartbeatMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "slots" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Slot"
+            }
+          },
+          "taskHeapBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tasksRunning" : {
+            "type" : "integer",
+            "format" : "int32"
           },
           "version" : {
             "type" : "string"

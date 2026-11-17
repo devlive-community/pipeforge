@@ -314,4 +314,33 @@ class RunApiTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PF-CLUS-0012"));
     }
+
+    @Test
+    void showsTheMasterAndItsWorkersWithTheirSlots() throws Exception {
+        String id = master.manager
+                .register(new org.devlive.pipeforge.engine.master.ResourceManager.WorkerSpec(
+                        "0.1.0",
+                        "w1:6124",
+                        "w1:6125",
+                        new org.devlive.pipeforge.engine.master.ResourceManager.Resources(8, 4L << 30, 0, 0),
+                        4,
+                        java.util.Map.of("zone", "a"),
+                        "default",
+                        new byte[32],
+                        null))
+                .workerId();
+        master.manager.reserve(
+                new org.devlive.pipeforge.engine.master.ResourceManager.FreeSlot(id, "w1:6124", "w1:6125", 0),
+                "orders",
+                "alloc-1");
+        String cluster = getJson("/api/v1/cluster");
+        assertThat((String) JsonPath.read(cluster, "$.master.address")).isEqualTo("in-process");
+        assertThat((String) JsonPath.read(cluster, "$.master.protocol")).isEqualTo("1.0");
+        assertThat((String) JsonPath.read(cluster, "$.workers[0].labels.zone")).isEqualTo("a");
+        assertThat((Integer) JsonPath.read(cluster, "$.workers[0].cpuCores")).isEqualTo(8);
+        assertThat((String) JsonPath.read(cluster, "$.workers[0].slots[0].job")).isEqualTo("orders");
+        assertThat((Integer) JsonPath.read(cluster, "$.slots")).isEqualTo(4);
+        assertThat((Integer) JsonPath.read(cluster, "$.slotsUsed")).isEqualTo(1);
+        assertThat((Double) JsonPath.read(cluster, "$.usage")).isEqualTo(0.25);
+    }
 }

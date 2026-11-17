@@ -142,6 +142,11 @@ the master has the run. `/logs` reads a task's log through the master from the w
 on; the server needs no access to the workers. To follow a log, read again from the `offset` of
 the previous answer until `eof`.
 
+`GET /api/v1/cluster` shows the cluster as the master sees it: the master's version and start time,
+and every registered worker with its addresses, labels, resource group, cores and memory, its slots
+with the job that holds each, its running tasks and the time since its last heartbeat, with the
+slot usage of the whole cluster. Without a master, or when it cannot be reached, it answers 503.
+
 ## Security
 
 The server has no authentication yet, so it only listens on the loopback interface. Do not set

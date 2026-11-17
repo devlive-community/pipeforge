@@ -9,6 +9,26 @@
 // Regenerate with: pnpm --filter @pipeforge/client generate
 
 export interface paths {
+    "/api/v1/cluster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the cluster
+         * @description The master and every registered worker with its slots, labels, resources and last heartbeat, and how many slots runs hold. HTTP 503 without a master or when it cannot be reached.
+         */
+        get: operations["getCluster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/components/{type}/{identifier}": {
         parameters: {
             query?: never;
@@ -380,6 +400,16 @@ export interface components {
         CancelRequest: {
             reason?: string;
         };
+        ClusterView: {
+            master?: components["schemas"]["Master"];
+            /** Format: int32 */
+            slots?: number;
+            /** Format: int32 */
+            slotsUsed?: number;
+            /** Format: double */
+            usage?: number;
+            workers?: components["schemas"]["Worker"][];
+        };
         Column: {
             comment?: string;
             name?: string;
@@ -536,6 +566,13 @@ export interface components {
             offset?: number;
             text?: string;
         };
+        Master: {
+            address?: string;
+            protocol?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            version?: string;
+        };
         Node: {
             boundedness?: string;
             id?: string;
@@ -681,6 +718,12 @@ export interface components {
             /** Format: int64 */
             rowsWritten?: number;
         };
+        Slot: {
+            allocated?: boolean;
+            /** Format: int32 */
+            index?: number;
+            job?: string;
+        };
         Split: {
             node?: string;
             split?: string;
@@ -736,6 +779,29 @@ export interface components {
             java?: string;
             version?: string;
         };
+        Worker: {
+            /** Format: int32 */
+            cpuCores?: number;
+            dataAddress?: string;
+            id?: string;
+            labels?: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            managedBytes?: number;
+            /** Format: int64 */
+            networkBytes?: number;
+            resourceGroup?: string;
+            rpcAddress?: string;
+            /** Format: int64 */
+            sinceHeartbeatMs?: number;
+            slots?: components["schemas"]["Slot"][];
+            /** Format: int64 */
+            taskHeapBytes?: number;
+            /** Format: int32 */
+            tasksRunning?: number;
+            version?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -745,6 +811,53 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterView"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
     getComponent: {
         parameters: {
             query?: {
