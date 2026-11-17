@@ -8,6 +8,7 @@
   "nav": {
     "overview": "概览",
     "jobEditor": "作业编辑器",
+    "runs": "运行",
     "plugins": "插件",
     "functions": "函数",
     "errors": "错误码"
@@ -24,7 +25,6 @@
     "workflowHint": "用 YAML 编写作业，检查配置，并查看数据如何流经各个节点。",
     "workflowAction": "打开作业编辑器",
     "resources": "已安装的资源",
-
     "title": "概览",
     "description": "当前连接的服务以及服务上安装的内容。",
     "server": "服务",
@@ -56,7 +56,6 @@
     "view": "编辑器视图",
     "showResults": "展开结果",
     "hideResults": "收起结果",
-
     "graphEmpty": "添加数据源后即可查看作业拓扑。",
     "title": "作业编辑器",
     "description": "用 YAML 编写作业；输入时实时校验，作业合法后显示计划。",
@@ -132,6 +131,45 @@
     "nodeLabel": "{id}，{kind} {type}",
     "nodeError": "{id}，{kind} {type}，有问题",
     "hint": "提示：{hint}"
+  },
+  "runs": {
+    "title": "运行",
+    "description": "作业在集群上的每一次运行，最新的在最前。页面打开期间每两秒刷新一次。",
+    "filter": "状态",
+    "job": "作业名称",
+    "jobPlaceholder": "全部作业",
+    "groups": {
+      "all": "全部",
+      "active": "进行中",
+      "succeeded": "成功",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "states": {
+      "QUEUE": "排队中",
+      "RUNNING": "运行中",
+      "SUCCESS": "成功",
+      "FAILED": "失败",
+      "CANCELLING": "取消中",
+      "CANCELLED": "已取消",
+      "TIMEOUT": "超时"
+    },
+    "columns": {
+      "job": "作业",
+      "state": "状态",
+      "submitted": "提交时间",
+      "duration": "耗时",
+      "read": "读取",
+      "written": "写入",
+      "error": "错误"
+    },
+    "caption": "作业的运行",
+    "none": "还没有运行",
+    "noneHint": "作业提交到集群后会出现在这里，例如通过 POST /api/v1/runs 提交。",
+    "noneFiltered": "没有符合筛选条件的运行。",
+    "previous": "上一页",
+    "next": "下一页",
+    "failed": "无法加载运行：{message}"
   },
   "plugins": {
     "title": "插件",

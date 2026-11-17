@@ -10,6 +10,7 @@ import { ErrorCodesPage } from "@/features/errors/ErrorCodesPage";
 import { NotFoundPage } from "@/features/not-found/NotFoundPage";
 import { OverviewPage } from "@/features/overview/OverviewPage";
 import { PluginsPage } from "@/features/plugins/PluginsPage";
+import { RunsPage } from "@/features/runs/RunsPage";
 import { LoadingPanel } from "@/ui/LoadingPanel";
 import { Shell } from "./Shell";
 
@@ -26,6 +27,7 @@ export const ROUTES: RouteObject[] = [
         // The editor brings CodeMirror; load it only when the page is opened.
         lazy: async () => ({ Component: (await import("@/features/job-editor/JobEditorPage")).JobEditorPage }),
       },
+      { path: "runs", element: <RunsPage /> },
       { path: "plugins", element: <PluginsPage /> },
       {
         path: "functions",

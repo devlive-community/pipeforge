@@ -5,6 +5,7 @@
  * project root for full license text.
  */
 
+import type { RunQuery } from "@pipeforge/client";
 import { useQuery } from "@tanstack/react-query";
 import { usePreferences } from "@/state/preferences";
 import { api } from "./client";
@@ -32,6 +33,19 @@ export function useErrorCodes() {
 }
 
 /** The JSON Schema of jobs with the options of the installed components; fetched once. */
+/** How often the run pages ask again; TanStack Query skips the polls while the page is hidden. */
+export const RUN_POLL_MS = 2000;
+
+export function useRuns(query: RunQuery) {
+  return useQuery({
+    queryKey: ["runs", query],
+    queryFn: () => api.listRuns(query),
+    refetchInterval: RUN_POLL_MS,
+    refetchIntervalInBackground: false,
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useJobSchema() {
   return useQuery({ queryKey: ["job-schema"], queryFn: api.getJobSchema, staleTime: Infinity });
 }

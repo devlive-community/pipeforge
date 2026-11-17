@@ -50,6 +50,7 @@ const PAGES: Shot[] = [
     ready: { "en-US": "88 functions", "zh-CN": "88 个函数" },
     click: { button: { "en-US": "Evaluate", "zh-CN": "求值" }, then: "PIPEFORGE pays 25.00" },
   },
+  { name: "runs", path: "/runs", ready: { "en-US": "users-sync", "zh-CN": "users-sync" } },
   { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
   {
     name: "field-mapping",

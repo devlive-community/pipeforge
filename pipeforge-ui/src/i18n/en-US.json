@@ -8,6 +8,7 @@
   "nav": {
     "overview": "Overview",
     "jobEditor": "Job editor",
+    "runs": "Runs",
     "plugins": "Plugins",
     "functions": "Functions",
     "errors": "Error codes"
@@ -24,7 +25,6 @@
     "workflowHint": "Build a job in YAML, check its configuration, and inspect how data flows through each stage.",
     "workflowAction": "Open job editor",
     "resources": "Installed resources",
-
     "title": "Overview",
     "description": "The server this UI is connected to and what is installed on it.",
     "server": "Server",
@@ -56,7 +56,6 @@
     "view": "Editor view",
     "showResults": "Show results",
     "hideResults": "Hide results",
-
     "graphEmpty": "Add a source to see the job topology.",
     "title": "Job editor",
     "description": "Write a job in YAML; it is validated while you type and its plan is shown once it is valid.",
@@ -132,6 +131,45 @@
     "nodeLabel": "{id}, {kind} {type}",
     "nodeError": "{id}, {kind} {type}, has a problem",
     "hint": "Hint: {hint}"
+  },
+  "runs": {
+    "title": "Runs",
+    "description": "Every run of a job on the cluster, newest first. The list follows the runs every two seconds while the page is open.",
+    "filter": "State",
+    "job": "Job name",
+    "jobPlaceholder": "All jobs",
+    "groups": {
+      "all": "All",
+      "active": "Active",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "states": {
+      "QUEUE": "Queued",
+      "RUNNING": "Running",
+      "SUCCESS": "Succeeded",
+      "FAILED": "Failed",
+      "CANCELLING": "Cancelling",
+      "CANCELLED": "Cancelled",
+      "TIMEOUT": "Timed out"
+    },
+    "columns": {
+      "job": "Job",
+      "state": "State",
+      "submitted": "Submitted",
+      "duration": "Duration",
+      "read": "Read",
+      "written": "Written",
+      "error": "Error"
+    },
+    "caption": "Runs of jobs",
+    "none": "No runs yet",
+    "noneHint": "Runs appear here once jobs are submitted to the cluster, for example with POST /api/v1/runs.",
+    "noneFiltered": "No run matches the filters.",
+    "previous": "Previous page",
+    "next": "Next page",
+    "failed": "The runs cannot be loaded: {message}"
   },
   "plugins": {
     "title": "Plugins",

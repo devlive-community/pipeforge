@@ -234,7 +234,61 @@ function evaluate(body: string, language: string) {
 }
 
 /** API answers of a server with two plugins, one rejected package, functions, error codes and jobs. */
+/** Runs of the cluster, the running one started 95 seconds ago so that its duration reads well. */
+export function runs() {
+  const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+  return {
+    runs: [
+      {
+        id: "3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01",
+        job: "orders-daily",
+        status: "RUNNING",
+        submittedAt: ago(97),
+        startedAt: ago(95),
+        updatedAt: ago(2),
+        rowsRead: 4_812_000,
+        rowsWritten: 4_790_500,
+      },
+      {
+        id: "a71c2e44-8d1f-4b6a-b2c9-0e5f3a9d8c12",
+        job: "users-sync",
+        status: "FAILED",
+        submittedAt: ago(3_720),
+        startedAt: ago(3_718),
+        endedAt: ago(3_655),
+        updatedAt: ago(3_655),
+        rowsRead: 120_000,
+        rowsWritten: 118_200,
+        error: { code: "PF-DATA-0009", message: "'out' refused a row: Data too long for column 'name'" },
+      },
+      {
+        id: "5e2b8f90-1c3d-4e7a-8b6f-2d9c0a1e4f23",
+        job: "orders-daily",
+        status: "SUCCESS",
+        submittedAt: ago(86_500),
+        startedAt: ago(86_498),
+        endedAt: ago(85_102),
+        updatedAt: ago(85_102),
+        rowsRead: 52_340_118,
+        rowsWritten: 52_340_118,
+      },
+      {
+        id: "c9a4d7e2-6f0b-4a1c-9e3d-7b2f5c8a0e34",
+        job: "inventory-snapshot",
+        status: "CANCELLED",
+        submittedAt: ago(172_900),
+        startedAt: ago(172_898),
+        endedAt: ago(172_100),
+        updatedAt: ago(172_100),
+        rowsRead: 3_100_000,
+        rowsWritten: 3_099_000,
+      },
+    ],
+  };
+}
+
 export const SERVER: Record<string, unknown> = {
+  "/api/v1/runs": () => runs(),
   "/api/v1/version": { version: "0.1.0", connectorApi: "0.1.0", java: "21.0.10+8-LTS" },
   "/api/v1/plugins": {
     plugins: [

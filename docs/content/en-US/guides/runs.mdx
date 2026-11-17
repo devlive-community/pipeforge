@@ -1,0 +1,42 @@
+---
+title: Runs
+description: Following the runs of jobs on the cluster in the Web UI - their state, duration and rows - and finding them by state and job.
+order: 22
+---
+
+The **Runs** page lists every run of a job on the cluster, newest first. A run is created when a job
+is submitted to the server (`POST /api/v1/runs`, see [running jobs on a
+cluster](../operations/server#running-jobs-on-a-cluster)). On a server without a master, a submitted
+run fails at once with `PF-CLUS-0015` and is listed as failed.
+
+<Screenshot name="runs" alt="The runs page" />
+
+## The list
+
+| Column | Meaning |
+|---|---|
+| Job | The name of the job, and the first characters of the run's ID |
+| State | **Queued**, **Running**, **Cancelling**, **Succeeded**, **Failed**, **Timed out** or **Cancelled** |
+| Submitted | When the run was submitted, in the time zone of the browser |
+| Duration | From the start to the end; while the run runs, up to now |
+| Read, Written | The rows the sources read and the sinks wrote, as of the last sample of the run's metrics (every 10 seconds by default), or a dash before the first one |
+| Error | The error code of a run that did not succeed; hover or focus it for the message, and look it up on the [error codes](./error-codes) page |
+
+The page asks the server again every two seconds while it is open, and stops while the browser tab
+is hidden, so a page left in the background costs nothing.
+
+## Finding runs
+
+Choose a state group above the list:
+
+| Group | States |
+|---|---|
+| All | Every run |
+| Active | Queued, Running, Cancelling |
+| Succeeded | Succeeded |
+| Failed | Failed, Timed out |
+| Cancelled | Cancelled |
+
+Type a job's name into the search field to see only its runs; the name must match exactly. Both
+filters are part of the address (`/runs?state=failed&job=orders-daily`), so a filtered list can be
+bookmarked and shared. A list longer than 50 runs has **Previous page** and **Next page** buttons.

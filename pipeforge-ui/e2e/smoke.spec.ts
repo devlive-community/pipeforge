@@ -82,3 +82,14 @@ test("is usable with the keyboard alone", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Language" })).toBeFocused();
 });
+
+test("lists the runs and filters them by state", async ({ page }) => {
+  await page.goto("/runs");
+  await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
+  await expect(page.getByText("users-sync")).toBeVisible();
+  await expect(page.getByText("PF-DATA-0009")).toBeVisible();
+  const request = page.waitForRequest((r) => r.url().includes("/api/v1/runs") && r.url().includes("status=FAILED"));
+  await page.getByRole("radio", { name: "Failed" }).click();
+  await request;
+  await expect(page).toHaveURL(/state=failed/);
+});
