@@ -44,6 +44,16 @@ public interface SinkUnderTest {
         return supportedTypes().contains(type.root());
     }
 
+    /**
+     * Whether the target system can hold {@code value} of {@code type}, which the type supports; by
+     * default every value. A system whose range is narrower than the logical type's, such as a
+     * database whose 32-bit float stops short of {@link Float#MAX_VALUE}, answers false for the
+     * values outside it, and the cases leave out the rows with such values.
+     */
+    default boolean holds(DataType type, Object value) {
+        return true;
+    }
+
     /** Rows of the large case of the {@code batch} group. */
     default int largeRowCount() {
         return 100_000;

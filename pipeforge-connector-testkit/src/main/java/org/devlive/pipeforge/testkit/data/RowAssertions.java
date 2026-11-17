@@ -6,6 +6,9 @@
  */
 package org.devlive.pipeforge.testkit.data;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -17,13 +20,17 @@ import java.util.Map;
 import java.util.TreeMap;
 import org.devlive.pipeforge.api.row.Row;
 import org.devlive.pipeforge.api.row.RowKind;
+import org.devlive.pipeforge.api.table.CatalogTable;
+import org.devlive.pipeforge.api.type.TypeRoot;
 import org.jspecify.annotations.Nullable;
 import org.opentest4j.AssertionFailedError;
 
 /**
  * Compares rows by value, in any order. Values are compared by meaning rather than by Java
  * identity: {@code 1.50} equals {@code 1.5} for decimals, byte arrays by content, maps regardless of
- * their order, nested rows by their fields. Floating point values must be exactly equal.
+ * their order, nested rows by their fields. Floating point values must be exactly equal. When the
+ * schema is given, the values of {@code JSON} columns are compared by content: {@code {"a":1}}
+ * equals {@code { "a": 1 }}, and the order of object members does not matter.
  */
 public final class RowAssertions {
 
@@ -37,10 +44,18 @@ public final class RowAssertions {
      * @param what what the rows are, for the message, e.g. "rows written by the sink"
      */
     public static void assertSameRows(String what, List<Row> expected, List<Row> actual) {
-        Map<String, Integer> missing = count(expected);
+        assertSameRows(what, null, expected, actual);
+    }
+
+    /**
+     * Fails unless {@code actual} holds the same rows as {@code expected}, each as many times, with
+     * the values of the {@code JSON} columns of {@code table} compared by content.
+     */
+    public static void assertSameRows(String what, @Nullable CatalogTable table, List<Row> expected, List<Row> actual) {
+        Map<String, Integer> missing = count(expected, table);
         Map<String, Integer> unexpected = new LinkedHashMap<>();
         for (Row row : actual) {
-            String key = canonical(row);
+            String key = canonical(row, table);
             Integer left = missing.get(key);
             if (left == null) {
                 unexpected.merge(key, 1, Integer::sum);
@@ -66,9 +81,18 @@ public final class RowAssertions {
 
     /** A string that is equal for two rows exactly when their kind and values are equal by meaning. */
     public static String canonical(Row row) {
+        return canonical(row, null);
+    }
+
+    /** {@link #canonical(Row)}, with the values of the {@code JSON} columns of {@code table} by content. */
+    public static String canonical(Row row, @Nullable CatalogTable table) {
         List<String> values = new ArrayList<>(row.arity());
         for (int i = 0; i < row.arity(); i++) {
-            values.add(canonical(row.get(i)));
+            Object value = row.get(i);
+            boolean json = table != null
+                    && i < table.columns().size()
+                    && table.columns().get(i).type().root() == TypeRoot.JSON;
+            values.add(json && value instanceof String text ? json(text) : canonical(value));
         }
         String kind = row.kind() == RowKind.INSERT ? "" : row.kind() + " ";
         return kind + "(" + String.join(", ", values) + ")";
@@ -117,10 +141,23 @@ public final class RowAssertions {
         return value.getClass().getSimpleName() + ":" + value;
     }
 
-    private static Map<String, Integer> count(List<Row> rows) {
+    /** A JSON text by content: parsed, with members sorted and numbers by value; as text when it is not JSON. */
+    static String json(String text) {
+        try {
+            return "json:" + canonical(JSON.readValue(text, Object.class));
+        } catch (JsonProcessingException e) {
+            return canonical(text);
+        }
+    }
+
+    private static final ObjectMapper JSON = new ObjectMapper()
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .enable(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS);
+
+    private static Map<String, Integer> count(List<Row> rows, @Nullable CatalogTable table) {
         Map<String, Integer> counts = new HashMap<>();
         for (Row row : rows) {
-            counts.merge(canonical(row), 1, Integer::sum);
+            counts.merge(canonical(row, table), 1, Integer::sum);
         }
         return counts;
     }

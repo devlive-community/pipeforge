@@ -98,6 +98,12 @@ public final class SourceGroups {
     public static TestRun read(
             TestkitEngine engine, SourceUnderTest source, TestTable table, int parallelism, Map<String, Object> extra)
             throws Exception {
+        return readHeld(engine, source, table.keeping(source::holds), parallelism, extra);
+    }
+
+    private static TestRun readHeld(
+            TestkitEngine engine, SourceUnderTest source, TestTable table, int parallelism, Map<String, Object> extra)
+            throws Exception {
         Map<String, Object> options = new LinkedHashMap<>(source.options(table));
         options.putAll(extra);
         String out = Datasets.output();
@@ -109,7 +115,7 @@ public final class SourceGroups {
             PlannedNode node = job.plan().node("src").orElseThrow();
             checkSchema(table.table(), node.outputTables());
             TestRun run = engine.run(job).requireSuccess().requireReconciled();
-            RowAssertions.assertSameRows("rows read by the source", table.rows(), Datasets.written(out));
+            RowAssertions.assertSameRows("rows read by the source", table.table(), table.rows(), Datasets.written(out));
             assertEquals(table.rows().size(), run.metrics().rowsRead(), "rowsRead");
             return run;
         } finally {

@@ -81,6 +81,11 @@ public final class SinkGroups {
     /** Writes {@code table} with the sink and checks the row counters and, when possible, what was written. */
     public static TestRun write(TestkitEngine engine, SinkUnderTest sink, TestTable table, int parallelism)
             throws Exception {
+        return writeHeld(engine, sink, table.keeping(sink::holds), parallelism);
+    }
+
+    private static TestRun writeHeld(TestkitEngine engine, SinkUnderTest sink, TestTable table, int parallelism)
+            throws Exception {
         String in = Datasets.input(table);
         Map<String, Object> options = sink.options(table);
         try {
@@ -92,7 +97,7 @@ public final class SinkGroups {
             assertEquals(table.rows().size(), run.metrics().rowsWritten(), "rowsWritten");
             Optional<List<Row>> written = sink.readBack(table, options);
             if (written.isPresent()) {
-                RowAssertions.assertSameRows("rows written by the sink", table.rows(), written.get());
+                RowAssertions.assertSameRows("rows written by the sink", table.table(), table.rows(), written.get());
             }
             return run;
         } finally {

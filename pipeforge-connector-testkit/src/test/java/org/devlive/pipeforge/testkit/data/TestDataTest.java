@@ -77,4 +77,17 @@ class TestDataTest {
     void namesTypesForTestNames() {
         assertThat(TestData.name(DataTypes.DECIMAL(10, 2).notNull())).isEqualTo("DECIMAL(10, 2)");
     }
+
+    @Test
+    void keepingLeavesOutTheRowsWithValuesTheSystemCannotHold() {
+        TestTable table = TestData.typeTable(org.devlive.pipeforge.api.type.DataTypes.FLOAT32());
+        TestTable kept = table.keeping((type, value) -> !(value instanceof Float f) || Math.abs(f) < Float.MAX_VALUE);
+        org.assertj.core.api.Assertions.assertThat(kept.rows())
+                .hasSize(table.rows().size() - 2);
+        org.assertj.core.api.Assertions.assertThat(kept.rows())
+                .as("NULL is always kept")
+                .anyMatch(r -> r.get(1) == null);
+        org.assertj.core.api.Assertions.assertThat(table.keeping((type, value) -> true))
+                .isSameAs(table);
+    }
 }

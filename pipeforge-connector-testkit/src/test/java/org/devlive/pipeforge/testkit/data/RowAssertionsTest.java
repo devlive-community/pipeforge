@@ -59,6 +59,33 @@ class RowAssertionsTest {
     }
 
     @Test
+    void comparesTheValuesOfJsonColumnsByContent() {
+        org.devlive.pipeforge.api.table.CatalogTable table = org.devlive.pipeforge.api.table.CatalogTable.of(
+                TestData.TABLE,
+                List.of(
+                        org.devlive.pipeforge.api.table.Column.of(
+                                "doc", org.devlive.pipeforge.api.type.DataTypes.JSON()),
+                        org.devlive.pipeforge.api.table.Column.of(
+                                "text", org.devlive.pipeforge.api.type.DataTypes.STRING())));
+        List<Row> expected =
+                List.of(GenericRow.of(TestData.TABLE, "{\"a\":[1,2.5,{\"b\":null}],\"c\":\"文字\"}", "{\"n\":1}"));
+        List<Row> normalized =
+                List.of(GenericRow.of(TestData.TABLE, "{\"c\": \"文字\", \"a\": [1, 2.50, {\"b\": null}]}", "{\"n\":1}"));
+        RowAssertions.assertSameRows("json", table, expected, normalized);
+
+        // other columns and rows without a schema compare as text
+        List<Row> spaced =
+                List.of(GenericRow.of(TestData.TABLE, "{\"a\":[1,2.5,{\"b\":null}],\"c\":\"文字\"}", "{\"n\": 1}"));
+        assertThatThrownBy(() -> RowAssertions.assertSameRows("json", table, expected, spaced))
+                .isInstanceOf(AssertionFailedError.class);
+        assertThatThrownBy(() -> RowAssertions.assertSameRows("json", expected, normalized))
+                .isInstanceOf(AssertionFailedError.class);
+        // an array is not an object, and text that is not JSON compares as text
+        assertThat(RowAssertions.json("[1]")).isNotEqualTo(RowAssertions.json("{\"0\":1}"));
+        assertThat(RowAssertions.json("not json")).isEqualTo("'not json'");
+    }
+
+    @Test
     void reportsMissingAndUnexpectedRowsWithCounts() {
         assertThatThrownBy(() -> RowAssertions.assertSameRows(
                         "rows written", List.of(row(1L), row(2L), row(2L)), List.of(row(1L), row(3L))))

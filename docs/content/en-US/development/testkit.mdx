@@ -69,6 +69,17 @@ order. `splitStrategies()` adds options per split strategy, e.g. `Map.of("by key
 "id"), "by size", Map.of("split-size", 1000))`; `largeRowCount()` sets the size of the large batch
 cases (100,000 by default).
 
+When the system supports a type but not its whole range, `holds(type, value)` says which values it
+can store, for sources and sinks alike. The cases leave out the rows with other values, so the
+connector never sees them. MySQL, for example, cannot store `Float.MAX_VALUE` in a `FLOAT`:
+
+```java
+@Override
+public boolean holds(DataType type, Object value) {
+    return !(value instanceof Float f) || Math.abs(f) <= 3.402823466e38f;
+}
+```
+
 ### A sink
 
 Implement `SinkUnderTest` and extend `SinkContract`. `options(table)` returns where the sink writes,
@@ -171,7 +182,9 @@ rows read by the source: expected 9 row(s) but got 8
 ```
 
 Values are compared by meaning: `1.50` equals `1.5` for decimals, byte arrays by content, maps in
-any order; floating point values must be exactly equal.
+any order; floating point values must be exactly equal. The contract groups also pass the schema, so
+the values of `JSON` columns are compared by content: a database that stores `{"a":1}` and returns
+`{"a": 1}` passes (`assertSameRows(what, table, expected, actual)`).
 
 ## Skipping a group
 
@@ -220,5 +233,5 @@ The pieces of the contracts can be used on their own:
 | `TestJob` | Builds a job from factory instances and plans it like any other job; `env(key, value)` sets an `env` option of the job, e.g. `env("dirty", Map.of("policy", "skip"))` |
 | `TestkitEngine` | Runs a `TestJob` on the local engine and returns a `TestRun` with the job result; `requireSuccess()` fails with the error, its hint and the run analysis |
 | `TestData` | Tables of every type, boundary values and rows generated from a seed |
-| `RowAssertions` | `assertSameRows(what, expected, actual)` |
+| `RowAssertions` | `assertSameRows(what, expected, actual)`, `assertSameRows(what, table, expected, actual)` |
 | `Datasets`, `TestkitConnectors` | The in-memory `testkit-rows` source (one table per data set, several with commas in `dataset`; `schema-change: true` adds a column after the first split) and `testkit-collect` sink |

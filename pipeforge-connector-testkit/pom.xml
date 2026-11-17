@@ -30,6 +30,11 @@
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
         </dependency>
+        <!-- compares JSON values by content -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
         <!-- A test library: plugins add the testkit with test scope and get JUnit through it. -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

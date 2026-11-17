@@ -65,6 +65,16 @@ Source 必须产出列名和类型根都相同的表，并读出全部行，顺�
 `Map.of("by key", Map.of("split-by", "id"), "by size", Map.of("split-size", 1000))`；`largeRowCount()` 设置 batch 用例组中大表的行数
 （默认 100,000）。
 
+如果系统支持某个类型、但不支持它的完整取值范围，用 `holds(type, value)` 说明能存储哪些值，Source 和 Sink 都适用。用例会去掉含有其他值的行，
+连接器不会收到这些行。例如 MySQL 的 `FLOAT` 存不下 `Float.MAX_VALUE`：
+
+```java
+@Override
+public boolean holds(DataType type, Object value) {
+    return !(value instanceof Float f) || Math.abs(f) <= 3.402823466e38f;
+}
+```
+
 ### Sink
 
 实现 `SinkUnderTest` 并继承 `SinkContract`。`options(table)` 返回 Sink 的写入位置，`readBack(table, options)` 返回它写入的内容：
@@ -158,7 +168,8 @@ rows read by the source: expected 9 row(s) but got 8
     (L8, 'x…')
 ```
 
-值按含义比较：小数 `1.50` 等于 `1.5`，字节数组按内容比较，Map 不区分顺序；浮点数必须完全相等。
+值按含义比较：小数 `1.50` 等于 `1.5`，字节数组按内容比较，Map 不区分顺序；浮点数必须完全相等。用例组还会传入表结构，
+因此 `JSON` 列的值按内容比较：数据库存入 `{"a":1}`、返回 `{"a": 1}` 也能通过（`assertSameRows(what, table, expected, actual)`）。
 
 ## 跳过用例组
 
@@ -203,5 +214,5 @@ PipeForge 的 CI 会用这两种方式运行仓库中的连接器。
 | `TestJob` | 用工厂实例构造作业，并像其他作业一样规划；`env(key, value)` 设置作业的 `env` 选项，例如 `env("dirty", Map.of("policy", "skip"))` |
 | `TestkitEngine` | 在本地引擎上运行 `TestJob`，返回带作业结果的 `TestRun`；`requireSuccess()` 失败时给出错误、排查建议和运行分析 |
 | `TestData` | 每种类型的表、边界值，以及由种子生成的行 |
-| `RowAssertions` | `assertSameRows(what, expected, actual)` |
+| `RowAssertions` | `assertSameRows(what, expected, actual)`, `assertSameRows(what, table, expected, actual)` |
 | `Datasets`、`TestkitConnectors` | 内存中的 `testkit-rows` Source（每个数据集一张表，`dataset` 中用逗号分隔可读取多个；`schema-change: true` 在第一个分片之后新增一列）和 `testkit-collect` Sink |
