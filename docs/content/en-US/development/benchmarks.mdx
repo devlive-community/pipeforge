@@ -49,7 +49,8 @@ process.
 | The run succeeded | yes |
 | PostgreSQL has as many rows as MySQL, the same sums of `id`, `amount` and `quantity`, as many notes and the same latest update | yes |
 | The server counted every row read and written | yes |
-| Every split was read, and split progress only grew while the run ran | yes |
+| Every split was read | yes |
+| Split progress followed the rows: the total was known from the first sample, the splits read only grew, and their share stayed with the share of rows read, give or take the splits being read | yes |
 | The read rates the server reported agree with the measured throughput within 30% (when the run was long enough to compare) | yes |
 | The run analysis concluded a bottleneck | yes |
 | At least 300,000 rows/s | only with `--enforce-target` |

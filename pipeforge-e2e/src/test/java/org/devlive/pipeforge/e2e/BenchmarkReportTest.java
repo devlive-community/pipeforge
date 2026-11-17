@@ -41,14 +41,42 @@ class BenchmarkReportTest {
                 });
     }
 
+    /** Samples at 0%, 50% and 100% of 32,000 rows in 32 splits read by 4 readers. */
+    static ArrayNode progress(int[] finished, int[] totals) {
+        ArrayNode timeline = Cluster.JSON.createArrayNode();
+        long[] read = {0, 16_000, 32_000};
+        for (int i = 0; i < finished.length; i++) {
+            timeline.addObject()
+                    .put("seconds", i * 5.0)
+                    .put("rowsRead", read[i])
+                    .put("splitsFinished", finished[i])
+                    .put("splitsTotal", totals[i]);
+        }
+        return timeline;
+    }
+
     @Test
-    void splitProgressMustOnlyGrow() {
-        assertThat(AcceptanceBenchmark.splitProgress(timeline(new double[] {1, 1, 1}, new int[] {0, 5, 32}))
-                        .passed())
-                .isTrue();
-        assertThat(AcceptanceBenchmark.splitProgress(timeline(new double[] {1, 1, 1}, new int[] {0, 5, 3}))
-                        .passed())
-                .isFalse();
+    void splitProgressMustFollowTheRows() {
+        int[] all = {32, 32, 32};
+        assertThat(AcceptanceBenchmark.splitProgress(progress(new int[] {0, 14, 32}, all), 32_000, 4))
+                .satisfies(check -> {
+                    assertThat(check.passed()).as(check.detail()).isTrue();
+                    assertThat(check.detail()).isEqualTo("3 sample(s), 32 split(s) from the first");
+                });
+        // half the rows read but no split counted: progress only at the end of the readers
+        assertThat(AcceptanceBenchmark.splitProgress(progress(new int[] {0, 0, 32}, all), 32_000, 4))
+                .satisfies(check -> {
+                    assertThat(check.passed()).isFalse();
+                    assertThat(check.detail()).isEqualTo("5 s: 0 of 32 splits read with 50% of the rows");
+                });
+        // the total grows as splits are handed out
+        assertThat(AcceptanceBenchmark.splitProgress(progress(new int[] {0, 14, 32}, new int[] {8, 28, 32}), 32_000, 4)
+                        .detail())
+                .contains("5 s: total 28, first 8");
+        // fewer splits read than before
+        assertThat(AcceptanceBenchmark.splitProgress(progress(new int[] {0, 16, 15}, all), 32_000, 4)
+                        .detail())
+                .contains("10 s: 15 read after 16");
     }
 
     @Test

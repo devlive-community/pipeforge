@@ -247,7 +247,7 @@ class AcceptanceBenchmark {
                 metrics.path("splitsFinished").asInt() + " of "
                         + metrics.path("splitsTotal").asInt(),
                 false));
-        checks.add(splitProgress(timeline));
+        checks.add(splitProgress(timeline, rows, parallelism));
         checks.add(rateAgreement(timeline, throughput));
         String kind = analysis.path("bottleneck").path("kind").asText();
         checks.add(new Check(
@@ -283,19 +283,49 @@ class AcceptanceBenchmark {
      */
     record Check(String name, boolean passed, String detail, boolean informational) {}
 
-    /** The splits read only grow, and reach the total. */
-    static Check splitProgress(ArrayNode timeline) {
+    /**
+     * Split progress matches the run: the total is known from the first sample, the splits read
+     * only grow, and their share stays with the share of rows read. The source splits on ranges of
+     * equal size, so at most one split per reader is being read: the share of splits read lies
+     * between the share of rows read less (parallelism + 1) splits and that share plus one split.
+     */
+    static Check splitProgress(ArrayNode timeline, long rows, int parallelism) {
         int last = -1;
-        boolean growing = true;
+        int total = -1;
+        List<String> problems = new ArrayList<>();
         for (JsonNode sample : timeline) {
             int finished = sample.path("splitsFinished").asInt();
-            growing &= finished >= last;
+            int splits = sample.path("splitsTotal").asInt();
+            double seconds = sample.path("seconds").asDouble();
+            if (total < 0) {
+                total = splits;
+            } else if (splits != total) {
+                problems.add(String.format(Locale.ROOT, "%.0f s: total %d, first %d", seconds, splits, total));
+            }
+            if (finished < last) {
+                problems.add(String.format(Locale.ROOT, "%.0f s: %d read after %d", seconds, finished, last));
+            }
             last = finished;
+            if (splits > 0) {
+                double share = (double) finished / splits;
+                double read = (double) sample.path("rowsRead").asLong() / rows;
+                if (share > read + 1.0 / splits || share < read - (parallelism + 1.0) / splits) {
+                    problems.add(String.format(
+                            Locale.ROOT,
+                            "%.0f s: %d of %d splits read with %.0f%% of the rows",
+                            seconds,
+                            finished,
+                            splits,
+                            read * 100));
+                }
+            }
         }
         return new Check(
-                "split progress only grows while the run runs",
-                growing,
-                timeline.size() + " sample(s), last " + last + " split(s) read",
+                "split progress follows the rows read",
+                problems.isEmpty(),
+                problems.isEmpty()
+                        ? timeline.size() + " sample(s), " + total + " split(s) from the first"
+                        : String.join("; ", problems),
                 false);
     }
 
