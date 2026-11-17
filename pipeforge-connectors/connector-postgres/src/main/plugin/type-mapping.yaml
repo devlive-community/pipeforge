@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# How the PostgreSQL source reads PostgreSQL types; the plugin page renders it.
+read:
+  - { external: boolean, logical: BOOLEAN }
+  - { external: smallint, logical: INT16 }
+  - { external: integer, logical: INT32 }
+  - { external: bigint, logical: INT64 }
+  - { external: real, logical: FLOAT32 }
+  - { external: double precision, logical: FLOAT64 }
+  - { external: "numeric(p, s), p ≤ 38", logical: "DECIMAL(p, s)" }
+  - { external: "numeric, numeric(p > 38, s)", logical: STRING, note: "exact text, including NaN; no DECIMAL holds it" }
+  - { external: "char(n), varchar(n)", logical: "STRING(n)" }
+  - { external: "text, user-defined enums", logical: STRING }
+  - { external: uuid, logical: "STRING(36)" }
+  - { external: "interval, money, inet, cidr, macaddr, bit, varbit, xml, timetz, tsvector", logical: STRING, note: "as PostgreSQL prints them" }
+  - { external: bytea, logical: BYTES }
+  - { external: date, logical: DATE }
+  - { external: "time(p)", logical: "TIME(p)" }
+  - { external: "timestamp(p)", logical: "TIMESTAMP(p)", note: "a local date and time, as stored" }
+  - { external: "timestamptz(p)", logical: "TIMESTAMP_LTZ(p)", note: "an instant, whatever the session's time zone" }
+  - { external: "json, jsonb", logical: JSON, note: "jsonb as PostgreSQL normalizes it: spacing and member order" }
+  - { external: "boolean[], smallint[], integer[], bigint[], real[], double precision[], text[], varchar[]", logical: "ARRAY(element)" }

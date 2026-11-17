@@ -141,6 +141,13 @@
         </dependency>
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>connector-postgres</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
             <artifactId>transform-field-mapper</artifactId>
             <version>${project.version}</version>
             <type>zip</type>

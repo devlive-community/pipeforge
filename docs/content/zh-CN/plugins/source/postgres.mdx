@@ -1,0 +1,158 @@
+---
+title: PostgreSQL Source
+description: 通过 JDBC 并行分片读取 PostgreSQL 表：一张表、一次读多张表，或者一个查询的结果。
+order: 30
+template: plugin
+---
+
+## 简介
+
+PostgreSQL Source（`type: jdbc-postgres`）通过 JDBC 读取 PostgreSQL 数据库中的表：一张表、名称匹配某个模式的所有表，或者一个查询的结果。
+它在有界作业中读取每张表的快照，按键范围切分成分片，由各个读取器共同领取，并以流式方式读取行，不会把整个结果放进内存。
+
+适用于把 PostgreSQL 的某个 Schema 或其中部分表复制到其他系统、每天把表装载到数据湖或数仓，或者把查询结果送入管道。
+实时读取变更（CDC）在后续里程碑提供。
+
+## 能力
+
+<PluginCapabilities plugin="postgres" component="source" />
+
+## 已验证版本
+
+<PluginVersions plugin="postgres" />
+
+## 快速开始
+
+```yaml
+version: 1
+name: orders-to-console
+source:
+  - id: orders
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/shop
+    username: reader
+    password: ${env:PG_PASSWORD}
+    table: public.orders
+sink:
+  - { id: out, type: console }
+```
+
+## 前置条件
+
+- **无需另外安装：** 插件自带 PostgreSQL JDBC 驱动（42.7，BSD-2-Clause）。
+- **网络连通**：Worker 以及规划作业的 Master 都能访问 PostgreSQL 端口。
+- **对 Schema 有 `USAGE`、对表有 `SELECT` 权限的用户。** 用户看不到的表不会被 `tables.include` 列出。
+
+## 数据源配置
+
+节点通过 `url`（其中包含数据库名）、`username` 和 `password` 连接。驱动属性写在 `jdbc.properties.<名称>` 中；以下两个属性在你没有设置时由插件设置：
+
+| 属性 | 取值 | 原因 |
+|---|---|---|
+| `reWriteBatchedInserts` | `true` | 供 Sink 使用：批次改写为多行插入 |
+| `stringtype` | `unspecified` | 文本参数采用列的类型，因此 `jsonb`、`uuid` 和枚举列可以接收文本 |
+
+会让驱动按名称加载类的属性（`socketFactory`、`socketFactoryArg`、`sslfactory`、`sslfactoryarg`、`sslhostnameverifier`、
+`sslpasswordcallback`、`authenticationPluginClassName`）以及会写文件的属性（`loggerFile`）是受控属性：设置它们会以 `PF-CONF-0003` 失败。
+TLS 通过常用的 `ssl`、`sslmode` 和 `sslrootcert` 属性配置。密码不会出现在日志、指标和导出的作业中。
+
+## 节点选项
+
+<PluginOptions plugin="postgres" component="source" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="postgres" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="postgres" />
+
+## 分片与并行
+
+- 表名是 URL 所指数据库中的 `schema.table`。
+- `split.mode: range`（默认）时，表按 `split.column` 切分；未设置时，如果主键是单个整数列则按主键切分。Source 读取该列的 `MIN` 和 `MAX`，
+  把范围切成 `split.count` 份（默认每个读取器四份）；列可为空时，另有一个分片读取 `NULL` 值。
+- 没有这样的列的表、`split.mode: none` 以及 `query` 都在一个分片中读取。
+- 使用 `tables.include` 时，每张表单独切分，所有表的分片共用一个队列。
+- 每个读取器保持一个连接，一次流式读取一个分片，每次往返读取 `fetch-size` 行，并且在事务中读取，这是驱动流式读取的要求。
+
+## 一致性语义
+
+每个分片是读取器事务中的一个独立查询，因此在表被写入期间，不同分片、不同读取器可能看到不同时刻的表；键在分片之间移动的行可能被读两次或者没有读到。
+需要精确复制时，请读取期间没有写入的表，或者读取从库。读取器从 checkpoint 恢复时，不会再次读取已完成的分片，正在读取的分片从头读取。
+
+## 示例
+
+### 读取一个 Schema 中除备份表以外的所有表
+
+```yaml
+version: 1
+name: public-copy
+source:
+  - id: public
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/shop
+    username: reader
+    password: ${env:PG_PASSWORD}
+    tables.include: ["public\\..*"]
+    tables.exclude: [".*_bak"]
+    split.count: 32
+    fetch-size: 5000
+sink:
+  - { id: out, type: console }
+```
+
+模式匹配完整的 `schema.table` 名称。系统 Schema `pg_catalog`、`pg_toast` 和 `information_schema` 永远不会被选中。
+
+### 通过 TLS 执行一个查询
+
+```yaml
+version: 1
+name: paid-orders
+source:
+  - id: paid
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/shop
+    username: reader
+    password: ${env:PG_PASSWORD}
+    jdbc.properties.sslmode: verify-full
+    query: SELECT id, customer_id, amount FROM public.orders WHERE status = 'PAID'
+sink:
+  - { id: out, type: console }
+```
+
+查询结果的列构成一张以节点命名的表（`paid`），在一个分片中读取。
+
+## 指标
+
+Source 报告标准的 Source 指标：`rowsRead`、读取速率，以及已分配和已完成的分片数。值无法读取的行计为坏行，按作业的
+[脏数据策略](../../concepts/dirty-data)处理。
+
+## 性能与调优
+
+- 把 `split.count` 设为并行度的几倍，并在有索引的整数列上切分；每个分片都是该列上的范围查询。
+- `fetch-size`（默认 1,000）决定每次往返的行数；内存随它增长，而不随表的大小增长。
+- 每个读取器在读取期间保持一个打开的事务，在繁忙的主库上会阻碍 `VACUUM`；长时间的复制请读取从库。
+
+## 错误码与排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-CONN-0001` | 无法连接服务器、连接被拒绝，或者数据库不存在 |
+| `PF-AUTH-0001` | 用户名或密码错误，或者 `pg_hba.conf` 不允许 Worker 所在主机连接 |
+| `PF-META-0001` | 表不存在，或者用户看不到它 |
+| `PF-CONF-0002` … `tables.include` … `no table of … matches` | 没有可见的表匹配这些模式；模式需要匹配完整的 `schema.table` 名称 |
+| `PF-CONF-0003` | 在 `jdbc.properties.*` 中设置了受控的驱动属性 |
+| `PF-DATA-0001` | 某列的类型插件无法读取，例如几何类型或其他元素类型的数组 |
+
+## 已知限制
+
+- 只支持有界读取；CDC 在后续里程碑提供。
+- 分区表通过其分区读取；`tables.include` 不会列出父表。
+- 无法读取几何类型、范围类型，以及布尔、数字和文本以外元素的数组。
+- 尚未验证 PostgreSQL 12、13、15 和 17。
+
+## 变更记录
+
+<PluginChangelog plugin="postgres" />

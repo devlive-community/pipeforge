@@ -77,8 +77,10 @@
   docs: ["plugins/source/mysql", "plugins/sink/mysql"]
 - paths: ["pipeforge-connectors/connector-mysql/src/main/java/org/devlive/pipeforge/connector/mysql/MySqlDialect.java"]
   docs: ["development/jdbc-dialects"]
-# until the PostgreSQL source and sink have their pages
+# The PostgreSQL plugin; its dialect is also described with the other dialects.
 - paths: ["pipeforge-connectors/connector-postgres/**"]
+  docs: ["plugins/source/postgres"]
+- paths: ["pipeforge-connectors/connector-postgres/src/main/java/org/devlive/pipeforge/connector/postgres/PostgresDialect.java"]
   docs: ["development/jdbc-dialects"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]

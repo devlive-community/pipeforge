@@ -19,8 +19,9 @@
     <artifactId>connector-postgres</artifactId>
     <name>PipeForge Connector PostgreSQL</name>
     <description>
-        D02 PostgreSQL dialect on the JDBC connector base; the PostgreSQL source and sink of the plugin
-        follow. Verified against PostgreSQL 14 and 16.
+        D02 PostgreSQL dialect on the JDBC connector base and S04 PostgreSQL source; the sink follows.
+        Verified against PostgreSQL 14 and 16. The PostgreSQL JDBC driver (BSD-2-Clause) is shipped in
+        the plugin.
     </description>
 
     <dependencies>
@@ -30,9 +31,16 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- BSD-2-Clause: shipped in the plugin's lib/, so no driver plugin is needed -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-connector-testkit</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -46,4 +54,13 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.devlive.pipeforge</groupId>
+                <artifactId>pipeforge-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>
