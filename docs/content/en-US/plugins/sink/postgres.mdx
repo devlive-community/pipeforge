@@ -35,7 +35,10 @@ source:
   - id: src
     type: fake
     table: public.orders
-    columns: [id INT64 NOT NULL, amount DECIMAL(10, 2), note STRING(20)]
+    columns:
+      - id INT64 NOT NULL
+      - amount DECIMAL(10, 2)
+      - note STRING(20)
     primary-key: [id]
     rows: 10000
 sink:
@@ -100,7 +103,9 @@ source:
   - id: src
     type: fake
     table: crm.people
-    columns: [id INT64 NOT NULL, name STRING]
+    columns:
+      - id INT64 NOT NULL
+      - name STRING
     primary-key: [id]
 sink:
   - id: out

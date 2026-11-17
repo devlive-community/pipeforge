@@ -31,7 +31,9 @@ source:
   - id: src
     type: fake
     table: PUBLIC.ORDERS
-    columns: [ID INT64 NOT NULL, AMOUNT DECIMAL(10, 2)]
+    columns:
+      - ID INT64 NOT NULL
+      - AMOUNT DECIMAL(10, 2)
     primary-key: [ID]
 sink:
   - id: out
@@ -89,7 +91,9 @@ source:
   - id: src
     type: fake
     table: PUBLIC.PEOPLE
-    columns: [ID INT64 NOT NULL, NAME STRING]
+    columns:
+      - ID INT64 NOT NULL
+      - NAME STRING
     primary-key: [ID]
 sink:
   - id: out
