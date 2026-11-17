@@ -96,6 +96,8 @@ public final class TestComponents {
     static final Option<String> FROM = Options.key("from").stringType().noDefault();
     static final Option<String> TO = Options.key("to").stringType().noDefault();
     static final Option<Integer> LIMIT = Options.key("limit").intType().defaultValue(20);
+    static final Option<java.time.Duration> FLUSH_INTERVAL =
+            Options.key("flush-interval").durationType().defaultValue(java.time.Duration.ofSeconds(1));
     static final Option<String> EXPR = Options.key("expr").stringType().noDefault();
     public static final Option<List<Map<String, String>>> NOTES =
             Options.key("notes").objectListType().noDefault();
@@ -319,7 +321,7 @@ public final class TestComponents {
 
             @Override
             public OptionRule optionRule() {
-                return OptionRule.builder().optional(LIMIT).build();
+                return OptionRule.builder().optional(LIMIT, FLUSH_INTERVAL).build();
             }
 
             @Override

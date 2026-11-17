@@ -53,6 +53,11 @@ class PlanExplainerTest {
         assertThat(src.path("outputTables").get(0).path("primaryKey").get(0).asText())
                 .isEqualTo("id");
         assertThat(json.toString()).doesNotContain("s3cret").contains("******");
+        JsonNode out = json.path("nodes").get(2);
+        assertThat(out.path("options").findValuesAsText("key")).contains("flush-interval");
+        assertThat(out.path("options").toString())
+                .as("a duration as ISO-8601 text")
+                .contains("\"PT1S\"");
         assertThat(PlanExplainer.text(plan("linear"))).doesNotContain("s3cret");
     }
 

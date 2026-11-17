@@ -203,6 +203,28 @@ public final class PlanExplainer {
         return changes.isEmpty() ? "(unchanged)" : "(" + String.join(", ", changes) + ")";
     }
 
+    /**
+     * An option value as JSON holds it: durations and other time values as their ISO-8601 text
+     * ({@code PT1S}), which the options accept back; lists and maps element by element.
+     */
+    static @Nullable Object plain(@Nullable Object value) {
+        if (value instanceof List<?> list) {
+            List<Object> items = new ArrayList<>();
+            list.forEach(item -> items.add(plain(item)));
+            return items;
+        }
+        if (value instanceof java.util.Map<?, ?> map) {
+            java.util.Map<Object, Object> entries = new java.util.LinkedHashMap<>();
+            map.forEach((k, v) -> entries.put(k, plain(v)));
+            return entries;
+        }
+        if (value instanceof java.time.temporal.TemporalAmount
+                || value instanceof java.time.temporal.TemporalAccessor) {
+            return value.toString();
+        }
+        return value;
+    }
+
     private static String display(@Nullable Object value) {
         if (value instanceof List<?> list) {
             List<String> items = new ArrayList<>();
@@ -278,7 +300,7 @@ public final class PlanExplainer {
                             : node.boundedness().name().toLowerCase(Locale.ROOT),
                     node.options().stream()
                             .map(o -> new ExplainDocument.Option(
-                                    o.key(), o.value(), o.origin().id(), o.sensitive()))
+                                    o.key(), plain(o.value()), o.origin().id(), o.sensitive()))
                             .toList(),
                     node.inputTables().stream().map(PlanExplainer::table).toList(),
                     node.outputTables().stream().map(PlanExplainer::table).toList()));

@@ -147,6 +147,12 @@
           "value" : 5,
           "origin" : "node",
           "sensitive" : false
+        },
+        {
+          "key" : "flush-interval",
+          "value" : "PT1S",
+          "origin" : "default",
+          "sensitive" : false
         }
       ],
       "inputTables" : [
@@ -202,6 +208,12 @@
           "key" : "limit",
           "value" : 50,
           "origin" : "cluster",
+          "sensitive" : false
+        },
+        {
+          "key" : "flush-interval",
+          "value" : "PT1S",
+          "origin" : "default",
           "sensitive" : false
         }
       ],

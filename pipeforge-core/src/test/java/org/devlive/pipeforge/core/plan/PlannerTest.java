@@ -100,10 +100,18 @@ class PlannerTest {
                         new PlannedOption("table", "demo.orders", OptionOrigin.CLUSTER, false),
                         new PlannedOption("fetch-size", 500L, OptionOrigin.ENV, false));
         PlannedNode out = TestComponents.plan(LINEAR, cluster).node("out").orElseThrow();
-        assertThat(out.options()).containsExactly(new PlannedOption("limit", 5, OptionOrigin.CLUSTER, false));
+        assertThat(out.options())
+                .containsExactly(
+                        new PlannedOption("limit", 5, OptionOrigin.CLUSTER, false),
+                        new PlannedOption(
+                                "flush-interval", java.time.Duration.ofSeconds(1), OptionOrigin.DEFAULT, false));
 
         PlannedNode defaults = plan(LINEAR).node("out").orElseThrow();
-        assertThat(defaults.options()).containsExactly(new PlannedOption("limit", 20, OptionOrigin.DEFAULT, false));
+        assertThat(defaults.options())
+                .containsExactly(
+                        new PlannedOption("limit", 20, OptionOrigin.DEFAULT, false),
+                        new PlannedOption(
+                                "flush-interval", java.time.Duration.ofSeconds(1), OptionOrigin.DEFAULT, false));
     }
 
     @Test
