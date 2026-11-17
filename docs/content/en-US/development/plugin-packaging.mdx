@@ -100,7 +100,10 @@ plugin sees only its own class loader.
 Code that several plugins share lives in a **library module** without a descriptor and without the
 `pipeforge-maven-plugin` goals, such as `connector-jdbc` (see [JDBC dialects](./jdbc-dialects)). A
 plugin depends on it with the default scope, so the library is in the plugin's `lib/` like any other
-dependency, and each plugin gets its own copy in its own class loader.
+dependency, and each plugin gets its own copy in its own class loader. A library module holds the
+resource `META-INF/pipeforge/library.properties`; the dependency check accepts PipeForge modules with
+that marker in compile or runtime scope, and still refuses every other PipeForge module except
+`pipeforge-api` and `pipeforge-common` (provided).
 
 ## Goals
 

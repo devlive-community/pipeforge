@@ -91,7 +91,8 @@ PipeForge 的 Source、Transform 和 Sink 插件是 `pipeforge-connectors` 的�
 
 多个插件共用的代码放在**库模块**中，它没有描述文件，也不使用 `pipeforge-maven-plugin` 的目标，例如 `connector-jdbc`（见
 [JDBC 方言](./jdbc-dialects)）。插件以默认范围依赖它，因此库和其他依赖一样位于插件的 `lib/` 中，每个插件在自己的类加载器里
-有一份自己的副本。
+有一份自己的副本。库模块包含资源 `META-INF/pipeforge/library.properties`；依赖检查接受带有该标记、范围为 compile 或 runtime 的
+PipeForge 模块，其他 PipeForge 模块仍然一律拒绝，`pipeforge-api` 和 `pipeforge-common`（provided）除外。
 
 ## 目标
 

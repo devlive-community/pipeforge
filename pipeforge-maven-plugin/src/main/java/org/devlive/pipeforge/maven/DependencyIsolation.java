@@ -20,6 +20,8 @@ import org.devlive.pipeforge.plugin.check.ClassCheck;
  * <ul>
  *   <li>{@code pipeforge-api} and {@code pipeforge-common} are {@code provided}: the engine supplies
  *       them parent-first, so a plugin never ships its own copy;
+ *   <li>a library module, shared connector code marked with {@value #LIBRARY_MARKER}, is shipped in
+ *       the plugin's {@code lib/}, so it has compile or runtime scope;
  *   <li>no other PipeForge module (engine, core, plugin loader) may be a dependency;
  *   <li>no jar may contain PipeForge API or engine classes (for example a shaded copy);
  *   <li>no class may exist twice among the plugin's own classes and runtime jars.
@@ -31,6 +33,9 @@ public final class DependencyIsolation {
     public static final Set<String> PROVIDED_MODULES = Set.of("pipeforge-api", "pipeforge-common");
 
     static final String GROUP = "org.devlive.pipeforge";
+
+    /** The resource that marks a PipeForge module as a library plugins ship, e.g. {@code connector-jdbc}. */
+    public static final String LIBRARY_MARKER = "META-INF/pipeforge/library.properties";
 
     /** A resolved dependency. */
     public record Dependency(String groupId, String artifactId, String version, String scope, File file) {
@@ -56,12 +61,34 @@ public final class DependencyIsolation {
                 if (!"provided".equals(dependency.scope())) {
                     problems.add(dependency.coordinate() + " must have provided scope; the engine supplies it");
                 }
+            } else if (library(dependency)) {
+                if (!dependency.shipped()) {
+                    problems.add(
+                            dependency.coordinate()
+                                    + " is a library module; it must have compile or runtime scope so that the plugin ships it");
+                }
             } else {
                 problems.add("plugins must not depend on " + dependency.coordinate()
-                        + "; only pipeforge-api (provided) is allowed");
+                        + "; only pipeforge-api, pipeforge-common (provided) and library modules are allowed");
             }
         }
         return problems;
+    }
+
+    /** Whether the dependency, a jar or a classes directory, holds {@link #LIBRARY_MARKER}. */
+    static boolean library(Dependency dependency) {
+        File file = dependency.file();
+        if (file == null || !file.exists()) {
+            return false;
+        }
+        if (file.isDirectory()) {
+            return new File(file, LIBRARY_MARKER).isFile();
+        }
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(file)) {
+            return zip.getEntry(LIBRARY_MARKER) != null;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /** The dependencies that go into the plugin package. */

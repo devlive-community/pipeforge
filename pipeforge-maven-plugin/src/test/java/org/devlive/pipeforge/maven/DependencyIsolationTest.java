@@ -51,7 +51,34 @@ class DependencyIsolationTest {
         assertThat(problems)
                 .containsExactly(
                         "org.devlive.pipeforge:pipeforge-common:1.0 must have provided scope; the engine supplies it",
-                        "plugins must not depend on org.devlive.pipeforge:engine-worker:1.0; only pipeforge-api (provided) is allowed");
+                        "plugins must not depend on org.devlive.pipeforge:engine-worker:1.0; only pipeforge-api, pipeforge-common (provided) and library modules are allowed");
+    }
+
+    @Test
+    void shipsLibraryModulesAsJarsOrClassesDirectories(@TempDir Path dir) throws IOException {
+        File jar = jar(
+                dir,
+                "connector-jdbc.jar",
+                DependencyIsolation.LIBRARY_MARKER,
+                "org/devlive/pipeforge/connector/jdbc/A.class");
+        Path classes = Files.createDirectories(dir.resolve("classes/META-INF/pipeforge"));
+        Files.writeString(classes.resolve("library.properties"), "library=true\n");
+        File plain = jar(dir, "connector-fake.jar", "org/devlive/pipeforge/connector/fake/A.class");
+        List<String> problems = DependencyIsolation.checkScopes(List.of(
+                dep("org.devlive.pipeforge", "connector-jdbc", "compile", jar),
+                dep(
+                        "org.devlive.pipeforge",
+                        "connector-base",
+                        "runtime",
+                        dir.resolve("classes").toFile()),
+                dep("org.devlive.pipeforge", "connector-jdbc-provided", "provided", jar),
+                dep("org.devlive.pipeforge", "connector-fake", "compile", plain),
+                dep("org.devlive.pipeforge", "connector-gone", "compile", new File("missing.jar"))));
+        assertThat(problems)
+                .containsExactly(
+                        "org.devlive.pipeforge:connector-jdbc-provided:1.0 is a library module; it must have compile or runtime scope so that the plugin ships it",
+                        "plugins must not depend on org.devlive.pipeforge:connector-fake:1.0; only pipeforge-api, pipeforge-common (provided) and library modules are allowed",
+                        "plugins must not depend on org.devlive.pipeforge:connector-gone:1.0; only pipeforge-api, pipeforge-common (provided) and library modules are allowed");
     }
 
     @Test
