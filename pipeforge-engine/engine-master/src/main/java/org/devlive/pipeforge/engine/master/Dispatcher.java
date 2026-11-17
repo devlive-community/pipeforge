@@ -289,6 +289,29 @@ public final class Dispatcher implements AutoCloseable {
         return find(runId).master.analysis();
     }
 
+    /**
+     * The splits of a run, with their readers.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
+     */
+    public List<JobMaster.SplitView> splits(String runId) {
+        return find(runId).master.splits();
+    }
+
+    /**
+     * Reads the log of a task of a run from its worker, also after the run ended.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run, {@link
+     *     ErrorCode#TASK_LOG_NOT_FOUND} for a task the run does not have
+     */
+    public java.util.concurrent.CompletableFuture<Void> readLog(
+            String runId,
+            org.devlive.pipeforge.engine.rpc.ExecutionAttemptId task,
+            org.devlive.pipeforge.engine.rpc.LogQuery query,
+            java.util.function.Consumer<org.devlive.pipeforge.engine.rpc.LogChunk> chunks) {
+        return find(runId).master.readLog(task, query, chunks);
+    }
+
     /** The runs in {@code states} (all when empty), newest first, at most {@code limit}. */
     public synchronized List<RunStatus> list(Set<State> states, int limit) {
         List<RunStatus> list = new ArrayList<>();

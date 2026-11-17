@@ -35,9 +35,9 @@ import org.devlive.pipeforge.engine.rpc.proto.SubmitJobResponse;
 import org.devlive.pipeforge.engine.rpc.proto.TaskStatus;
 
 /**
- * The gRPC side of the {@link Dispatcher}: the server submits, cancels, lists and watches runs
- * (protocol specification, section 2.1). Run analysis comes with the analysis of runs and answers
- * {@code UNIMPLEMENTED} until then.
+ * The gRPC side of the {@link Dispatcher}: the server submits, cancels, lists and watches runs,
+ * reads their analysis and splits, and reads task logs, which the master forwards from the worker
+ * the task ran on (protocol specification, section 2.1).
  */
 public final class DispatcherService extends DispatcherServiceGrpc.DispatcherServiceImplBase {
 
@@ -118,6 +118,66 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 response.setNextPageToken(String.valueOf(offset + limit));
             }
             return response.build();
+        });
+    }
+
+    @Override
+    public void listSplits(
+            JobRequest request, StreamObserver<org.devlive.pipeforge.engine.rpc.proto.ListSplitsResponse> observer) {
+        answer(observer, request.getHeader(), () -> {
+            var response = org.devlive.pipeforge.engine.rpc.proto.ListSplitsResponse.newBuilder();
+            for (JobMaster.SplitView split : dispatcher.splits(request.getRunId())) {
+                response.addSplits(org.devlive.pipeforge.engine.rpc.proto.SplitInfo.newBuilder()
+                        .setNodeId(split.node())
+                        .setSplitId(split.split())
+                        .setSubtask(split.subtask())
+                        .setState(
+                                split.finished()
+                                        ? org.devlive.pipeforge.engine.rpc.proto.SplitState.SPLIT_STATE_FINISHED
+                                        : org.devlive.pipeforge.engine.rpc.proto.SplitState.SPLIT_STATE_ASSIGNED));
+            }
+            return response.build();
+        });
+    }
+
+    /** Streams the log of a task from its worker; a client that stops following cancels the read. */
+    @Override
+    public void readTaskLog(
+            org.devlive.pipeforge.engine.rpc.proto.ReadTaskLogRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.LogChunk> observer) {
+        java.util.concurrent.CompletableFuture<Void> reading;
+        try {
+            Headers.checkVersion(request.getHeader());
+            var query = new org.devlive.pipeforge.engine.rpc.LogQuery(
+                    request.getOffset(),
+                    request.getMaxBytes(),
+                    request.getContains(),
+                    request.getMinLevel().isEmpty() ? null : request.getMinLevel(),
+                    request.getFollow());
+            reading =
+                    dispatcher.readLog(request.getRunId(), ProtoMapping.fromProto(request.getTask()), query, chunk -> {
+                        synchronized (observer) {
+                            observer.onNext(ProtoMapping.toProto(chunk));
+                        }
+                    });
+        } catch (RuntimeException e) {
+            reading = java.util.concurrent.CompletableFuture.failedFuture(e);
+        }
+        java.util.concurrent.CompletableFuture<Void> running = reading;
+        if (observer instanceof io.grpc.stub.ServerCallStreamObserver<?> call) {
+            call.setOnCancelHandler(() -> running.cancel(false));
+        }
+        running.whenComplete((ignored, error) -> {
+            synchronized (observer) {
+                if (error instanceof java.util.concurrent.CancellationException) {
+                    return;
+                }
+                if (error != null) {
+                    observer.onError(RpcErrors.toStatus(error));
+                } else {
+                    observer.onCompleted();
+                }
+            }
         });
     }
 

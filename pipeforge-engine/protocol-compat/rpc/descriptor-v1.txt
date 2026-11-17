@@ -4,6 +4,7 @@
 enum pipeforge.rpc.v1.NodeKind
 enum pipeforge.rpc.v1.Partitioning.Kind
 enum pipeforge.rpc.v1.RunState
+enum pipeforge.rpc.v1.SplitState
 enum pipeforge.rpc.v1.TaskState
 field pipeforge.rpc.v1.AddSplits 1 splits repeated pipeforge.rpc.v1.Versioned
 field pipeforge.rpc.v1.BlobChunk 1 offset int64
@@ -122,6 +123,7 @@ field pipeforge.rpc.v1.ListJobsRequest 3 limit int32
 field pipeforge.rpc.v1.ListJobsRequest 4 page_token string
 field pipeforge.rpc.v1.ListJobsResponse 1 jobs repeated pipeforge.rpc.v1.JobStatus
 field pipeforge.rpc.v1.ListJobsResponse 2 next_page_token string
+field pipeforge.rpc.v1.ListSplitsResponse 1 splits repeated pipeforge.rpc.v1.SplitInfo
 field pipeforge.rpc.v1.LogChunk 1 offset int64
 field pipeforge.rpc.v1.LogChunk 2 data bytes
 field pipeforge.rpc.v1.LogChunk 3 eof bool
@@ -184,6 +186,14 @@ field pipeforge.rpc.v1.ReadLogRequest 4 max_bytes int64
 field pipeforge.rpc.v1.ReadLogRequest 5 contains string
 field pipeforge.rpc.v1.ReadLogRequest 6 min_level string
 field pipeforge.rpc.v1.ReadLogRequest 7 follow bool
+field pipeforge.rpc.v1.ReadTaskLogRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.ReadTaskLogRequest 2 run_id string
+field pipeforge.rpc.v1.ReadTaskLogRequest 3 task pipeforge.rpc.v1.ExecutionAttemptId
+field pipeforge.rpc.v1.ReadTaskLogRequest 4 offset int64
+field pipeforge.rpc.v1.ReadTaskLogRequest 5 max_bytes int64
+field pipeforge.rpc.v1.ReadTaskLogRequest 6 contains string
+field pipeforge.rpc.v1.ReadTaskLogRequest 7 min_level string
+field pipeforge.rpc.v1.ReadTaskLogRequest 8 follow bool
 field pipeforge.rpc.v1.ReaderEvent 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.ReaderEvent 2 source pipeforge.rpc.v1.ExecutionAttemptId
 field pipeforge.rpc.v1.ReaderEvent 3 node_id string
@@ -238,6 +248,10 @@ field pipeforge.rpc.v1.SlotStatus 1 index int32
 field pipeforge.rpc.v1.SlotStatus 2 allocated bool
 field pipeforge.rpc.v1.SlotStatus 3 job_id string
 field pipeforge.rpc.v1.SlotStatus 4 allocation_id string
+field pipeforge.rpc.v1.SplitInfo 1 node_id string
+field pipeforge.rpc.v1.SplitInfo 2 split_id string
+field pipeforge.rpc.v1.SplitInfo 3 subtask int32
+field pipeforge.rpc.v1.SplitInfo 4 state pipeforge.rpc.v1.SplitState
 field pipeforge.rpc.v1.SplitProgress 1 split_id string
 field pipeforge.rpc.v1.SplitProgress 2 rows int64
 field pipeforge.rpc.v1.SplitProgress 3 finished bool
@@ -348,6 +362,7 @@ message pipeforge.rpc.v1.JobRequest
 message pipeforge.rpc.v1.JobStatus
 message pipeforge.rpc.v1.ListJobsRequest
 message pipeforge.rpc.v1.ListJobsResponse
+message pipeforge.rpc.v1.ListSplitsResponse
 message pipeforge.rpc.v1.LogChunk
 message pipeforge.rpc.v1.MetricsReport
 message pipeforge.rpc.v1.NoMoreSplits
@@ -360,6 +375,7 @@ message pipeforge.rpc.v1.Partitioning
 message pipeforge.rpc.v1.PluginRef
 message pipeforge.rpc.v1.RateLimitQuota
 message pipeforge.rpc.v1.ReadLogRequest
+message pipeforge.rpc.v1.ReadTaskLogRequest
 message pipeforge.rpc.v1.ReaderEvent
 message pipeforge.rpc.v1.RegisterWorkerRequest
 message pipeforge.rpc.v1.RegisterWorkerRequest.LabelsEntry
@@ -375,6 +391,7 @@ message pipeforge.rpc.v1.SecretBundle.ValuesEntry
 message pipeforge.rpc.v1.SlotReport
 message pipeforge.rpc.v1.SlotRequest
 message pipeforge.rpc.v1.SlotStatus
+message pipeforge.rpc.v1.SplitInfo
 message pipeforge.rpc.v1.SplitProgress
 message pipeforge.rpc.v1.SplitRequest
 message pipeforge.rpc.v1.SubmitJobRequest
@@ -397,6 +414,8 @@ rpc pipeforge.rpc.v1.DispatcherService.CancelJob pipeforge.rpc.v1.JobRequest -> 
 rpc pipeforge.rpc.v1.DispatcherService.GetJobMetrics pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobMetrics
 rpc pipeforge.rpc.v1.DispatcherService.GetJobStatus pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobStatus
 rpc pipeforge.rpc.v1.DispatcherService.ListJobs pipeforge.rpc.v1.ListJobsRequest -> pipeforge.rpc.v1.ListJobsResponse
+rpc pipeforge.rpc.v1.DispatcherService.ListSplits pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.ListSplitsResponse
+rpc pipeforge.rpc.v1.DispatcherService.ReadTaskLog pipeforge.rpc.v1.ReadTaskLogRequest -> stream pipeforge.rpc.v1.LogChunk
 rpc pipeforge.rpc.v1.DispatcherService.SubmitJob pipeforge.rpc.v1.SubmitJobRequest -> pipeforge.rpc.v1.SubmitJobResponse
 rpc pipeforge.rpc.v1.JobMasterService.ReportMetrics stream pipeforge.rpc.v1.MetricsReport -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.JobMasterService.SendReaderEvent pipeforge.rpc.v1.ReaderEvent -> pipeforge.rpc.v1.Ack
@@ -433,6 +452,9 @@ value pipeforge.rpc.v1.RunState 4 RUN_STATE_FAILED
 value pipeforge.rpc.v1.RunState 5 RUN_STATE_CANCELLING
 value pipeforge.rpc.v1.RunState 6 RUN_STATE_CANCELLED
 value pipeforge.rpc.v1.RunState 7 RUN_STATE_TIMEOUT
+value pipeforge.rpc.v1.SplitState 0 SPLIT_STATE_UNSPECIFIED
+value pipeforge.rpc.v1.SplitState 1 SPLIT_STATE_ASSIGNED
+value pipeforge.rpc.v1.SplitState 2 SPLIT_STATE_FINISHED
 value pipeforge.rpc.v1.TaskState 0 TASK_STATE_UNSPECIFIED
 value pipeforge.rpc.v1.TaskState 1 TASK_STATE_DEPLOYING
 value pipeforge.rpc.v1.TaskState 2 TASK_STATE_RUNNING

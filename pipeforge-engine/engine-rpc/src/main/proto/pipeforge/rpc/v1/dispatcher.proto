@@ -14,6 +14,7 @@ option java_package = "org.devlive.pipeforge.engine.rpc.proto";
 option java_multiple_files = true;
 
 import "pipeforge/rpc/v1/common.proto";
+import "pipeforge/rpc/v1/task_executor.proto";
 
 service DispatcherService {
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
@@ -22,6 +23,8 @@ service DispatcherService {
   rpc GetJobMetrics(JobRequest) returns (JobMetrics);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc Analyze(JobRequest) returns (ExplainResult);
+  rpc ReadTaskLog(ReadTaskLogRequest) returns (stream LogChunk);  // 兼容增加：Master 转发给运行该 Task 的 Worker
+  rpc ListSplits(JobRequest) returns (ListSplitsResponse);         // 兼容增加：分片的归属与进度
   // M2：TriggerSavepoint、StopWithSavepoint
 }
 
@@ -137,4 +140,33 @@ message ListJobsResponse {
 message ExplainResult {
   string schema_version = 1;
   string json = 2;                    // 与 REST 运行分析接口相同的 JSON（见 29 章）
+}
+
+// 读取一个 Task 的日志：字段与 ReadLogRequest 相同，Master 按 run_id 找到 Task 所在的 Worker 后转发
+message ReadTaskLogRequest {
+  Header header = 1;
+  string run_id = 2;
+  ExecutionAttemptId task = 3;
+  int64 offset = 4;                   // 负数表示从末尾往前
+  int64 max_bytes = 5;                // 0 表示 64KB
+  string contains = 6;                // 关键字过滤，空表示不过滤
+  string min_level = 7;               // TRACE / DEBUG / INFO / WARN / ERROR
+  bool follow = 8;                    // Task 运行中时持续推送
+}
+
+enum SplitState {
+  SPLIT_STATE_UNSPECIFIED = 0;
+  SPLIT_STATE_ASSIGNED = 1;           // 已分配给读取器，正在读或排队
+  SPLIT_STATE_FINISHED = 2;           // 读取器已结束：分片已读完
+}
+
+message SplitInfo {
+  string node_id = 1;                 // Source 节点
+  string split_id = 2;
+  int32 subtask = 3;                  // 读取它的读取器
+  SplitState state = 4;
+}
+
+message ListSplitsResponse {
+  repeated SplitInfo splits = 1;      // 按读取器、分片 ID 排序；尚未分配的分片不在其中
 }

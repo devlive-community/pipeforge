@@ -111,7 +111,9 @@ public final class JobMaster {
 
     private final TaskSettings settings;
     private final Placement placement;
-    private List<Placement.Slot> slots = List.of();
+    /** Written once on the job master thread; read by log readers on other threads. */
+    private volatile List<Placement.Slot> slots = List.of();
+
     private final ScheduledExecutorService thread;
     private final MetricsAggregator aggregator;
     private final Handle handle = new Handle();
@@ -863,6 +865,53 @@ public final class JobMaster {
                                 + type + " of " + plugin + ", which the plan does not use"))
                         .component())
                 .chain();
+    }
+
+    /**
+     * A split and where it is.
+     *
+     * @param finished whether its reader has finished, so that the split was read
+     */
+    public record SplitView(String node, String split, int subtask, boolean finished) {}
+
+    /** Every split the enumerator assigned, by reader and split ID; safe from any thread. */
+    public List<SplitView> splits() {
+        Set<Integer> finished = new java.util.HashSet<>();
+        for (TaskView task : taskView) {
+            if (task.attempt().vertexId().equals(sourceVertex.id()) && task.state() == TaskState.FINISHED) {
+                finished.add(task.attempt().subtask());
+            }
+        }
+        List<SplitView> splits = new ArrayList<>();
+        String node = sourceVertex.head().id();
+        splitOwners().forEach((reader, owned) -> owned.stream()
+                .sorted()
+                .forEach(split -> splits.add(new SplitView(node, split, reader, finished.contains(reader)))));
+        return splits;
+    }
+
+    /**
+     * Reads the log of a task of this run from the worker it ran on; safe from any thread.
+     *
+     * @throws PipeForgeException {@link ErrorCode#TASK_LOG_NOT_FOUND} for a task this run does not have
+     */
+    public java.util.concurrent.CompletableFuture<Void> readLog(
+            ExecutionAttemptId attempt,
+            org.devlive.pipeforge.engine.rpc.LogQuery query,
+            java.util.function.Consumer<org.devlive.pipeforge.engine.rpc.LogChunk> chunks) {
+        TaskView task = taskView.stream()
+                .filter(t -> t.attempt().equals(attempt))
+                .findFirst()
+                .orElse(null);
+        List<Placement.Slot> current = slots;
+        if (task == null || attempt.subtask() >= current.size()) {
+            throw PipeForgeException.of(ErrorCode.TASK_LOG_NOT_FOUND)
+                    .param("task", attempt.toString())
+                    .param("worker", task == null ? "-" : task.workerId())
+                    .build();
+        }
+        // subtask i of every vertex runs in slot i
+        return current.get(attempt.subtask()).gateway().readLog(attempt, query, chunks);
     }
 
     /** The splits every reader was given, by reader. */

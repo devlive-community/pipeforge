@@ -201,4 +201,52 @@ class DispatcherServiceTest {
         assertThatThrownBy(() -> DispatcherService.fromProto(RunState.RUN_STATE_UNSPECIFIED))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void listsTheSplitsOfARunAndReadsTaskLogsThroughTheMaster() throws Exception {
+        runs.ok();
+        stub.submitJob(submit("run-1", "ok"));
+        runs.awaitEnd("run-1");
+
+        var splits = stub.listSplits(request("run-1")).getSplitsList();
+        assertThat(splits).extracting(s -> s.getSplitId()).isNotEmpty().doesNotHaveDuplicates();
+        assertThat(splits).allSatisfy(split -> {
+            assertThat(split.getNodeId()).isEqualTo("src");
+            assertThat(split.getSubtask()).isZero();
+            assertThat(split.getState())
+                    .isEqualTo(org.devlive.pipeforge.engine.rpc.proto.SplitState.SPLIT_STATE_FINISHED);
+        });
+
+        // the log of the source task, on the worker it ran on
+        var attempt = runs.dispatcher.status("run-1").tasks().get(0).attempt();
+        java.nio.file.Path file = runs.logs.path("test-job", attempt);
+        java.nio.file.Files.createDirectories(file.getParent());
+        java.nio.file.Files.writeString(
+                file, "2026-11-17 08:00:00.000 INFO  reading split a\n2026-11-17 08:00:01.000 WARN  slow target\n");
+        var chunks = stub.readTaskLog(org.devlive.pipeforge.engine.rpc.proto.ReadTaskLogRequest.newBuilder()
+                .setHeader(header())
+                .setRunId("run-1")
+                .setTask(org.devlive.pipeforge.engine.rpc.ProtoMapping.toProto(attempt))
+                .setContains("slow")
+                .build());
+        StringBuilder text = new StringBuilder();
+        chunks.forEachRemaining(chunk -> text.append(chunk.getData().toStringUtf8()));
+        assertThat(text.toString()).contains("slow target").doesNotContain("reading split");
+
+        // a task the run does not have, and a run the master does not know
+        assertThatThrownBy(() -> stub.readTaskLog(org.devlive.pipeforge.engine.rpc.proto.ReadTaskLogRequest.newBuilder()
+                                .setHeader(header())
+                                .setRunId("run-1")
+                                .setTask(org.devlive.pipeforge.engine.rpc.ProtoMapping.toProto(
+                                        new org.devlive.pipeforge.engine.rpc.ExecutionAttemptId(
+                                                "run-1", "nothing", 0, 0)))
+                                .build())
+                        .hasNext())
+                .satisfies(e ->
+                        assertThat(RpcErrors.fromStatus(e, "master").code()).isEqualTo(ErrorCode.TASK_LOG_NOT_FOUND));
+        assertThatThrownBy(() -> stub.listSplits(request("nothing")))
+                .isInstanceOfSatisfying(
+                        StatusRuntimeException.class,
+                        e -> assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.NOT_FOUND));
+    }
 }

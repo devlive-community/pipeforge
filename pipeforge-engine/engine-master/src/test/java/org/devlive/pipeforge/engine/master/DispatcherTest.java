@@ -44,7 +44,20 @@ class DispatcherTest {
 
     final JobMasters jobs = new JobMasters();
     final InProcessRpc.Endpoint<JobMasterGateway> master = InProcessRpc.serve("master", jobs);
-    final TaskExecutor executor = new TaskExecutor("local", master.gateway());
+    final java.nio.file.Path logDir = temporaryLogs();
+    final org.devlive.pipeforge.engine.worker.log.LogService logs =
+            new org.devlive.pipeforge.engine.worker.log.LogService(
+                    "local", org.devlive.pipeforge.engine.worker.log.LogService.Settings.defaults(logDir));
+    final TaskExecutor executor = new TaskExecutor("local", master.gateway(), null, null, logs);
+
+    private static java.nio.file.Path temporaryLogs() {
+        try {
+            return java.nio.file.Files.createTempDirectory("dispatcher-logs");
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     final InProcessRpc.Endpoint<TaskExecutorGateway> worker = InProcessRpc.serve("worker", executor);
     final ScheduledExecutorService timers = Executors.newSingleThreadScheduledExecutor();
     final Map<String, Supplier<JobPlan>> definitions = new ConcurrentHashMap<>();
@@ -75,6 +88,7 @@ class DispatcherTest {
 
     @AfterEach
     void stop() {
+        logs.close();
         dispatcher.close();
         executor.close();
         worker.close();

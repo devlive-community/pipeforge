@@ -14,7 +14,7 @@ PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Tas
 | `ResourceManagerService` | Worker → Master | 注册、心跳、Worker 提供的 Slot |
 | `TaskExecutorService` | Master → Worker | 申请 Slot、部署与取消 Task、分配分片、Task 日志 |
 | `JobMasterService` | Task → Master | Task 状态变化、请求分片、Task 指标 |
-| `DispatcherService` | Server → Master | 提交、取消作业，状态、指标、运行分析 |
+| `DispatcherService` | Server → Master | 提交、取消作业，状态、指标、运行分析；运行的分片及其读取器（`ListSplits`），以及 Task 日志（`ReadTaskLog`），由 Master 从运行该 Task 的 Worker 转发，因此服务端只需要访问 Master |
 | `BlobService` | Worker → Master | 按 SHA-256 提供插件包，分块流式传输，可从某个偏移量续传（冻结后的兼容增加） |
 
 定义位于 `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`。构建时由它们生成 Java 消息与服务桩
