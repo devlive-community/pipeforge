@@ -46,6 +46,8 @@ public final class JdbcSplitEnumerator implements SplitEnumerator<JdbcSplit, Lis
     private final ClassLoader loader;
     private final Deque<JdbcSplit> remaining = new ArrayDeque<>();
     private boolean started;
+    /** The splits made at the start, or -1 when restored: some of them were read before. */
+    private int total = -1;
 
     JdbcSplitEnumerator(
             JdbcSourceConfig config,
@@ -70,7 +72,13 @@ public final class JdbcSplitEnumerator implements SplitEnumerator<JdbcSplit, Lis
         }
         started = true;
         remaining.addAll(splits());
+        total = remaining.size();
         LOG.info("{} reads {} in {} split(s)", config.node(), config.produced(), remaining.size());
+    }
+
+    @Override
+    public java.util.OptionalInt totalSplits() {
+        return total < 0 ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(total);
     }
 
     List<JdbcSplit> splits() {

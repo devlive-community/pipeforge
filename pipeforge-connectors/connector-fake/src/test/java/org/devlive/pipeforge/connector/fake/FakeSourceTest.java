@@ -64,6 +64,12 @@ class FakeSourceTest {
 
     private static final class Context implements ReaderContext {
         int requests;
+        final List<String> finished = new ArrayList<>();
+
+        @Override
+        public void splitFinished(String splitId) {
+            finished.add(splitId);
+        }
 
         @Override
         public JobContext job() {
@@ -220,6 +226,7 @@ class FakeSourceTest {
             reader.pollNext(capture);
         }
         assertThat(context.requests).isEqualTo(2);
+        assertThat(context.finished).as("the split is reported once it is read").containsExactly("fake.rows#0");
         assertThat(reader.snapshotState(2)).isEmpty();
         reader.notifyNoMoreSplits();
         assertThat(reader.pollNext(capture)).isEqualTo(PollStatus.END_OF_INPUT);
@@ -269,9 +276,13 @@ class FakeSourceTest {
 
         assertThat(assigned.get(1)).extracting(FakeSplit::splitId).containsExactly("fake.rows#0", "fake.rows#1");
         assertThat(finished).containsExactly(1);
+        assertThat(enumerator.totalSplits()).hasValue(2);
         SplitEnumerator<FakeSplit, List<FakeSplit>> restored =
                 source.restoreEnumerator(context, List.of(assigned.get(1).get(0)));
         assertThat(restored.snapshotState(2)).hasSize(1);
+        assertThat(restored.totalSplits())
+                .as("some splits were read before the restore")
+                .isEmpty();
     }
 
     @Test

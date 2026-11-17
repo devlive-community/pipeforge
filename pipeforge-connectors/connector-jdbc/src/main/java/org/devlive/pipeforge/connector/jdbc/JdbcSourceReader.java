@@ -108,7 +108,11 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
             Target reading = java.util.Objects.requireNonNull(target);
             for (int i = 0; i < ROWS_PER_POLL; i++) {
                 if (!result.next()) {
+                    JdbcSplit done = current;
                     closeSplit();
+                    if (done != null) {
+                        context.splitFinished(done.splitId());
+                    }
                     request();
                     return PollStatus.MORE_AVAILABLE;
                 }

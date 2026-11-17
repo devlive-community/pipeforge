@@ -63,13 +63,13 @@ public final class FakeSource implements Source<FakeSplit, List<FakeSplit>>, Sup
 
     @Override
     public SplitEnumerator<FakeSplit, List<FakeSplit>> createEnumerator(EnumeratorContext<FakeSplit> context) {
-        return new Enumerator(context, splits(settings));
+        return new Enumerator(context, splits(settings), true);
     }
 
     @Override
     public SplitEnumerator<FakeSplit, List<FakeSplit>> restoreEnumerator(
             EnumeratorContext<FakeSplit> context, List<FakeSplit> state) {
-        return new Enumerator(context, state);
+        return new Enumerator(context, state, false);
     }
 
     @Override
@@ -116,10 +116,18 @@ public final class FakeSource implements Source<FakeSplit, List<FakeSplit>>, Sup
     private static final class Enumerator implements SplitEnumerator<FakeSplit, List<FakeSplit>> {
         private final EnumeratorContext<FakeSplit> context;
         private final Deque<FakeSplit> pending;
+        /** The splits made, or -1 when restored from the splits not yet assigned. */
+        private final int total;
 
-        Enumerator(EnumeratorContext<FakeSplit> context, List<FakeSplit> splits) {
+        Enumerator(EnumeratorContext<FakeSplit> context, List<FakeSplit> splits, boolean all) {
             this.context = context;
             this.pending = new ArrayDeque<>(splits);
+            this.total = all ? splits.size() : -1;
+        }
+
+        @Override
+        public java.util.OptionalInt totalSplits() {
+            return total < 0 ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(total);
         }
 
         @Override
@@ -206,6 +214,7 @@ public final class FakeSource implements Source<FakeSplit, List<FakeSplit>>, Sup
             split = split.advance(budget);
             if (split.done()) {
                 current = null;
+                context.splitFinished(split.splitId());
                 context.sendSplitRequest();
             } else {
                 current = split;
