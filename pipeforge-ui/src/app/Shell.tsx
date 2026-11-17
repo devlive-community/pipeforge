@@ -36,7 +36,9 @@ export function Shell() {
   const t = useT();
   const { pathname } = useLocation();
   const navigation = useNavigation();
-  const current = NAVIGATION.find((item) => item.to === (pathname.replace(/\/$/, "") || "/"));
+  const path = pathname.replace(/\/$/, "") || "/";
+  // a page below an entry (a run under /runs) belongs to that entry
+  const current = NAVIGATION.find((item) => item.to === path || (item.to !== "/" && path.startsWith(`${item.to}/`)));
   const changingPage = Boolean(navigation.location && navigation.location.pathname !== pathname);
   useDocumentPreferences();
   return (
@@ -69,7 +71,7 @@ export function Shell() {
           <NavLink
             key={item.to}
             to={item.to}
-            end
+            end={item.to === "/"}
             className={({ isActive }) => cx("workspace-link", isActive && "workspace-link-active")}
           >
             <Icon name={item.icon} size={17} />

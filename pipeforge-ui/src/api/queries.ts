@@ -5,7 +5,7 @@
  * project root for full license text.
  */
 
-import type { RunQuery } from "@pipeforge/client";
+import { ApiError, type RunQuery } from "@pipeforge/client";
 import { useQuery } from "@tanstack/react-query";
 import { usePreferences } from "@/state/preferences";
 import { api } from "./client";
@@ -43,6 +43,47 @@ export function useRuns(query: RunQuery) {
     refetchInterval: RUN_POLL_MS,
     refetchIntervalInBackground: false,
     placeholderData: (previous) => previous,
+  });
+}
+
+/** Retries a failed query once, but not an answer that the thing does not exist. */
+function retryUnlessMissing(failures: number, error: unknown) {
+  return failures < 1 && !(error instanceof ApiError && error.status === 404);
+}
+
+/** A run with its definition and transitions; asked again while `live`. */
+export function useRun(id: string, live = true) {
+  return useQuery({
+    queryKey: ["run", id],
+    queryFn: () => api.getRun(id),
+    retry: retryUnlessMissing,
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
+export function useRunMetrics(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-metrics", id],
+    queryFn: () => api.getRunMetrics(id),
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
+export function useRunHistory(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-history", id],
+    queryFn: () => api.getRunMetricsHistory(id),
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
+/** The run analysis; a run whose analysis the server does not have answers 404, which is no error here. */
+export function useRunAnalysis(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-analysis", id],
+    queryFn: () => api.getRunAnalysis(id),
+    retry: retryUnlessMissing,
+    refetchInterval: live ? RUN_POLL_MS : false,
   });
 }
 

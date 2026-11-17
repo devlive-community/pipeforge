@@ -171,6 +171,77 @@
     "next": "下一页",
     "failed": "无法加载运行：{message}"
   },
+  "runDetail": {
+    "back": "运行",
+    "tabs": {
+      "overview": "概览",
+      "metrics": "指标"
+    },
+    "facts": {
+      "state": "状态",
+      "submitted": "提交时间",
+      "started": "开始时间",
+      "ended": "结束时间",
+      "duration": "耗时",
+      "error": "错误",
+      "id": "运行 ID"
+    },
+    "progress": "进度",
+    "splits": "已读完 {finished} / {total} 个分片",
+    "noSplits": "尚未分配分片",
+    "rows": "行数",
+    "read": "读取",
+    "written": "写入",
+    "dirty": "跳过的坏行",
+    "inFlight": "传输中",
+    "perSecond": "{rate} 行/秒",
+    "waits": "等待",
+    "readerWait": "读取器等待目标端",
+    "writerWait": "写入器等待源端",
+    "throttleWait": "等待限流",
+    "backpressure": "等待网络缓冲",
+    "bottleneck": "瓶颈",
+    "noAnalysis": "这次运行没有分析结果。",
+    "at": "位于 {node}",
+    "evidence": "依据",
+    "advice": "建议",
+    "kinds": {
+      "THROTTLE": "限流限制了运行",
+      "TARGET": "目标端最慢",
+      "NETWORK": "Worker 之间的网络最慢",
+      "SOURCE": "源端最慢",
+      "NONE": "没有长时间的等待",
+      "UNKNOWN": "数据还不够"
+    },
+    "kindHints": {
+      "THROTTLE": "作业的限流（env.limit）按配置生效。",
+      "TARGET": "读取器在等待已满的写队列：Sink 或它写入的系统比其他部分慢。",
+      "NETWORK": "Task 在等待网络缓冲，而接收数据的 Task 并不繁忙。",
+      "SOURCE": "写入器在等待数据：源端或它的读取器比其他部分慢。",
+      "NONE": "运行已经达到最慢环节允许的速度。",
+      "UNKNOWN": "还没有 Task 运行足够长的时间来判断。"
+    },
+    "adviceCodes": {
+      "rate-limit": "如果源端和目标端还能承受，调高作业的限流（env.limit）。",
+      "sink-parallelism": "调高 {node} 的并行度。",
+      "check-target": "检查目标系统的写入延迟和负载。",
+      "network-buffers": "调大 network.buffers-per-channel 或 network.floating-buffers-per-gate。",
+      "check-network": "检查 Worker 之间的网络及其负载。",
+      "source-parallelism": "调高 {node} 的并行度。",
+      "check-source": "检查源系统的查询延迟和负载。"
+    },
+    "rates": "读写速率",
+    "ratesSummary": "当前读取 {read} 行/秒，写入 {write} 行/秒。",
+    "rowsChart": "行数变化",
+    "rowsSummary": "目前已读取 {read} 行，写入 {written} 行。",
+    "noSamples": "服务端得到运行指标的两次采样后（默认每 10 秒一次）显示图表。",
+    "nodes": "节点",
+    "node": "节点",
+    "rowsIn": "输入行数",
+    "rowsOut": "输出行数",
+    "notFound": "不存在运行 {id}。",
+    "failed": "无法加载运行：{message}"
+  },
   "plugins": {
     "title": "插件",
     "description": "服务上安装的插件、插件中的组件以及每个组件的选项。",

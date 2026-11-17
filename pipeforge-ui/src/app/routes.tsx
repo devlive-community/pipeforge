@@ -10,6 +10,7 @@ import { ErrorCodesPage } from "@/features/errors/ErrorCodesPage";
 import { NotFoundPage } from "@/features/not-found/NotFoundPage";
 import { OverviewPage } from "@/features/overview/OverviewPage";
 import { PluginsPage } from "@/features/plugins/PluginsPage";
+import { RunDetailPage } from "@/features/run-detail/RunDetailPage";
 import { RunsPage } from "@/features/runs/RunsPage";
 import { LoadingPanel } from "@/ui/LoadingPanel";
 import { Shell } from "./Shell";
@@ -28,6 +29,7 @@ export const ROUTES: RouteObject[] = [
         lazy: async () => ({ Component: (await import("@/features/job-editor/JobEditorPage")).JobEditorPage }),
       },
       { path: "runs", element: <RunsPage /> },
+      { path: "runs/:id", element: <RunDetailPage /> },
       { path: "plugins", element: <PluginsPage /> },
       {
         path: "functions",

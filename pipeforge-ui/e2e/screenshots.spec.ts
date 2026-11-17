@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { EXAMPLE_JOB } from "../src/features/job-editor/example";
 import { MAPPED_SHOT } from "./jobs";
-import { mockServer } from "./mocks";
+import { mockServer, RUN_ID } from "./mocks";
 
 const OUT = fileURLToPath(new URL("../../docs/public/screenshots/ui/", import.meta.url));
 
@@ -51,6 +51,16 @@ const PAGES: Shot[] = [
     click: { button: { "en-US": "Evaluate", "zh-CN": "求值" }, then: "PIPEFORGE pays 25.00" },
   },
   { name: "runs", path: "/runs", ready: { "en-US": "users-sync", "zh-CN": "users-sync" } },
+  {
+    name: "run-detail",
+    path: `/runs/${RUN_ID}`,
+    ready: { "en-US": "The target is the slowest part", "zh-CN": "目标端最慢" },
+  },
+  {
+    name: "run-metrics",
+    path: `/runs/${RUN_ID}?tab=metrics`,
+    ready: { "en-US": "warehouse", "zh-CN": "warehouse" },
+  },
   { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
   {
     name: "field-mapping",

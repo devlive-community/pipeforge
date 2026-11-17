@@ -171,6 +171,77 @@
     "next": "Next page",
     "failed": "The runs cannot be loaded: {message}"
   },
+  "runDetail": {
+    "back": "Runs",
+    "tabs": {
+      "overview": "Overview",
+      "metrics": "Metrics"
+    },
+    "facts": {
+      "state": "State",
+      "submitted": "Submitted",
+      "started": "Started",
+      "ended": "Ended",
+      "duration": "Duration",
+      "error": "Error",
+      "id": "Run ID"
+    },
+    "progress": "Progress",
+    "splits": "{finished} of {total} splits read",
+    "noSplits": "No split assigned yet",
+    "rows": "Rows",
+    "read": "Read",
+    "written": "Written",
+    "dirty": "Bad rows skipped",
+    "inFlight": "In flight",
+    "perSecond": "{rate} rows/s",
+    "waits": "Waits",
+    "readerWait": "Readers waited for the target",
+    "writerWait": "Writers waited for the source",
+    "throttleWait": "Waited for the rate limit",
+    "backpressure": "Waited for network buffers",
+    "bottleneck": "Bottleneck",
+    "noAnalysis": "There is no analysis of this run.",
+    "at": "at {node}",
+    "evidence": "Evidence",
+    "advice": "What to change",
+    "kinds": {
+      "THROTTLE": "The rate limit holds the run back",
+      "TARGET": "The target is the slowest part",
+      "NETWORK": "The network between workers is the slowest part",
+      "SOURCE": "The source is the slowest part",
+      "NONE": "Nothing waits for long",
+      "UNKNOWN": "Not enough data yet"
+    },
+    "kindHints": {
+      "THROTTLE": "The job's rate limit (env.limit) works as configured.",
+      "TARGET": "Readers wait for a full write queue: the sink or the system it writes to is slower than the rest.",
+      "NETWORK": "Tasks wait for network buffers while the tasks they send to are not busy.",
+      "SOURCE": "Writers wait for rows: the source or its reader is slower than the rest.",
+      "NONE": "The run is as fast as its slowest part allows.",
+      "UNKNOWN": "No task ran long enough to judge."
+    },
+    "adviceCodes": {
+      "rate-limit": "Raise the job's rate limit (env.limit) if the source and the target can take more.",
+      "sink-parallelism": "Raise the parallelism of {node}.",
+      "check-target": "Check the write latency and the load of the target system.",
+      "network-buffers": "Raise network.buffers-per-channel or network.floating-buffers-per-gate.",
+      "check-network": "Check the network between the workers and their load.",
+      "source-parallelism": "Raise the parallelism of {node}.",
+      "check-source": "Check the query latency and the load of the source system."
+    },
+    "rates": "Read and write rates",
+    "ratesSummary": "Now {read} rows/s read and {write} rows/s written.",
+    "rowsChart": "Rows over time",
+    "rowsSummary": "{read} rows read and {written} rows written so far.",
+    "noSamples": "The chart appears once the server has two samples of the run's metrics (every 10 seconds by default).",
+    "nodes": "Nodes",
+    "node": "Node",
+    "rowsIn": "Rows in",
+    "rowsOut": "Rows out",
+    "notFound": "There is no run {id}.",
+    "failed": "The run cannot be loaded: {message}"
+  },
   "plugins": {
     "title": "Plugins",
     "description": "The plugins installed on the server, their components and the options of each component.",

@@ -31,6 +31,7 @@ pipeforge-ui/
 │   ├── app/              # shell, routes, navigation
 │   ├── ui/               # component library: the only place for native controls
 │   ├── canvas/           # graph layout
+│   ├── charts/           # charts in SVG, drawn with the chart tokens
 │   ├── features/         # one directory per page or feature
 │   ├── api/              # API client and query hooks
 │   ├── i18n/             # en-US.json, zh-CN.json
@@ -74,6 +75,11 @@ The documentation site runs the same rules, defined once in `@pipeforge/design-t
 | `FileButton` | Opens the file picker and hands over the file's name and text |
 | `CodeEditor` | YAML or SQL-style expression editing (`language`) with completion and problems; imported from `@/ui/CodeEditor` so that CodeMirror only loads with the pages that use it. Completion is a function of the text and the cursor that returns the suggestions, so pages never touch CodeMirror |
 | `DagCanvas` | A read-only job graph: layered layout from `src/canvas`, pan, zoom, fit, nodes as buttons |
+
+Charts are in `src/charts`, also our own and drawn in SVG with the chart colors of the tokens
+(`chart-1` to `chart-8`). `LineChart` draws lines over time with three levels of the y axis, the
+first and last time and a legend; it is an image for assistive technology with a summary in words
+of what it shows, and shows a hint instead of a chart with fewer than two points.
 
 Conventions for every component:
 

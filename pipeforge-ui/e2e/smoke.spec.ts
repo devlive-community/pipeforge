@@ -93,3 +93,13 @@ test("lists the runs and filters them by state", async ({ page }) => {
   await request;
   await expect(page).toHaveURL(/state=failed/);
 });
+
+test("opens a run from the list and switches to its metrics", async ({ page }) => {
+  await page.goto("/runs");
+  await page.getByRole("link", { name: "orders-daily" }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "orders-daily" })).toBeVisible();
+  await expect(page.getByText("The target is the slowest part")).toBeVisible();
+  await page.getByRole("tab", { name: "Metrics" }).click();
+  await expect(page).toHaveURL(/tab=metrics/);
+  await expect(page.getByRole("img", { name: /Read and write rates/ })).toBeVisible();
+});

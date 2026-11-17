@@ -287,8 +287,85 @@ export function runs() {
   };
 }
 
+/** The running run of {@link runs}, with its metrics, analysis and two minutes of samples. */
+export const RUN_ID = "3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01";
+
+function runDetail() {
+  return { run: runs().runs[0], transitions: [] };
+}
+
+function runMetrics() {
+  return {
+    elapsedMs: 95_000,
+    parallelism: 4,
+    rowsRead: 4_812_000,
+    rowsWritten: 4_790_500,
+    rowsInFlight: 21_500,
+    rowsDirty: 12,
+    readRowsPerSecond: 50_650,
+    writeRowsPerSecond: 50_420,
+    readerWaitMs: 239_400,
+    writerWaitMs: 11_400,
+    throttleWaitMs: 0,
+    backpressuredMs: 3_800,
+    splitsTotal: 16,
+    splitsFinished: 9,
+    nodes: [
+      { node: "orders", rowsIn: 0, rowsOut: 4_812_000 },
+      { node: "enrich", rowsIn: 4_812_000, rowsOut: 4_790_500 },
+      { node: "warehouse", rowsIn: 4_790_500, rowsOut: 4_790_500 },
+    ],
+  };
+}
+
+function runAnalysis() {
+  return {
+    schemaVersion: "1",
+    job: "orders-daily",
+    status: "RUNNING",
+    windowFromMs: 85_000,
+    windowToMs: 95_000,
+    rates: [],
+    bottleneck: {
+      kind: "TARGET",
+      node: "warehouse",
+      evidence: [
+        { metric: "readerWaitShare", node: null, value: 0.63 },
+        { metric: "writerWaitShare", node: null, value: 0.03 },
+      ],
+      advice: [
+        { code: "sink-parallelism", text: "Raise the parallelism of warehouse" },
+        { code: "check-target", text: "Check the write latency and the load of the target system" },
+      ],
+    },
+  };
+}
+
+/** A sample every 10 seconds since the start; the rate climbs, then dips while the target is slow. */
+function runHistory() {
+  const now = Date.now();
+  const rates = [0, 38_000, 52_000, 55_000, 54_000, 41_000, 36_000, 49_000, 53_000, 51_000];
+  let read = 0;
+  return rates.map((rate, i) => {
+    read += rate * 10;
+    return {
+      at: new Date(now - (rates.length - 1 - i) * 10_000).toISOString(),
+      elapsedMs: i * 10_000,
+      rowsRead: read,
+      // the writers fall behind while the target is slow and catch up afterwards
+      rowsWritten: Math.max(0, read - [0, 9_000, 14_000, 16_000, 52_000, 120_000, 98_000, 40_000, 26_000, 21_500][i]!),
+      rowsDirty: 0,
+      rowsFailed: 0,
+    };
+  });
+}
+
 export const SERVER: Record<string, unknown> = {
   "/api/v1/runs": () => runs(),
+  [`/api/v1/runs/${RUN_ID}`]: () => runDetail(),
+  [`/api/v1/runs/${RUN_ID}/metrics`]: () => runMetrics(),
+  [`/api/v1/runs/${RUN_ID}/analysis`]: () => runAnalysis(),
+  [`/api/v1/runs/${RUN_ID}/metrics/history`]: () => runHistory(),
   "/api/v1/version": { version: "0.1.0", connectorApi: "0.1.0", java: "21.0.10+8-LTS" },
   "/api/v1/plugins": {
     plugins: [
@@ -347,7 +424,11 @@ export async function mockServer(page: Page, answers: Record<string, unknown> = 
       await route.fulfill({ status: answer, json: { code: "PF-SYS-0001", message: "down" } });
     } else if (answer === undefined) {
       await route.fulfill({ status: 404, json: { code: "PF-CONF-0007", message: "no endpoint" } });
-    } else if (typeof answer === "object" && answer !== null && "status" in answer) {
+    } else if (
+      typeof answer === "object" &&
+      answer !== null &&
+      typeof (answer as { status?: unknown }).status === "number"
+    ) {
       const { status, ...json } = answer as { status: number };
       await route.fulfill({ status, json });
     } else {

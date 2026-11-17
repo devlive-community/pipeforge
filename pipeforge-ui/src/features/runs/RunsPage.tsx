@@ -7,7 +7,7 @@
 
 import type { Run, RunState } from "@pipeforge/client";
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useRuns } from "@/api/queries";
 import { useT } from "@/i18n";
 import { usePreferences } from "@/state/preferences";
@@ -85,7 +85,9 @@ export function RunsPage() {
       header: t("runs.columns.job"),
       cell: (run) => (
         <div>
-          <div className="font-medium">{run.job}</div>
+          <Link to={`/runs/${run.id ?? ""}`} className="font-medium text-primary hover:underline">
+            {run.job}
+          </Link>
           <div className="font-mono text-xs text-fg-subtle">{(run.id ?? "").slice(0, 8)}</div>
         </div>
       ),

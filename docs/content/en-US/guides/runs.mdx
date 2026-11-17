@@ -1,6 +1,6 @@
 ---
 title: Runs
-description: Following the runs of jobs on the cluster in the Web UI - their state, duration and rows - and finding them by state and job.
+description: Following the runs of jobs on the cluster in the Web UI - their state, duration, rows and bottleneck - and finding them by state and job.
 order: 22
 ---
 
@@ -40,3 +40,28 @@ Choose a state group above the list:
 Type a job's name into the search field to see only its runs; the name must match exactly. Both
 filters are part of the address (`/runs?state=failed&job=orders-daily`), so a filtered list can be
 bookmarked and shared. A list longer than 50 runs has **Previous page** and **Next page** buttons.
+
+## A run
+
+Select a job's name in the list to open its run. The top of the page shows the run's ID, when it
+was submitted, started and ended, how long it took and, for a run that did not succeed, its error.
+The address (`/runs/<id>`) can be shared; a run that does not exist says so. While the run is not
+finished, the page asks again every two seconds.
+
+<Screenshot name="run-detail" alt="The overview of a run" />
+
+The **Overview** tab:
+
+| Part | Shows |
+|---|---|
+| Rows | The rows read and written with their current rates, the rows between the readers and the writers (in flight) and the bad rows skipped; the splits read of all splits, as progress |
+| Waits | How much of the tasks' time went to waiting: readers for the target, writers for the source, for the rate limit and for network buffers |
+| Bottleneck | What limits the run, the metrics that show it and what to change, from the [run analysis](../concepts/plan-and-explain#run-analysis); a running run is judged on the last 10 seconds, a finished one on the whole run |
+
+The **Metrics** tab (`/runs/<id>?tab=metrics`) draws the read and write rates and the rows over
+time from the server's samples of the run's metrics, and lists the rows in and out of each node of
+the plan. The charts appear once there are two samples; the server takes one every 10 seconds by
+default (`pipeforge.master.metrics-interval`).
+
+<Screenshot name="run-metrics" alt="The metrics of a run over time" />
+
