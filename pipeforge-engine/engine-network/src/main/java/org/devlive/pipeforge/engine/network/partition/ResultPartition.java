@@ -120,6 +120,10 @@ public final class ResultPartition {
         check();
         buffers++;
         if (target.start(buffer) && !target.append(scratch)) {
+            if (target.isDone()) {
+                // the consumer released the subpartition between start and append: the row is dropped
+                return;
+            }
             throw new IllegalStateException("a row of " + size + " bytes does not fit an empty buffer");
         }
     }
