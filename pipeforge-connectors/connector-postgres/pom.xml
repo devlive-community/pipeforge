@@ -19,7 +19,8 @@
     <artifactId>connector-postgres</artifactId>
     <name>PipeForge Connector PostgreSQL</name>
     <description>
-        D02 PostgreSQL dialect on the JDBC connector base and S04 PostgreSQL source; the sink follows.
+        D02 PostgreSQL dialect on the JDBC connector base, S04 PostgreSQL source and K04 PostgreSQL sink
+        (batch).
         Verified against PostgreSQL 14 and 16. The PostgreSQL JDBC driver (BSD-2-Clause) is shipped in
         the plugin.
     </description>

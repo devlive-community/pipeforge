@@ -1,0 +1,159 @@
+---
+title: PostgreSQL Sink
+description: 按批次把行插入已有的 PostgreSQL 表，支持重试，并逐行定位坏行。
+order: 30
+template: plugin
+---
+
+## 简介
+
+PostgreSQL Sink（`type: jdbc-postgres`）通过 JDBC 把输入的行插入一张已有的 PostgreSQL 表。它按批次写入，每个批次一个独立事务，驱动把批次作为多行插入发送。
+因暂时性原因失败的批次会重试；含有 PostgreSQL 拒绝的行的批次会被拆分，直到找出这些行，它们按作业的脏数据策略处理。
+
+适用于把任意数据源的数据装载到 PostgreSQL，或者配合 [PostgreSQL Source](../source/postgres) 在 PostgreSQL 数据库之间复制。
+upsert、自动建表和 Schema 变更在后续里程碑提供。
+
+## 能力
+
+<PluginCapabilities plugin="postgres" component="sink" />
+
+## 已验证版本
+
+<PluginVersions plugin="postgres" />
+
+## 快速开始
+
+建好目标表，然后：
+
+```yaml
+version: 1
+name: fake-to-postgres
+source:
+  - id: src
+    type: fake
+    table: public.orders
+    columns: [id INT64 NOT NULL, amount DECIMAL(10, 2), note STRING(20)]
+    primary-key: [id]
+    rows: 10000
+sink:
+  - id: out
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/shop
+    username: writer
+    password: ${env:PG_PASSWORD}
+    table: public.orders
+```
+
+## 前置条件
+
+- **目标表。** 输入的每一列都必须在表中存在，按名称匹配（先精确匹配，否则忽略大小写）；输入中没有的列取默认值。
+- **对 Schema 有 `USAGE`、对表有 `INSERT` 权限的用户**，以及 Master 和 Worker 到数据库的网络连通。驱动随插件提供。
+
+## 数据源配置
+
+连接方式与 [PostgreSQL Source](../source/postgres#数据源配置) 相同：`url`、`username`、`password`，以及写在 `jdbc.properties.<名称>`
+中的驱动属性，默认值和受控属性也相同。`reWriteBatchedInserts=true` 把批次改写为多行插入，`stringtype=unspecified` 让文本值可以写入
+`jsonb`、`uuid`、枚举等列。
+
+## 节点选项
+
+<PluginOptions plugin="postgres" component="sink" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="postgres" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="postgres" />
+
+## 分片与并行
+
+Sink 的写入器数量等于其并行度，每个写入器有自己的连接和事务。行到达各写入器的顺序不固定。
+
+## 一致性语义
+
+Sink 的语义是**至少一次**。失败的批次会回滚，不会留下任何行；只有在提交成功但确认丢失，或者运行在部分批次提交后重新开始时，
+才会重复写入。目标表有主键时，这些重复的行会因重复键被拒绝，成为坏行而不会被存储两次：`env.dirty.policy: skip` 时被跳过，默认的 `fail` 时作业失败。
+
+## 示例
+
+### 跳过 PostgreSQL 拒绝的行
+
+```yaml
+version: 1
+name: people-to-postgres
+env:
+  dirty: { policy: skip, max-rows: 100 }
+source:
+  - id: src
+    type: fake
+    table: crm.people
+    columns: [id INT64 NOT NULL, name STRING]
+    primary-key: [id]
+sink:
+  - id: out
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/crm
+    username: writer
+    password: ${env:PG_PASSWORD}
+    table: crm.people
+    batch-size: 5000
+```
+
+超过列长度的名称、超出范围的数字、无法解析为列类型的值或者重复键都会使插入失败。Sink 拆分批次直到找出这一行，写入其余的行，
+作业最多跳过 100 个这样的行，并保留最早的几行作为样本。
+
+### 在 PostgreSQL 服务器之间复制一张表
+
+```yaml
+version: 1
+name: orders-archive
+source:
+  - id: orders
+    type: jdbc-postgres
+    url: jdbc:postgresql://primary.example.com:5432/shop
+    username: reader
+    password: ${env:SHOP_PASSWORD}
+    table: public.orders
+sink:
+  - id: archive
+    type: jdbc-postgres
+    url: jdbc:postgresql://archive.example.com:5432/archive
+    username: writer
+    password: ${env:ARCHIVE_PASSWORD}
+    table: public.orders
+```
+
+## 指标
+
+Sink 报告标准的 Sink 指标：`rowsWritten`、写入速率、写入队列和 `writerWaitMs`。策略为 `skip` 时，PostgreSQL 拒绝的行计入 `rowsDirty`，
+并保留样本。
+
+## 性能与调优
+
+- `batch-size`（默认 1,000）是每个事务的行数；批次越大写得越快，直到受到锁等待或单个事务的 WAL 量的限制。
+- 定位坏行代价不高但并非没有代价：失败批次的每次拆分都多一次往返。对于系统性的原因（例如列太窄），应修正原因，而不是跳过大量行。
+- 目标表上的索引、触发器和外键会降低插入速度；大批量装载时可以考虑装载后再添加。
+
+## 错误码与排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-META-0001` | 目标表不存在，或者用户看不到它 |
+| `PF-META-0002` | 目标表缺少输入中的某一列；添加该列，或者用 Transform 映射列 |
+| `PF-PLAN-0012` | 有多张表进入这个 Sink；为每张表配置一个 Sink |
+| `PF-DATA-0009` | PostgreSQL 拒绝了某一行（过长、超出范围、不符合列类型、重复键），消息中带有 PostgreSQL 的原因。修正数据或表，或者设置 `env.dirty.policy: skip` |
+| `PF-DATA-0010` | 被拒绝的行数超过了 `env.dirty.max-rows` |
+| `PF-CONN-0001`、`PF-AUTH-0001` | 见 [PostgreSQL Source](../source/postgres#错误码与排障) |
+
+## 已知限制
+
+- 只支持插入：暂不支持 upsert、更新和删除，表必须已经存在。
+- 每个 Sink 节点只写一张表。
+- 至少一次；精确一次在后续里程碑提供。
+- 尚未验证 PostgreSQL 12、13、15 和 17。
+
+## 变更记录
+
+<PluginChangelog plugin="postgres" />

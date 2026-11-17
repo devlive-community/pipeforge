@@ -25,3 +25,18 @@ read:
   - { external: "timestamptz(p)", logical: "TIMESTAMP_LTZ(p)", note: "an instant, whatever the session's time zone" }
   - { external: "json, jsonb", logical: JSON, note: "jsonb as PostgreSQL normalizes it: spacing and member order" }
   - { external: "boolean[], smallint[], integer[], bigint[], real[], double precision[], text[], varchar[]", logical: "ARRAY(element)" }
+# How the PostgreSQL sink binds logical values; the target column's type decides what is stored.
+write:
+  - { external: boolean, logical: BOOLEAN }
+  - { external: "smallint, integer, bigint", logical: "INT8, INT16, INT32, INT64", note: "values out of the column's range are bad rows" }
+  - { external: "real, double precision", logical: "FLOAT32, FLOAT64" }
+  - { external: "numeric(p, s)", logical: "DECIMAL(p, s)" }
+  - { external: "varchar(n), text, char(n)", logical: STRING, note: "a value longer than the column is a bad row" }
+  - { external: "jsonb, json, uuid, enums, inet, interval and other types with a text form", logical: STRING, note: "sent as untyped text, which PostgreSQL casts to the column's type" }
+  - { external: bytea, logical: BYTES }
+  - { external: date, logical: DATE }
+  - { external: "time(p)", logical: "TIME(p)" }
+  - { external: "timestamp(p)", logical: "TIMESTAMP(p)" }
+  - { external: "timestamptz(p)", logical: "TIMESTAMP_LTZ(p)" }
+  - { external: "jsonb, json", logical: JSON }
+  - { external: "boolean[], smallint[], integer[], bigint[], real[], double precision[], text[]", logical: "ARRAY(element)" }

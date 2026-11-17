@@ -1,0 +1,174 @@
+---
+title: PostgreSQL sink
+description: Insert rows into an existing PostgreSQL table in batches, with retries and bad rows located one by one.
+order: 30
+template: plugin
+---
+
+## Introduction
+
+The PostgreSQL sink (`type: jdbc-postgres`) inserts the rows of its input into an existing PostgreSQL
+table over JDBC. It writes in batches, each in a transaction of its own, which the driver sends as
+multi-row inserts. A batch that fails for a passing reason is tried again; a batch with rows
+PostgreSQL refuses is split until those rows are found, and they follow the job's dirty data policy.
+
+Use it to load data from any source into PostgreSQL, or to copy between PostgreSQL databases with the
+[PostgreSQL source](../source/postgres). Upsert, creating the table and changing its schema come in
+later milestones.
+
+## Capabilities
+
+<PluginCapabilities plugin="postgres" component="sink" />
+
+## Verified versions
+
+<PluginVersions plugin="postgres" />
+
+## Quick start
+
+Create the target table, then:
+
+```yaml
+version: 1
+name: fake-to-postgres
+source:
+  - id: src
+    type: fake
+    table: public.orders
+    columns: [id INT64 NOT NULL, amount DECIMAL(10, 2), note STRING(20)]
+    primary-key: [id]
+    rows: 10000
+sink:
+  - id: out
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/shop
+    username: writer
+    password: ${env:PG_PASSWORD}
+    table: public.orders
+```
+
+## Prerequisites
+
+- **The target table.** Every column of the input must exist in it, matched by name (exactly, else
+  ignoring case); columns of the table that the input lacks get their defaults.
+- **A user with `USAGE` on the schema and `INSERT` on the table**, and network access from the
+  master and the workers. The driver comes with the plugin.
+
+## Data source configuration
+
+The connection works as for the [PostgreSQL source](../source/postgres#data-source-configuration):
+`url`, `username`, `password` and driver properties in `jdbc.properties.<name>`, with the same
+defaults and controlled properties. `reWriteBatchedInserts=true` turns a batch into multi-row
+inserts, and `stringtype=unspecified` lets text values go into `jsonb`, `uuid`, enum and similar
+columns.
+
+## Node options
+
+<PluginOptions plugin="postgres" component="sink" />
+
+## Native options
+
+<PluginNativeOptions plugin="postgres" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="postgres" />
+
+## Splits and parallelism
+
+The sink writes with as many writers as its parallelism, each with its own connection and
+transactions. Rows reach the writers in no particular order.
+
+## Consistency
+
+The sink writes **at least once**. A failed batch is rolled back, so it leaves no rows behind; rows
+are written twice only when a commit succeeded but its acknowledgement was lost, or when a run
+restarts after some batches were committed. With a primary key on the target, such repeats are
+refused as duplicate keys and become bad rows instead of being stored twice: with
+`env.dirty.policy: skip` they are skipped, with the default `fail` the job fails.
+
+## Examples
+
+### Skip the rows PostgreSQL refuses
+
+```yaml
+version: 1
+name: people-to-postgres
+env:
+  dirty: { policy: skip, max-rows: 100 }
+source:
+  - id: src
+    type: fake
+    table: crm.people
+    columns: [id INT64 NOT NULL, name STRING]
+    primary-key: [id]
+sink:
+  - id: out
+    type: jdbc-postgres
+    url: jdbc:postgresql://db.example.com:5432/crm
+    username: writer
+    password: ${env:PG_PASSWORD}
+    table: crm.people
+    batch-size: 5000
+```
+
+A name longer than the column, a number out of range, a value that does not parse as the column's
+type or a duplicate key fails the insert. The sink splits the batch until it finds the row, writes
+the others, and the job skips up to 100 such rows, keeping the first ones as samples.
+
+### Copy a table between PostgreSQL servers
+
+```yaml
+version: 1
+name: orders-archive
+source:
+  - id: orders
+    type: jdbc-postgres
+    url: jdbc:postgresql://primary.example.com:5432/shop
+    username: reader
+    password: ${env:SHOP_PASSWORD}
+    table: public.orders
+sink:
+  - id: archive
+    type: jdbc-postgres
+    url: jdbc:postgresql://archive.example.com:5432/archive
+    username: writer
+    password: ${env:ARCHIVE_PASSWORD}
+    table: public.orders
+```
+
+## Metrics
+
+The sink reports the standard sink metrics: `rowsWritten`, the write rate, the write queue and
+`writerWaitMs`. Rows PostgreSQL refuses count in `rowsDirty` with samples when the policy is `skip`.
+
+## Performance and tuning
+
+- `batch-size` (1,000 by default) is the number of rows per transaction; larger batches write
+  faster until lock times or the volume of WAL per transaction get in the way.
+- Bad rows are cheap to find but not free: each split of a failed batch is another round trip.
+  Fix systematic causes, such as a column that is too narrow, instead of skipping many rows.
+- Indexes, triggers and foreign keys on the target slow inserts; for large loads, consider adding
+  them after.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-META-0001` | The target table does not exist or the user cannot see it |
+| `PF-META-0002` | An input column is missing from the target table; add it or map the columns with a transform |
+| `PF-PLAN-0012` | More than one table comes into the sink; give each table a sink of its own |
+| `PF-DATA-0009` | PostgreSQL refused a row (too long, out of range, not of the column's type, duplicate key); the message has PostgreSQL's reason. Fix the data or the table, or set `env.dirty.policy: skip` |
+| `PF-DATA-0010` | More rows were refused than `env.dirty.max-rows` allows |
+| `PF-CONN-0001`, `PF-AUTH-0001` | See the [PostgreSQL source](../source/postgres#errors-and-troubleshooting) |
+
+## Known limitations
+
+- Inserts only: no upsert, update or delete yet, and the table must exist.
+- One table per sink node.
+- At least once; exactly-once comes in a later milestone.
+- PostgreSQL 12, 13, 15 and 17 are not verified yet.
+
+## Changelog
+
+<PluginChangelog plugin="postgres" />

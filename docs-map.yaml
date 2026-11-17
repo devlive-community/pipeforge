@@ -79,7 +79,7 @@
   docs: ["development/jdbc-dialects"]
 # The PostgreSQL plugin; its dialect is also described with the other dialects.
 - paths: ["pipeforge-connectors/connector-postgres/**"]
-  docs: ["plugins/source/postgres"]
+  docs: ["plugins/source/postgres", "plugins/sink/postgres"]
 - paths: ["pipeforge-connectors/connector-postgres/src/main/java/org/devlive/pipeforge/connector/postgres/PostgresDialect.java"]
   docs: ["development/jdbc-dialects"]
 - paths: ["pipeforge-connector-testkit/**"]

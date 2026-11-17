@@ -10,9 +10,10 @@ version: 0.1.0-SNAPSHOT
 api-version: "0.x"
 vendor: PipeForge
 license: MIT
-description: Reads PostgreSQL tables, many at once, in parallel splits over JDBC. Ships the PostgreSQL JDBC driver.
+description: Reads PostgreSQL tables, many at once, in parallel splits over JDBC, and writes rows into PostgreSQL tables in batches. Ships the PostgreSQL JDBC driver.
 provides:
   - { type: source, identifier: jdbc-postgres, class: org.devlive.pipeforge.connector.postgres.PostgresSourceFactory }
+  - { type: sink, identifier: jdbc-postgres, class: org.devlive.pipeforge.connector.postgres.PostgresSinkFactory }
 datasource:
   type: postgres
   versions: ["14", "16"]

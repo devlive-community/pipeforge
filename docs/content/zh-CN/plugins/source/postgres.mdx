@@ -11,7 +11,7 @@ PostgreSQL Source（`type: jdbc-postgres`）通过 JDBC 读取 PostgreSQL 数据
 它在有界作业中读取每张表的快照，按键范围切分成分片，由各个读取器共同领取，并以流式方式读取行，不会把整个结果放进内存。
 
 适用于把 PostgreSQL 的某个 Schema 或其中部分表复制到其他系统、每天把表装载到数据湖或数仓，或者把查询结果送入管道。
-实时读取变更（CDC）在后续里程碑提供。
+实时读取变更（CDC）在后续里程碑提供。同一个插件通过 [PostgreSQL Sink](../sink/postgres) 写入 PostgreSQL。
 
 ## 能力
 
