@@ -46,6 +46,7 @@
         <module>pipeforge-server</module>
         <module>pipeforge-cli</module>
         <module>pipeforge-dist</module>
+        <module>pipeforge-e2e</module>
     </modules>
 
     <properties>

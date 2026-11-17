@@ -1,0 +1,40 @@
+---
+title: 测试
+description: 仓库中的测试种类、运行方式，以及由打包后的发行版组成的集群端到端测试。
+order: 65
+---
+
+## 测试种类
+
+| 种类 | 位置 | 运行方式 |
+|---|---|---|
+| 单元测试 | 每个模块的 `src/test` | `./mvnw test`，每次构建都运行 |
+| 连接器契约测试 | 各连接器模块，使用 [testkit](./testkit) 和 Docker 中的真实数据库 | `./mvnw test`；没有 Docker 时跳过 |
+| 发行版脚本 | `pipeforge-dist`，`*IT` | 打包之后，`./mvnw verify -pl pipeforge-dist` |
+| 端到端测试 | `pipeforge-e2e`，`*IT` | 打包之后，`./mvnw verify -pl pipeforge-e2e`；没有 Docker 时跳过 |
+| Web UI | `pipeforge-ui`：Vitest、Playwright | `pnpm test`、`pnpm e2e` |
+| CI 脚本 | `.ci/tests` | `.ci/tests/run.sh` |
+
+## 端到端测试
+
+`pipeforge-e2e` 按部署后的样子测试集群：解压 `pipeforge-dist` 的发布包，每个进程在自己的发行版副本中由各自的脚本启动。
+
+- **集群**：一个 Master、三个各有 4 个 Slot 且标签分别为 `zone=a`、`zone=b`、`zone=c` 的 Worker，以及服务端，都使用本机的空闲端口；
+  MySQL 8.4 和 PostgreSQL 16 运行在 Docker 中。Master 从测试的 Connector/J jar 得到 `mysql-connector-j` 驱动插件，
+  Worker 像下载其他插件一样从 Master 下载它。
+- **一百万行**：MySQL 生成一百万条订单，包含文本、小数、毫秒精度的时间、`NULL` 和非 ASCII 字符。通过服务端 REST API 提交的作业以并行度 3、
+  12 个分片把它们复制到 PostgreSQL。两边的行数、求和、`NULL` 数和时间范围必须一致，一千多行抽样数据必须逐值一致。服务端必须保存了这次运行的指标
+  （读写各一百万行、所有分片读完）、指标历史和运行分析。
+- **丢失 Worker**：一个限速的复制作业运行时，测试直接杀掉其中一个 Task 所在的 Worker，模拟进程崩溃。运行必须以 `PF-CLUS-0001`（没有心跳）
+  或 `PF-CLUS-0010`（到它的数据连接断开）失败，消息必须指明这个 Worker，集群必须带着另外两个 Worker 继续工作。这里 Master 在 6 秒后认为
+  Worker 已丢失。
+
+构建发行版之后运行：
+
+```bash
+./mvnw -B install -pl pipeforge-dist -am -DskipTests
+./mvnw -B verify -pl pipeforge-e2e
+```
+
+运行需要几分钟。每个进程的输出写在 `pipeforge-e2e/target/e2e-run/logs/` 中，某一步失败时会显示每个进程输出的末尾。
+`-Dpipeforge.e2e.skip` 可以跳过它们，例如在只需要构件的完整构建中。CI 在它们依赖的模块改动时运行这些测试，也就是引擎、服务端和它们用到的连接器的所有模块。

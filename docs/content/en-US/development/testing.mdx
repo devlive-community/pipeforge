@@ -1,0 +1,48 @@
+---
+title: Testing
+description: The kinds of tests in the repository, how to run them, and the end-to-end tests of a cluster made of the packaged distribution.
+order: 65
+---
+
+## Kinds of tests
+
+| Kind | Where | Runs with |
+|---|---|---|
+| Unit tests | `src/test` of every module | `./mvnw test`, on every build |
+| Connector contracts | the connector modules, with the [testkit](./testkit) and real databases in Docker | `./mvnw test`; skipped without Docker |
+| Scripts of the distribution | `pipeforge-dist`, `*IT` | `./mvnw verify -pl pipeforge-dist`, after packaging |
+| End-to-end tests | `pipeforge-e2e`, `*IT` | `./mvnw verify -pl pipeforge-e2e`, after packaging; skipped without Docker |
+| Web UI | `pipeforge-ui`: Vitest, Playwright | `pnpm test`, `pnpm e2e` |
+| CI scripts | `.ci/tests` | `.ci/tests/run.sh` |
+
+## End-to-end tests
+
+`pipeforge-e2e` tests a cluster as it is deployed: the release archive of `pipeforge-dist`,
+unpacked, with each process started by its own script in its own copy of the distribution.
+
+- **The cluster**: a master, three workers with four slots each and labels `zone=a`, `zone=b`,
+  `zone=c`, and the server, all on free ports of the host; MySQL 8.4 and PostgreSQL 16 run in
+  Docker. The master gets the `mysql-connector-j` driver plugin from the test's Connector/J jar,
+  and the workers download it from the master like the other plugins.
+- **A million rows**: MySQL makes a million orders with text, decimals, millisecond times, `NULL`s
+  and non-ASCII characters. A job submitted to the server's REST API copies them to PostgreSQL at
+  parallelism 3 in 12 splits. Both sides must agree on the count, the sums, the `NULL` counts and
+  the time range, and on more than a thousand sampled rows value by value. The server must have kept
+  the run's metrics (a million rows read and written, every split read), their history and the run
+  analysis.
+- **A lost worker**: a rate-limited copy runs while the test kills the worker of one of its tasks
+  at once, as a crash would. The run must fail with `PF-CLUS-0001` (no heartbeat) or `PF-CLUS-0010`
+  (the data connection to it broke), the message must name that worker, and the cluster must go on
+  with the two others. The master counts a worker as lost after 6 seconds here.
+
+Run them after a build of the distribution:
+
+```bash
+./mvnw -B install -pl pipeforge-dist -am -DskipTests
+./mvnw -B verify -pl pipeforge-e2e
+```
+
+They take a few minutes. Each process writes its output to `pipeforge-e2e/target/e2e-run/logs/`, and
+a failed step shows the end of every process's output. `-Dpipeforge.e2e.skip` skips them, for
+example in a full build that only needs the artifacts. CI runs them when the modules they depend on
+change, which is every module of the engine, the server and the connectors they use.

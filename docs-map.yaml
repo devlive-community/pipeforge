@@ -105,6 +105,8 @@
   docs: ["reference/api"]
 - paths: ["pipeforge-cli/**"]
   docs: ["reference/cli"]
+- paths: ["pipeforge-e2e/**"]
+  docs: ["development/testing"]
 - paths: ["pipeforge-dist/**"]
   docs: ["operations/deployment"]
 - paths: ["pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/log/**", "pipeforge-dist/src/main/dist/conf/logback.xml"]
