@@ -34,6 +34,9 @@ class PluginDocsTest {
         JsonNode json = new ObjectMapper().readTree(file.toFile());
         assertThat(json.get("format").asInt()).isEqualTo(PluginDocs.FORMAT_VERSION);
         assertThat(json.get("datasource").get("versions").get(0).asText()).isEqualTo("1.0");
+        assertThat(Files.readString(file))
+                .as("the same order on every JVM, so that the committed file stays current")
+                .containsSubsequence("\"datasource\"", "\"type\"", "\"versions\"", "\"drivers\"");
         JsonNode component = json.get("components").get(0);
         assertThat(component.get("type").asText()).isEqualTo("source");
         assertThat(component.get("capabilities").toString())

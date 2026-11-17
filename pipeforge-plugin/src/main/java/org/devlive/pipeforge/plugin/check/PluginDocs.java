@@ -49,13 +49,11 @@ public final class PluginDocs {
         model.put("license", descriptor.license());
         model.put("description", descriptor.description());
         if (descriptor.datasource() != null) {
-            model.put(
-                    "datasource",
-                    Map.of(
-                            "type",
-                            descriptor.datasource().type(),
-                            "versions",
-                            descriptor.datasource().versions()));
+            // in a fixed order: the file is compared with the committed one
+            Map<String, Object> datasource = new LinkedHashMap<>();
+            datasource.put("type", descriptor.datasource().type());
+            datasource.put("versions", descriptor.datasource().versions());
+            model.put("datasource", datasource);
         }
         model.put("drivers", descriptor.drivers());
         List<Map<String, Object>> list = new ArrayList<>();
