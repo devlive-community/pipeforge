@@ -229,6 +229,73 @@ public class RunRepository {
                 .update();
     }
 
+    /** Keeps a sample of a run's metrics; a sample another server took at the same moment is kept once. */
+    public void sample(String runId, RunMetrics metrics, String json) {
+        try {
+            jdbc.sql("INSERT INTO job_run_metrics (run_id, sampled_at, elapsed_ms, rows_read, rows_written, rows_dirty,"
+                            + " rows_failed, metrics_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                    .params(
+                            runId,
+                            utc(metrics.at()),
+                            metrics.elapsedMs(),
+                            metrics.rowsRead(),
+                            metrics.rowsWritten(),
+                            metrics.rowsDirty(),
+                            metrics.rowsFailed(),
+                            json)
+                    .update();
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            // taken already
+        }
+    }
+
+    /** The full metrics of the last sample of a run, as JSON. */
+    public Optional<String> latestMetrics(String runId) {
+        return jdbc.sql("SELECT metrics_json FROM job_run_metrics WHERE run_id = ? ORDER BY sampled_at DESC LIMIT 1")
+                .param(runId)
+                .query(String.class)
+                .optional();
+    }
+
+    /** The samples of a run, oldest first, from {@code since} on, at most {@code limit}. */
+    public List<RunMetrics.Sample> samples(String runId, @Nullable Instant since, int limit) {
+        return jdbc
+                .sql("SELECT sampled_at, elapsed_ms, rows_read, rows_written, rows_dirty, rows_failed FROM"
+                        + " job_run_metrics WHERE run_id = ? AND sampled_at >= ? ORDER BY sampled_at")
+                .params(runId, utc(since == null ? Instant.EPOCH : since))
+                .query((rs, row) -> new RunMetrics.Sample(
+                        instant(rs.getObject("sampled_at", LocalDateTime.class)),
+                        rs.getLong("elapsed_ms"),
+                        rs.getLong("rows_read"),
+                        rs.getLong("rows_written"),
+                        rs.getLong("rows_dirty"),
+                        rs.getLong("rows_failed")))
+                .stream()
+                .limit(Math.max(1, Math.min(limit, 10_000)))
+                .toList();
+    }
+
+    /** Removes the samples taken before {@code before}; returns how many. */
+    public int deleteSamplesBefore(Instant before) {
+        return jdbc.sql("DELETE FROM job_run_metrics WHERE sampled_at < ?")
+                .param(utc(before))
+                .update();
+    }
+
+    /** Keeps the run analysis of a run that ended. */
+    public void saveAnalysis(String runId, String json) {
+        jdbc.sql("UPDATE job_run SET analysis_json = ? WHERE id = ?")
+                .params(json, runId)
+                .update();
+    }
+
+    public Optional<String> analysis(String runId) {
+        return jdbc.sql("SELECT analysis_json FROM job_run WHERE id = ? AND analysis_json IS NOT NULL")
+                .param(runId)
+                .query(String.class)
+                .optional();
+    }
+
     /** Where a page ends: the submission time and ID of its last run. */
     record Cursor(Instant submittedAt, String id) {
         String encode() {

@@ -213,6 +213,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the analysis of a run
+         * @description What limited the run and where (design 29): job-level figures, node-level figures and the bottleneck. Kept when the run ends.
+         */
+        get: operations["getRunAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{id}/cancel": {
         parameters: {
             query?: never;
@@ -227,6 +247,106 @@ export interface paths {
          * @description Asks the master to cancel a run that has not ended; the run moves to CANCELLING, then CANCELLED. An ended run is returned as it is.
          */
         post: operations["cancelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the log of a task
+         * @description A part of a task's log, through the master from the worker it ran on. offset in the answer is where the next read continues, so following a log means reading again from it; eof is true once the log was read to its end and the task has ended.
+         */
+        get: operations["readRunLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the metrics of a run
+         * @description Rows, rates, waits, memory, splits and the counters of every node: from the master while the run runs, else the last sample the server kept (design 15).
+         */
+        get: operations["getRunMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/metrics/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the metrics of a run over time
+         * @description The samples the server kept while the run ran (pipeforge.master.metrics-interval), oldest first; rates follow from two samples.
+         */
+        get: operations["getRunMetricsHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the splits of a run
+         * @description Every split the source assigned, with its reader and whether the reader finished; empty once the master no longer has the run.
+         */
+        get: operations["listRunSplits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tasks of a run
+         * @description Every task with its state and worker, to read its log; empty once the master no longer has the run.
+         */
+        get: operations["listRunTasks"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -292,6 +412,15 @@ export interface components {
         DatasourceInfo: {
             type?: string;
             versions?: string[];
+        };
+        DirtySample: {
+            /** Format: date-time */
+            at?: string;
+            code?: string;
+            message?: string;
+            node?: string;
+            row?: string;
+            table?: string;
         };
         ErrorCodeInfo: {
             category?: string;
@@ -373,6 +502,40 @@ export interface components {
                 [key: string]: string;
             };
         };
+        JsonNode: {
+            array?: boolean;
+            bigDecimal?: boolean;
+            bigInteger?: boolean;
+            binary?: boolean;
+            boolean?: boolean;
+            container?: boolean;
+            double?: boolean;
+            embeddedValue?: boolean;
+            empty?: boolean;
+            float?: boolean;
+            floatingPointNumber?: boolean;
+            int?: boolean;
+            integralNumber?: boolean;
+            long?: boolean;
+            missingNode?: boolean;
+            /** @enum {string} */
+            nodeType?: "ARRAY" | "BINARY" | "BOOLEAN" | "MISSING" | "NULL" | "NUMBER" | "OBJECT" | "POJO" | "STRING";
+            null?: boolean;
+            number?: boolean;
+            object?: boolean;
+            pojo?: boolean;
+            short?: boolean;
+            string?: boolean;
+            /** @deprecated */
+            textual?: boolean;
+            valueNode?: boolean;
+        };
+        LogChunk: {
+            eof?: boolean;
+            /** Format: int64 */
+            offset?: number;
+            text?: string;
+        };
         Node: {
             boundedness?: string;
             id?: string;
@@ -450,9 +613,80 @@ export interface components {
             code?: string;
             message?: string;
         };
+        RunMetrics: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: int64 */
+            backpressuredMs?: number;
+            dirtySamples?: components["schemas"]["DirtySample"][];
+            /** Format: int64 */
+            elapsedMs?: number;
+            /** Format: int64 */
+            exchangedBytes?: number;
+            /** Format: int64 */
+            memoryBytes?: number;
+            nodes?: components["schemas"]["Node"][];
+            /** Format: int32 */
+            parallelism?: number;
+            /** Format: int32 */
+            queueCapacity?: number;
+            /** Format: int32 */
+            queueDepth?: number;
+            /** Format: int64 */
+            readerWaitMs?: number;
+            /** Format: double */
+            readRowsPerSecond?: number;
+            /** Format: int64 */
+            rowsDirty?: number;
+            /** Format: int64 */
+            rowsExpanded?: number;
+            /** Format: int64 */
+            rowsFailed?: number;
+            /** Format: int64 */
+            rowsFiltered?: number;
+            /** Format: int64 */
+            rowsInFlight?: number;
+            /** Format: int64 */
+            rowsRead?: number;
+            /** Format: int64 */
+            rowsWritten?: number;
+            /** Format: int32 */
+            splitsFinished?: number;
+            /** Format: int32 */
+            splitsTotal?: number;
+            /** Format: int32 */
+            tasksRunning?: number;
+            /** Format: int64 */
+            throttleWaitMs?: number;
+            /** Format: double */
+            writeRowsPerSecond?: number;
+            /** Format: int64 */
+            writerWaitMs?: number;
+        };
         RunPage: {
             next?: string;
             runs?: components["schemas"]["Run"][];
+        };
+        Sample: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: int64 */
+            elapsedMs?: number;
+            /** Format: int64 */
+            rowsDirty?: number;
+            /** Format: int64 */
+            rowsFailed?: number;
+            /** Format: int64 */
+            rowsRead?: number;
+            /** Format: int64 */
+            rowsWritten?: number;
+        };
+        Split: {
+            node?: string;
+            split?: string;
+            state?: string;
+            /** Format: int32 */
+            subtask?: number;
         };
         SubmitRequest: {
             definition: string;
@@ -467,6 +701,15 @@ export interface components {
             id?: string;
             partitionKeys?: string[];
             primaryKey?: string[];
+        };
+        Task: {
+            /** Format: int32 */
+            attempt?: number;
+            state?: string;
+            /** Format: int32 */
+            subtask?: number;
+            vertex?: string;
+            worker?: string;
         };
         Transition: {
             /** Format: date-time */
@@ -1062,6 +1305,55 @@ export interface operations {
             };
         };
     };
+    getRunAnalysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonNode"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
     cancelRun: {
         parameters: {
             query?: never;
@@ -1084,6 +1376,271 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    readRunLog: {
+        parameters: {
+            query: {
+                /** @description The attempt */
+                attempt?: number;
+                /** @description Only entries with this text */
+                contains?: string;
+                /** @description Only entries of this level or above: TRACE, DEBUG, INFO, WARN, ERROR */
+                level?: string | null;
+                /** @description The most bytes; 0 for 64KB */
+                maxBytes?: number;
+                /** @description Where to start; negative counts back from the end */
+                offset?: number;
+                /** @description The subtask */
+                subtask: number;
+                /** @description The vertex of the task, as in the tasks of the run */
+                vertex: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogChunk"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    getRunMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunMetrics"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    getRunMetricsHistory: {
+        parameters: {
+            query?: {
+                /** @description Samples at most, up to 10000 */
+                limit?: number;
+                /** @description Only samples from this time on */
+                since?: string | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sample"][];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    listRunSplits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Split"][];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    listRunTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][];
                 };
             };
             /** @description The request is invalid (PF-CONF-0007) */

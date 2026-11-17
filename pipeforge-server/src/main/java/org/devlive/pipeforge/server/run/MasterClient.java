@@ -34,7 +34,25 @@ public interface MasterClient extends AutoCloseable {
      * @param started when it started; {@code null} before
      * @param error why it failed
      */
-    record Status(RunState state, @Nullable Instant started, Runs.@Nullable RunError error) {}
+    record Status(
+            RunState state,
+            @Nullable Instant started,
+            Runs.@Nullable RunError error,
+            java.util.List<RunMetrics.Task> tasks) {
+        public Status(RunState state, @Nullable Instant started, Runs.@Nullable RunError error) {
+            this(state, started, error, java.util.List.of());
+        }
+    }
+
+    /**
+     * A part of a task's log to read.
+     *
+     * @param offset where to start; negative counts from the end
+     * @param maxBytes the most bytes; 0 for 64KB
+     * @param contains only entries with this text; empty for all
+     * @param minLevel only entries of this level or above; {@code null} for all
+     */
+    record LogQuery(long offset, long maxBytes, String contains, @Nullable String minLevel) {}
 
     /** Where the master is, for messages. */
     String address();
@@ -51,6 +69,22 @@ public interface MasterClient extends AutoCloseable {
      * @throws PipeForgeException {@code PF-CLUS-0008} when the master cannot be reached
      */
     Optional<Status> status(String runId);
+
+    /** The metrics of a run now; empty when the master does not know it. */
+    Optional<RunMetrics> metrics(String runId);
+
+    /** The run analysis as JSON (design 29); empty when the master does not know the run. */
+    Optional<String> analysis(String runId);
+
+    /** The splits of a run with their readers; empty when the master does not know the run. */
+    Optional<java.util.List<RunMetrics.Split>> splits(String runId);
+
+    /**
+     * Reads a part of a task's log, through the master from the task's worker.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0012} when there is no such log
+     */
+    RunMetrics.LogChunk readLog(String runId, RunMetrics.Task task, LogQuery query);
 
     @Override
     void close();
@@ -75,6 +109,26 @@ public interface MasterClient extends AutoCloseable {
 
             @Override
             public Optional<Status> status(String runId) {
+                throw missing();
+            }
+
+            @Override
+            public Optional<RunMetrics> metrics(String runId) {
+                throw missing();
+            }
+
+            @Override
+            public Optional<String> analysis(String runId) {
+                throw missing();
+            }
+
+            @Override
+            public Optional<java.util.List<RunMetrics.Split>> splits(String runId) {
+                throw missing();
+            }
+
+            @Override
+            public RunMetrics.LogChunk readLog(String runId, RunMetrics.Task task, LogQuery query) {
                 throw missing();
             }
 

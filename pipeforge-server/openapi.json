@@ -766,6 +766,68 @@
         }
       }
     },
+    "/api/v1/runs/{id}/analysis" : {
+      "get" : {
+        "description" : "What limited the run and where (design 29): job-level figures, node-level figures and the bottleneck. Kept when the run ends.",
+        "operationId" : "getRunAnalysis",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/JsonNode"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get the analysis of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "运行受什么限制、限制在哪里：作业级与节点级的数字以及瓶颈结论。运行结束时保留。",
+          "summary" : "查看运行分析"
+        }
+      }
+    },
     "/api/v1/runs/{id}/cancel" : {
       "post" : {
         "description" : "Asks the master to cancel a run that has not ended; the run moves to CANCELLING, then CANCELLED. An ended run is returned as it is.",
@@ -834,6 +896,408 @@
         "x-zh-CN" : {
           "description" : "请 Master 取消一个尚未结束的运行；运行先进入 CANCELLING，然后是 CANCELLED。已结束的运行原样返回。",
           "summary" : "取消运行"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/logs" : {
+      "get" : {
+        "description" : "A part of a task's log, through the master from the worker it ran on. offset in the answer is where the next read continues, so following a log means reading again from it; eof is true once the log was read to its end and the task has ended.",
+        "operationId" : "readRunLog",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The vertex of the task, as in the tasks of the run",
+          "in" : "query",
+          "name" : "vertex",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The subtask",
+          "in" : "query",
+          "name" : "subtask",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "description" : "The attempt",
+          "in" : "query",
+          "name" : "attempt",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "description" : "Where to start; negative counts back from the end",
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        }, {
+          "description" : "The most bytes; 0 for 64KB",
+          "in" : "query",
+          "name" : "maxBytes",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "default" : 0
+          }
+        }, {
+          "description" : "Only entries with this text",
+          "in" : "query",
+          "name" : "contains",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : ""
+          }
+        }, {
+          "description" : "Only entries of this level or above: TRACE, DEBUG, INFO, WARN, ERROR",
+          "in" : "query",
+          "name" : "level",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LogChunk"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Read the log of a task",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "经 Master 从 Task 所在的 Worker 读取一段日志。返回的 offset 是下一次读取继续的位置，跟踪日志就是从它再次读取；日志读完且 Task 已结束时 eof 为 true。",
+          "summary" : "读取 Task 的日志"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/metrics" : {
+      "get" : {
+        "description" : "Rows, rates, waits, memory, splits and the counters of every node: from the master while the run runs, else the last sample the server kept (design 15).",
+        "operationId" : "getRunMetrics",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RunMetrics"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get the metrics of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "行数、速率、等待时间、内存、分片以及每个节点的计数：运行中时来自 Master，否则为服务端保留的最后一次采样。",
+          "summary" : "查看运行的指标"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/metrics/history" : {
+      "get" : {
+        "description" : "The samples the server kept while the run ran (pipeforge.master.metrics-interval), oldest first; rates follow from two samples.",
+        "operationId" : "getRunMetricsHistory",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Only samples from this time on",
+          "in" : "query",
+          "name" : "since",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          }
+        }, {
+          "description" : "Samples at most, up to 10000",
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 1000
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Sample"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Get the metrics of a run over time",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "运行期间服务端保留的采样（pipeforge.master.metrics-interval），按时间顺序；速率由相邻两次采样得出。",
+          "summary" : "查看运行指标的变化"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/splits" : {
+      "get" : {
+        "description" : "Every split the source assigned, with its reader and whether the reader finished; empty once the master no longer has the run.",
+        "operationId" : "listRunSplits",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Split"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List the splits of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "Source 分配的每个分片、读取它的读取器以及读取器是否已结束；Master 不再保留该运行后为空。",
+          "summary" : "列出运行的分片"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/tasks" : {
+      "get" : {
+        "description" : "Every task with its state and worker, to read its log; empty once the master no longer has the run.",
+        "operationId" : "listRunTasks",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Task"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List the tasks of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "每个 Task 的状态和所在的 Worker，用于读取日志；Master 不再保留该运行后为空。",
+          "summary" : "列出运行的 Task"
         }
       }
     },
@@ -1011,6 +1475,30 @@
             "items" : {
               "type" : "string"
             }
+          }
+        }
+      },
+      "DirtySample" : {
+        "type" : "object",
+        "properties" : {
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "node" : {
+            "type" : "string"
+          },
+          "row" : {
+            "type" : "string"
+          },
+          "table" : {
+            "type" : "string"
           }
         }
       },
@@ -1244,6 +1732,100 @@
           }
         },
         "required" : [ "definition" ]
+      },
+      "JsonNode" : {
+        "type" : "object",
+        "properties" : {
+          "array" : {
+            "type" : "boolean"
+          },
+          "bigDecimal" : {
+            "type" : "boolean"
+          },
+          "bigInteger" : {
+            "type" : "boolean"
+          },
+          "binary" : {
+            "type" : "boolean"
+          },
+          "boolean" : {
+            "type" : "boolean"
+          },
+          "container" : {
+            "type" : "boolean"
+          },
+          "double" : {
+            "type" : "boolean"
+          },
+          "embeddedValue" : {
+            "type" : "boolean"
+          },
+          "empty" : {
+            "type" : "boolean"
+          },
+          "float" : {
+            "type" : "boolean"
+          },
+          "floatingPointNumber" : {
+            "type" : "boolean"
+          },
+          "int" : {
+            "type" : "boolean"
+          },
+          "integralNumber" : {
+            "type" : "boolean"
+          },
+          "long" : {
+            "type" : "boolean"
+          },
+          "missingNode" : {
+            "type" : "boolean"
+          },
+          "nodeType" : {
+            "type" : "string",
+            "enum" : [ "ARRAY", "BINARY", "BOOLEAN", "MISSING", "NULL", "NUMBER", "OBJECT", "POJO", "STRING" ]
+          },
+          "null" : {
+            "type" : "boolean"
+          },
+          "number" : {
+            "type" : "boolean"
+          },
+          "object" : {
+            "type" : "boolean"
+          },
+          "pojo" : {
+            "type" : "boolean"
+          },
+          "short" : {
+            "type" : "boolean"
+          },
+          "string" : {
+            "type" : "boolean"
+          },
+          "textual" : {
+            "type" : "boolean",
+            "deprecated" : true
+          },
+          "valueNode" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "LogChunk" : {
+        "type" : "object",
+        "properties" : {
+          "eof" : {
+            "type" : "boolean"
+          },
+          "offset" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
       },
       "Node" : {
         "type" : "object",
@@ -1481,6 +2063,115 @@
           }
         }
       },
+      "RunMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "backpressuredMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dirtySamples" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DirtySample"
+            }
+          },
+          "elapsedMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "exchangedBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "memoryBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Node"
+            }
+          },
+          "parallelism" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "queueCapacity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "queueDepth" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "readRowsPerSecond" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "readerWaitMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsDirty" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsExpanded" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsFailed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsFiltered" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsInFlight" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsRead" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsWritten" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "splitsFinished" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "splitsTotal" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tasksRunning" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "throttleWaitMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "writeRowsPerSecond" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "writerWaitMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "RunPage" : {
         "type" : "object",
         "properties" : {
@@ -1492,6 +2183,53 @@
             "items" : {
               "$ref" : "#/components/schemas/Run"
             }
+          }
+        }
+      },
+      "Sample" : {
+        "type" : "object",
+        "properties" : {
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "elapsedMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsDirty" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsFailed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsRead" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsWritten" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Split" : {
+        "type" : "object",
+        "properties" : {
+          "node" : {
+            "type" : "string"
+          },
+          "split" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "subtask" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -1537,6 +2275,28 @@
             "items" : {
               "type" : "string"
             }
+          }
+        }
+      },
+      "Task" : {
+        "type" : "object",
+        "properties" : {
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "subtask" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "vertex" : {
+            "type" : "string"
+          },
+          "worker" : {
+            "type" : "string"
           }
         }
       },

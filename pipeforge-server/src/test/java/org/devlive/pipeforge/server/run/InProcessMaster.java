@@ -42,11 +42,21 @@ final class InProcessMaster implements AutoCloseable {
     private Dispatcher dispatcher;
     private Server server;
     private final PluginManager plugins;
+    /** The task logs of the worker. */
+    final org.devlive.pipeforge.engine.worker.log.LogService logs;
 
     InProcessMaster(PluginManager plugins) {
         this.plugins = plugins;
         master = InProcessRpc.serve(name + "-jobs", jobs);
-        executor = new TaskExecutor("local", master.gateway());
+        try {
+            logs = new org.devlive.pipeforge.engine.worker.log.LogService(
+                    "local",
+                    org.devlive.pipeforge.engine.worker.log.LogService.Settings.defaults(
+                            java.nio.file.Files.createTempDirectory("in-process-logs")));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        executor = new TaskExecutor("local", master.gateway(), null, null, logs);
         worker = InProcessRpc.serve(name + "-worker", executor);
         start();
     }
@@ -86,6 +96,7 @@ final class InProcessMaster implements AutoCloseable {
         server.shutdownNow();
         dispatcher.close();
         executor.close();
+        logs.close();
         worker.close();
         master.close();
         timers.shutdownNow();

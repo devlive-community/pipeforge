@@ -27,6 +27,23 @@ export type Run = Schemas["Run"];
 export type RunDetail = Schemas["RunDetail"];
 export type RunPage = Schemas["RunPage"];
 export type RunState = NonNullable<Run["status"]>;
+export type RunMetrics = Schemas["RunMetrics"];
+export type MetricSample = Schemas["Sample"];
+export type RunSplit = Schemas["Split"];
+export type RunTask = Schemas["Task"];
+export type LogChunk = Schemas["LogChunk"];
+
+/** Which part of a task's log to read. */
+export interface LogQuery {
+  vertex: string;
+  subtask: number;
+  attempt?: number;
+  /** Where to start; the offset of the previous chunk to follow the log. */
+  offset?: number;
+  maxBytes?: number;
+  contains?: string;
+  level?: "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR";
+}
 
 /** Which runs to list: some states, one job, and the page. */
 export interface RunQuery {
@@ -108,6 +125,14 @@ export function createClient(options: ClientOptions = {}) {
     submitRun: (body: SubmitRequest) => unwrap(raw.POST("/api/v1/runs", { body })),
     listRuns: (query: RunQuery = {}) => unwrap(raw.GET("/api/v1/runs", { params: { query } })),
     getRun: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}", { params: { path: { id } } })),
+    getRunMetrics: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/metrics", { params: { path: { id } } })),
+    getRunMetricsHistory: (id: string, since?: string) =>
+      unwrap(raw.GET("/api/v1/runs/{id}/metrics/history", { params: { path: { id }, query: since ? { since } : {} } })),
+    getRunAnalysis: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/analysis", { params: { path: { id } } })),
+    listRunSplits: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/splits", { params: { path: { id } } })),
+    listRunTasks: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/tasks", { params: { path: { id } } })),
+    readRunLog: (id: string, query: LogQuery) =>
+      unwrap(raw.GET("/api/v1/runs/{id}/logs", { params: { path: { id }, query } })),
     cancelRun: (id: string, reason?: string) =>
       unwrap(raw.POST("/api/v1/runs/{id}/cancel", { params: { path: { id } }, body: reason ? { reason } : {} })),
   };

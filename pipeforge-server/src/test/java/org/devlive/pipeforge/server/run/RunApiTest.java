@@ -95,6 +95,7 @@ class RunApiTest {
         registry.add("pipeforge.plugin.paths", () -> root.resolve("plugins").toString());
         registry.add("pipeforge.plugin.cache", () -> root.resolve("cache").toString());
         registry.add("pipeforge.master.poll-interval", () -> "50ms");
+        registry.add("pipeforge.master.metrics-interval", () -> "50ms");
     }
 
     static String job(String name, String source) {
@@ -242,5 +243,75 @@ class RunApiTest {
         master.restart();
         String detail = await(id, "FAILED");
         assertThat((String) JsonPath.read(detail, "$.run.error.code")).isEqualTo("PF-CLUS-0016");
+    }
+
+    String getJson(String path) throws Exception {
+        return mvc.perform(get(path))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    @Test
+    void keepsTheMetricsAndAnalysisOfARunAfterTheMasterForgetsIt() throws Exception {
+        String id = submit(job("measured", "rows: 400, rows-per-second: 800"));
+        await(id, "SUCCESS");
+        String metrics = getJson("/api/v1/runs/" + id + "/metrics");
+        assertThat((Integer) JsonPath.read(metrics, "$.rowsRead")).isEqualTo(400);
+        assertThat((Integer) JsonPath.read(metrics, "$.rowsWritten")).isEqualTo(400);
+        assertThat((List<String>) JsonPath.read(metrics, "$.nodes[*].node")).containsExactly("src", "out");
+        List<Integer> read = JsonPath.read(getJson("/api/v1/runs/" + id + "/metrics/history"), "$[*].rowsRead");
+        assertThat(read)
+                .as("samples while it ran and the last one")
+                .isNotEmpty()
+                .isSorted()
+                .endsWith(400);
+        assertThat((String) JsonPath.read(getJson("/api/v1/runs/" + id + "/analysis"), "$.schemaVersion"))
+                .isNotBlank();
+        assertThat((List<String>) JsonPath.read(getJson("/api/v1/runs/" + id + "/splits"), "$[*].state"))
+                .isNotEmpty()
+                .containsOnly("FINISHED");
+        assertThat((List<String>) JsonPath.read(getJson("/api/v1/runs/" + id + "/tasks"), "$[*].state"))
+                .isNotEmpty()
+                .containsOnly("FINISHED");
+
+        master.restart();
+        assertThat((Integer) JsonPath.read(getJson("/api/v1/runs/" + id + "/metrics"), "$.rowsRead"))
+                .as("kept by the server")
+                .isEqualTo(400);
+        assertThat((String) JsonPath.read(getJson("/api/v1/runs/" + id + "/analysis"), "$.schemaVersion"))
+                .isNotBlank();
+        assertThat(getJson("/api/v1/runs/" + id + "/splits")).isEqualTo("[]");
+    }
+
+    @Test
+    void readsTaskLogsThroughTheMaster() throws Exception {
+        String id = submit(job("logged", "rows: 20"));
+        await(id, "SUCCESS");
+        String tasks = getJson("/api/v1/runs/" + id + "/tasks");
+        String vertex = JsonPath.read(tasks, "$[0].vertex");
+        var attempt = new org.devlive.pipeforge.engine.rpc.ExecutionAttemptId(id, vertex, 0, 0);
+        java.nio.file.Path file = master.logs.path("logged", attempt);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "2026-11-17 08:00:00.000 INFO  reading\n2026-11-17 08:00:01.000 WARN  slow target\n");
+
+        String chunk = mvc.perform(get("/api/v1/runs/" + id + "/logs")
+                        .param("vertex", vertex)
+                        .param("subtask", "0")
+                        .param("contains", "slow"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat((String) JsonPath.read(chunk, "$.text"))
+                .contains("slow target")
+                .doesNotContain("reading");
+        assertThat((Integer) JsonPath.read(chunk, "$.offset")).isPositive();
+        mvc.perform(get("/api/v1/runs/" + id + "/logs")
+                        .param("vertex", "nothing")
+                        .param("subtask", "0"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PF-CLUS-0012"));
     }
 }

@@ -24,6 +24,10 @@ import org.springframework.stereotype.Component;
  * records every change of state. A run the master no longer knows failed ({@code PF-CLUS-0016}),
  * unless it is still in {@code QUEUE} within {@link #SUBMIT_GRACE} of its submission: the master
  * may not have received it yet. While the master cannot be reached, runs keep their state.
+ *
+ * <p>Every metrics interval it keeps a sample of each running run's metrics in {@code
+ * job_run_metrics}, and when a run ends its final metrics and its run analysis, so that they
+ * outlive the master's memory of the run. Samples older than the retention are removed hourly.
  */
 @Component
 public class RunTracker implements SmartLifecycle {
@@ -37,6 +41,11 @@ public class RunTracker implements SmartLifecycle {
     private final MasterClient master;
     private final Clock clock;
     private final Duration interval;
+    private final Duration metricsInterval;
+    private final Duration retention;
+    private final tools.jackson.databind.json.JsonMapper json;
+    private final java.util.Map<String, java.time.Instant> sampled = new java.util.concurrent.ConcurrentHashMap<>();
+    private java.time.Instant cleaned = java.time.Instant.EPOCH;
     private ScheduledExecutorService timer;
     private volatile boolean unreachable;
 
@@ -44,15 +53,20 @@ public class RunTracker implements SmartLifecycle {
             RunRepository runs,
             MasterClient master,
             Clock clock,
-            org.devlive.pipeforge.server.config.ServerProperties properties) {
+            org.devlive.pipeforge.server.config.ServerProperties properties,
+            tools.jackson.databind.json.JsonMapper json) {
         this.runs = runs;
         this.master = master;
         this.clock = clock;
         this.interval = properties.master().pollInterval();
+        this.metricsInterval = properties.master().metricsInterval();
+        this.retention = properties.metastore().metricsRetention();
+        this.json = json;
     }
 
     /** Asks the master about every run that has not ended and records what changed. */
     public void poll() {
+        cleanup();
         for (Runs.Run run : runs.live()) {
             Optional<MasterClient.Status> status;
             try {
@@ -93,8 +107,53 @@ public class RunTracker implements SmartLifecycle {
                 if (runs.transition(
                         run.id(), run.status(), now.state(), clock.instant(), now.started(), now.error(), reason)) {
                     LOG.info("Run {} of job {}: {} -> {}", run.id(), run.job(), run.status(), now.state());
+                    if (now.state().isTerminal()) {
+                        keep(run.id());
+                    }
                 }
             }
+            if (!now.state().isTerminal() && now.state() != RunState.QUEUE) {
+                java.time.Instant last = sampled.get(run.id());
+                if (last == null || !last.plus(metricsInterval).isAfter(clock.instant())) {
+                    sample(run.id());
+                }
+            }
+        }
+    }
+
+    /** Keeps a sample of a run's metrics. */
+    private void sample(String runId) {
+        try {
+            master.metrics(runId).ifPresent(metrics -> {
+                runs.sample(runId, metrics, json.writeValueAsString(metrics));
+                sampled.put(runId, clock.instant());
+            });
+        } catch (PipeForgeException e) {
+            LOG.debug("No metrics of run {}: {}", runId, e.getMessage());
+        }
+    }
+
+    /** Keeps the final metrics and the run analysis of a run that ended. */
+    private void keep(String runId) {
+        sample(runId);
+        sampled.remove(runId);
+        try {
+            master.analysis(runId).ifPresent(analysis -> runs.saveAnalysis(runId, analysis));
+        } catch (PipeForgeException e) {
+            LOG.warn("Cannot keep the analysis of run {}: {}", runId, e.getMessage());
+        }
+    }
+
+    /** Removes the samples older than the retention, at most once an hour. */
+    private void cleanup() {
+        java.time.Instant now = clock.instant();
+        if (cleaned.plus(Duration.ofHours(1)).isAfter(now)) {
+            return;
+        }
+        cleaned = now;
+        int removed = runs.deleteSamplesBefore(now.minus(retention));
+        if (removed > 0) {
+            LOG.info("Removed {} metric samples older than {}", removed, retention);
         }
     }
 

@@ -28,9 +28,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 class RunServiceTest {
 
     final HikariDataSource data = MetastoreDataSources.create(new ServerProperties.Metastore(
-            "jdbc:h2:mem:runs-" + System.nanoTime() + ";DB_CLOSE_DELAY=-1", "sa", "", null, 2, true));
+            "jdbc:h2:mem:runs-" + System.nanoTime() + ";DB_CLOSE_DELAY=-1",
+            "sa",
+            "",
+            null,
+            2,
+            true,
+            java.time.Duration.ofDays(30)));
     final RunRepository runs;
     final Instant now = Instant.parse("2026-11-17T08:00:00.123Z");
+    static final tools.jackson.databind.json.JsonMapper JSON =
+            tools.jackson.databind.json.JsonMapper.builder().build();
 
     RunServiceTest() {
         new MetastoreMigrations(data, MetastoreVendor.H2, "test").migrate();
@@ -73,7 +81,7 @@ class RunServiceTest {
 
     @Test
     void withoutAMasterNothingIsSubmittedAndTheTrackerWaits() {
-        RunTracker tracker = new RunTracker(runs, MasterClient.none(), java.time.Clock.systemUTC(), properties());
+        RunTracker tracker = new RunTracker(runs, MasterClient.none(), java.time.Clock.systemUTC(), properties(), JSON);
         runs.insert("r2", "job", "yaml", null, now);
         tracker.poll();
         assertThat(runs.find("r2").orElseThrow().status()).isEqualTo(RunState.QUEUE);
@@ -84,7 +92,7 @@ class RunServiceTest {
 
     @Test
     void anUnreachableMasterLeavesRunsAsTheyAre() {
-        MasterClient unreachable = new MasterClient() {
+        MasterClient unreachable = new StubMaster() {
             @Override
             public String address() {
                 return "master:1";
@@ -108,7 +116,7 @@ class RunServiceTest {
             public void close() {}
         };
         runs.insert("r3", "job", "yaml", null, now);
-        new RunTracker(runs, unreachable, java.time.Clock.systemUTC(), properties()).poll();
+        new RunTracker(runs, unreachable, java.time.Clock.systemUTC(), properties(), JSON).poll();
         assertThat(runs.find("r3").orElseThrow().status()).isEqualTo(RunState.QUEUE);
     }
 
@@ -117,17 +125,19 @@ class RunServiceTest {
                 new ServerProperties.Plugin(
                         java.util.List.of(), java.nio.file.Path.of("cache"), new ServerProperties.Dev(false, null)),
                 new ServerProperties.Job("UTC", java.util.Map.of()),
-                new ServerProperties.Metastore("jdbc:h2:mem:x", null, null, null, 1, true),
+                new ServerProperties.Metastore(
+                        "jdbc:h2:mem:x", null, null, null, 1, true, java.time.Duration.ofDays(30)),
                 new ServerProperties.Master(
                         null,
                         "",
                         new ServerProperties.Tls(false, null, "", null, ""),
+                        java.time.Duration.ofMillis(50),
                         java.time.Duration.ofMillis(50)));
     }
 
     @Test
     void aRunTheMasterHasNotReceivedYetIsNotLost() {
-        MasterClient forgetful = new MasterClient() {
+        MasterClient forgetful = new StubMaster() {
             @Override
             public String address() {
                 return "master:1";
@@ -152,7 +162,7 @@ class RunServiceTest {
         runs.insert("old", "job", "yaml", null, now.minus(RunTracker.SUBMIT_GRACE));
         runs.insert("running", "job", "yaml", null, now);
         runs.transition("running", RunState.QUEUE, RunState.RUNNING, now, now, null, null);
-        new RunTracker(runs, forgetful, clock, properties()).poll();
+        new RunTracker(runs, forgetful, clock, properties(), JSON).poll();
         assertThat(runs.find("fresh").orElseThrow().status())
                 .as("just submitted")
                 .isEqualTo(RunState.QUEUE);

@@ -76,6 +76,7 @@ Found 1 plugin(s) in /work/pipeforge
 | `pipeforge.master.token` | 无 | 集群令牌（集群的 `cluster.token`），配置 Master 时必填 |
 | `pipeforge.master.tls.*` | 关闭 | `enabled`、`key-store`、`key-store-password`、`trust-store`、`trust-store-password`，与集群的 `security.tls.*` 相同 |
 | `pipeforge.master.poll-interval` | `1s` | 服务端向 Master 查询尚未结束的运行的间隔 |
+| `pipeforge.master.metrics-interval` | `10s` | 服务端保留运行中运行的指标采样的间隔 |
 
 ```yaml
 pipeforge:
@@ -111,6 +112,11 @@ QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
 `GET /api/v1/runs` 按提交时间从新到旧列出运行，可以按状态和作业筛选，用 `next` 令牌翻页；`GET /api/v1/runs/{id}` 显示运行及其定义和状态变化；
 `POST /api/v1/runs/{id}/cancel` 请 Master 取消运行。无法连接 Master 时，运行保持原来的状态；Master 已经不知道的运行（因为 Master 重启）
 以 `PF-CLUS-0016` 失败。
+
+运行期间，`GET /api/v1/runs/{id}/metrics` 显示来自 Master 的当前指标；服务端每隔 `metrics-interval` 保留一次采样，供
+`GET /api/v1/runs/{id}/metrics/history` 使用。运行结束时，服务端保留它的最终指标和运行分析（`GET /api/v1/runs/{id}/analysis`），
+因此 Master 忘记该运行之后两者仍然可以查看。只要 Master 还保留该运行，`/splits` 列出分片及其读取器，`/tasks` 列出 Task 及其所在的 Worker。
+`/logs` 经 Master 从 Task 所在的 Worker 读取日志，服务端不需要访问 Worker。跟踪日志时，从上一次返回的 `offset` 再次读取，直到 `eof`。
 
 ## 安全
 

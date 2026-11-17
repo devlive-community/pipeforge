@@ -34,12 +34,85 @@ public class RunService {
     private final RunRepository runs;
     private final MasterClient master;
     private final Clock clock;
+    private final tools.jackson.databind.json.JsonMapper json;
 
-    public RunService(JobPlanning planning, RunRepository runs, MasterClient master, Clock clock) {
+    public RunService(
+            JobPlanning planning,
+            RunRepository runs,
+            MasterClient master,
+            Clock clock,
+            tools.jackson.databind.json.JsonMapper json) {
         this.planning = planning;
         this.runs = runs;
         this.master = master;
         this.clock = clock;
+        this.json = json;
+    }
+
+    private Runs.Run run(String id) {
+        return runs.find(id).orElseThrow(() -> RunRepository.notFound(id));
+    }
+
+    /**
+     * The metrics of a run: from the master while it runs, else the last sample the server kept.
+     *
+     * @throws PipeForgeException {@code PF-CONF-0010} for an unknown run
+     */
+    public RunMetrics metrics(String id) {
+        Runs.Run run = run(id);
+        if (!run.status().isTerminal()) {
+            try {
+                java.util.Optional<RunMetrics> live = master.metrics(id);
+                if (live.isPresent()) {
+                    return live.get();
+                }
+            } catch (PipeForgeException e) {
+                LOG.debug("No live metrics of run {}: {}", id, e.getMessage());
+            }
+        }
+        return runs.latestMetrics(id)
+                .map(text -> json.readValue(text, RunMetrics.class))
+                .orElseGet(() -> RunMetrics.none(run.endedAt() != null ? run.endedAt() : run.updatedAt()));
+    }
+
+    /** The samples of a run's metrics, oldest first. */
+    public java.util.List<RunMetrics.Sample> history(String id, @Nullable Instant since, int limit) {
+        run(id);
+        return runs.samples(id, since, limit);
+    }
+
+    /**
+     * The run analysis (design 29): kept when the run ended, else from the master.
+     *
+     * @throws PipeForgeException {@code PF-CONF-0010} for an unknown run, or when neither the
+     *     server nor the master has its analysis
+     */
+    public tools.jackson.databind.JsonNode analysis(String id) {
+        run(id);
+        String text = runs.analysis(id).or(() -> master.analysis(id)).orElseThrow(() -> RunRepository.notFound(id));
+        return json.readTree(text);
+    }
+
+    /** The splits of a run with their readers; empty when the master no longer has the run. */
+    public java.util.List<RunMetrics.Split> splits(String id) {
+        run(id);
+        return master.splits(id).orElse(java.util.List.of());
+    }
+
+    /** The tasks of a run with their workers; empty when the master no longer has the run. */
+    public java.util.List<RunMetrics.Task> tasks(String id) {
+        run(id);
+        return master.status(id).map(MasterClient.Status::tasks).orElse(java.util.List.of());
+    }
+
+    /**
+     * Reads a part of a task's log through the master.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0012} when there is no such log
+     */
+    public RunMetrics.LogChunk log(String id, String vertex, int subtask, int attempt, MasterClient.LogQuery query) {
+        run(id);
+        return master.readLog(id, new RunMetrics.Task(vertex, subtask, attempt, "", ""), query);
     }
 
     /**

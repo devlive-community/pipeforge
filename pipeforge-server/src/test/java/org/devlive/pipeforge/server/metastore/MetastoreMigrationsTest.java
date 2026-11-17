@@ -86,7 +86,7 @@ class MetastoreMigrationsTest {
     }
 
     static ServerProperties.Metastore settings(String url, String user, String password, Path driverDir) {
-        return new ServerProperties.Metastore(url, user, password, driverDir, 4, true);
+        return new ServerProperties.Metastore(url, user, password, driverDir, 4, true, java.time.Duration.ofDays(30));
     }
 
     static Set<String> tables(HikariDataSource dataSource) throws Exception {

@@ -10,6 +10,8 @@ import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.common.error.ErrorCode;
@@ -17,9 +19,12 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.engine.rpc.grpc.Headers;
 import org.devlive.pipeforge.engine.rpc.grpc.RpcErrors;
 import org.devlive.pipeforge.engine.rpc.proto.DispatcherServiceGrpc;
+import org.devlive.pipeforge.engine.rpc.proto.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.proto.JobRequest;
 import org.devlive.pipeforge.engine.rpc.proto.JobStatus;
+import org.devlive.pipeforge.engine.rpc.proto.LogChunk;
 import org.devlive.pipeforge.engine.rpc.proto.PluginRef;
+import org.devlive.pipeforge.engine.rpc.proto.ReadTaskLogRequest;
 import org.devlive.pipeforge.engine.rpc.proto.SubmitJobRequest;
 
 /** The master's dispatcher over gRPC (protocol: DispatcherService). */
@@ -109,10 +114,137 @@ public final class GrpcMasterClient implements MasterClient {
                 ? new Runs.RunError(
                         status.getError().getCode(), status.getError().getMessage())
                 : null;
+        List<RunMetrics.Task> tasks = status.getTasksList().stream()
+                .map(task -> new RunMetrics.Task(
+                        task.getId().getVertexId(),
+                        task.getId().getSubtask(),
+                        task.getId().getAttempt(),
+                        task.getState().name().replace("TASK_STATE_", ""),
+                        task.getWorkerId()))
+                .toList();
         return Optional.of(new Status(
                 RunState.fromProto(status.getState()),
                 status.getStartMs() == 0 ? null : Instant.ofEpochMilli(status.getStartMs()),
-                error));
+                error,
+                tasks));
+    }
+
+    /** The answer of a call, or empty when the master does not know the run. */
+    private <T> Optional<T> known(java.util.function.Supplier<T> call) {
+        try {
+            return Optional.of(call.get());
+        } catch (RuntimeException e) {
+            PipeForgeException error = RpcErrors.fromStatus(e, address);
+            if (error.code().equals(ErrorCode.RUN_NOT_FOUND)) {
+                return Optional.empty();
+            }
+            throw error;
+        }
+    }
+
+    @Override
+    public Optional<RunMetrics> metrics(String runId) {
+        return known(() -> call().getJobMetrics(request(runId))).map(GrpcMasterClient::metrics);
+    }
+
+    @Override
+    public Optional<String> analysis(String runId) {
+        return known(() -> call().analyze(request(runId)).getJson());
+    }
+
+    @Override
+    public Optional<List<RunMetrics.Split>> splits(String runId) {
+        return known(() -> call().listSplits(request(runId)).getSplitsList().stream()
+                .map(split -> new RunMetrics.Split(
+                        split.getNodeId(),
+                        split.getSplitId(),
+                        split.getSubtask(),
+                        split.getState().name().replace("SPLIT_STATE_", "")))
+                .toList());
+    }
+
+    @Override
+    public RunMetrics.LogChunk readLog(String runId, RunMetrics.Task task, LogQuery query) {
+        ReadTaskLogRequest.Builder request = ReadTaskLogRequest.newBuilder()
+                .setHeader(header())
+                .setRunId(runId)
+                .setTask(ExecutionAttemptId.newBuilder()
+                        .setRunId(runId)
+                        .setVertexId(task.vertex())
+                        .setSubtask(task.subtask())
+                        .setAttempt(task.attempt()))
+                .setOffset(query.offset())
+                .setMaxBytes(query.maxBytes())
+                .setContains(query.contains());
+        if (query.minLevel() != null) {
+            request.setMinLevel(query.minLevel());
+        }
+        try {
+            Iterator<LogChunk> chunks = call().readTaskLog(request.build());
+            StringBuilder text = new StringBuilder();
+            long offset = query.offset();
+            boolean eof = false;
+            while (chunks.hasNext()) {
+                LogChunk chunk = chunks.next();
+                text.append(chunk.getData().toStringUtf8());
+                offset = chunk.getOffset();
+                eof = chunk.getEof();
+            }
+            return new RunMetrics.LogChunk(offset, text.toString(), eof);
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, address);
+        }
+    }
+
+    private static JobRequest request(String runId) {
+        return JobRequest.newBuilder().setHeader(header()).setRunId(runId).build();
+    }
+
+    static RunMetrics metrics(org.devlive.pipeforge.engine.rpc.proto.JobMetrics metrics) {
+        return new RunMetrics(
+                Instant.ofEpochMilli(metrics.getTimestampMs()),
+                metrics.getElapsedMs(),
+                metrics.getRowsRead(),
+                metrics.getRowsWritten(),
+                metrics.getRowsFiltered(),
+                metrics.getRowsExpanded(),
+                metrics.getRowsDirty(),
+                metrics.getRowsFailed(),
+                metrics.getRowsInFlight(),
+                metrics.getReadRowsPerSecond(),
+                metrics.getWriteRowsPerSecond(),
+                metrics.getReaderWaitMs(),
+                metrics.getWriterWaitMs(),
+                metrics.getBackPressuredMs(),
+                metrics.getThrottleWaitMs(),
+                metrics.getExchangedBytes(),
+                metrics.getMemoryBytes(),
+                metrics.getQueueDepth(),
+                metrics.getQueueCapacity(),
+                metrics.getTasksRunning(),
+                metrics.getParallelism(),
+                metrics.getSplitsTotal(),
+                metrics.getSplitsFinished(),
+                metrics.getNodesList().stream()
+                        .map(n -> new RunMetrics.Node(
+                                n.getNodeId(),
+                                n.getRowsIn(),
+                                n.getRowsOut(),
+                                n.getRowsFiltered(),
+                                n.getRowsExpanded(),
+                                n.getRowsDirty(),
+                                n.getBytesIn(),
+                                n.getBytesOut()))
+                        .toList(),
+                metrics.getDirtySamplesList().stream()
+                        .map(d -> new RunMetrics.DirtySample(
+                                d.getNodeId(),
+                                d.getTable().isEmpty() ? null : d.getTable(),
+                                d.getCode(),
+                                d.getMessage(),
+                                d.getRow(),
+                                Instant.ofEpochMilli(d.getAtMs())))
+                        .toList());
     }
 
     @Override

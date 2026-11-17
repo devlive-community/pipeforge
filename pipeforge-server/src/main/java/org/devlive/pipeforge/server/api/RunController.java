@@ -17,6 +17,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.devlive.pipeforge.server.run.MasterClient;
+import org.devlive.pipeforge.server.run.RunMetrics;
 import org.devlive.pipeforge.server.run.RunRepository;
 import org.devlive.pipeforge.server.run.RunService;
 import org.devlive.pipeforge.server.run.RunState;
@@ -141,5 +143,138 @@ public class RunController {
                             }))
     public Runs.Run cancel(@PathVariable String id, @RequestBody(required = false) @Nullable CancelRequest request) {
         return service.cancel(id, request == null ? null : request.reason());
+    }
+
+    @GetMapping("/{id}/metrics")
+    @Operation(
+            operationId = "getRunMetrics",
+            summary = "Get the metrics of a run",
+            description = "Rows, rates, waits, memory, splits and the counters of every node: from the master while"
+                    + " the run runs, else the last sample the server kept (design 15).",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "查看运行的指标"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "行数、速率、等待时间、内存、分片以及每个节点的计数：运行中时来自 Master，否则为服务端保留的最后一次采样。")
+                            }))
+    public RunMetrics metrics(@PathVariable String id) {
+        return service.metrics(id);
+    }
+
+    @GetMapping("/{id}/metrics/history")
+    @Operation(
+            operationId = "getRunMetricsHistory",
+            summary = "Get the metrics of a run over time",
+            description = "The samples the server kept while the run ran (pipeforge.master.metrics-interval), oldest"
+                    + " first; rates follow from two samples.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "查看运行指标的变化"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "运行期间服务端保留的采样（pipeforge.master.metrics-interval），按时间顺序；速率由相邻两次采样得出。")
+                            }))
+    public List<RunMetrics.Sample> history(
+            @PathVariable String id,
+            @Parameter(description = "Only samples from this time on") @RequestParam(required = false) @Nullable
+                    Instant since,
+            @Parameter(description = "Samples at most, up to 10000") @RequestParam(defaultValue = "1000") int limit) {
+        return service.history(id, since, limit);
+    }
+
+    @GetMapping("/{id}/analysis")
+    @Operation(
+            operationId = "getRunAnalysis",
+            summary = "Get the analysis of a run",
+            description = "What limited the run and where (design 29): job-level figures, node-level figures and the"
+                    + " bottleneck. Kept when the run ends.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "查看运行分析"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "运行受什么限制、限制在哪里：作业级与节点级的数字以及瓶颈结论。运行结束时保留。")
+                            }))
+    public tools.jackson.databind.JsonNode analysis(@PathVariable String id) {
+        return service.analysis(id);
+    }
+
+    @GetMapping("/{id}/splits")
+    @Operation(
+            operationId = "listRunSplits",
+            summary = "List the splits of a run",
+            description = "Every split the source assigned, with its reader and whether the reader finished; empty"
+                    + " once the master no longer has the run.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "列出运行的分片"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "Source 分配的每个分片、读取它的读取器以及读取器是否已结束；Master 不再保留该运行后为空。")
+                            }))
+    public List<RunMetrics.Split> splits(@PathVariable String id) {
+        return service.splits(id);
+    }
+
+    @GetMapping("/{id}/tasks")
+    @Operation(
+            operationId = "listRunTasks",
+            summary = "List the tasks of a run",
+            description = "Every task with its state and worker, to read its log; empty once the master no longer has"
+                    + " the run.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "列出运行的 Task"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "每个 Task 的状态和所在的 Worker，用于读取日志；Master 不再保留该运行后为空。")
+                            }))
+    public List<RunMetrics.Task> tasks(@PathVariable String id) {
+        return service.tasks(id);
+    }
+
+    @GetMapping("/{id}/logs")
+    @Operation(
+            operationId = "readRunLog",
+            summary = "Read the log of a task",
+            description = "A part of a task's log, through the master from the worker it ran on. offset in the answer"
+                    + " is where the next read continues, so following a log means reading again from it; eof is true"
+                    + " once the log was read to its end and the task has ended.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "读取 Task 的日志"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "经 Master 从 Task 所在的 Worker 读取一段日志。返回的 offset 是下一次读取继续的位置，"
+                                                + "跟踪日志就是从它再次读取；日志读完且 Task 已结束时 eof 为 true。")
+                            }))
+    public RunMetrics.LogChunk log(
+            @PathVariable String id,
+            @Parameter(description = "The vertex of the task, as in the tasks of the run") @RequestParam String vertex,
+            @Parameter(description = "The subtask") @RequestParam int subtask,
+            @Parameter(description = "The attempt") @RequestParam(defaultValue = "0") int attempt,
+            @Parameter(description = "Where to start; negative counts back from the end")
+                    @RequestParam(defaultValue = "0")
+                    long offset,
+            @Parameter(description = "The most bytes; 0 for 64KB") @RequestParam(defaultValue = "0") long maxBytes,
+            @Parameter(description = "Only entries with this text") @RequestParam(defaultValue = "") String contains,
+            @Parameter(description = "Only entries of this level or above: TRACE, DEBUG, INFO, WARN, ERROR")
+                    @RequestParam(required = false)
+                    @Nullable
+                    String level) {
+        return service.log(id, vertex, subtask, attempt, new MasterClient.LogQuery(offset, maxBytes, contains, level));
     }
 }

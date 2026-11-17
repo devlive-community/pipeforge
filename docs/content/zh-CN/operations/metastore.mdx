@@ -28,6 +28,7 @@ order: 15
 | `pipeforge.metastore.driver-dir` | 无 | 存放 JDBC 驱动 jar 的目录，用于 MySQL；使用其中接受该 URL 的驱动，并且只使用该目录中的驱动 |
 | `pipeforge.metastore.pool-size` | `10` | 服务端最多打开的连接数 |
 | `pipeforge.metastore.migrate` | `true` | 服务端启动时是否执行待执行的迁移 |
+| `pipeforge.metastore.metrics-retention` | `30d` | 运行指标采样的保留时间；更早的采样每小时清理一次 |
 
 ```yaml
 pipeforge:
@@ -45,10 +46,10 @@ pipeforge:
 
 | 表 | 内容 |
 |---|---|
-| `job_run` | 每次运行一行：作业及其 YAML、状态、提交人、提交、开始和结束时间，以及错误 |
+| `job_run` | 每次运行一行：作业及其 YAML、状态、提交人、提交、开始和结束时间、错误，以及结束后的运行分析 |
 | `job_run_attempt` | 运行的各次尝试，以及执行每次尝试的 Master |
 | `job_run_transition` | 运行状态的每一次变化，按顺序记录，并附带原因 |
-| `job_run_metrics` | 运行期间采样的指标：主要计数作为列，完整指标为 JSON |
+| `job_run_metrics` | 运行期间采样的指标以及最终指标：主要计数作为列，完整指标为 JSON |
 | `worker` | 集群中的 Worker：地址、Slot 数、标签、版本、状态和最近一次心跳 |
 | `pipeforge_schema_history` | 已执行的迁移（Flyway） |
 

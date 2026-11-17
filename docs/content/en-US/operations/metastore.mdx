@@ -30,6 +30,7 @@ in a file serves one process only.
 | `pipeforge.metastore.driver-dir` | none | A directory of JDBC driver jars, for MySQL; the driver that accepts the URL is used, and only the drivers of the directory |
 | `pipeforge.metastore.pool-size` | `10` | The most connections the server opens |
 | `pipeforge.metastore.migrate` | `true` | Whether the server applies pending migrations when it starts |
+| `pipeforge.metastore.metrics-retention` | `30d` | How long samples of run metrics are kept; older ones are removed hourly |
 
 ```yaml
 pipeforge:
@@ -48,10 +49,10 @@ without its query string, so a password written in the URL does not appear in it
 
 | Table | Holds |
 |---|---|
-| `job_run` | One row per run: the job and its YAML, the status, who submitted it, when it was submitted, started and ended, and the error |
+| `job_run` | One row per run: the job and its YAML, the status, who submitted it, when it was submitted, started and ended, the error, and the run analysis once it ended |
 | `job_run_attempt` | The attempts of a run, with the master that ran each |
 | `job_run_transition` | Every change of a run's status, in order, with the reason |
-| `job_run_metrics` | Metrics sampled while a run is running: the main counters as columns and the full metrics as JSON |
+| `job_run_metrics` | Metrics sampled while a run is running, and its final metrics: the main counters as columns and the full metrics as JSON |
 | `worker` | The workers of the cluster: address, slots, labels, version, state and last heartbeat |
 | `pipeforge_schema_history` | The migrations applied (Flyway) |
 
