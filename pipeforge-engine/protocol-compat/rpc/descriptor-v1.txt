@@ -21,6 +21,11 @@ field pipeforge.rpc.v1.ChainDescriptor 2 job pipeforge.rpc.v1.JobContext
 field pipeforge.rpc.v1.ChainDescriptor 3 nodes repeated pipeforge.rpc.v1.NodeDescriptor
 field pipeforge.rpc.v1.ChainDescriptor 4 tables repeated pipeforge.rpc.v1.TableEntry
 field pipeforge.rpc.v1.ChainDescriptor 5 outputs repeated pipeforge.rpc.v1.OutputEdge
+field pipeforge.rpc.v1.ClusterRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.ClusterStatus 1 engine_version string
+field pipeforge.rpc.v1.ClusterStatus 2 protocol_version string
+field pipeforge.rpc.v1.ClusterStatus 3 started_ms int64
+field pipeforge.rpc.v1.ClusterStatus 4 workers repeated pipeforge.rpc.v1.WorkerInfo
 field pipeforge.rpc.v1.ColumnEntry 1 name string
 field pipeforge.rpc.v1.ColumnEntry 2 type string
 field pipeforge.rpc.v1.ColumnEntry 3 comment string
@@ -329,6 +334,18 @@ field pipeforge.rpc.v1.WorkerHeartbeat 1 header pipeforge.rpc.v1.Header
 field pipeforge.rpc.v1.WorkerHeartbeat 2 worker_id string
 field pipeforge.rpc.v1.WorkerHeartbeat 3 slots repeated pipeforge.rpc.v1.SlotStatus
 field pipeforge.rpc.v1.WorkerHeartbeat 4 tasks repeated pipeforge.rpc.v1.RunningTask
+field pipeforge.rpc.v1.WorkerInfo 1 worker_id string
+field pipeforge.rpc.v1.WorkerInfo 10 since_heartbeat_ms int64
+field pipeforge.rpc.v1.WorkerInfo 2 engine_version string
+field pipeforge.rpc.v1.WorkerInfo 3 rpc_address string
+field pipeforge.rpc.v1.WorkerInfo 4 data_address string
+field pipeforge.rpc.v1.WorkerInfo 5 resources pipeforge.rpc.v1.ResourceProfile
+field pipeforge.rpc.v1.WorkerInfo 6 labels repeated pipeforge.rpc.v1.WorkerInfo.LabelsEntry
+field pipeforge.rpc.v1.WorkerInfo 7 resource_group string
+field pipeforge.rpc.v1.WorkerInfo 8 slots repeated pipeforge.rpc.v1.SlotStatus
+field pipeforge.rpc.v1.WorkerInfo 9 tasks_running int32
+field pipeforge.rpc.v1.WorkerInfo.LabelsEntry 1 key string
+field pipeforge.rpc.v1.WorkerInfo.LabelsEntry 2 value string
 file pipeforge/rpc/v1/blob.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/chain.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/common.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
@@ -342,6 +359,8 @@ message pipeforge.rpc.v1.BlobChunk
 message pipeforge.rpc.v1.BlobRequest
 message pipeforge.rpc.v1.CancelTaskRequest
 message pipeforge.rpc.v1.ChainDescriptor
+message pipeforge.rpc.v1.ClusterRequest
+message pipeforge.rpc.v1.ClusterStatus
 message pipeforge.rpc.v1.ColumnEntry
 message pipeforge.rpc.v1.ColumnEntry.OptionsEntry
 message pipeforge.rpc.v1.DirtySample
@@ -406,11 +425,14 @@ message pipeforge.rpc.v1.TaskStateUpdate
 message pipeforge.rpc.v1.TaskStatus
 message pipeforge.rpc.v1.Versioned
 message pipeforge.rpc.v1.WorkerHeartbeat
+message pipeforge.rpc.v1.WorkerInfo
+message pipeforge.rpc.v1.WorkerInfo.LabelsEntry
 reserved pipeforge.rpc.v1.TaskDeployment 10-10
 reserved pipeforge.rpc.v1.TaskDeployment 9-9
 rpc pipeforge.rpc.v1.BlobService.GetBlob pipeforge.rpc.v1.BlobRequest -> stream pipeforge.rpc.v1.BlobChunk
 rpc pipeforge.rpc.v1.DispatcherService.Analyze pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.ExplainResult
 rpc pipeforge.rpc.v1.DispatcherService.CancelJob pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.DispatcherService.GetCluster pipeforge.rpc.v1.ClusterRequest -> pipeforge.rpc.v1.ClusterStatus
 rpc pipeforge.rpc.v1.DispatcherService.GetJobMetrics pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobMetrics
 rpc pipeforge.rpc.v1.DispatcherService.GetJobStatus pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobStatus
 rpc pipeforge.rpc.v1.DispatcherService.ListJobs pipeforge.rpc.v1.ListJobsRequest -> pipeforge.rpc.v1.ListJobsResponse

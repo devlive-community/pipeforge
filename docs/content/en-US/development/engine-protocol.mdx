@@ -15,7 +15,7 @@ gRPC services and Protobuf messages of the package `pipeforge.rpc.v1`:
 | `ResourceManagerService` | worker → master | registration, heartbeats, the slots a worker offers |
 | `TaskExecutorService` | master → worker | slot requests, task deployment and cancellation, split assignment, task logs |
 | `JobMasterService` | task → master | task state changes, split requests, task metrics |
-| `DispatcherService` | server → master | job submission, cancellation, status, metrics, run analysis; the splits of a run with their readers (`ListSplits`), and task logs (`ReadTaskLog`), which the master forwards from the worker the task ran on, so the server reaches only the master |
+| `DispatcherService` | server → master | job submission, cancellation, status, metrics, run analysis; the splits of a run with their readers (`ListSplits`), and task logs (`ReadTaskLog`), which the master forwards from the worker the task ran on, and the state of the cluster (`GetCluster`: the master, and every worker with its slots, labels, resources and last heartbeat), so the server reaches only the master |
 | `BlobService` | worker → master | plugin packages by their SHA-256, streamed in chunks and resumable from an offset (added after the freeze, as a compatible addition) |
 
 The definitions live in `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`. The build

@@ -45,9 +45,69 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
     static final int DEFAULT_PAGE = 100;
 
     private final Dispatcher dispatcher;
+    private final java.util.function.Supplier<List<ResourceManager.Worker>> workers;
+    private final Instant started = Instant.now();
 
+    /** A dispatcher without registered workers, as in one process. */
     public DispatcherService(Dispatcher dispatcher) {
+        this(dispatcher, List::of);
+    }
+
+    /** @param workers the workers of the cluster, from the {@link ResourceManager} */
+    public DispatcherService(Dispatcher dispatcher, java.util.function.Supplier<List<ResourceManager.Worker>> workers) {
         this.dispatcher = dispatcher;
+        this.workers = workers;
+    }
+
+    /** The version in the manifest of the engine jar, or {@code dev} when run from classes. */
+    static String engineVersion() {
+        String version = DispatcherService.class.getPackage().getImplementationVersion();
+        return version == null ? "dev" : version;
+    }
+
+    @Override
+    public void getCluster(
+            org.devlive.pipeforge.engine.rpc.proto.ClusterRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.ClusterStatus> observer) {
+        answer(observer, request.getHeader(), () -> {
+            var status = org.devlive.pipeforge.engine.rpc.proto.ClusterStatus.newBuilder()
+                    .setEngineVersion(engineVersion())
+                    .setProtocolVersion(org.devlive.pipeforge.engine.rpc.ProtocolVersion.CURRENT.toString())
+                    .setStartedMs(started.toEpochMilli());
+            for (ResourceManager.Worker worker : workers.get()) {
+                ResourceManager.WorkerSpec spec = worker.spec();
+                var info = org.devlive.pipeforge.engine.rpc.proto.WorkerInfo.newBuilder()
+                        .setWorkerId(worker.id())
+                        .setEngineVersion(spec.engineVersion())
+                        .setRpcAddress(spec.rpcAddress())
+                        .setDataAddress(spec.dataAddress())
+                        .setResources(org.devlive.pipeforge.engine.rpc.proto.ResourceProfile.newBuilder()
+                                .setCpuCores(spec.resources().cpuCores())
+                                .setTaskHeapBytes(spec.resources().taskHeapBytes())
+                                .setNetworkBytes(spec.resources().networkBytes())
+                                .setManagedBytes(spec.resources().managedBytes()))
+                        .putAllLabels(spec.labels())
+                        .setResourceGroup(spec.resourceGroup())
+                        .setTasksRunning((int) worker.tasks().stream()
+                                .filter(t -> t.state() == org.devlive.pipeforge.engine.rpc.TaskState.RUNNING)
+                                .count())
+                        .setSinceHeartbeatMs(worker.sinceHeartbeat().toMillis());
+                for (ResourceManager.Slot slot : worker.slots()) {
+                    var proto = org.devlive.pipeforge.engine.rpc.proto.SlotStatus.newBuilder()
+                            .setIndex(slot.index())
+                            .setAllocated(slot.allocated());
+                    if (slot.jobId() != null) {
+                        proto.setJobId(slot.jobId());
+                    }
+                    if (slot.allocationId() != null) {
+                        proto.setAllocationId(slot.allocationId());
+                    }
+                    info.addSlots(proto);
+                }
+                status.addWorkers(info);
+            }
+            return status.build();
+        });
     }
 
     @Override

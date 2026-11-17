@@ -101,7 +101,7 @@ public final class MasterProcess implements AutoCloseable {
                     List.of(
                             new ResourceManagerService(manager),
                             new JobMasterService(jobs, new IdempotencyCache()),
-                            new DispatcherService(dispatcher),
+                            new DispatcherService(dispatcher, manager::workers),
                             new BlobServer(blobs)));
         } catch (IOException e) {
             close();

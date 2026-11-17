@@ -14,6 +14,7 @@ option java_package = "org.devlive.pipeforge.engine.rpc.proto";
 option java_multiple_files = true;
 
 import "pipeforge/rpc/v1/common.proto";
+import "pipeforge/rpc/v1/resource_manager.proto";
 import "pipeforge/rpc/v1/task_executor.proto";
 
 service DispatcherService {
@@ -25,6 +26,7 @@ service DispatcherService {
   rpc Analyze(JobRequest) returns (ExplainResult);
   rpc ReadTaskLog(ReadTaskLogRequest) returns (stream LogChunk);  // 兼容增加：Master 转发给运行该 Task 的 Worker
   rpc ListSplits(JobRequest) returns (ListSplitsResponse);         // 兼容增加：分片的归属与进度
+  rpc GetCluster(ClusterRequest) returns (ClusterStatus);           // 兼容增加：Master 与 Worker 的状态
   // M2：TriggerSavepoint、StopWithSavepoint
 }
 
@@ -169,4 +171,29 @@ message SplitInfo {
 
 message ListSplitsResponse {
   repeated SplitInfo splits = 1;      // 按读取器、分片 ID 排序；尚未分配的分片不在其中
+}
+
+// 集群的状态：Master 与已注册的 Worker（Slot、标签、资源、心跳）
+message ClusterRequest {
+  Header header = 1;
+}
+
+message WorkerInfo {
+  string worker_id = 1;
+  string engine_version = 2;
+  string rpc_address = 3;
+  string data_address = 4;
+  ResourceProfile resources = 5;
+  map<string, string> labels = 6;
+  string resource_group = 7;
+  repeated SlotStatus slots = 8;
+  int32 tasks_running = 9;
+  int64 since_heartbeat_ms = 10;      // 距离最近一次心跳的时间
+}
+
+message ClusterStatus {
+  string engine_version = 1;          // Master 的版本
+  string protocol_version = 2;
+  int64 started_ms = 3;               // Master 启动的时间
+  repeated WorkerInfo workers = 4;    // 按注册顺序
 }

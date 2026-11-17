@@ -249,4 +249,57 @@ class DispatcherServiceTest {
                         StatusRuntimeException.class,
                         e -> assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.NOT_FOUND));
     }
+
+    @Test
+    void reportsTheMasterAndItsWorkers() throws Exception {
+        ResourceManager manager = new ResourceManager(ResourceManager.Settings.DEFAULTS);
+        String worker = manager.register(new ResourceManager.WorkerSpec(
+                        "0.1.0",
+                        "w1:6124",
+                        "w1:6125",
+                        new ResourceManager.Resources(4, 2L << 30, 1L << 28, 0),
+                        2,
+                        java.util.Map.of("zone", "a"),
+                        "etl",
+                        new byte[32],
+                        null))
+                .workerId();
+        assertThat(manager.reserve(new ResourceManager.FreeSlot(worker, "w1:6124", "w1:6125", 1), "job-1", "alloc-1"))
+                .isTrue();
+        String cluster = "cluster-" + UUID.randomUUID();
+        Server withWorkers = InProcessServerBuilder.forName(cluster)
+                .addService(new DispatcherService(runs.dispatcher, manager::workers))
+                .build()
+                .start();
+        ManagedChannel to = InProcessChannelBuilder.forName(cluster).build();
+        try {
+            var status = DispatcherServiceGrpc.newBlockingStub(to)
+                    .getCluster(org.devlive.pipeforge.engine.rpc.proto.ClusterRequest.newBuilder()
+                            .setHeader(header())
+                            .build());
+            assertThat(status.getProtocolVersion()).isEqualTo("1.0");
+            assertThat(status.getEngineVersion()).isNotBlank();
+            assertThat(status.getStartedMs()).isPositive();
+            assertThat(status.getWorkersList()).singleElement().satisfies(info -> {
+                assertThat(info.getWorkerId()).isEqualTo(worker);
+                assertThat(info.getRpcAddress()).isEqualTo("w1:6124");
+                assertThat(info.getLabelsMap()).containsEntry("zone", "a");
+                assertThat(info.getResourceGroup()).isEqualTo("etl");
+                assertThat(info.getResources().getCpuCores()).isEqualTo(4);
+                assertThat(info.getSlotsList())
+                        .extracting(slot -> slot.getAllocated())
+                        .containsExactly(false, true);
+                assertThat(info.getSlots(1).getJobId()).isEqualTo("job-1");
+            });
+            // a dispatcher in one process has no registered workers
+            assertThat(stub.getCluster(org.devlive.pipeforge.engine.rpc.proto.ClusterRequest.newBuilder()
+                                    .setHeader(header())
+                                    .build())
+                            .getWorkersList())
+                    .isEmpty();
+        } finally {
+            to.shutdownNow();
+            withWorkers.shutdownNow();
+        }
+    }
 }
