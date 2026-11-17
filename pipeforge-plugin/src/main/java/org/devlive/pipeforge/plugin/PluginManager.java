@@ -174,16 +174,25 @@ public final class PluginManager implements AutoCloseable {
 
     /**
      * The driver plugins {@code plugin} requires ({@code requires.drivers}), each in its highest
-     * installed version.
+     * installed version; with {@code drivers: any}, every installed driver plugin in its highest
+     * version, by id.
      *
      * @throws PipeForgeException {@link ErrorCode#DRIVER_MISSING} for a driver that is not installed
      */
     public List<InstalledPlugin> drivers(InstalledPlugin plugin) {
+        if (plugin.descriptor().anyDrivers()) {
+            java.util.Map<String, InstalledPlugin> newest = new java.util.TreeMap<>();
+            plugins.values().stream()
+                    .filter(PluginManager::isDriver)
+                    .forEach(p ->
+                            newest.merge(p.id(), p, (a, b) -> compareVersions(a.version(), b.version()) >= 0 ? a : b));
+            return List.copyOf(newest.values());
+        }
         List<InstalledPlugin> drivers = new ArrayList<>();
         for (String id : plugin.descriptor().drivers()) {
             drivers.add(plugins.values().stream()
                     .filter(p -> p.id().equals(id))
-                    .filter(p -> p.descriptor().provides().stream().anyMatch(c -> c.type() == PluginType.DRIVER))
+                    .filter(PluginManager::isDriver)
                     .max(Comparator.comparing(InstalledPlugin::version, PluginManager::compareVersions))
                     .orElseThrow(() -> PipeForgeException.of(ErrorCode.DRIVER_MISSING)
                             .param("plugin", plugin.coordinate())
@@ -191,6 +200,10 @@ public final class PluginManager implements AutoCloseable {
                             .build()));
         }
         return drivers;
+    }
+
+    private static boolean isDriver(InstalledPlugin plugin) {
+        return plugin.descriptor().provides().stream().anyMatch(c -> c.type() == PluginType.DRIVER);
     }
 
     /**

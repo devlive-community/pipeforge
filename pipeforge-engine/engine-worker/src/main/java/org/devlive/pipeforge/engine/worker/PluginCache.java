@@ -150,8 +150,21 @@ public final class PluginCache implements AutoCloseable {
             }
         }
         InstalledPlugin plugin = install(coordinate, ref.getSha256());
-        // the driver plugins it requires come with it in the deployment
+        // the driver plugins it requires come with it in the deployment; a plugin that takes any
+        // driver gets every driver plugin of the deployment
         List<InstalledPlugin> installed = new java.util.ArrayList<>(List.of(plugin));
+        if (plugin.descriptor().anyDrivers()) {
+            for (PluginRef other : refs.values()) {
+                String id = other.getId() + "@" + other.getVersion();
+                if (!id.equals(coordinate) && !other.getSha256().isEmpty()) {
+                    InstalledPlugin candidate = install(id, other.getSha256());
+                    if (candidate.descriptor().provides().stream()
+                            .anyMatch(c -> c.type() == org.devlive.pipeforge.common.plugin.PluginType.DRIVER)) {
+                        installed.add(candidate);
+                    }
+                }
+            }
+        }
         for (String driver : plugin.descriptor().drivers()) {
             refs.values().stream()
                     .filter(r -> r.getId().equals(driver) && !r.getSha256().isEmpty())

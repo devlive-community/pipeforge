@@ -50,6 +50,10 @@ and each plugin gets its own class loader, so libraries in different versions ne
       - { type: source, identifier: greeting, class: org.example.greeting.GreetingSourceFactory }
     datasource: { type: greeting, versions: ["1.0"] }
     ```
+
+    A plugin that needs third-party drivers it does not ship adds `requires: { drivers: [<id>, ...] }`
+    with the ids of [driver plugins](../concepts/plugins#driver-plugins), or `requires: { drivers: any }`
+    to take every installed one.
   </Step>
   <Step title="Add the Maven plugin">
     ```xml title="pom.xml"

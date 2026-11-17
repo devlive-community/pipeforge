@@ -52,6 +52,7 @@ class PluginBlobsTest {
         plugins.pluginRequiring("acme", "1.0.0", "acme-source", library, List.of("acme-driver"));
         plugins.driver("acme-driver", "1.0.0", library);
         plugins.pluginRequiring("lonely", "1.0.0", "lonely-source", library, List.of("missing-driver"));
+        plugins.pluginRequiring("jdbc", "1.0.0", "jdbc-source", library, List.of("any"));
         installed = PluginManager.load(
                 List.of(dir.resolve("build/plugins")), dir.resolve("master-cache"), PluginManager.Options.defaults());
         blobs = new PluginBlobs(installed, dir.resolve("blobs"));
@@ -80,6 +81,10 @@ class PluginBlobsTest {
         assertThat(blobs.refs("acme@1.0.0"))
                 .allSatisfy(r -> assertThat(r.getSha256()).hasSize(64));
         assertThat(blobs.refs("alpha@1.0.0")).hasSize(1);
+        assertThat(blobs.refs("jdbc@1.0.0"))
+                .as("a plugin that takes any driver gets every installed one")
+                .extracting(PluginRef::getId)
+                .containsExactly("jdbc", "acme-driver");
         assertThatThrownBy(() -> blobs.refs("lonely@1.0.0"))
                 .isInstanceOfSatisfying(
                         org.devlive.pipeforge.common.error.PipeForgeException.class, e -> assertThat(e.code())

@@ -56,6 +56,9 @@ public final class PluginDocs {
             model.put("datasource", datasource);
         }
         model.put("drivers", descriptor.drivers());
+        if (descriptor.anyDrivers()) {
+            model.put("anyDrivers", true);
+        }
         List<Map<String, Object>> list = new ArrayList<>();
         for (PluginInspector.Inspected component : components) {
             list.add(component(component));

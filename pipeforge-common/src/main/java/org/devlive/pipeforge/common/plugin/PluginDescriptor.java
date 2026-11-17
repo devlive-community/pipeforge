@@ -42,6 +42,8 @@ import org.yaml.snakeyaml.error.YAMLException;
  * @param provides the components of the plugin
  * @param datasource data source type and verified versions, if the plugin connects to one
  * @param drivers driver plugins the plugin needs
+ * @param anyDrivers whether the plugin takes every installed driver plugin ({@code requires: {
+ *     drivers: any}}), as a generic JDBC plugin whose users bring their own driver
  * @param extra further fields kept as written (lob, state-downgrade, skipped-testkit-groups, ...)
  */
 public record PluginDescriptor(
@@ -55,6 +57,7 @@ public record PluginDescriptor(
         List<Component> provides,
         @Nullable Datasource datasource,
         List<String> drivers,
+        boolean anyDrivers,
         Map<String, Object> extra) {
 
     /** File name of the descriptor at the root of a plugin package. */
@@ -152,7 +155,9 @@ public record PluginDescriptor(
         }
         List<Component> provides = components(map.get("provides"), problems);
         Datasource datasource = datasource(map.get("datasource"), problems);
-        List<String> drivers = drivers(map.get("requires"), problems);
+        Object driverList = map.get("requires") instanceof Map<?, ?> requires ? requires.get("drivers") : null;
+        boolean anyDrivers = "any".equals(driverList);
+        List<String> drivers = anyDrivers ? List.of() : drivers(map.get("requires"), problems);
         Map<String, Object> extra = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String key = String.valueOf(entry.getKey());
@@ -175,6 +180,7 @@ public record PluginDescriptor(
                         provides,
                         datasource,
                         drivers,
+                        anyDrivers,
                         extra),
                 problems);
     }
@@ -270,7 +276,7 @@ public record PluginDescriptor(
             return List.of();
         }
         if (!(drivers instanceof List<?> list)) {
-            problems.add("requires.drivers must be a list");
+            problems.add("requires.drivers must be a list of driver plugin ids, or any");
             return List.of();
         }
         return list.stream().map(String::valueOf).toList();

@@ -134,6 +134,32 @@ class PluginCacheTest {
     }
 
     @Test
+    void aPluginThatTakesAnyDriverGetsTheDriversOfTheDeployment() throws Exception {
+        TestPlugins plugins = new TestPlugins(dir.resolve("any"));
+        Path library = plugins.library("d-5");
+        PluginPackage.Packed jdbc = PluginPackage.pack(
+                PluginRepository.read(plugins.pluginRequiring("jdbc", "1.0.0", "jdbc-source", library, List.of("any"))),
+                dir.resolve("master"));
+        PluginPackage.Packed driver = PluginPackage.pack(
+                PluginRepository.read(plugins.driver("h2-driver", "2.2.0", library)), dir.resolve("master"));
+        served.put(jdbc.sha256(), jdbc.file());
+        served.put(driver.sha256(), driver.file());
+        List<PluginRef> deployment = new java.util.ArrayList<>(refs());
+        deployment.add(ChainCodec.pluginRef("jdbc@1.0.0").toBuilder()
+                .setSha256(jdbc.sha256())
+                .build());
+        deployment.add(ChainCodec.pluginRef("h2-driver@2.2.0").toBuilder()
+                .setSha256(driver.sha256())
+                .build());
+        try (PluginCache cache = cache()) {
+            Component component =
+                    cache.forRun("run-1", deployment).resolve(NodeKind.SOURCE, "jdbc-source", "jdbc@1.0.0");
+            assertThat(libraryVersion(component)).as("from the driver plugin").isEqualTo("d-5");
+            assertThat(fetched).contains("jdbc@1.0.0", "h2-driver@2.2.0");
+        }
+    }
+
+    @Test
     void downloadsAPackageOnceAndLoadsItPerRun() throws Exception {
         try (PluginCache cache = cache()) {
             Component one = cache.forRun("run-1", refs()).resolve(NodeKind.SOURCE, "alpha-source", "alpha@1.0.0");

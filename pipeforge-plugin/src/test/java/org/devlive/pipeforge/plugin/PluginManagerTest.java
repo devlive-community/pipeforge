@@ -96,6 +96,43 @@ class PluginManagerTest {
     }
 
     @Test
+    void aPluginThatTakesAnyDriverGetsTheNewestOfEachInstalledDriver() throws Exception {
+        TestPlugins plugins = new TestPlugins(dir);
+        Path library = plugins.library("driver-9");
+        plugins.pluginRequiring("jdbc", "1.0.0", "jdbc", library, List.of("any"));
+        plugins.driver("acme-driver", "8.0.1", plugins.library("driver-8"));
+        plugins.driver("acme-driver", "9.1.0", library);
+        plugins.driver("other-driver", "1.0.0", plugins.library("other"));
+        try (PluginManager manager = manager(plugins)) {
+            InstalledPlugin jdbc = manager.resolve(PluginType.SOURCE, "jdbc", null);
+            assertThat(manager.drivers(jdbc))
+                    .extracting(InstalledPlugin::coordinate)
+                    .containsExactly("acme-driver@9.1.0", "other-driver@1.0.0");
+            try (PluginLease lease = manager.acquire(jdbc, "job")) {
+                SourceFactory factory = lease.factory(PluginType.SOURCE, "jdbc", SourceFactory.class);
+                assertThat(call(factory, "libraryVersion"))
+                        .as("the first driver's jars come first")
+                        .isEqualTo("driver-9");
+            }
+        }
+    }
+
+    @Test
+    void aPluginThatTakesAnyDriverLoadsWithoutOne() {
+        TestPlugins plugins = new TestPlugins(dir);
+        plugins.pluginRequiring("jdbc", "1.0.0", "jdbc", plugins.library("x"), List.of("any"));
+        try (PluginManager manager = manager(plugins)) {
+            InstalledPlugin jdbc = manager.resolve(PluginType.SOURCE, "jdbc", null);
+            assertThat(manager.drivers(jdbc)).isEmpty();
+            try (PluginLease lease = manager.acquire(jdbc, "job")) {
+                assertThat(lease.classLoader())
+                        .as("the driver is missing only when a job connects")
+                        .isNotNull();
+            }
+        }
+    }
+
+    @Test
     void aMissingDriverIsReportedWhenThePluginLoads() {
         TestPlugins plugins = new TestPlugins(dir);
         plugins.pluginRequiring("acme", "1.0.0", "acme-source", plugins.library("1"), List.of("acme-driver"));

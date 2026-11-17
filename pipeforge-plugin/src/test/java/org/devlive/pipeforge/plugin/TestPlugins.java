@@ -76,7 +76,8 @@ public final class TestPlugins {
     }
 
     /**
-     * A plugin that requires the driver plugins {@code drivers} and does not bundle {@code library}:
+     * A plugin that requires the driver plugins {@code drivers}, or every installed one for {@code
+     * List.of("any")}, and does not bundle {@code library}:
      * its factory reports the version of the library a driver brings.
      */
     public Path pluginRequiring(String id, String version, String identifier, Path library, List<String> drivers) {
@@ -91,8 +92,10 @@ public final class TestPlugins {
             Files.copy(pluginJar, dir.resolve("lib").resolve(pluginJar.getFileName()));
             Files.writeString(
                     dir.resolve("plugin.yaml"),
-                    descriptor(id, version, identifier) + "requires:\n  drivers: [" + String.join(", ", drivers)
-                            + "]\n");
+                    descriptor(id, version, identifier)
+                            + "requires:\n  drivers: "
+                            + (drivers.equals(List.of("any")) ? "any" : "[" + String.join(", ", drivers) + "]")
+                            + "\n");
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

@@ -51,7 +51,13 @@ class PluginDescriptorTest {
         assertThat(descriptor.datasource())
                 .isEqualTo(new PluginDescriptor.Datasource("mysql", List.of("5.7", "8.0", "8.4")));
         assertThat(descriptor.drivers()).containsExactly("mysql-connector-j");
+        assertThat(descriptor.anyDrivers()).isFalse();
         assertThat(descriptor.extra()).containsEntry("lob", "streaming");
+        PluginDescriptor any = PluginDescriptor.parse(
+                        VALID.replace("requires:\n  drivers: [mysql-connector-j]", "requires:\n  drivers: any"))
+                .orElseThrow();
+        assertThat(any.anyDrivers()).as("a generic plugin takes every driver").isTrue();
+        assertThat(any.drivers()).isEmpty();
     }
 
     @Test
@@ -84,7 +90,7 @@ class PluginDescriptorTest {
                         "provides[3] must be a mapping with type, identifier and class",
                         "provides[5] repeats sink 'a'",
                         "datasource must be a mapping",
-                        "requires.drivers must be a list");
+                        "requires.drivers must be a list of driver plugin ids, or any");
         assertThatThrownBy(result::orElseThrow).hasMessageStartingWith("Invalid plugin.yaml: id must be");
     }
 
@@ -135,6 +141,7 @@ class PluginDescriptorTest {
                 .orElseThrow();
         assertThat(descriptor.datasource()).isNull();
         assertThat(descriptor.drivers()).isEmpty();
+        assertThat(descriptor.anyDrivers()).isFalse();
         assertThat(descriptor.apiMajorVersion()).isZero();
     }
 }

@@ -48,6 +48,9 @@ greeting-plugin-1.0.0.zip
       - { type: source, identifier: greeting, class: org.example.greeting.GreetingSourceFactory }
     datasource: { type: greeting, versions: ["1.0"] }
     ```
+
+    插件需要自己不打包的第三方驱动时，加上 `requires: { drivers: [<id>, ...] }`，写出[驱动插件](../concepts/plugins#驱动插件)的 id；
+    写 `requires: { drivers: any }` 则使用所有已安装的驱动插件。
   </Step>
   <Step title="加入 Maven 插件">
     ```xml title="pom.xml"
