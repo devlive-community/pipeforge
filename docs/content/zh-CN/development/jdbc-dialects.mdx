@@ -49,6 +49,7 @@ Sink，其他功能都可以直接使用。
 |---|---|---|---|
 | `jdbc`（`GenericDialect`） | `connector-jdbc` | H2 | 无 |
 | `mysql` | `connector-mysql` | MySQL 8.0、8.4，Connector/J 8.4 | 反引号；`db.t` 中 `db` 是 Catalog；无符号整数放宽一级，`BIGINT UNSIGNED` 为 `DECIMAL(20, 0)`，`YEAR` 为 `INT16`，`BIT(n)` 为 `BYTES`，`TIMESTAMP` 为时间点；会话使用 UTC、批量改写、UTF-8；逐行流式读取；`allowLoadLocalInfile`、`allowUrlInLocalInfile` 和 `autoReconnect` 为受控键；按 MySQL 错误码分类；表按 Catalog 命名为 `库.表`，`mysql`、`sys`、`information_schema` 和 `performance_schema` 是系统库；Source 使用的方言（`MySqlDialect.forReading()`）还通过二进制协议读取（`useServerPrepStmts`），因为文本协议会丢失 `FLOAT` 的位数 |
+| `postgres` | `connector-postgres` | PostgreSQL 14、16，PostgreSQL JDBC 驱动 42.7 | 双引号；`s.t` 中 `s` 为 Schema；`pg_catalog` 和 `pg_toast` 是系统 Schema；`timestamptz` 是时刻，`json`/`jsonb` 是 `JSON`；没有精度或超过 38 位的 `numeric` 为 `STRING`，精确保留包括 `NaN` 在内的值；`uuid`、`interval`、`money`、网络地址、位串、`xml` 和 `timetz` 读作文本；布尔、整数、浮点和文本的数组为 `ARRAY`；在事务中按 fetch size 流式读取；改写批次，文本参数不带类型发送（`stringtype=unspecified`），因此 `jsonb`、`uuid` 和枚举列可以接收文本；会加载类（`socketFactory`、`sslfactory` 等）或写文件（`loggerFile`）的属性是受控属性；按 PostgreSQL 的 SQLState 识别库不存在、关闭、连接过多和锁超时 |
 
 ## 接入插件
 

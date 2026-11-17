@@ -77,6 +77,9 @@
   docs: ["plugins/source/mysql", "plugins/sink/mysql"]
 - paths: ["pipeforge-connectors/connector-mysql/src/main/java/org/devlive/pipeforge/connector/mysql/MySqlDialect.java"]
   docs: ["development/jdbc-dialects"]
+# until the PostgreSQL source and sink have their pages
+- paths: ["pipeforge-connectors/connector-postgres/**"]
+  docs: ["development/jdbc-dialects"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
 # Plugins: every plugin module has its page; the conventions of plugin builds are part of packaging.

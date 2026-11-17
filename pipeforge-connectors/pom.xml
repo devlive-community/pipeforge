@@ -24,6 +24,7 @@
     <modules>
         <module>connector-jdbc</module>
         <module>connector-mysql</module>
+        <module>connector-postgres</module>
         <module>connector-fake</module>
         <module>connector-console</module>
         <module>connector-blackhole</module>

@@ -76,6 +76,7 @@
         <h2.version>2.2.224</h2.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <mysql-connector-j.version>8.4.0</mysql-connector-j.version>
+        <postgresql.version>42.7.13</postgresql.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <errorprone.version>2.36.0</errorprone.version>
         <calcite.version>1.40.0</calcite.version>
@@ -167,6 +168,17 @@
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-mysql</artifactId>
                 <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-postgresql</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <!-- PostgreSQL JDBC driver, BSD-2-Clause -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
             </dependency>
             <!-- GPLv2 with the Universal FOSS Exception: a test dependency; plugins do not ship it -->
             <dependency>
