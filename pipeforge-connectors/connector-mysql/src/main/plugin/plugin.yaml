@@ -10,9 +10,10 @@ version: 0.1.0-SNAPSHOT
 api-version: "0.x"
 vendor: PipeForge
 license: MIT
-description: Reads MySQL tables, many at once, in parallel splits over JDBC. Needs the MySQL Connector/J driver plugin, which is installed separately.
+description: Reads MySQL tables, many at once, in parallel splits over JDBC, and writes rows into MySQL tables in batches. Needs the MySQL Connector/J driver plugin, which is installed separately.
 provides:
   - { type: source, identifier: jdbc-mysql, class: org.devlive.pipeforge.connector.mysql.MySqlSourceFactory }
+  - { type: sink, identifier: jdbc-mysql, class: org.devlive.pipeforge.connector.mysql.MySqlSinkFactory }
 datasource:
   type: mysql
   versions: ["8.0", "8.4"]

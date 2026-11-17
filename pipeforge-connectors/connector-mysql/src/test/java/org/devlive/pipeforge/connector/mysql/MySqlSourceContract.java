@@ -6,7 +6,6 @@
  */
 package org.devlive.pipeforge.connector.mysql;
 
-import java.time.Instant;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
@@ -26,23 +25,6 @@ abstract class MySqlSourceContract extends SourceContract {
     /** MySQL has no arrays, maps or rows. */
     static final Set<TypeRoot> TYPES =
             EnumSet.complementOf(EnumSet.of(TypeRoot.ARRAY, TypeRoot.MAP, TypeRoot.ROW, TypeRoot.NULL));
-
-    /** The range of a MySQL TIMESTAMP. */
-    static final Instant FIRST_TIMESTAMP = Instant.parse("1970-01-01T00:00:01Z");
-
-    static final Instant LAST_TIMESTAMP = Instant.parse("2038-01-19T03:14:07.999999Z");
-
-    /** Whether MySQL can store {@code value}: FLOAT and TIMESTAMP have narrower ranges than their types. */
-    static boolean holds(DataType type, Object value) {
-        if (value instanceof Float f) {
-            // MySQL's FLOAT ends at 3.402823466E+38, just below Float.MAX_VALUE
-            return Math.abs(f) < Float.MAX_VALUE;
-        }
-        if (value instanceof Instant instant) {
-            return !instant.isBefore(FIRST_TIMESTAMP) && !instant.isAfter(LAST_TIMESTAMP);
-        }
-        return true;
-    }
 
     private final String version;
 
@@ -82,7 +64,7 @@ abstract class MySqlSourceContract extends SourceContract {
 
             @Override
             public boolean holds(DataType type, Object value) {
-                return MySqlSourceContract.holds(type, value);
+                return MySql.holds(type, value);
             }
 
             @Override

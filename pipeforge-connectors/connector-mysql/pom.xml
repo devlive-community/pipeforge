@@ -19,7 +19,7 @@
     <artifactId>connector-mysql</artifactId>
     <name>PipeForge Connector MySQL</name>
     <description>
-        D01 MySQL dialect on the JDBC connector base and S03 MySQL source; the sink follows. Verified
+        D01 MySQL dialect on the JDBC connector base, S03 MySQL source and K03 MySQL sink (batch). Verified
         against MySQL 8.0 and 8.4. Connector/J is not packaged: it comes from the mysql-connector-j
         driver plugin.
     </description>

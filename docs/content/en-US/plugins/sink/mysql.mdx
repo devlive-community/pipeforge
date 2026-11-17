@@ -1,0 +1,175 @@
+---
+title: MySQL sink
+description: Insert rows into an existing MySQL table in batches, with retries and bad rows located one by one.
+order: 20
+template: plugin
+---
+
+## Introduction
+
+The MySQL sink (`type: jdbc-mysql`) inserts the rows of its input into an existing MySQL table over
+JDBC. It writes in batches, each in a transaction of its own, which Connector/J sends as multi-row
+inserts. A batch that fails for a passing reason is tried again; a batch with rows MySQL refuses is
+split until those rows are found, and they follow the job's dirty data policy.
+
+Use it to load data from any source into MySQL, or to copy between MySQL databases with the
+[MySQL source](../source/mysql). Updates and deletes (upsert), creating the table and changing its
+schema come in later milestones.
+
+## Capabilities
+
+<PluginCapabilities plugin="mysql" component="sink" />
+
+## Verified versions
+
+<PluginVersions plugin="mysql" />
+
+## Quick start
+
+Install the driver plugin (see [Prerequisites](#prerequisites)) and create the target table, then:
+
+```yaml
+version: 1
+name: fake-to-mysql
+source:
+  - id: src
+    type: fake
+    table: shop.orders
+    columns: [id INT64 NOT NULL, amount DECIMAL(10, 2), note STRING(20)]
+    primary-key: [id]
+    rows: 10000
+sink:
+  - id: out
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: writer
+    password: ${env:MYSQL_PASSWORD}
+    table: shop.orders
+```
+
+## Prerequisites
+
+- **The MySQL Connector/J driver plugin**, `mysql-connector-j`, installed as a
+  [driver plugin](../../concepts/plugins#driver-plugins); the plugin does not ship it. Without it the
+  job fails with `PF-PLUG-0003`.
+- **The target table.** Every column of the input must exist in it, matched by name (exactly, else
+  ignoring case); columns of the table that the input lacks get their defaults.
+- **A user with `INSERT`** on the table, and network access from the master and the workers.
+
+## Data source configuration
+
+The connection works as for the [MySQL source](../source/mysql#data-source-configuration): `url`,
+`username`, `password` and Connector/J properties in `jdbc.properties.<name>`, with the same
+defaults and controlled properties, except that the sink keeps client-side prepared statements, so
+that `rewriteBatchedStatements` turns a batch into multi-row inserts.
+
+## Node options
+
+<PluginOptions plugin="mysql" component="sink" />
+
+## Native options
+
+<PluginNativeOptions plugin="mysql" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="mysql" />
+
+## Splits and parallelism
+
+The sink writes with as many writers as its parallelism, each with its own connection and
+transactions. Rows reach the writers in no particular order.
+
+## Consistency
+
+The sink writes **at least once**. A failed batch is rolled back, so it leaves no rows behind; rows
+are written twice only when a commit succeeded but its acknowledgement was lost, or when a run
+restarts after some batches were committed. With a primary key on the target, such repeats are
+refused as duplicate keys and become bad rows instead of being stored twice: with
+`env.dirty.policy: skip` they are skipped, with the default `fail` the job fails.
+
+## Examples
+
+### Skip the rows MySQL refuses
+
+```yaml
+version: 1
+name: people-to-mysql
+env:
+  dirty: { policy: skip, max-rows: 100 }
+source:
+  - id: src
+    type: fake
+    table: crm.people
+    columns: [id INT64 NOT NULL, name STRING]
+    primary-key: [id]
+sink:
+  - id: out
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/crm
+    username: writer
+    password: ${env:MYSQL_PASSWORD}
+    table: crm.people
+    batch-size: 5000
+```
+
+In strict mode, which MySQL 8 uses by default, a name longer than the column, a number out of range
+or a duplicate key fails the insert. The sink splits the batch until it finds the row, writes the
+others, and the job skips up to 100 such rows, keeping the first ones as samples.
+
+### Copy a table between MySQL servers
+
+```yaml
+version: 1
+name: orders-archive
+source:
+  - id: orders
+    type: jdbc-mysql
+    url: jdbc:mysql://primary.example.com:3306/shop
+    username: reader
+    password: ${env:SHOP_PASSWORD}
+    table: shop.orders
+sink:
+  - id: archive
+    type: jdbc-mysql
+    url: jdbc:mysql://archive.example.com:3306/archive
+    username: writer
+    password: ${env:ARCHIVE_PASSWORD}
+    table: archive.orders
+```
+
+## Metrics
+
+The sink reports the standard sink metrics: `rowsWritten`, the write rate, the write queue and
+`writerWaitMs`. Rows MySQL refuses count in `rowsDirty` with samples when the policy is `skip`.
+
+## Performance and tuning
+
+- `batch-size` (1,000 by default) is the number of rows per insert and transaction; larger batches
+  write faster until the server's `max_allowed_packet` or lock times get in the way.
+- Bad rows are cheap to find but not free: each split of a failed batch is another round trip.
+  Fix systematic causes, such as a column that is too narrow, instead of skipping many rows.
+- Indexes and foreign keys on the target slow inserts; for large loads, consider adding them after.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-PLUG-0003` | The `mysql-connector-j` driver plugin is not installed |
+| `PF-META-0001` | The target table does not exist or the user cannot see it |
+| `PF-META-0002` | An input column is missing from the target table; add it or map the columns with a transform |
+| `PF-PLAN-0012` | More than one table comes into the sink; give each table a sink of its own |
+| `PF-DATA-0009` | MySQL refused a row (too long, out of range, duplicate key); the message has MySQL's reason. Fix the data or the table, or set `env.dirty.policy: skip` |
+| `PF-DATA-0010` | More rows were refused than `env.dirty.max-rows` allows |
+| `PF-CONN-0001`, `PF-AUTH-0001` | See the [MySQL source](../source/mysql#errors-and-troubleshooting) |
+
+## Known limitations
+
+- Inserts only: no upsert, update or delete yet (M4), and the table must exist (creating it: M3).
+- One table per sink node.
+- At least once: exactly-once with XA transactions arrives in M4.
+- MySQL 5.7 is not verified yet.
+
+## Changelog
+
+<PluginChangelog plugin="mysql" />

@@ -126,6 +126,50 @@ final class MySql {
         }
     }
 
+    /** The rows of {@code table}, read the way the source reads them: over the binary protocol. */
+    List<Row> rows(CatalogTable table) throws SQLException {
+        MySqlDialect reading = MySqlDialect.forReading();
+        List<Row> rows = new ArrayList<>();
+        try (Connection connection = JdbcConnections.open(
+                        JdbcConnectionConfig.of(
+                                ReadonlyConfig.of(
+                                        Map.of("url", url(), "username", "root", "password", server.getPassword())),
+                                reading,
+                                "test"),
+                        reading,
+                        MySql.class.getClassLoader(),
+                        "test");
+                PreparedStatement select =
+                        connection.prepareStatement(reading.selectQuery(table.id(), table.columnNames(), null));
+                java.sql.ResultSet rs = select.executeQuery()) {
+            while (rs.next()) {
+                Object[] values = new Object[table.columns().size()];
+                for (int i = 0; i < values.length; i++) {
+                    values[i] = reading.read(rs, i + 1, table.columns().get(i).type());
+                }
+                rows.add(org.devlive.pipeforge.api.row.GenericRow.of(table.id(), values));
+            }
+        }
+        return rows;
+    }
+
+    /** Whether MySQL can store {@code value}: FLOAT and TIMESTAMP have narrower ranges than their types. */
+    static boolean holds(DataType type, Object value) {
+        if (value instanceof Float f) {
+            // MySQL's FLOAT ends at 3.402823466E+38, just below Float.MAX_VALUE
+            return Math.abs(f) < Float.MAX_VALUE;
+        }
+        if (value instanceof java.time.Instant instant) {
+            return !instant.isBefore(FIRST_TIMESTAMP) && !instant.isAfter(LAST_TIMESTAMP);
+        }
+        return true;
+    }
+
+    /** The range of a MySQL TIMESTAMP. */
+    static final java.time.Instant FIRST_TIMESTAMP = java.time.Instant.parse("1970-01-01T00:00:01Z");
+
+    static final java.time.Instant LAST_TIMESTAMP = java.time.Instant.parse("2038-01-19T03:14:07.999999Z");
+
     void drop(TableId table) throws SQLException {
         if (table.database() != null) {
             execute("CREATE DATABASE IF NOT EXISTS " + DIALECT.quote(table.database()));

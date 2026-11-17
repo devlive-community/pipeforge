@@ -1,0 +1,161 @@
+---
+title: MySQL Sink
+description: 按批次把行插入已有的 MySQL 表，支持重试，并逐行定位坏行。
+order: 20
+template: plugin
+---
+
+## 简介
+
+MySQL Sink（`type: jdbc-mysql`）通过 JDBC 把输入的行插入一张已有的 MySQL 表。它按批次写入，每个批次一个独立事务，Connector/J
+把批次作为多行插入发送。因暂时性原因失败的批次会重试；含有 MySQL 拒绝的行的批次会被拆分，直到找出这些行，它们按作业的脏数据策略处理。
+
+适用于把任意数据源的数据装载到 MySQL，或者配合 [MySQL Source](../source/mysql) 在 MySQL 数据库之间复制。更新与删除（upsert）、
+自动建表和 Schema 变更在后续里程碑提供。
+
+## 能力
+
+<PluginCapabilities plugin="mysql" component="sink" />
+
+## 已验证版本
+
+<PluginVersions plugin="mysql" />
+
+## 快速开始
+
+安装驱动插件（见[前置条件](#前置条件)）并建好目标表，然后：
+
+```yaml
+version: 1
+name: fake-to-mysql
+source:
+  - id: src
+    type: fake
+    table: shop.orders
+    columns: [id INT64 NOT NULL, amount DECIMAL(10, 2), note STRING(20)]
+    primary-key: [id]
+    rows: 10000
+sink:
+  - id: out
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: writer
+    password: ${env:MYSQL_PASSWORD}
+    table: shop.orders
+```
+
+## 前置条件
+
+- **MySQL Connector/J 驱动插件** `mysql-connector-j`，作为[驱动插件](../../concepts/plugins#驱动插件)安装；插件本身不打包它。
+  没有安装时作业以 `PF-PLUG-0003` 失败。
+- **目标表。** 输入的每一列都必须在表中存在，按名称匹配（先精确匹配，否则忽略大小写）；输入中没有的列取默认值。
+- **对该表有 `INSERT` 权限的用户**，以及 Master 和 Worker 到数据库的网络连通。
+
+## 数据源配置
+
+连接方式与 [MySQL Source](../source/mysql#数据源配置) 相同：`url`、`username`、`password`，以及写在 `jdbc.properties.<名称>`
+中的 Connector/J 属性，默认值和受控属性也相同；区别是 Sink 使用客户端预编译语句，以便 `rewriteBatchedStatements` 把批次改写为多行插入。
+
+## 节点选项
+
+<PluginOptions plugin="mysql" component="sink" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="mysql" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="mysql" />
+
+## 分片与并行
+
+Sink 的写入器数量等于其并行度，每个写入器有自己的连接和事务。行到达各写入器的顺序不固定。
+
+## 一致性语义
+
+Sink 的语义是**至少一次**。失败的批次会回滚，不会留下任何行；只有在提交成功但确认丢失，或者运行在部分批次提交后重新开始时，
+才会重复写入。目标表有主键时，这些重复的行会因重复键被拒绝，成为坏行而不会被存储两次：`env.dirty.policy: skip` 时被跳过，默认的 `fail` 时作业失败。
+
+## 示例
+
+### 跳过 MySQL 拒绝的行
+
+```yaml
+version: 1
+name: people-to-mysql
+env:
+  dirty: { policy: skip, max-rows: 100 }
+source:
+  - id: src
+    type: fake
+    table: crm.people
+    columns: [id INT64 NOT NULL, name STRING]
+    primary-key: [id]
+sink:
+  - id: out
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/crm
+    username: writer
+    password: ${env:MYSQL_PASSWORD}
+    table: crm.people
+    batch-size: 5000
+```
+
+在 MySQL 8 默认的严格模式下，超过列长度的名称、超出范围的数字或者重复键都会使插入失败。Sink 拆分批次直到找出这一行，写入其余的行，
+作业最多跳过 100 个这样的行，并保留最早的几行作为样本。
+
+### 在 MySQL 服务器之间复制一张表
+
+```yaml
+version: 1
+name: orders-archive
+source:
+  - id: orders
+    type: jdbc-mysql
+    url: jdbc:mysql://primary.example.com:3306/shop
+    username: reader
+    password: ${env:SHOP_PASSWORD}
+    table: shop.orders
+sink:
+  - id: archive
+    type: jdbc-mysql
+    url: jdbc:mysql://archive.example.com:3306/archive
+    username: writer
+    password: ${env:ARCHIVE_PASSWORD}
+    table: archive.orders
+```
+
+## 指标
+
+Sink 报告标准的 Sink 指标：`rowsWritten`、写入速率、写入队列和 `writerWaitMs`。策略为 `skip` 时，MySQL 拒绝的行计入 `rowsDirty`，
+并保留样本。
+
+## 性能与调优
+
+- `batch-size`（默认 1,000）是每次插入和每个事务的行数；批次越大写得越快，直到受到服务器的 `max_allowed_packet` 或锁等待的限制。
+- 定位坏行代价不高但并非没有代价：失败批次的每次拆分都多一次往返。对于系统性的原因（例如列太窄），应修正原因，而不是跳过大量行。
+- 目标表上的索引和外键会降低插入速度；大批量装载时可以考虑装载后再添加。
+
+## 错误码与排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-PLUG-0003` | 没有安装 `mysql-connector-j` 驱动插件 |
+| `PF-META-0001` | 目标表不存在，或者用户看不到它 |
+| `PF-META-0002` | 目标表缺少输入中的某一列；添加该列，或者用 Transform 映射列 |
+| `PF-PLAN-0012` | 有多张表进入这个 Sink；为每张表配置一个 Sink |
+| `PF-DATA-0009` | MySQL 拒绝了某一行（过长、超出范围、重复键），消息中带有 MySQL 的原因。修正数据或表，或者设置 `env.dirty.policy: skip` |
+| `PF-DATA-0010` | 被拒绝的行数超过了 `env.dirty.max-rows` |
+| `PF-CONN-0001`、`PF-AUTH-0001` | 见 [MySQL Source](../source/mysql#错误码与排障) |
+
+## 已知限制
+
+- 只支持插入：暂不支持 upsert、更新和删除（M4），表必须已经存在（自动建表：M3）。
+- 每个 Sink 节点只写一张表。
+- 至少一次：基于 XA 事务的精确一次在 M4 提供。
+- 尚未验证 MySQL 5.7。
+
+## 变更记录
+
+<PluginChangelog plugin="mysql" />

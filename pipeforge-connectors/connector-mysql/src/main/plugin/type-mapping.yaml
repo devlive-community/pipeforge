@@ -24,3 +24,17 @@ read:
   - { external: "DATETIME(p)", logical: "TIMESTAMP(p)", note: "a local date and time, as stored" }
   - { external: "TIMESTAMP(p)", logical: "TIMESTAMP_LTZ(p)", note: "an instant; the session is in UTC, so it does not depend on time zones" }
   - { external: JSON, logical: JSON, note: "as MySQL prints it: normalized spacing and member order" }
+# How the MySQL sink binds logical values; the target column's MySQL type decides what is stored.
+write:
+  - { external: "BOOLEAN, TINYINT(1)", logical: BOOLEAN }
+  - { external: "TINYINT, SMALLINT, INT, BIGINT", logical: "INT8, INT16, INT32, INT64", note: "MySQL refuses values out of the column's range in strict mode: a bad row" }
+  - { external: FLOAT, logical: FLOAT32, note: "up to 3.402823466E+38; Float.MAX_VALUE itself is out of range" }
+  - { external: DOUBLE, logical: FLOAT64 }
+  - { external: "DECIMAL(p, s)", logical: "DECIMAL(p, s)" }
+  - { external: "VARCHAR(n), TEXT kinds, ENUM", logical: "STRING", note: "a value longer than the column is a bad row" }
+  - { external: "VARBINARY(n), BLOB kinds", logical: BYTES }
+  - { external: DATE, logical: DATE }
+  - { external: "TIME(p)", logical: "TIME(p)" }
+  - { external: "DATETIME(p)", logical: "TIMESTAMP(p)" }
+  - { external: "TIMESTAMP(p)", logical: "TIMESTAMP_LTZ(p)", note: "1970-01-01 00:00:01 to 2038-01-19 03:14:07 UTC" }
+  - { external: JSON, logical: JSON }
