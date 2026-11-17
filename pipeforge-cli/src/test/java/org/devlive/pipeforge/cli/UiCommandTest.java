@@ -83,6 +83,12 @@ class UiCommandTest {
         assertThat(again.exit()).isEqualTo(1);
         assertThat(again.err()).startsWith("ERROR PF-RES-0006 Port " + port + " is already in use");
 
+        // the command polls on its own: interrupt it only once it has printed the address and waits for
+        // the server, not while it sleeps between polls
+        long ready = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+        while (command.getState() != Thread.State.WAITING && System.nanoTime() < ready) {
+            Thread.sleep(20);
+        }
         command.interrupt();
         command.join(Duration.ofSeconds(30).toMillis());
         assertThat(command.isAlive()).isFalse();
