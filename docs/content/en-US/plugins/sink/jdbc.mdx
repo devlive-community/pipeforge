@@ -1,0 +1,149 @@
+---
+title: JDBC sink
+description: Insert rows into an existing table of any database with a JDBC driver, in batches, with ANSI SQL.
+order: 40
+template: plugin
+---
+
+## Introduction
+
+The generic JDBC sink (`type: jdbc`) inserts the rows of its input into an existing table of any
+database that has a JDBC driver, with ANSI SQL and the standard JDBC setters. It writes in batches,
+each in a transaction of its own; a batch that fails for a passing reason is tried again, and a batch
+with rows the database refuses is split until those rows are found, and they follow the job's dirty
+data policy.
+
+Use it for databases without a plugin of their own; where one exists, such as
+[MySQL](./mysql) or [PostgreSQL](./postgres), prefer it. The plugin is verified with H2.
+
+## Capabilities
+
+<PluginCapabilities plugin="jdbc" component="sink" />
+
+## Verified versions
+
+<PluginVersions plugin="jdbc" />
+
+## Quick start
+
+Install the database's driver as a driver plugin and create the target table, then:
+
+```yaml
+version: 1
+name: fake-to-h2
+source:
+  - id: src
+    type: fake
+    table: PUBLIC.ORDERS
+    columns: [ID INT64 NOT NULL, AMOUNT DECIMAL(10, 2)]
+    primary-key: [ID]
+sink:
+  - id: out
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/shop
+    username: sa
+    password: ${env:DB_PASSWORD}
+    table: PUBLIC.ORDERS
+```
+
+## Prerequisites
+
+- **The JDBC driver as a [driver plugin](../../concepts/plugins#driver-plugins)**, as for the
+  [JDBC source](../source/jdbc#prerequisites). Without a driver that accepts the URL the job fails
+  with `PF-PLUG-0003`.
+- **The target table.** Every column of the input must exist in it, matched by name (exactly, else
+  ignoring case); columns of the table that the input lacks get their defaults.
+- **A user with `INSERT`** on the table, and network access from the master and the workers.
+
+## Data source configuration
+
+As for the [JDBC source](../source/jdbc#data-source-configuration): `url`, `username`, `password`,
+`driver` when several drivers accept the URL, and driver properties in `jdbc.properties.<name>`,
+passed as they are. Whether a batch is sent as one statement depends on the driver; some need a
+property for it, which you set there.
+
+## Node options
+
+<PluginOptions plugin="jdbc" component="sink" />
+
+## Native options
+
+<PluginNativeOptions plugin="jdbc" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="jdbc" />
+
+## Splits and parallelism
+
+The sink writes with as many writers as its parallelism, each with its own connection and
+transactions. Rows reach the writers in no particular order.
+
+## Consistency
+
+The sink writes **at least once**. A failed batch is rolled back, so it leaves no rows behind; rows
+are written twice only when a commit succeeded but its acknowledgement was lost, or when a run
+restarts after some batches were committed. With a primary key on the target, such repeats are
+refused as duplicate keys and become bad rows: with `env.dirty.policy: skip` they are skipped, with
+the default `fail` the job fails. Bad rows are recognised by their SQLState (classes `22` and
+`23`); a driver that reports data errors otherwise fails the job instead.
+
+## Examples
+
+### Skip the rows the database refuses
+
+```yaml
+version: 1
+name: people-to-h2
+env:
+  dirty: { policy: skip, max-rows: 100 }
+source:
+  - id: src
+    type: fake
+    table: PUBLIC.PEOPLE
+    columns: [ID INT64 NOT NULL, NAME STRING]
+    primary-key: [ID]
+sink:
+  - id: out
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/crm
+    username: sa
+    password: ${env:DB_PASSWORD}
+    table: PUBLIC.PEOPLE
+    batch-size: 5000
+```
+
+## Metrics
+
+The sink reports the standard sink metrics: `rowsWritten`, the write rate, the write queue and
+`writerWaitMs`. Rows the database refuses count in `rowsDirty` with samples when the policy is
+`skip`.
+
+## Performance and tuning
+
+- `batch-size` (1,000 by default) is the number of rows per transaction.
+- Check whether the driver sends batches as one statement or row by row; a driver property often
+  decides it.
+- Failed batches are split to find bad rows, one more round trip per split; fix systematic causes
+  instead of skipping many rows.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-PLUG-0003` | No installed driver plugin accepts the URL |
+| `PF-META-0001` | The target table does not exist or the user cannot see it |
+| `PF-META-0002` | An input column is missing from the target table |
+| `PF-PLAN-0012` | More than one table comes into the sink; give each table a sink of its own |
+| `PF-DATA-0009` | The database refused a row; the message has its reason |
+| `PF-DATA-0010` | More rows were refused than `env.dirty.max-rows` allows |
+
+## Known limitations
+
+- Inserts only, into an existing table; one table per sink node.
+- At least once.
+- ANSI SQL only; only H2 is verified.
+
+## Changelog
+
+<PluginChangelog plugin="jdbc" />

@@ -118,4 +118,61 @@ class JdbcGenericPluginTest {
             }
         }
     }
+
+    @Test
+    void writesWithTheDriverPluginThatAcceptsTheUrl(TestkitEngine engine) throws Exception {
+        String url = "jdbc:h2:file:" + dir.resolve("out").toAbsolutePath();
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+                Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA \"crm\"");
+            statement.execute("CREATE TABLE \"crm\".\"people\" (\"id\" BIGINT PRIMARY KEY, \"name\" VARCHAR(8))");
+        }
+        org.devlive.pipeforge.api.row.TableId people = org.devlive.pipeforge.api.row.TableId.of("crm", "people");
+        org.devlive.pipeforge.api.table.CatalogTable table = org.devlive.pipeforge.api.table.CatalogTable.of(
+                        people,
+                        List.of(
+                                org.devlive.pipeforge.api.table.Column.of(
+                                        "id",
+                                        org.devlive.pipeforge.api.type.DataTypes.INT64()
+                                                .notNull()),
+                                org.devlive.pipeforge.api.table.Column.of(
+                                        "name", org.devlive.pipeforge.api.type.DataTypes.STRING())))
+                .withPrimaryKey("id");
+        List<Row> rows = new java.util.ArrayList<>();
+        for (long i = 0; i < 30; i++) {
+            rows.add(org.devlive.pipeforge.api.row.GenericRow.of(people, i, i == 7 ? "much-too-long" : "p" + i));
+        }
+        InstalledPlugin plugin = jdbcPlugin();
+        String in = Datasets.input(new org.devlive.pipeforge.testkit.data.TestTable("people", table, rows));
+        try (PluginManager manager = new PluginManager(List.of(plugin, h2Driver()), PluginManager.Options.defaults());
+                PluginLease lease = manager.acquire(plugin, "job")) {
+            org.devlive.pipeforge.api.factory.SinkFactory factory =
+                    lease.factory(PluginType.SINK, "jdbc", org.devlive.pipeforge.api.factory.SinkFactory.class);
+            Map<String, Object> options = new LinkedHashMap<>();
+            options.put("url", url);
+            options.put("username", "sa");
+            options.put("password", "");
+            options.put("table", "crm.people");
+            options.put("batch-size", 8);
+            org.devlive.pipeforge.testkit.TestRun run = engine.run(TestJob.named("generic-sink")
+                            .source(TestkitConnectors.rows(), Map.of("dataset", in, "splits", 2))
+                            .sink(factory, options)
+                            .parallelism(2)
+                            .env("dirty", Map.of("policy", "skip", "max-rows", 5)))
+                    .requireSuccess()
+                    .requireReconciled();
+            assertThat(run.metrics().rowsWritten()).isEqualTo(29);
+            assertThat(run.metrics().rowsDirty())
+                    .as("the name too long for the column")
+                    .isEqualTo(1);
+        } finally {
+            Datasets.release(in);
+        }
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+                Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM \"crm\".\"people\"")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getLong(1)).isEqualTo(29);
+        }
+    }
 }

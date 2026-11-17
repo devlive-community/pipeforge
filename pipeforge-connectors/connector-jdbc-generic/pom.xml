@@ -19,8 +19,8 @@
     <artifactId>connector-jdbc-generic</artifactId>
     <name>PipeForge Connector JDBC (generic)</name>
     <description>
-        S02 generic JDBC source on the JDBC connector base with the ANSI dialect, for databases
-        without a plugin of their own. Users bring the JDBC driver as a driver plugin; verified with H2.
+        S02 generic JDBC source and K05 sink on the JDBC connector base with the ANSI dialect, for
+        databases without a plugin of their own. Users bring the JDBC driver as a driver plugin; verified with H2.
     </description>
 
     <dependencies>

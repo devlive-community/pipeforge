@@ -22,3 +22,15 @@ read:
   - { external: "TIME(p)", logical: "TIME(p)" }
   - { external: "TIMESTAMP(p)", logical: "TIMESTAMP(p)" }
   - { external: "TIMESTAMP WITH TIME ZONE(p)", logical: "TIMESTAMP_LTZ(p)" }
+# How the generic JDBC sink binds logical values: with the standard JDBC setters.
+write:
+  - { external: BOOLEAN, logical: BOOLEAN, note: setBoolean }
+  - { external: "TINYINT, SMALLINT, INTEGER, BIGINT", logical: "INT8, INT16, INT32, INT64" }
+  - { external: "REAL, DOUBLE", logical: "FLOAT32, FLOAT64" }
+  - { external: "DECIMAL(p, s)", logical: "DECIMAL(p, s)", note: setBigDecimal }
+  - { external: "VARCHAR, CHAR, CLOB", logical: STRING, note: setString }
+  - { external: "VARBINARY, BLOB", logical: BYTES, note: setBytes }
+  - { external: DATE, logical: DATE, note: "setObject with LocalDate" }
+  - { external: TIME, logical: TIME, note: "setObject with LocalTime" }
+  - { external: TIMESTAMP, logical: TIMESTAMP, note: "setObject with LocalDateTime" }
+  - { external: TIMESTAMP WITH TIME ZONE, logical: TIMESTAMP_LTZ, note: "setObject with an OffsetDateTime in UTC" }

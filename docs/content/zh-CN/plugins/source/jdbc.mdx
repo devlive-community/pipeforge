@@ -12,7 +12,7 @@ template: plugin
 
 适用于没有专用插件的数据库。已有专用插件的数据库，例如 [MySQL](./mysql) 或 [PostgreSQL](./postgres)，请优先使用专用插件：
 它们了解数据库的类型、流式读取方式和错误。插件以 H2 验证；其他数据库只要遵循 ANSI SQL（双引号名称、`schema.table`），
-且驱动报告标准 JDBC 类型，就可以使用。
+且驱动报告标准 JDBC 类型，就可以使用。同一个插件通过 [JDBC Sink](../sink/jdbc) 写入。
 
 ## 能力
 

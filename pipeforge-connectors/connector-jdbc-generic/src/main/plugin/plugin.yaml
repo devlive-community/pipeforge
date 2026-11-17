@@ -10,9 +10,10 @@ version: 0.1.0-SNAPSHOT
 api-version: "0.x"
 vendor: PipeForge
 license: MIT
-description: Reads tables of any database with a JDBC driver, many at once, in parallel splits, with ANSI SQL. Users install the driver as a driver plugin.
+description: Reads and writes tables of any database with a JDBC driver, with ANSI SQL; reads many at once in parallel splits, writes in batches. Users install the driver as a driver plugin.
 provides:
   - { type: source, identifier: jdbc, class: org.devlive.pipeforge.connector.jdbc.generic.JdbcGenericSourceFactory }
+  - { type: sink, identifier: jdbc, class: org.devlive.pipeforge.connector.jdbc.generic.JdbcGenericSinkFactory }
 # verified with H2; other databases work as far as they follow ANSI SQL
 datasource:
   type: h2

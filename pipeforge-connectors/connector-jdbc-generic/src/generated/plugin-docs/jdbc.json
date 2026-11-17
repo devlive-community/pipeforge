@@ -6,7 +6,7 @@
   "apiVersion" : "0.x",
   "vendor" : "PipeForge",
   "license" : "MIT",
-  "description" : "Reads tables of any database with a JDBC driver, many at once, in parallel splits, with ANSI SQL. Users install the driver as a driver plugin.",
+  "description" : "Reads and writes tables of any database with a JDBC driver, with ANSI SQL; reads many at once in parallel splits, writes in batches. Users install the driver as a driver plugin.",
   "datasource" : {
     "type" : "h2",
     "versions" : [ "2.2" ]
@@ -176,6 +176,119 @@
       "since" : null
     } ],
     "exclusive" : [ [ "table", "query", "tables.include" ] ],
+    "conditions" : [ ],
+    "nativeNamespaces" : [ "jdbc.properties" ]
+  }, {
+    "type" : "sink",
+    "identifier" : "jdbc",
+    "factory" : "org.devlive.pipeforge.connector.jdbc.generic.JdbcGenericSinkFactory",
+    "capabilities" : [ ],
+    "options" : [ {
+      "key" : "url",
+      "type" : "string",
+      "requirement" : "required",
+      "default" : null,
+      "description" : "The JDBC URL of the database",
+      "group" : null,
+      "min" : null,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    }, {
+      "key" : "table",
+      "type" : "string",
+      "requirement" : "required",
+      "default" : null,
+      "description" : "The table, e.g. shop.orders; the database or schema part follows the dialect",
+      "group" : null,
+      "min" : null,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    }, {
+      "key" : "username",
+      "type" : "string",
+      "requirement" : "optional",
+      "default" : null,
+      "description" : "The user the connection logs in as",
+      "group" : null,
+      "min" : null,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ "user" ],
+      "since" : null
+    }, {
+      "key" : "password",
+      "type" : "string",
+      "requirement" : "optional",
+      "default" : null,
+      "description" : "The password of the user",
+      "group" : null,
+      "min" : null,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : true,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    }, {
+      "key" : "driver",
+      "type" : "string",
+      "requirement" : "optional",
+      "default" : null,
+      "description" : "The class of the JDBC driver; found from the URL when not set",
+      "group" : null,
+      "min" : null,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    }, {
+      "key" : "batch-size",
+      "type" : "int",
+      "requirement" : "optional",
+      "default" : 1000,
+      "description" : "Rows written in one batch and one transaction",
+      "group" : null,
+      "min" : 1.0,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    }, {
+      "key" : "max-retries",
+      "type" : "int",
+      "requirement" : "optional",
+      "default" : 3,
+      "description" : "How often a batch that failed for a transient reason is tried again",
+      "group" : null,
+      "min" : 0.0,
+      "max" : 100.0,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    }, {
+      "key" : "retry-backoff",
+      "type" : "duration",
+      "requirement" : "optional",
+      "default" : "1s",
+      "description" : "The wait before the first retry; it doubles with every retry",
+      "group" : null,
+      "min" : null,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
+    } ],
+    "exclusive" : [ ],
     "conditions" : [ ],
     "nativeNamespaces" : [ "jdbc.properties" ]
   } ]

@@ -14,7 +14,8 @@ result of a query. It splits tables into key ranges that the readers share, and 
 Use it for databases without a plugin of their own. Where a dedicated plugin exists, such as
 [MySQL](./mysql) or [PostgreSQL](./postgres), prefer it: it knows the database's types, streaming
 and errors. The plugin is verified with H2; other databases work as far as they follow ANSI SQL
-(double-quoted names, `schema.table`) and their drivers report the standard JDBC types.
+(double-quoted names, `schema.table`) and their drivers report the standard JDBC types. The same
+plugin writes with the [JDBC sink](../sink/jdbc).
 
 ## Capabilities
 

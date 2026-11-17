@@ -1,0 +1,133 @@
+---
+title: JDBC Sink
+description: 用 ANSI SQL 按批次把行插入任何有 JDBC 驱动的数据库中的已有表。
+order: 40
+template: plugin
+---
+
+## 简介
+
+通用 JDBC Sink（`type: jdbc`）使用 ANSI SQL 和标准 JDBC 设值方法，把输入的行插入任何有 JDBC 驱动的数据库中的一张已有表。它按批次写入，
+每个批次一个独立事务；因暂时性原因失败的批次会重试，含有数据库拒绝的行的批次会被拆分，直到找出这些行，它们按作业的脏数据策略处理。
+
+适用于没有专用插件的数据库；已有专用插件的数据库，例如 [MySQL](./mysql) 或 [PostgreSQL](./postgres)，请优先使用专用插件。插件以 H2 验证。
+
+## 能力
+
+<PluginCapabilities plugin="jdbc" component="sink" />
+
+## 已验证版本
+
+<PluginVersions plugin="jdbc" />
+
+## 快速开始
+
+把数据库的驱动安装为驱动插件并建好目标表，然后：
+
+```yaml
+version: 1
+name: fake-to-h2
+source:
+  - id: src
+    type: fake
+    table: PUBLIC.ORDERS
+    columns: [ID INT64 NOT NULL, AMOUNT DECIMAL(10, 2)]
+    primary-key: [ID]
+sink:
+  - id: out
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/shop
+    username: sa
+    password: ${env:DB_PASSWORD}
+    table: PUBLIC.ORDERS
+```
+
+## 前置条件
+
+- **作为[驱动插件](../../concepts/plugins#驱动插件)安装的 JDBC 驱动**，与 [JDBC Source](../source/jdbc#前置条件) 相同。没有驱动接受该 URL 时，
+  作业以 `PF-PLUG-0003` 失败。
+- **目标表。** 输入的每一列都必须在表中存在，按名称匹配（先精确匹配，否则忽略大小写）；输入中没有的列取默认值。
+- **对该表有 `INSERT` 权限的用户**，以及 Master 和 Worker 到数据库的网络连通。
+
+## 数据源配置
+
+与 [JDBC Source](../source/jdbc#数据源配置) 相同：`url`、`username`、`password`，有多个驱动接受该 URL 时用 `driver` 指定，
+驱动属性写在 `jdbc.properties.<名称>` 中原样传递。批次是否作为一条语句发送取决于驱动；有些驱动需要设置某个属性，在这里设置即可。
+
+## 节点选项
+
+<PluginOptions plugin="jdbc" component="sink" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="jdbc" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="jdbc" />
+
+## 分片与并行
+
+Sink 的写入器数量等于其并行度，每个写入器有自己的连接和事务。行到达各写入器的顺序不固定。
+
+## 一致性语义
+
+Sink 的语义是**至少一次**。失败的批次会回滚，不会留下任何行；只有在提交成功但确认丢失，或者运行在部分批次提交后重新开始时，
+才会重复写入。目标表有主键时，这些重复的行会因重复键被拒绝，成为坏行：`env.dirty.policy: skip` 时被跳过，默认的 `fail` 时作业失败。
+坏行按 SQLState（`22` 和 `23` 类）识别；以其他方式报告数据错误的驱动会使作业失败。
+
+## 示例
+
+### 跳过数据库拒绝的行
+
+```yaml
+version: 1
+name: people-to-h2
+env:
+  dirty: { policy: skip, max-rows: 100 }
+source:
+  - id: src
+    type: fake
+    table: PUBLIC.PEOPLE
+    columns: [ID INT64 NOT NULL, NAME STRING]
+    primary-key: [ID]
+sink:
+  - id: out
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/crm
+    username: sa
+    password: ${env:DB_PASSWORD}
+    table: PUBLIC.PEOPLE
+    batch-size: 5000
+```
+
+## 指标
+
+Sink 报告标准的 Sink 指标：`rowsWritten`、写入速率、写入队列和 `writerWaitMs`。策略为 `skip` 时，数据库拒绝的行计入 `rowsDirty`，并保留样本。
+
+## 性能与调优
+
+- `batch-size`（默认 1,000）是每个事务的行数。
+- 确认驱动是把批次作为一条语句发送还是逐行发送；这通常由某个驱动属性决定。
+- 失败的批次会被拆分以找出坏行，每次拆分多一次往返；应修正系统性的原因，而不是跳过大量行。
+
+## 错误码与排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-PLUG-0003` | 没有已安装的驱动插件接受该 URL |
+| `PF-META-0001` | 目标表不存在，或者用户看不到它 |
+| `PF-META-0002` | 目标表缺少输入中的某一列 |
+| `PF-PLAN-0012` | 有多张表进入这个 Sink；为每张表配置一个 Sink |
+| `PF-DATA-0009` | 数据库拒绝了某一行；消息中带有原因 |
+| `PF-DATA-0010` | 被拒绝的行数超过了 `env.dirty.max-rows` |
+
+## 已知限制
+
+- 只支持插入已有的表；每个 Sink 节点只写一张表。
+- 至少一次。
+- 只支持 ANSI SQL；只验证了 H2。
+
+## 变更记录
+
+<PluginChangelog plugin="jdbc" />
