@@ -1,0 +1,180 @@
+---
+title: MySQL source
+description: Read MySQL tables — one, many at once, or the result of a query — in parallel splits over JDBC.
+order: 20
+template: plugin
+---
+
+## Introduction
+
+The MySQL source (`type: jdbc-mysql`) reads tables of a MySQL database over JDBC: one table, every
+table whose name matches a pattern, or the result of a query. It reads a snapshot of each table in
+bounded jobs, split into key ranges that the readers share, and streams the rows without holding a
+result in memory.
+
+Use it to copy a MySQL database or some of its tables into another system, to load a table into a
+data lake or warehouse each day, or to feed a query result to a pipeline. For changes as they happen,
+use the MySQL CDC source when it arrives (milestone M5).
+
+## Capabilities
+
+<PluginCapabilities plugin="mysql" component="source" />
+
+## Verified versions
+
+<PluginVersions plugin="mysql" />
+
+## Quick start
+
+Install the driver plugin first (see [Prerequisites](#prerequisites)), then read a table:
+
+```yaml
+version: 1
+name: orders-to-console
+source:
+  - id: orders
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: reader
+    password: ${env:MYSQL_PASSWORD}
+    table: shop.orders
+sink:
+  - { id: out, type: console }
+```
+
+## Prerequisites
+
+- **The MySQL Connector/J driver plugin.** The plugin does not ship Connector/J, which is licensed
+  under the GPL: install it as a [driver plugin](../../concepts/plugins#driver-plugins) named
+  `mysql-connector-j`, a directory in `plugins/` with the driver jar in `lib/` (Connector/J 8.4 is
+  verified). Without it, a job that uses the plugin fails with `PF-PLUG-0003`.
+- **Network access** from the workers, and the master that plans the job, to the MySQL port.
+- **A user with `SELECT`** on the tables. Reading the column metadata and listing tables for
+  `tables.include` need no further privileges; tables the user cannot see are not listed.
+
+## Data source configuration
+
+The node connects with `url`, `username` and `password`. Properties of Connector/J go into
+`jdbc.properties.<name>`; the plugin sets a few unless you set them:
+
+| Property | Value | Why |
+|---|---|---|
+| `connectionTimeZone`, `forceConnectionTimeZoneToSession` | `UTC`, `true` | `TIMESTAMP` values are the same instants whatever the time zones of the server and the workers |
+| `useServerPrepStmts` | `true` | values arrive in binary; over the text protocol a `FLOAT` loses digits |
+| `characterEncoding` | `UTF-8` | text, including four-byte characters, arrives intact |
+| `yearIsDateType` | `false` | `YEAR` is a number, not January 1st of that year |
+| `rewriteBatchedStatements` | `true` | used by the sink; harmless when reading |
+
+`allowLoadLocalInfile`, `allowUrlInLocalInfile` and `autoReconnect` are controlled: setting them
+fails with `PF-CONF-0003`, because they would let the database read the worker's files or hide lost
+connections. The password never appears in logs, metrics or exported jobs.
+
+## Node options
+
+<PluginOptions plugin="mysql" component="source" />
+
+## Native options
+
+<PluginNativeOptions plugin="mysql" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="mysql" />
+
+## Splits and parallelism
+
+- With `split.mode: range` (the default) a table is split on `split.column`, or on its primary key
+  when that is a single integer column. The source reads its `MIN` and `MAX` and cuts the range into
+  `split.count` parts (four per reader by default), plus one split for `NULL` values when the
+  column is nullable.
+- A table without such a column, `split.mode: none` and a `query` are read in one split.
+- With `tables.include` every table is split on its own and the splits of all tables share one
+  queue, so readers move on to the next table as they finish.
+- Each reader keeps one connection and streams one split at a time.
+
+## Consistency
+
+Each split is a separate query, so a table that changes while it is read can show rows from
+different moments, and a row whose key moves between splits can be read twice or not at all. Read a
+table that is not written meanwhile, or a replica, when the copy must be exact. A reader restored
+from a checkpoint does not read its finished splits again and reads the split in progress from its
+start.
+
+## Examples
+
+### Every table of a database but the backups
+
+```yaml
+version: 1
+name: shop-copy
+source:
+  - id: shop
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: reader
+    password: ${env:MYSQL_PASSWORD}
+    tables.include: ["shop\\..*"]
+    tables.exclude: [".*_bak", ".*_tmp"]
+    split.count: 32
+    fetch-size: 5000
+sink:
+  - { id: out, type: console }
+```
+
+Names are matched whole, as `database.table`. System databases (`mysql`, `sys`,
+`information_schema`, `performance_schema`) are never selected.
+
+### A query
+
+```yaml
+version: 1
+name: paid-orders
+source:
+  - id: paid
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: reader
+    password: ${env:MYSQL_PASSWORD}
+    query: SELECT id, customer_id, amount FROM shop.orders WHERE status = 'PAID'
+sink:
+  - { id: out, type: console }
+```
+
+The query's result columns become a table named after the node (`paid`), read in one split.
+
+## Metrics
+
+The source reports the standard source metrics: `rowsRead`, the read rate and splits assigned and
+finished. Rows whose values cannot be read count as bad rows and follow the job's
+[dirty data policy](../../concepts/dirty-data).
+
+## Performance and tuning
+
+- Set `split.count` to a few times the parallelism; more, smaller splits even out readers when keys
+  are unevenly spread, but each split is one more query.
+- Split on an indexed integer column: each split is a range query on it.
+- Rows stream one by one regardless of `fetch-size`, the way Connector/J streams; memory does not
+  grow with the size of a table.
+- Reading from a replica keeps the load off the primary.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-PLUG-0003` | The `mysql-connector-j` driver plugin is not installed on the master or workers |
+| `PF-CONN-0001` | The server cannot be reached or refused the connection; check the host, port and firewall |
+| `PF-AUTH-0001` | Wrong user or password, or the user may not connect from the workers' hosts |
+| `PF-META-0001` | The table does not exist or the user cannot see it |
+| `PF-CONF-0002` … `tables.include` … `no table of … matches` | No visible table matches the patterns; the patterns must match the whole `database.table` name |
+| `PF-CONF-0003` | A controlled Connector/J property was set in `jdbc.properties.*` |
+| `PF-DATA-0001` | A column has a type the plugin cannot read |
+
+## Known limitations
+
+- Bounded reads only; changes are read by the MySQL CDC source (M5).
+- Tables added while a `tables.include` job runs are not read until the next run.
+- MySQL 5.7 is not verified yet.
+
+## Changelog
+
+<PluginChangelog plugin="mysql" />

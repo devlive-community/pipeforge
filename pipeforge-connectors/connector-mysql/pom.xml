@@ -19,8 +19,9 @@
     <artifactId>connector-mysql</artifactId>
     <name>PipeForge Connector MySQL</name>
     <description>
-        D01 MySQL dialect on the JDBC connector base; the MySQL source and sink of the plugin follow.
-        Verified against MySQL 8.0 and 8.4.
+        D01 MySQL dialect on the JDBC connector base and S03 MySQL source; the sink follows. Verified
+        against MySQL 8.0 and 8.4. Connector/J is not packaged: it comes from the mysql-connector-j
+        driver plugin.
     </description>
 
     <dependencies>
@@ -30,6 +31,12 @@
             <version>${project.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-connector-testkit</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
@@ -46,4 +53,13 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.devlive.pipeforge</groupId>
+                <artifactId>pipeforge-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

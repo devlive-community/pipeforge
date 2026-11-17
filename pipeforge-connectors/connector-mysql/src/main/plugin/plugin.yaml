@@ -1,0 +1,20 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+id: mysql
+name: MySQL
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Reads MySQL tables, many at once, in parallel splits over JDBC. Needs the MySQL Connector/J driver plugin, which is installed separately.
+provides:
+  - { type: source, identifier: jdbc-mysql, class: org.devlive.pipeforge.connector.mysql.MySqlSourceFactory }
+datasource:
+  type: mysql
+  versions: ["8.0", "8.4"]
+requires:
+  drivers: [mysql-connector-j]

@@ -1,0 +1,163 @@
+---
+title: MySQL Source
+description: 通过 JDBC 并行分片读取 MySQL 表：一张表、一次读多张表，或者一个查询的结果。
+order: 20
+template: plugin
+---
+
+## 简介
+
+MySQL Source（`type: jdbc-mysql`）通过 JDBC 读取 MySQL 数据库中的表：一张表、名称匹配某个模式的所有表，或者一个查询的结果。
+它在有界作业中读取每张表的快照，按键范围切分成分片，由各个读取器共同领取，并以流式方式读取行，不会把整个结果放进内存。
+
+适用于把 MySQL 数据库或其中部分表复制到其他系统、每天把一张表装载到数据湖或数仓，或者把查询结果送入管道。如果需要实时读取变更，
+请使用 MySQL CDC Source（M5 里程碑提供）。
+
+## 能力
+
+<PluginCapabilities plugin="mysql" component="source" />
+
+## 已验证版本
+
+<PluginVersions plugin="mysql" />
+
+## 快速开始
+
+先安装驱动插件（见[前置条件](#前置条件)），然后读取一张表：
+
+```yaml
+version: 1
+name: orders-to-console
+source:
+  - id: orders
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: reader
+    password: ${env:MYSQL_PASSWORD}
+    table: shop.orders
+sink:
+  - { id: out, type: console }
+```
+
+## 前置条件
+
+- **MySQL Connector/J 驱动插件。** 插件不打包使用 GPL 许可证的 Connector/J：请把它作为名为 `mysql-connector-j` 的
+  [驱动插件](../../concepts/plugins#驱动插件)安装，即 `plugins/` 下的一个目录，驱动 jar 放在 `lib/` 中（已验证 Connector/J 8.4）。
+  没有安装时，使用该插件的作业以 `PF-PLUG-0003` 失败。
+- **网络连通**：Worker 以及规划作业的 Master 都能访问 MySQL 端口。
+- **具有 `SELECT` 权限的用户**。读取列元数据、为 `tables.include` 列出表都不需要其他权限；用户看不到的表不会被列出。
+
+## 数据源配置
+
+节点通过 `url`、`username` 和 `password` 连接。Connector/J 的属性写在 `jdbc.properties.<名称>` 中；以下属性在你没有设置时由插件设置：
+
+| 属性 | 取值 | 原因 |
+|---|---|---|
+| `connectionTimeZone`、`forceConnectionTimeZoneToSession` | `UTC`、`true` | 无论服务器和 Worker 处于哪个时区，`TIMESTAMP` 值都是同一时刻 |
+| `useServerPrepStmts` | `true` | 值以二进制传输；通过文本协议传输时 `FLOAT` 会丢失位数 |
+| `characterEncoding` | `UTF-8` | 文本（包括四字节字符）完整传输 |
+| `yearIsDateType` | `false` | `YEAR` 是数字，而不是该年的 1 月 1 日 |
+| `rewriteBatchedStatements` | `true` | 供 Sink 使用；读取时没有影响 |
+
+`allowLoadLocalInfile`、`allowUrlInLocalInfile` 和 `autoReconnect` 是受控属性：设置它们会以 `PF-CONF-0003` 失败，
+因为它们会让数据库读取 Worker 上的文件，或掩盖断开的连接。密码不会出现在日志、指标和导出的作业中。
+
+## 节点选项
+
+<PluginOptions plugin="mysql" component="source" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="mysql" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="mysql" />
+
+## 分片与并行
+
+- `split.mode: range`（默认）时，表按 `split.column` 切分；未设置时，如果主键是单个整数列则按主键切分。Source 读取该列的 `MIN` 和 `MAX`，
+  把范围切成 `split.count` 份（默认每个读取器四份）；列可为空时，另有一个分片读取 `NULL` 值。
+- 没有这样的列的表、`split.mode: none` 以及 `query` 都在一个分片中读取。
+- 使用 `tables.include` 时，每张表单独切分，所有表的分片共用一个队列，读取器读完一个分片后继续领取下一个，可能来自另一张表。
+- 每个读取器保持一个连接，一次流式读取一个分片。
+
+## 一致性语义
+
+每个分片是一个独立的查询，因此读取期间仍在变化的表可能读到不同时刻的行；键在分片之间移动的行可能被读两次或者没有读到。
+需要精确复制时，请读取期间没有写入的表，或者读取从库。读取器从 checkpoint 恢复时，不会再次读取已完成的分片，正在读取的分片从头读取。
+
+## 示例
+
+### 读取一个库中除备份表以外的所有表
+
+```yaml
+version: 1
+name: shop-copy
+source:
+  - id: shop
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: reader
+    password: ${env:MYSQL_PASSWORD}
+    tables.include: ["shop\\..*"]
+    tables.exclude: [".*_bak", ".*_tmp"]
+    split.count: 32
+    fetch-size: 5000
+sink:
+  - { id: out, type: console }
+```
+
+模式匹配完整的 `数据库.表` 名称。系统库（`mysql`、`sys`、`information_schema`、`performance_schema`）永远不会被选中。
+
+### 一个查询
+
+```yaml
+version: 1
+name: paid-orders
+source:
+  - id: paid
+    type: jdbc-mysql
+    url: jdbc:mysql://db.example.com:3306/shop
+    username: reader
+    password: ${env:MYSQL_PASSWORD}
+    query: SELECT id, customer_id, amount FROM shop.orders WHERE status = 'PAID'
+sink:
+  - { id: out, type: console }
+```
+
+查询结果的列构成一张以节点命名的表（`paid`），在一个分片中读取。
+
+## 指标
+
+Source 报告标准的 Source 指标：`rowsRead`、读取速率，以及已分配和已完成的分片数。值无法读取的行计为坏行，按作业的
+[脏数据策略](../../concepts/dirty-data)处理。
+
+## 性能与调优
+
+- 把 `split.count` 设为并行度的几倍；分片越多越小，键分布不均时各读取器越均衡，但每个分片都多一次查询。
+- 在有索引的整数列上切分：每个分片都是该列上的范围查询。
+- 无论 `fetch-size` 是多少，行都是逐行流式读取的，这是 Connector/J 的流式方式；内存不随表的大小增长。
+- 读取从库可以避免给主库增加负载。
+
+## 错误码与排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-PLUG-0003` | Master 或 Worker 上没有安装 `mysql-connector-j` 驱动插件 |
+| `PF-CONN-0001` | 无法连接服务器或连接被拒绝；检查主机、端口和防火墙 |
+| `PF-AUTH-0001` | 用户名或密码错误，或者该用户不允许从 Worker 所在主机连接 |
+| `PF-META-0001` | 表不存在，或者用户看不到它 |
+| `PF-CONF-0002` … `tables.include` … `no table of … matches` | 没有可见的表匹配这些模式；模式需要匹配完整的 `数据库.表` 名称 |
+| `PF-CONF-0003` | 在 `jdbc.properties.*` 中设置了受控的 Connector/J 属性 |
+| `PF-DATA-0001` | 某列的类型插件无法读取 |
+
+## 已知限制
+
+- 只支持有界读取；变更由 MySQL CDC Source（M5）读取。
+- `tables.include` 作业运行期间新增的表，要到下一次运行才会读取。
+- 尚未验证 MySQL 5.7。
+
+## 变更记录
+
+<PluginChangelog plugin="mysql" />

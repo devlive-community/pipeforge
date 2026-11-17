@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# How the MySQL source reads MySQL types; the plugin page renders it.
+read:
+  - { external: "BOOLEAN, TINYINT(1), BIT(1)", logical: BOOLEAN }
+  - { external: TINYINT, logical: INT8 }
+  - { external: "SMALLINT, TINYINT UNSIGNED, YEAR", logical: INT16 }
+  - { external: "INT, MEDIUMINT, SMALLINT UNSIGNED, MEDIUMINT UNSIGNED", logical: INT32 }
+  - { external: "BIGINT, INT UNSIGNED", logical: INT64 }
+  - { external: BIGINT UNSIGNED, logical: "DECIMAL(20, 0)" }
+  - { external: FLOAT, logical: FLOAT32, note: "read over the binary protocol so that no digits are lost" }
+  - { external: DOUBLE, logical: FLOAT64 }
+  - { external: "DECIMAL(p, s)", logical: "DECIMAL(p, s)", note: "above 38 digits: DECIMAL(38, s); larger values are bad rows" }
+  - { external: "CHAR(n), VARCHAR(n), ENUM, SET", logical: "STRING(n)" }
+  - { external: "TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT", logical: STRING }
+  - { external: "BINARY(n), VARBINARY(n)", logical: "BYTES(n)" }
+  - { external: "TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB, BIT(n > 1)", logical: BYTES }
+  - { external: DATE, logical: DATE }
+  - { external: "TIME(p)", logical: "TIME(p)" }
+  - { external: "DATETIME(p)", logical: "TIMESTAMP(p)", note: "a local date and time, as stored" }
+  - { external: "TIMESTAMP(p)", logical: "TIMESTAMP_LTZ(p)", note: "an instant; the session is in UTC, so it does not depend on time zones" }
+  - { external: JSON, logical: JSON, note: "as MySQL prints it: normalized spacing and member order" }

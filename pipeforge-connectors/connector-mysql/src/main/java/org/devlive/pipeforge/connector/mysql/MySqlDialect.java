@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.type.DataType;
 import org.devlive.pipeforge.api.type.DataTypes;
@@ -36,10 +37,30 @@ import org.jspecify.annotations.Nullable;
  *       worker, unless the user says otherwise; loading local files and reconnecting on its own are not allowed;
  *   <li>errors are classified by MySQL's error codes where the SQLState says too little.
  * </ul>
+ *
+ * <p>The dialect of a source ({@link #forReading()}) also reads over the binary protocol, with
+ * server-side prepared statements: the text protocol prints a {@code FLOAT} with six significant
+ * digits, which loses most of its precision.
  */
 public final class MySqlDialect extends AbstractJdbcDialect {
 
     private static final long serialVersionUID = 1L;
+
+    private final boolean reading;
+
+    /** The dialect of a sink and of the tools: client-side prepared statements, batches rewritten. */
+    public MySqlDialect() {
+        this(false);
+    }
+
+    private MySqlDialect(boolean reading) {
+        this.reading = reading;
+    }
+
+    /** The dialect of a source, which reads over the binary protocol so that FLOAT keeps its value. */
+    public static MySqlDialect forReading() {
+        return new MySqlDialect(true);
+    }
 
     @Override
     public String name() {
@@ -62,8 +83,29 @@ public final class MySqlDialect extends AbstractJdbcDialect {
         return new String[] {table.database() != null ? table.database() : table.schema(), null};
     }
 
+    /** Metadata lists MySQL tables under their database, as the catalog. */
+    @Override
+    public TableId tableId(@Nullable String catalog, @Nullable String schema, String table) {
+        return catalog != null ? TableId.of(catalog, table) : TableId.of(table);
+    }
+
+    @Override
+    public Set<String> systemSchemas() {
+        return Set.of("INFORMATION_SCHEMA", "MYSQL", "PERFORMANCE_SCHEMA", "SYS");
+    }
+
     @Override
     public Map<String, String> defaultProperties() {
+        if (reading) {
+            Map<String, String> properties = new java.util.LinkedHashMap<>(writing());
+            // values in binary: the text protocol prints FLOAT with six significant digits
+            properties.put("useServerPrepStmts", "true");
+            return Map.copyOf(properties);
+        }
+        return writing();
+    }
+
+    private static Map<String, String> writing() {
         return Map.of(
                 "rewriteBatchedStatements", "true",
                 "characterEncoding", "UTF-8",

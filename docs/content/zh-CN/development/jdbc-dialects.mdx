@@ -48,7 +48,7 @@ Sink，其他功能都可以直接使用。
 | 方言 | 模块 | 已验证 | 与 ANSI 的不同 |
 |---|---|---|---|
 | `jdbc`（`GenericDialect`） | `connector-jdbc` | H2 | 无 |
-| `mysql` | `connector-mysql` | MySQL 8.0、8.4，Connector/J 8.4 | 反引号；`db.t` 中 `db` 是 Catalog；无符号整数放宽一级，`BIGINT UNSIGNED` 为 `DECIMAL(20, 0)`，`YEAR` 为 `INT16`，`BIT(n)` 为 `BYTES`，`TIMESTAMP` 为时间点；会话使用 UTC、批量改写、UTF-8；逐行流式读取；`allowLoadLocalInfile`、`allowUrlInLocalInfile` 和 `autoReconnect` 为受控键；按 MySQL 错误码分类 |
+| `mysql` | `connector-mysql` | MySQL 8.0、8.4，Connector/J 8.4 | 反引号；`db.t` 中 `db` 是 Catalog；无符号整数放宽一级，`BIGINT UNSIGNED` 为 `DECIMAL(20, 0)`，`YEAR` 为 `INT16`，`BIT(n)` 为 `BYTES`，`TIMESTAMP` 为时间点；会话使用 UTC、批量改写、UTF-8；逐行流式读取；`allowLoadLocalInfile`、`allowUrlInLocalInfile` 和 `autoReconnect` 为受控键；按 MySQL 错误码分类；表按 Catalog 命名为 `库.表`，`mysql`、`sys`、`information_schema` 和 `performance_schema` 是系统库；Source 使用的方言（`MySqlDialect.forReading()`）还通过二进制协议读取（`useServerPrepStmts`），因为文本协议会丢失 `FLOAT` 的位数 |
 
 ## 接入插件
 

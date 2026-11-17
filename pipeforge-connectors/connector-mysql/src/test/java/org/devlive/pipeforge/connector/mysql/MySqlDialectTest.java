@@ -117,4 +117,30 @@ class MySqlDialectTest {
                             .isEqualTo(ErrorCode.NATIVE_KEY_CONTROLLED));
         }
     }
+
+    @Test
+    void theSourceReadsOverTheBinaryProtocol() {
+        Map<String, String> reading = JdbcConnectionConfig.of(
+                        ReadonlyConfig.of(Map.of("url", "jdbc:mysql://db/shop")), MySqlDialect.forReading(), "src")
+                .properties();
+        assertThat(reading).containsEntry("useServerPrepStmts", "true").containsEntry("connectionTimeZone", "UTC");
+        assertThat(DIALECT.defaultProperties()).doesNotContainKey("useServerPrepStmts");
+        assertThat(JdbcConnectionConfig.of(
+                                ReadonlyConfig.of(Map.of(
+                                        "url", "jdbc:mysql://db/shop", "jdbc.properties.useServerPrepStmts", "false")),
+                                MySqlDialect.forReading(),
+                                "src")
+                        .properties())
+                .as("the user wins")
+                .containsEntry("useServerPrepStmts", "false");
+        assertThat(new MySqlSourceFactory().identifier()).isEqualTo("jdbc-mysql");
+    }
+
+    @Test
+    void namesTablesByDatabaseAndLeavesOutTheSystemDatabases() {
+        assertThat(DIALECT.tableId("shop", null, "orders")).isEqualTo(TableId.of("shop", "orders"));
+        assertThat(DIALECT.tableId(null, null, "orders")).isEqualTo(TableId.of("orders"));
+        assertThat(DIALECT.systemSchemas())
+                .containsExactlyInAnyOrder("INFORMATION_SCHEMA", "MYSQL", "PERFORMANCE_SCHEMA", "SYS");
+    }
 }
