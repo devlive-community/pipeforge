@@ -102,6 +102,32 @@ class ProcessTest {
     }
 
     @Test
+    void theMasterRemovesAWorkerThatStoppedSendingHeartbeats() throws Exception {
+        Files.createDirectories(home.resolve("plugins"));
+        Map<String, String> settings = new java.util.HashMap<>(settings(freePorts(3)));
+        settings.put("master.heartbeat.timeout", "1s");
+        Configuration config = Configuration.load(home.resolve("conf"), Map.of(), settings);
+        try (MasterProcess master = new MasterProcess(config, home)) {
+            // registered, then silent, as a worker whose process was killed
+            master.resourceManager()
+                    .register(new org.devlive.pipeforge.engine.master.ResourceManager.WorkerSpec(
+                            "0.1.0",
+                            "localhost:1",
+                            "localhost:2",
+                            new org.devlive.pipeforge.engine.master.ResourceManager.Resources(1, 1, 1, 1),
+                            1,
+                            Map.of(),
+                            "",
+                            new byte[0],
+                            null));
+            assertThat(master.resourceManager().workers()).hasSize(1);
+            await(
+                    "the silent worker is removed",
+                    () -> master.resourceManager().workers().isEmpty());
+        }
+    }
+
+    @Test
     void theNetworkMemoryIsDerivedFromTheHeap() {
         Configuration config =
                 Configuration.load(home.resolve("conf"), Map.of("PIPEFORGE_CLUSTER_TOKEN", "t"), Map.of());

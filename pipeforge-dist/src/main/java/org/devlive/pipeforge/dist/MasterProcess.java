@@ -83,6 +83,8 @@ public final class MasterProcess implements AutoCloseable {
                 ResourceManager.Settings.DEFAULTS.leaderEpoch()));
         JobMasters jobs = new JobMasters();
         manager.addListener(jobs);
+        // without these checks a worker that dies is never removed, and its runs never fail
+        manager.scheduleChecks(threads);
         Scheduler scheduler = new Scheduler(manager, this::gateway, threads, Duration.ofMillis(100));
         Scheduler.Strategy strategy = strategy(config.string(Settings.SCHEDULER_STRATEGY));
         Duration slotTimeout = config.duration(Settings.SLOT_REQUEST_TIMEOUT);
