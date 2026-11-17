@@ -157,10 +157,10 @@ public class RunRepository {
             params.add(utc(cursor.submittedAt()));
             params.add(cursor.id());
         }
-        sql.append(" ORDER BY submitted_at DESC, id DESC");
-        List<Runs.Run> runs = jdbc.sql(sql.toString()).params(params).query(RUN).stream()
-                .limit(size + 1L)
-                .toList();
+        // LIMIT in the query, not a stream: a stream of JdbcClient keeps its connection until closed
+        sql.append(" ORDER BY submitted_at DESC, id DESC LIMIT ?");
+        params.add(size + 1);
+        List<Runs.Run> runs = jdbc.sql(sql.toString()).params(params).query(RUN).list();
         if (runs.size() <= size) {
             return new Runs.RunPage(runs, null);
         }
@@ -266,10 +266,9 @@ public class RunRepository {
 
     /** The samples of a run, oldest first, from {@code since} on, at most {@code limit}. */
     public List<RunMetrics.Sample> samples(String runId, @Nullable Instant since, int limit) {
-        return jdbc
-                .sql("SELECT sampled_at, elapsed_ms, rows_read, rows_written, rows_dirty, rows_failed FROM"
-                        + " job_run_metrics WHERE run_id = ? AND sampled_at >= ? ORDER BY sampled_at")
-                .params(runId, utc(since == null ? Instant.EPOCH : since))
+        return jdbc.sql("SELECT sampled_at, elapsed_ms, rows_read, rows_written, rows_dirty, rows_failed FROM"
+                        + " job_run_metrics WHERE run_id = ? AND sampled_at >= ? ORDER BY sampled_at LIMIT ?")
+                .params(runId, utc(since == null ? Instant.EPOCH : since), Math.max(1, Math.min(limit, 10_000)))
                 .query((rs, row) -> new RunMetrics.Sample(
                         instant(rs.getObject("sampled_at", LocalDateTime.class)),
                         rs.getLong("elapsed_ms"),
@@ -277,9 +276,7 @@ public class RunRepository {
                         rs.getLong("rows_written"),
                         rs.getLong("rows_dirty"),
                         rs.getLong("rows_failed")))
-                .stream()
-                .limit(Math.max(1, Math.min(limit, 10_000)))
-                .toList();
+                .list();
     }
 
     /** Removes the samples taken before {@code before}; returns how many. */

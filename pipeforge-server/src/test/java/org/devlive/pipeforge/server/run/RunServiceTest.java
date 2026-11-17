@@ -51,6 +51,21 @@ class RunServiceTest {
     }
 
     @Test
+    void readingRunsAndSamplesGivesTheConnectionsBack() {
+        runs.insert("r1", "job", "yaml", null, now);
+        runs.sample("r1", RunMetrics.none(now), "{}");
+        // the pool has two connections; polling pages read far more often than that
+        for (int i = 0; i < 20; i++) {
+            assertThat(runs.list(java.util.Set.of(), null, 1, null).runs()).hasSize(1);
+            assertThat(runs.list(java.util.Set.of(), "job", 50, null).runs()).hasSize(1);
+            assertThat(runs.samples("r1", null, 100)).hasSize(1);
+        }
+        assertThat(data.getHikariPoolMXBean().getActiveConnections())
+                .as("connections still borrowed")
+                .isZero();
+    }
+
+    @Test
     void aStateChangesOnceWhenServersRaceForIt() {
         runs.insert("r1", "job", "yaml", null, now);
         assertThat(runs.transition("r1", RunState.QUEUE, RunState.RUNNING, now.plusSeconds(1), now, null, "a"))
