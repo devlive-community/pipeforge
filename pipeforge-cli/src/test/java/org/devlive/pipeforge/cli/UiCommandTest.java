@@ -98,6 +98,9 @@ class UiCommandTest {
         assertThat(result.get().err()).contains("Starting the server for http://127.0.0.1:" + port);
         assertThat(UiCommandTestSupport.answers(port)).isFalse();
         assertThat(dir.resolve("work/home/.pipeforge/logs/ui-" + port + ".log")).exists();
+        assertThat(dir.resolve("work/home/.pipeforge/metastore/pipeforge.mv.db"))
+                .as("the server migrated its metastore, scripts read from the exec jar")
+                .exists();
     }
 
     @Test
@@ -141,6 +144,8 @@ class UiCommandTest {
                 .contains("-jar", "--server.address=127.0.0.1", "--server.port=8080")
                 .contains("--pipeforge.plugin.paths=" + dir.resolve("checkout/pipeforge-server/a") + ","
                         + dir.resolve("checkout/pipeforge-server/b"))
-                .contains("--spring.profiles.active=dev", "--pipeforge.plugin.dev.root=" + dir.resolve("checkout"));
+                .contains("--spring.profiles.active=dev", "--pipeforge.plugin.dev.root=" + dir.resolve("checkout"))
+                .anyMatch(o -> o.startsWith("--pipeforge.metastore.url=jdbc:h2:file:")
+                        && o.endsWith("/.pipeforge/metastore/pipeforge"));
     }
 }

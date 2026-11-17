@@ -113,3 +113,21 @@
   hint:
     en-US: "The task did not run on this worker, or its log was removed after worker.log.retention. Ask the worker the task ran on; the job master knows it."
     zh-CN: "该 Task 没有在这个 Worker 上运行，或者它的日志已超过 worker.log.retention 被清理。请向 Task 实际运行的 Worker 读取；JobMaster 知道是哪一个。"
+
+- code: PF-CLUS-0013
+  name: METASTORE_UNAVAILABLE
+  message:
+    en-US: "The metastore {url} cannot be reached: {reason}"
+    zh-CN: "无法连接元数据库 {url}：{reason}"
+  hint:
+    en-US: "Check pipeforge.metastore.url, the user and password, that the database is running and that its JDBC driver is installed (for MySQL, in pipeforge.metastore.driver-dir)."
+    zh-CN: "请检查 pipeforge.metastore.url、用户名和密码，确认数据库正在运行，并且已安装它的 JDBC 驱动（MySQL 的驱动放在 pipeforge.metastore.driver-dir 中）。"
+
+- code: PF-CLUS-0014
+  name: METASTORE_MIGRATION_FAILED
+  message:
+    en-US: "Migrating the metastore {url} failed: {reason}"
+    zh-CN: "元数据库 {url} 迁移失败：{reason}"
+  hint:
+    en-US: "The schema was left at the last migration that succeeded. Fix the cause, for example the user's privileges, and start the server again; never edit a migration that was applied."
+    zh-CN: "表结构停留在最后一个成功的迁移。请修正原因（例如用户权限）后重新启动服务端；不要修改已经执行过的迁移脚本。"

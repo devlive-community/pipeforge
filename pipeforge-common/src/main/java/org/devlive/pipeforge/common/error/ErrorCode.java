@@ -140,6 +140,10 @@ public final class ErrorCode {
     public static final ErrorCode PARTITION_NOT_FOUND =
             define("PF-CLUS-0011", "PARTITION_NOT_FOUND", "partition", "worker", "seconds");
     public static final ErrorCode TASK_LOG_NOT_FOUND = define("PF-CLUS-0012", "TASK_LOG_NOT_FOUND", "task", "worker");
+    public static final ErrorCode METASTORE_UNAVAILABLE =
+            define("PF-CLUS-0013", "METASTORE_UNAVAILABLE", "url", "reason");
+    public static final ErrorCode METASTORE_MIGRATION_FAILED =
+            define("PF-CLUS-0014", "METASTORE_MIGRATION_FAILED", "url", "reason");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

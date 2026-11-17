@@ -71,6 +71,7 @@ Found 1 plugin(s) in /work/pipeforge
 | `pipeforge.plugin.dev.root` | 从工作目录查找 | 开发模式使用的源码仓库根目录 |
 | `pipeforge.job.timezone` | `UTC` | 没有设置 `env.timezone` 的作业使用的时区 |
 | `pipeforge.job.defaults.*` | 无 | 节点选项的集群默认值，采用 env 写法，例如 `pipeforge.job.defaults.source.fetch-size` |
+| `pipeforge.metastore.*` | `~/.pipeforge/metastore` 中的 H2 文件 | 服务端保存记录的数据库；见[元数据库](./metastore) |
 
 ```yaml
 pipeforge:

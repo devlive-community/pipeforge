@@ -32,6 +32,9 @@ springdoc:
   writer-with-order-by-keys: true
 
 pipeforge:
+  metastore:
+    # an H2 database in the user's home; MySQL and PostgreSQL for clusters (see operations/metastore)
+    url: jdbc:h2:file:${user.home}/.pipeforge/metastore/pipeforge
   plugin:
     paths: plugins
     cache: work/plugin-cache

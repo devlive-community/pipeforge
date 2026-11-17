@@ -1,0 +1,98 @@
+---
+title: Metastore
+description: The database the server keeps its records in - H2, MySQL or PostgreSQL - how to configure it, and how its schema is migrated and upgrades are rolled back.
+order: 15
+---
+
+The server keeps its records in a relational database, the **metastore**: the runs of jobs, their
+attempts and state changes, metrics sampled while they run, and the workers of the cluster. The
+server reads and writes it with plain JDBC.
+
+## Databases
+
+| Database | URL | Driver | Use |
+|---|---|---|---|
+| H2 | `jdbc:h2:file:/path/name` | shipped | the default: one server, trying PipeForge out, development |
+| PostgreSQL (verified: 16) | `jdbc:postgresql://host:5432/db` | shipped | clusters |
+| MySQL (verified: 8.4) | `jdbc:mysql://host:3306/db` | not shipped (GPL): put `mysql-connector-j-*.jar` in `driver-dir` | clusters |
+
+By default the server keeps an H2 database in `~/.pipeforge/metastore/`; `pipeforge ui` keeps it in
+the same place as its other state. A cluster with several servers needs MySQL or PostgreSQL, since H2
+in a file serves one process only.
+
+## Configuration
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `pipeforge.metastore.url` | `jdbc:h2:file:${user.home}/.pipeforge/metastore/pipeforge` | JDBC URL of the metastore |
+| `pipeforge.metastore.username` | none | User |
+| `pipeforge.metastore.password` | none | Password |
+| `pipeforge.metastore.driver-dir` | none | A directory of JDBC driver jars, for MySQL; the driver that accepts the URL is used, and only the drivers of the directory |
+| `pipeforge.metastore.pool-size` | `10` | The most connections the server opens |
+| `pipeforge.metastore.migrate` | `true` | Whether the server applies pending migrations when it starts |
+
+```yaml
+pipeforge:
+  metastore:
+    url: jdbc:mysql://db.example.com:3306/pipeforge
+    username: pipeforge
+    password: ${PIPEFORGE_METASTORE_PASSWORD}
+    driver-dir: /opt/pipeforge/lib/metastore
+```
+
+Create the database first (`CREATE DATABASE pipeforge` with `utf8mb4` on MySQL). The user needs the
+right to create tables and indexes in it; the server creates everything else. The log shows the URL
+without its query string, so a password written in the URL does not appear in it.
+
+## Tables
+
+| Table | Holds |
+|---|---|
+| `job_run` | One row per run: the job and its YAML, the status, who submitted it, when it was submitted, started and ended, and the error |
+| `job_run_attempt` | The attempts of a run, with the master that ran each |
+| `job_run_transition` | Every change of a run's status, in order, with the reason |
+| `job_run_metrics` | Metrics sampled while a run is running: the main counters as columns and the full metrics as JSON |
+| `worker` | The workers of the cluster: address, slots, labels, version, state and last heartbeat |
+| `pipeforge_schema_history` | The migrations applied (Flyway) |
+
+Times are stored in UTC.
+
+## Migrations
+
+The server brings the schema up to date when it starts, before it accepts requests: it applies the
+migration scripts the metastore does not have yet. When several servers start together, the first
+locks the migration history and the others wait, so every script runs once. A migration that fails
+stops the server with `PF-CLUS-0014`; the schema stays at the last script that succeeded.
+
+Scripts are only ever added. A released script never changes: the server compares the checksum of
+every applied script with the one in its history and refuses to start when they differ, and the
+build checks every script against the list of released checksums.
+
+## Upgrades and rollback
+
+Migrations come in two steps, so that an upgrade can be rolled back:
+
+- **Expand** scripts only add: tables, nullable columns and indexes. The new server applies them when
+  it starts. The previous version ignores what it does not know and keeps working on the expanded
+  schema, so going back to it needs nothing but deploying it again.
+- **Contract** scripts drop, rename or change what the previous version needs. They run only once
+  the upgrade is confirmed, after which the previous version can no longer run on the metastore.
+
+Back up the metastore before upgrading across major versions, which cannot be rolled back this way.
+
+## Troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-CLUS-0013` | The database cannot be reached: check the URL, user and password, that it runs, and for MySQL that `driver-dir` holds Connector/J |
+| `PF-CLUS-0014` | A migration failed: often the user may not create tables; or an applied script was changed, which must not happen |
+| `PF-CONF-0011` … `pipeforge.metastore.url` | The URL is not H2, MySQL or PostgreSQL |
+
+## Limitations
+
+- Confirming an upgrade, which runs the contract scripts, and a dry run of pending migrations come
+  with the `pipeforge metastore` commands; this version has no contract scripts yet.
+- The migrations use Flyway Community 10.3, which logs that it has not been tested with H2 2.2.224;
+  the tests of every release run the migrations on H2, MySQL and PostgreSQL.
+- Only the tables above exist so far; jobs, data sources, schedules and users follow in later
+  milestones, each with expand scripts of its own.

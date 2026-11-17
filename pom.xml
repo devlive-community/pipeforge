@@ -77,6 +77,7 @@
         <testcontainers.version>2.0.5</testcontainers.version>
         <mysql-connector-j.version>8.4.0</mysql-connector-j.version>
         <postgresql.version>42.7.13</postgresql.version>
+        <flyway.version>10.3.0</flyway.version>
         <spotbugs.version>4.8.6</spotbugs.version>
         <errorprone.version>2.36.0</errorprone.version>
         <calcite.version>1.40.0</calcite.version>
@@ -173,6 +174,22 @@
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-postgresql</artifactId>
                 <version>${testcontainers.version}</version>
+            </dependency>
+            <!-- Migrations of the server's metastore: Flyway Community, Apache 2.0 -->
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-mysql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
             </dependency>
             <!-- PostgreSQL JDBC driver, BSD-2-Clause -->
             <dependency>

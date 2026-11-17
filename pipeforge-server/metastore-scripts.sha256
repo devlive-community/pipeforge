@@ -1,0 +1,10 @@
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# SHA-256 of every metastore migration script. Scripts are only ever added: a listed script must not
+# change, and a new script is added here with its checksum (shasum -a 256 <script>).
+aa6642a7c2d327eea27bc461cded85346ccf220bc04c71db89ef293ffa50c391  db/metastore/expand/h2/V1__runs_and_workers.sql
+096e7b7847eebad7fc8f7d3c1edc7fa737416a8f0b297f13d7f80dd2446f3eff  db/metastore/expand/mysql/V1__runs_and_workers.sql
+3541fafee60f4e9cb1f974a391c7ef066c27df02268e32b7b78bbe41ba14a053  db/metastore/expand/postgresql/V1__runs_and_workers.sql

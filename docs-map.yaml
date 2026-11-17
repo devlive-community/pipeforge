@@ -99,6 +99,8 @@
   docs: ["plugins/transform/field-mapper", "reference/mapping"]
 - paths: ["pipeforge-server/**"]
   docs: ["operations/server"]
+- paths: ["pipeforge-server/src/main/java/org/devlive/pipeforge/server/metastore/**", "pipeforge-server/src/main/resources/db/**", "pipeforge-server/metastore-scripts.sha256"]
+  docs: ["operations/metastore"]
 - paths: ["pipeforge-server/openapi.json", "pipeforge-server/src/main/java/org/devlive/pipeforge/server/api/**"]
   docs: ["reference/api"]
 - paths: ["pipeforge-cli/**"]

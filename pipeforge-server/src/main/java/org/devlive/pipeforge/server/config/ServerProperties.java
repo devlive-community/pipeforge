@@ -18,9 +18,34 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param plugin where plugins are installed
  * @param job defaults for the jobs the server plans
+ * @param metastore the database the server keeps its records in
  */
 @ConfigurationProperties("pipeforge")
-public record ServerProperties(@DefaultValue Plugin plugin, @DefaultValue Job job) {
+public record ServerProperties(@DefaultValue Plugin plugin, @DefaultValue Job job, @DefaultValue Metastore metastore) {
+
+    /**
+     * @param url the JDBC URL: H2, MySQL or PostgreSQL
+     * @param username the user
+     * @param password the password
+     * @param driverDir a directory of JDBC driver jars, for a database whose driver the server does
+     *     not ship (MySQL); the driver that accepts the URL is used
+     * @param poolSize the most connections the server opens
+     * @param migrate whether the server applies pending expand migrations when it starts
+     */
+    public record Metastore(
+            @DefaultValue("jdbc:h2:mem:pipeforge;DB_CLOSE_DELAY=-1") String url,
+            @Nullable String username,
+            @Nullable String password,
+            @Nullable Path driverDir,
+            @DefaultValue("10") int poolSize,
+            @DefaultValue("true") boolean migrate) {
+
+        /** The URL without user information, for messages and logs. */
+        public String safeUrl() {
+            int query = url.indexOf('?');
+            return query < 0 ? url : url.substring(0, query);
+        }
+    }
 
     /**
      * @param paths directories that hold plugin packages

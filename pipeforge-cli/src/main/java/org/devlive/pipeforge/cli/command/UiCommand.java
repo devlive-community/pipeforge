@@ -112,6 +112,9 @@ public final class UiCommand extends BaseCommand {
         command.add("--pipeforge.plugin.paths="
                 + session.pluginDirectories().stream().map(Path::toString).collect(Collectors.joining(",")));
         command.add("--pipeforge.plugin.cache=" + session.pluginCache());
+        // the metastore of a local server lives with the other state of the CLI
+        command.add("--pipeforge.metastore.url=jdbc:h2:file:"
+                + session.environment().stateDirectory().resolve("metastore").resolve("pipeforge"));
         Optional<Path> dev = session.devRoot();
         if (dev.isPresent()) {
             command.add("--spring.profiles.active=dev");

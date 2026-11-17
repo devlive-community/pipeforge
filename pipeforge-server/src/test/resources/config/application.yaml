@@ -1,0 +1,10 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Tests keep the metastore in memory instead of the user's home.
+pipeforge:
+  metastore:
+    url: jdbc:h2:mem:server-tests;DB_CLOSE_DELAY=-1

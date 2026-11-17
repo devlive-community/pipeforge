@@ -1,0 +1,86 @@
+---
+title: 元数据库
+description: 服务端保存记录的数据库（H2、MySQL 或 PostgreSQL）：如何配置，表结构如何迁移，以及升级如何回退。
+order: 15
+---
+
+服务端把记录保存在一个关系数据库中，即**元数据库**：作业的运行、运行的尝试和状态变化、运行期间采样的指标，以及集群中的 Worker。
+服务端直接通过 JDBC 读写它。
+
+## 数据库
+
+| 数据库 | URL | 驱动 | 用途 |
+|---|---|---|---|
+| H2 | `jdbc:h2:file:/路径/名称` | 自带 | 默认：单个服务端、试用 PipeForge、开发 |
+| PostgreSQL（已验证 16） | `jdbc:postgresql://host:5432/db` | 自带 | 集群 |
+| MySQL（已验证 8.4） | `jdbc:mysql://host:3306/db` | 不自带（GPL）：把 `mysql-connector-j-*.jar` 放到 `driver-dir` | 集群 |
+
+默认情况下，服务端把 H2 数据库放在 `~/.pipeforge/metastore/` 中；`pipeforge ui` 把它和自己的其他状态放在一起。
+有多个服务端的集群需要 MySQL 或 PostgreSQL，因为文件形式的 H2 只能供一个进程使用。
+
+## 配置
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `pipeforge.metastore.url` | `jdbc:h2:file:${user.home}/.pipeforge/metastore/pipeforge` | 元数据库的 JDBC URL |
+| `pipeforge.metastore.username` | 无 | 用户名 |
+| `pipeforge.metastore.password` | 无 | 密码 |
+| `pipeforge.metastore.driver-dir` | 无 | 存放 JDBC 驱动 jar 的目录，用于 MySQL；使用其中接受该 URL 的驱动，并且只使用该目录中的驱动 |
+| `pipeforge.metastore.pool-size` | `10` | 服务端最多打开的连接数 |
+| `pipeforge.metastore.migrate` | `true` | 服务端启动时是否执行待执行的迁移 |
+
+```yaml
+pipeforge:
+  metastore:
+    url: jdbc:mysql://db.example.com:3306/pipeforge
+    username: pipeforge
+    password: ${PIPEFORGE_METASTORE_PASSWORD}
+    driver-dir: /opt/pipeforge/lib/metastore
+```
+
+请先创建数据库（MySQL 上使用 `utf8mb4` 执行 `CREATE DATABASE pipeforge`）。用户需要在其中建表和建索引的权限；其余的都由服务端创建。
+日志中显示的 URL 不带查询串，因此写在 URL 中的密码不会出现在日志里。
+
+## 表
+
+| 表 | 内容 |
+|---|---|
+| `job_run` | 每次运行一行：作业及其 YAML、状态、提交人、提交、开始和结束时间，以及错误 |
+| `job_run_attempt` | 运行的各次尝试，以及执行每次尝试的 Master |
+| `job_run_transition` | 运行状态的每一次变化，按顺序记录，并附带原因 |
+| `job_run_metrics` | 运行期间采样的指标：主要计数作为列，完整指标为 JSON |
+| `worker` | 集群中的 Worker：地址、Slot 数、标签、版本、状态和最近一次心跳 |
+| `pipeforge_schema_history` | 已执行的迁移（Flyway） |
+
+时间均以 UTC 保存。
+
+## 迁移
+
+服务端在启动时、开始接受请求之前更新表结构：执行元数据库中还没有执行过的迁移脚本。多个服务端同时启动时，第一个锁住迁移历史，
+其他的等待，因此每个脚本只执行一次。迁移失败时服务端以 `PF-CLUS-0014` 停止；表结构停留在最后一个成功的脚本。
+
+迁移脚本只增不改。已发布的脚本永远不会再修改：服务端会比较每个已执行脚本的校验和与历史中的记录，不一致时拒绝启动；构建也会用已发布脚本的校验和清单检查每个脚本。
+
+## 升级与回退
+
+迁移分为两步，以便升级可以回退：
+
+- **扩展**脚本只做增加：新表、可空列和索引。新版本的服务端在启动时执行它们。旧版本会忽略自己不认识的部分，在扩展后的表结构上继续工作，
+  因此回退只需要重新部署旧版本。
+- **收缩**脚本删除、改名或修改旧版本需要的内容。只有在确认升级之后才会执行，此后旧版本不能再使用这个元数据库。
+
+跨主版本升级无法用这种方式回退，升级前请备份元数据库。
+
+## 排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-CLUS-0013` | 无法连接数据库：检查 URL、用户名和密码，确认数据库正在运行；MySQL 还要确认 `driver-dir` 中有 Connector/J |
+| `PF-CLUS-0014` | 迁移失败：常见原因是用户没有建表权限；或者已执行的脚本被修改过，这是不允许的 |
+| `PF-CONF-0011` … `pipeforge.metastore.url` | URL 不是 H2、MySQL 或 PostgreSQL |
+
+## 限制
+
+- 确认升级（执行收缩脚本）以及预览待执行的迁移将随 `pipeforge metastore` 命令提供；当前版本还没有收缩脚本。
+- 迁移使用 Flyway 社区版 10.3，它会在日志中提示尚未在 H2 2.2.224 上测试；每次发布的测试都会在 H2、MySQL 和 PostgreSQL 上执行迁移。
+- 目前只有上面这些表；作业、数据源、调度和用户在后续里程碑中提供，各自带有自己的扩展脚本。

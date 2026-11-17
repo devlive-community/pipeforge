@@ -85,6 +85,7 @@ as `--name=value`, or set them as environment variables (`PIPEFORGE_JOB_TIMEZONE
 | `pipeforge.plugin.dev.root` | found from the working directory | Root of the source checkout for development mode |
 | `pipeforge.job.timezone` | `UTC` | Time zone of jobs that do not set `env.timezone` |
 | `pipeforge.job.defaults.*` | none | Cluster defaults for node options, in the env form, e.g. `pipeforge.job.defaults.source.fetch-size` |
+| `pipeforge.metastore.*` | an H2 file in `~/.pipeforge/metastore` | The database of the server's records; see [metastore](./metastore) |
 
 ```yaml
 pipeforge:

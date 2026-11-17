@@ -212,6 +212,8 @@
                             <includeArtifactIds>pipeforge-server</includeArtifactIds>
                             <includeClassifiers>exec</includeClassifiers>
                             <outputDirectory>${project.build.directory}/test-server</outputDirectory>
+                            <!-- the server of this build, not a copy left by an earlier one -->
+                            <overWriteSnapshots>true</overWriteSnapshots>
                         </configuration>
                     </execution>
                 </executions>
