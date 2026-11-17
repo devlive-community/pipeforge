@@ -2051,6 +2051,42 @@
           }
         }
       },
+      "NodeMetrics" : {
+        "type" : "object",
+        "properties" : {
+          "bytesIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "bytesOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "node" : {
+            "type" : "string"
+          },
+          "rowsDirty" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsExpanded" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsFiltered" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsIn" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsOut" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "Option" : {
         "type" : "object",
         "properties" : {
@@ -2370,7 +2406,7 @@
           "nodes" : {
             "type" : "array",
             "items" : {
-              "$ref" : "#/components/schemas/Node"
+              "$ref" : "#/components/schemas/NodeMetrics"
             }
           },
           "parallelism" : {

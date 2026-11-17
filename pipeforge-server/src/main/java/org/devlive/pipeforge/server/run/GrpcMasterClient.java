@@ -266,7 +266,7 @@ public final class GrpcMasterClient implements MasterClient {
                 metrics.getSplitsTotal(),
                 metrics.getSplitsFinished(),
                 metrics.getNodesList().stream()
-                        .map(n -> new RunMetrics.Node(
+                        .map(n -> new RunMetrics.NodeMetrics(
                                 n.getNodeId(),
                                 n.getRowsIn(),
                                 n.getRowsOut(),

@@ -28,6 +28,7 @@ export type RunDetail = Schemas["RunDetail"];
 export type RunPage = Schemas["RunPage"];
 export type RunState = NonNullable<Run["status"]>;
 export type RunMetrics = Schemas["RunMetrics"];
+export type NodeMetrics = Schemas["NodeMetrics"];
 export type MetricSample = Schemas["Sample"];
 export type RunSplit = Schemas["Split"];
 export type RunTask = Schemas["Task"];

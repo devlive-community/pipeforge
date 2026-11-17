@@ -45,7 +45,7 @@ public record RunMetrics(
         int parallelism,
         int splitsTotal,
         int splitsFinished,
-        List<Node> nodes,
+        List<NodeMetrics> nodes,
         List<DirtySample> dirtySamples) {
 
     public RunMetrics {
@@ -54,7 +54,7 @@ public record RunMetrics(
     }
 
     /** The counters of one node of the plan. */
-    public record Node(
+    public record NodeMetrics(
             String node,
             long rowsIn,
             long rowsOut,

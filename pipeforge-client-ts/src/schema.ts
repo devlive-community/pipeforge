@@ -607,6 +607,23 @@ export interface components {
             plugin?: string;
             type?: string;
         };
+        NodeMetrics: {
+            /** Format: int64 */
+            bytesIn?: number;
+            /** Format: int64 */
+            bytesOut?: number;
+            node?: string;
+            /** Format: int64 */
+            rowsDirty?: number;
+            /** Format: int64 */
+            rowsExpanded?: number;
+            /** Format: int64 */
+            rowsFiltered?: number;
+            /** Format: int64 */
+            rowsIn?: number;
+            /** Format: int64 */
+            rowsOut?: number;
+        };
         Option: {
             key?: string;
             origin?: string;
@@ -720,7 +737,7 @@ export interface components {
             exchangedBytes?: number;
             /** Format: int64 */
             memoryBytes?: number;
-            nodes?: components["schemas"]["Node"][];
+            nodes?: components["schemas"]["NodeMetrics"][];
             /** Format: int32 */
             parallelism?: number;
             /** Format: int32 */
