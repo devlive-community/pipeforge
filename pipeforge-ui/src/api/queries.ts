@@ -103,6 +103,16 @@ export function useRunTasks(id: string, live: boolean) {
   });
 }
 
+/** The master, the workers and their slots; asked again like the run pages. */
+export function useCluster() {
+  return useQuery({
+    queryKey: ["cluster"],
+    queryFn: () => api.getCluster(),
+    refetchInterval: RUN_POLL_MS,
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useJobSchema() {
   return useQuery({ queryKey: ["job-schema"], queryFn: api.getJobSchema, staleTime: Infinity });
 }

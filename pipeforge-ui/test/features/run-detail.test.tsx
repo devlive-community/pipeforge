@@ -8,7 +8,8 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { evidenceValue, rates, waitShare } from "@/features/run-detail/analysis";
-import { edgeWidthFor, formatBytes } from "@/features/run-detail/PlanTab";
+import { edgeWidthFor } from "@/features/run-detail/PlanTab";
+import { formatBytes } from "@/features/runs/format";
 import { usePreferences } from "@/state/preferences";
 import { fakeServer, renderApp } from "../render";
 

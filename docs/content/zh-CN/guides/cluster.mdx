@@ -1,0 +1,37 @@
+---
+title: 集群
+description: 在 Web UI 中查看集群的 Master 和 Worker：Slot、占用 Slot 的作业、标签、资源和心跳。
+order: 24
+---
+
+**集群**页面按 Master 的视角显示服务端运行作业所用的集群。这个页面需要配置了 Master 的服务端（`pipeforge.master.address`，见
+[服务端](../operations/server)）；页面打开期间每两秒刷新一次。
+
+<Screenshot name="cluster" alt="集群页面" />
+
+## Master 与 Slot
+
+第一行显示 Master（RPC 地址、版本、协议和启动时间）、运行占用的 Slot 比例，以及已连接的 Worker 数量。一个 Slot 可以运行一个 Task；
+一次运行占用的 Slot 数由作业的并行度决定。
+
+## Worker
+
+每个 Worker 一张卡片：
+
+| 部分 | 内容 |
+|---|---|
+| Slot | 每个 Slot 一个方块，被运行占用时填充；下方列出哪些作业各占用了多少 |
+| RPC 地址、数据地址 | Master 和其他 Worker 访问它的地址 |
+| 资源组、标签 | Worker 启动时指定的值（`--labels key=value`，见[启动集群](../operations/deployment#启动集群)） |
+| 运行中的 Task | 当前运行的 Task 数 |
+| CPU 核数、Task 堆内存、托管内存、网络缓冲 | 它的资源 |
+| 最近心跳 | Master 最后一次收到它的心跳是多久之前 |
+| 版本 | 它运行的 PipeForge 版本 |
+
+超过 15 秒（默认心跳间隔 5 秒的三倍）没有心跳的 Worker 会标记为**心跳延迟**。默认情况下，Master 在 30 秒没有心跳后认为 Worker 已丢失
+（`master.heartbeat.timeout`），让它上面的 Task 失败，并将它从页面中移除。
+
+## 页面无法显示集群时
+
+- **服务端没有配置 Master**：服务端启动时没有设置 `pipeforge.master.address`；它仍然可以校验和预览作业，但不能在集群上运行作业。
+- **无法连接 Master**：地址已设置，但 Master 没有响应；消息中会说明原因。请检查 Master 是否在运行、服务端能否访问它的 RPC 端口。

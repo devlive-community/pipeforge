@@ -39,3 +39,16 @@ export function runDuration(
   const end = run.endedAt ? Date.parse(run.endedAt) : now;
   return end - Date.parse(run.startedAt);
 }
+
+/** Bytes in the largest binary unit below the value, one decimal: 512 B, 1.5 KiB, 3.2 GiB. */
+export function formatBytes(bytes: number | null | undefined, language: string): string {
+  if (bytes === null || bytes === undefined) return "–";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${new Intl.NumberFormat(language, { maximumFractionDigits: unit === 0 ? 0 : 1 }).format(value)} ${units[unit]}`;
+}

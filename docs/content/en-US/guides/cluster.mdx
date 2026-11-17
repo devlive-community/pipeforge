@@ -1,0 +1,42 @@
+---
+title: Cluster
+description: Watching the master and the workers of the cluster in the Web UI - their slots, the jobs that hold them, labels, resources and heartbeats.
+order: 24
+---
+
+The **Cluster** page shows the cluster the server's runs execute on, as the master sees it. It
+needs a server with a master (`pipeforge.master.address`, see [the server](../operations/server));
+the page asks again every two seconds while it is open.
+
+<Screenshot name="cluster" alt="The cluster page" />
+
+## Master and slots
+
+The top row shows the master (its RPC address, version, protocol and when it started), the share of
+the cluster's slots that runs hold, and how many workers are connected. A slot is the room for one
+task; a run holds as many as its job's parallelism needs.
+
+## Workers
+
+Each worker has a card:
+
+| Part | Shows |
+|---|---|
+| Slots | One square per slot, filled when a run holds it, then which jobs hold how many |
+| RPC and data address | Where the master and other workers reach it |
+| Resource group, labels | What the worker was started with (`--labels key=value`, see [starting a cluster](../operations/deployment#starting-a-cluster)) |
+| Tasks running | The tasks it runs now |
+| CPU cores, task heap, managed memory, network buffers | Its resources |
+| Last heartbeat | How long ago the master last heard from it |
+| Version | The PipeForge version it runs |
+
+A worker without a heartbeat for over 15 seconds (three of the default 5-second intervals) is
+marked **Late**. By default the master counts a worker as lost after 30 seconds without a heartbeat
+(`master.heartbeat.timeout`), fails its tasks and removes it from the page.
+
+## When the page cannot show the cluster
+
+- **The server has no master**: the server was started without `pipeforge.master.address`; it can
+  still validate and preview jobs, but not run them on a cluster.
+- **The master cannot be reached**: the address is set but the master does not answer; the message
+  says why. Check that the master runs and that the server can reach its RPC port.

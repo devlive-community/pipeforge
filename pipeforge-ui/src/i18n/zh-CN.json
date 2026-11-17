@@ -9,6 +9,7 @@
     "overview": "概览",
     "jobEditor": "作业编辑器",
     "runs": "运行",
+    "cluster": "集群",
     "plugins": "插件",
     "functions": "函数",
     "errors": "错误码"
@@ -296,6 +297,45 @@
       "noneHint": "运行开始后 Source 才会分发分片；不分片的 Source 没有分片。",
       "failed": "无法加载分片：{message}"
     }
+  },
+  "cluster": {
+    "title": "集群",
+    "description": "运行所在的 Master 和 Worker，以及它们的 Slot。页面每两秒刷新一次。",
+    "master": "Master",
+    "address": "地址",
+    "version": "版本",
+    "protocol": "协议",
+    "started": "启动时间",
+    "slots": "Slot",
+    "slotsUsed": "已使用 {used} / {total}",
+    "workers": "Worker",
+    "workerCount": "已连接 {count} 个",
+    "worker": {
+      "rpc": "RPC 地址",
+      "data": "数据地址",
+      "group": "资源组",
+      "cores": "CPU 核数",
+      "heap": "Task 堆内存",
+      "managed": "托管内存",
+      "network": "网络缓冲",
+      "tasks": "运行中的 Task",
+      "heartbeat": "最近心跳",
+      "version": "版本",
+      "labels": "标签",
+      "noLabels": "无标签"
+    },
+    "ago": "{seconds} 秒前",
+    "late": "心跳延迟",
+    "lateHint": "超过 15 秒没有心跳；默认情况下 Master 在 30 秒后认为 Worker 已丢失。",
+    "slotGrid": "{worker} 的 Slot：已使用 {used} / {total}",
+    "free": "空闲",
+    "slotJobs": "{job} · {count} 个 Slot",
+    "noWorkers": "没有已连接的 Worker",
+    "noWorkersHint": "Worker 启动时向 Master 注册；参见部署指南。",
+    "noMaster": "服务端没有配置 Master",
+    "noMasterHint": "将 pipeforge.master.address 设置为 Master 的 RPC 地址，即可在集群上运行作业。",
+    "unreachable": "无法连接 Master",
+    "failed": "无法加载集群信息：{message}"
   },
   "plugins": {
     "title": "插件",

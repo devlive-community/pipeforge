@@ -127,6 +127,8 @@
   docs: ["guides/web-ui"]
 - paths: ["pipeforge-ui/src/features/runs/**", "pipeforge-ui/src/features/run-detail/**"]
   docs: ["guides/runs"]
+- paths: ["pipeforge-ui/src/features/cluster/**"]
+  docs: ["guides/cluster"]
 - paths: ["pipeforge-ui/src/features/job-editor/**"]
   docs: ["guides/job-editor"]
 - paths: ["pipeforge-ui/src/features/field-mapping/**"]

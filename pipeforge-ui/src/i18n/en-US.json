@@ -9,6 +9,7 @@
     "overview": "Overview",
     "jobEditor": "Job editor",
     "runs": "Runs",
+    "cluster": "Cluster",
     "plugins": "Plugins",
     "functions": "Functions",
     "errors": "Error codes"
@@ -296,6 +297,45 @@
       "noneHint": "Sources hand out their splits once the run starts; a source that is not split has none.",
       "failed": "The splits cannot be loaded: {message}"
     }
+  },
+  "cluster": {
+    "title": "Cluster",
+    "description": "The master and the workers the runs execute on, with their slots. The page follows the cluster every two seconds.",
+    "master": "Master",
+    "address": "Address",
+    "version": "Version",
+    "protocol": "Protocol",
+    "started": "Started",
+    "slots": "Slots",
+    "slotsUsed": "{used} of {total} in use",
+    "workers": "Workers",
+    "workerCount": "{count} connected",
+    "worker": {
+      "rpc": "RPC address",
+      "data": "Data address",
+      "group": "Resource group",
+      "cores": "CPU cores",
+      "heap": "Task heap",
+      "managed": "Managed memory",
+      "network": "Network buffers",
+      "tasks": "Tasks running",
+      "heartbeat": "Last heartbeat",
+      "version": "Version",
+      "labels": "Labels",
+      "noLabels": "No labels"
+    },
+    "ago": "{seconds} s ago",
+    "late": "Late",
+    "lateHint": "No heartbeat for over 15 seconds; the master counts a worker as lost after 30 seconds by default.",
+    "slotGrid": "Slots of {worker}: {used} of {total} in use",
+    "free": "free",
+    "slotJobs": "{job} · {count} slot(s)",
+    "noWorkers": "No worker is connected",
+    "noWorkersHint": "Workers register with the master when they start; see the deployment guide.",
+    "noMaster": "The server has no master",
+    "noMasterHint": "Set pipeforge.master.address to the master's RPC address to run jobs on a cluster.",
+    "unreachable": "The master cannot be reached",
+    "failed": "The cluster cannot be loaded: {message}"
   },
   "plugins": {
     "title": "Plugins",

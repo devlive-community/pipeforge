@@ -461,7 +461,44 @@ function taskLog(url: URL) {
   return { text: text && !text.endsWith("\n") ? `${text}\n` : text, offset: TASK_LOG.length, eof: false };
 }
 
+/** A cluster of three workers with eight slots each; the running run holds 12 of them. */
+function cluster() {
+  const GiB = 1024 ** 3;
+  const worker = (n: number, held: string[], labels: Record<string, string>, heartbeat: number) => ({
+    id: `worker-${n}`,
+    rpcAddress: `10.0.4.${10 + n}:6124`,
+    dataAddress: `10.0.4.${10 + n}:6125`,
+    resourceGroup: n === 3 ? "reporting" : "default",
+    labels,
+    cpuCores: 16,
+    taskHeapBytes: 8 * GiB,
+    managedBytes: 4 * GiB,
+    networkBytes: 512 * 1024 ** 2,
+    tasksRunning: held.length,
+    sinceHeartbeatMs: heartbeat,
+    version: "0.1.0",
+    slots: Array.from({ length: 8 }, (_, index) => ({
+      index,
+      allocated: index < held.length,
+      ...(index < held.length ? { job: held[index] } : {}),
+    })),
+  });
+  const orders = (count: number) => Array.from({ length: count }, () => "orders-daily");
+  return {
+    master: { address: "10.0.4.10:6123", version: "0.1.0", protocol: "1.0", startedAt: "2026-11-17T06:00:00Z" },
+    slots: 24,
+    slotsUsed: 14,
+    usage: 14 / 24,
+    workers: [
+      worker(1, [...orders(6), "users-sync"], { zone: "cn-north-1a", disk: "ssd" }, 1_400),
+      worker(2, orders(6), { zone: "cn-north-1b", disk: "ssd" }, 3_100),
+      worker(3, ["inventory-snapshot"], { zone: "cn-north-1a" }, 18_600),
+    ],
+  };
+}
+
 export const SERVER: Record<string, unknown> = {
+  "/api/v1/cluster": () => cluster(),
   [`/api/v1/runs/${RUN_ID}/splits`]: () => runSplits(),
   [`/api/v1/runs/${RUN_ID}/tasks`]: () => runTasks(),
   [`/api/v1/runs/${RUN_ID}/logs`]: (_body: string, _language: string, url: URL) => taskLog(url),

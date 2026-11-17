@@ -10,6 +10,7 @@ import { ErrorCodesPage } from "@/features/errors/ErrorCodesPage";
 import { NotFoundPage } from "@/features/not-found/NotFoundPage";
 import { OverviewPage } from "@/features/overview/OverviewPage";
 import { PluginsPage } from "@/features/plugins/PluginsPage";
+import { ClusterPage } from "@/features/cluster/ClusterPage";
 import { RunDetailPage } from "@/features/run-detail/RunDetailPage";
 import { RunsPage } from "@/features/runs/RunsPage";
 import { LoadingPanel } from "@/ui/LoadingPanel";
@@ -30,6 +31,7 @@ export const ROUTES: RouteObject[] = [
       },
       { path: "runs", element: <RunsPage /> },
       { path: "runs/:id", element: <RunDetailPage /> },
+      { path: "cluster", element: <ClusterPage /> },
       { path: "plugins", element: <PluginsPage /> },
       {
         path: "functions",

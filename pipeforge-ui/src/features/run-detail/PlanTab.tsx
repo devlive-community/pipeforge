@@ -8,25 +8,12 @@
 import type { NodeMetrics, RunMetrics } from "@pipeforge/client";
 import { useMemo } from "react";
 import { readStructure } from "@/features/job-editor/structure";
-import { formatCount } from "@/features/runs/format";
+import { formatBytes, formatCount } from "@/features/runs/format";
 import { useT } from "@/i18n";
 import { usePreferences } from "@/state/preferences";
 import { Card, DagCanvas, DescriptionList, Empty, type DagNode } from "@/ui";
 import type { RunAnalysis } from "./analysis";
 import { BottleneckCard } from "./Bottleneck";
-
-/** Bytes in the largest binary unit below the value, one decimal: 512 B, 1.5 KiB, 3.2 GiB. */
-export function formatBytes(bytes: number | null | undefined, language: string): string {
-  if (bytes === null || bytes === undefined) return "–";
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${new Intl.NumberFormat(language, { maximumFractionDigits: unit === 0 ? 0 : 1 }).format(value)} ${units[unit]}`;
-}
 
 /** The width of an edge for a rate: 1.5 for nothing, 8 for the fastest edge of the run. */
 export function edgeWidthFor(rate: number | undefined, fastest: number): number | undefined {

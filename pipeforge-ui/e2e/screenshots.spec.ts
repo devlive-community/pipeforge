@@ -79,6 +79,7 @@ const PAGES: Shot[] = [
       "zh-CN": "java.sql.SQLTransientConnectionException: Communications link failure",
     },
   },
+  { name: "cluster", path: "/cluster", ready: { "en-US": "worker-3", "zh-CN": "worker-3" } },
   { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
   {
     name: "field-mapping",

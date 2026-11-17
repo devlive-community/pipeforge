@@ -118,3 +118,12 @@ test("reads a task's log and finds text in it", async ({ page }) => {
   await page.getByRole("tab", { name: "Splits" }).click();
   await expect(page.getByText("9 of 13 splits read")).toBeVisible();
 });
+
+test("shows the cluster with its workers", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Cluster" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Cluster" })).toBeVisible();
+  await expect(page.getByText("14 of 24 in use")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Slots of worker-1: 7 of 8 in use" })).toBeVisible();
+  await expect(page.getByText("Late")).toBeVisible();
+});
