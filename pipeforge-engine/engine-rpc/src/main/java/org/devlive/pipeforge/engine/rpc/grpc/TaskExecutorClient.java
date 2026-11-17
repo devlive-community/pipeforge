@@ -9,6 +9,7 @@ package org.devlive.pipeforge.engine.rpc.grpc;
 import com.google.protobuf.ByteString;
 import io.grpc.Channel;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +50,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
     private final Supplier<Headers.Epochs> epochs;
     private final Retry retry;
     private final Map<Stream, AtomicLong> sequences = new ConcurrentHashMap<>();
-    private final java.util.function.Function<String, org.devlive.pipeforge.engine.rpc.proto.PluginRef> plugins;
+    private final java.util.function.Function<String, List<org.devlive.pipeforge.engine.rpc.proto.PluginRef>> plugins;
 
     /**
      * @param target how errors name the worker, e.g. its address
@@ -58,12 +59,12 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
      */
     public TaskExecutorClient(
             Channel channel, String target, byte[] publicKey, Supplier<Headers.Epochs> epochs, Retry retry) {
-        this(channel, target, publicKey, epochs, retry, ChainCodec::pluginRef);
+        this(channel, target, publicKey, epochs, retry, c -> List.of(ChainCodec.pluginRef(c)));
     }
 
     /**
-     * @param plugins the reference of a plugin coordinate ({@code id@version}) with the SHA-256 of
-     *     the package the worker downloads
+     * @param plugins the references of a plugin coordinate ({@code id@version}) with the SHA-256 of
+     *     the packages the worker downloads: the plugin's and those of the drivers it requires
      */
     public TaskExecutorClient(
             Channel channel,
@@ -71,7 +72,7 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
             byte[] publicKey,
             Supplier<Headers.Epochs> epochs,
             Retry retry,
-            java.util.function.Function<String, org.devlive.pipeforge.engine.rpc.proto.PluginRef> plugins) {
+            java.util.function.Function<String, List<org.devlive.pipeforge.engine.rpc.proto.PluginRef>> plugins) {
         this.plugins = plugins;
         this.stub = TaskExecutorServiceGrpc.newFutureStub(channel);
         this.streams = TaskExecutorServiceGrpc.newStub(channel);
@@ -95,7 +96,11 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                     .addAllInputs(ProtoMapping.toProtoInputs(deployment.inputs()))
                     .addAllOutputs(ProtoMapping.outputs(deployment.chain().outputs()));
             for (PlannedNode node : deployment.chain().nodes()) {
-                request.addPlugins(plugins.apply(node.plugin()));
+                for (var ref : plugins.apply(node.plugin())) {
+                    if (!request.getPluginsList().contains(ref)) {
+                        request.addPlugins(ref);
+                    }
+                }
             }
             if (!encoded.secrets().isEmpty()) {
                 byte[] bundle = SecretBundle.newBuilder()

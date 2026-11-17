@@ -45,6 +45,31 @@ JDK
 在集群上，Worker 以插件包的形式从 Master 获得插件：包含 `plugin.yaml` 和插件的 jar，同一个插件每次都打包成相同的字节和 SHA-256。
 在 Worker 上，每次运行的每个插件都有自己的类加载器，运行结束时关闭；见[插件分发](./cluster#插件分发)。
 
+### 驱动插件
+
+有些插件需要一个自己不打包的第三方驱动，例如因为许可证原因：MySQL 插件需要 MySQL Connector/J。这类插件在 `plugin.yaml`
+的 `requires.drivers` 中写明驱动，驱动作为一个独立插件安装，和其他插件一样是一个目录或 zip：
+
+```text
+plugins/mysql-connector-j-8.4.0/
+├── plugin.yaml
+└── lib/
+    └── mysql-connector-j-8.4.0.jar
+```
+
+```yaml
+id: mysql-connector-j
+name: MySQL Connector/J
+version: 8.4.0
+api-version: "0.x"
+provides:
+  - { type: driver, identifier: mysql-connector-j, class: com.mysql.cj.jdbc.Driver }
+```
+
+插件加载时，它所需的每个驱动中已安装的最高版本的 jar 会加入它的类加载器，排在插件自己的 jar 之后，因此驱动只对这个插件可见。
+驱动 jar 不做禁止调用检查：它们是你选择安装的第三方库。缺少驱动时插件无法加载，作业以
+[`PF-PLUG-0003`](../reference/errors#pf-plug-0003) 失败。在集群中，Master 会把驱动的插件包和插件一起发给 Worker。
+
 ### 调用边界
 
 对插件代码的调用都经过插件的调用器：把插件类加载器设置为线程上下文类加载器；把失败包装成带插件名和操作名的错误（`PF-PLUG-0007`）；
@@ -115,6 +140,7 @@ sink:
 |---|---|
 | `PF-PLUG-0001` | 没有已安装的插件提供该组件；安装插件或检查标识。 |
 | `PF-PLUG-0002` | 插件为其他 API 主版本构建；安装与当前版本匹配的构建。 |
+| `PF-PLUG-0003` | 插件所需的驱动没有安装；把它作为驱动插件安装。 |
 | `PF-PLUG-0004` | 插件包不完整，例如 `lib/` 为空。 |
 | `PF-PLUG-0005` | 插件调用了影响整个 JVM 的操作；应改为通过选项传递设置。 |
 | `PF-PLUG-0006` | 插件调用没有按时完成；检查外部系统。 |

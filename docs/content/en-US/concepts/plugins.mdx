@@ -57,6 +57,35 @@ jars, built so that the same plugin always gives the same bytes and SHA-256. The
 own class loader per plugin, closed when the run ends; see
 [plugin distribution](./cluster#plugin-distribution).
 
+### Driver plugins
+
+Some plugins need a third-party driver they do not ship, for example because of its license: the
+MySQL plugin needs MySQL Connector/J. They name it in `requires.drivers` of their `plugin.yaml`, and
+the driver is installed as a plugin of its own, a directory or zip like any other:
+
+```text
+plugins/mysql-connector-j-8.4.0/
+├── plugin.yaml
+└── lib/
+    └── mysql-connector-j-8.4.0.jar
+```
+
+```yaml
+id: mysql-connector-j
+name: MySQL Connector/J
+version: 8.4.0
+api-version: "0.x"
+provides:
+  - { type: driver, identifier: mysql-connector-j, class: com.mysql.cj.jdbc.Driver }
+```
+
+When the plugin loads, the jars of the highest installed version of each driver it requires join
+its class loader, after its own jars, so the driver is visible to that plugin only. Driver jars are
+not checked for forbidden calls: they are third-party libraries you chose to install. Without the
+driver the plugin does not load and the job fails with
+[`PF-PLUG-0003`](../reference/errors#pf-plug-0003). On a cluster the master sends the driver's
+package to the workers together with the plugin.
+
 ### The invocation boundary
 
 Calls into plugin code go through the plugin's invoker. It sets the plugin class loader as the
@@ -134,6 +163,7 @@ sink:
 |---|---|
 | `PF-PLUG-0001` | No installed plugin provides the component; install it or check the identifier. |
 | `PF-PLUG-0002` | The plugin was built for another API major version; install a matching build. |
+| `PF-PLUG-0003` | A driver the plugin requires is not installed; install it as a driver plugin. |
 | `PF-PLUG-0004` | The package is incomplete, for example `lib/` is empty. |
 | `PF-PLUG-0005` | The plugin calls a JVM-wide operation; it must pass settings through options instead. |
 | `PF-PLUG-0006` | A plugin call did not finish in time; check the external system. |

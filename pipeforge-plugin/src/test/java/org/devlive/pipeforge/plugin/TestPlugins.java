@@ -76,6 +76,53 @@ public final class TestPlugins {
     }
 
     /**
+     * A plugin that requires the driver plugins {@code drivers} and does not bundle {@code library}:
+     * its factory reports the version of the library a driver brings.
+     */
+    public Path pluginRequiring(String id, String version, String identifier, Path library, List<String> drivers) {
+        String pkg = pkg(id, version);
+        Path pluginJar = jar(
+                id + "-" + version,
+                Map.of(pkg.replace('.', '/') + "/Factory.java", factory(pkg, identifier, "")),
+                List.of(library));
+        Path dir = root.resolve("plugins").resolve(id + "-" + version);
+        try {
+            Files.createDirectories(dir.resolve("lib"));
+            Files.copy(pluginJar, dir.resolve("lib").resolve(pluginJar.getFileName()));
+            Files.writeString(
+                    dir.resolve("plugin.yaml"),
+                    descriptor(id, version, identifier) + "requires:\n  drivers: [" + String.join(", ", drivers)
+                            + "]\n");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return dir;
+    }
+
+    /** A driver plugin {@code id@version} that holds {@code library}, as a user installs one. */
+    public Path driver(String id, String version, Path library) {
+        Path dir = root.resolve("plugins").resolve(id + "-" + version);
+        try {
+            Files.createDirectories(dir.resolve("lib"));
+            Files.copy(library, dir.resolve("lib").resolve(library.getFileName()));
+            Files.writeString(
+                    dir.resolve("plugin.yaml"),
+                    """
+                    id: %s
+                    name: Driver
+                    version: %s
+                    api-version: "%s"
+                    provides:
+                      - { type: driver, identifier: %s, class: com.example.lib.Greeting }
+                    """
+                            .formatted(id, version, org.devlive.pipeforge.api.ApiVersion.descriptorForm(), id));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return dir;
+    }
+
+    /**
      * A plugin module of a source tree below {@code tree}, as a Maven build leaves it: the
      * descriptor in src/main/plugin, the compiled factory in target/classes and the dependency list
      * with the library.

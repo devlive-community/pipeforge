@@ -48,6 +48,10 @@ class PluginBlobsTest {
     void start() throws Exception {
         TestPlugins plugins = new TestPlugins(dir.resolve("build"));
         plugins.plugin("alpha", "1.0.0", "alpha-source", plugins.library("7"), "");
+        Path library = plugins.library("d-1");
+        plugins.pluginRequiring("acme", "1.0.0", "acme-source", library, List.of("acme-driver"));
+        plugins.driver("acme-driver", "1.0.0", library);
+        plugins.pluginRequiring("lonely", "1.0.0", "lonely-source", library, List.of("missing-driver"));
         installed = PluginManager.load(
                 List.of(dir.resolve("build/plugins")), dir.resolve("master-cache"), PluginManager.Options.defaults());
         blobs = new PluginBlobs(installed, dir.resolve("blobs"));
@@ -64,6 +68,22 @@ class PluginBlobsTest {
         channel.shutdownNow();
         server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
         installed.close();
+    }
+
+    @Test
+    void theReferencesOfAPluginIncludeTheDriversItRequires() {
+        assertThat(blobs.refs("acme@1.0.0"))
+                .extracting(PluginRef::getId, PluginRef::getVersion)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("acme", "1.0.0"),
+                        org.assertj.core.groups.Tuple.tuple("acme-driver", "1.0.0"));
+        assertThat(blobs.refs("acme@1.0.0"))
+                .allSatisfy(r -> assertThat(r.getSha256()).hasSize(64));
+        assertThat(blobs.refs("alpha@1.0.0")).hasSize(1);
+        assertThatThrownBy(() -> blobs.refs("lonely@1.0.0"))
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.common.error.PipeForgeException.class, e -> assertThat(e.code())
+                                .isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.DRIVER_MISSING));
     }
 
     @Test

@@ -21,7 +21,7 @@ tar -xzf pipeforge-dist/target/pipeforge-0.1.0-SNAPSHOT.tar.gz
 | `bin/` | `pipeforge`（命令）以及 `pipeforge-master`、`pipeforge-worker`、`pipeforge-standalone` 的 `.sh` 与 `.cmd` 脚本 |
 | `conf/` | `pipeforge.yaml`、`master.yaml`、`worker.yaml`、`logback.xml`、`jvm.options` |
 | `lib/` | 依赖库；`lib/logback/` 是集群进程的日志库，`lib/server/` 是服务 |
-| `plugins/` | Master 提供的插件：`fake`、`field-mapper`、`console`、`blackhole` |
+| `plugins/` | Master 提供的插件，以及你安装的[驱动插件](../concepts/plugins#驱动插件)：`fake`、`field-mapper`、`console`、`blackhole` |
 | `logs/`、`run/`、`data/` | 首次启动时创建：日志、进程 ID、插件缓存 |
 
 进程需要 Java 21 或更高版本；`JAVA_HOME` 选择运行时。

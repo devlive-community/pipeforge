@@ -72,6 +72,47 @@ class PluginManagerTest {
     }
 
     @Test
+    void aPluginLoadsTheClassesOfTheDriversItRequires() throws Exception {
+        TestPlugins plugins = new TestPlugins(dir);
+        Path library = plugins.library("driver-9");
+        plugins.pluginRequiring("acme", "1.0.0", "acme-source", library, List.of("acme-driver"));
+        plugins.driver("acme-driver", "8.0.1", plugins.library("driver-8"));
+        plugins.driver("acme-driver", "9.1.0", library);
+        try (PluginManager manager = manager(plugins)) {
+            InstalledPlugin acme = manager.resolve(PluginType.SOURCE, "acme-source", null);
+            assertThat(manager.drivers(acme))
+                    .extracting(InstalledPlugin::coordinate)
+                    .containsExactly("acme-driver@9.1.0");
+            try (PluginLease lease = manager.acquire(acme, "job")) {
+                SourceFactory factory = lease.factory(PluginType.SOURCE, "acme-source", SourceFactory.class);
+                assertThat(call(factory, "libraryVersion"))
+                        .as("from the newest driver")
+                        .isEqualTo("driver-9");
+                assertThat(Class.forName("com.example.lib.Greeting", false, lease.classLoader())
+                                .getClassLoader())
+                        .isSameAs(lease.classLoader());
+            }
+        }
+    }
+
+    @Test
+    void aMissingDriverIsReportedWhenThePluginLoads() {
+        TestPlugins plugins = new TestPlugins(dir);
+        plugins.pluginRequiring("acme", "1.0.0", "acme-source", plugins.library("1"), List.of("acme-driver"));
+        try (PluginManager manager = manager(plugins)) {
+            InstalledPlugin acme = manager.resolve(PluginType.SOURCE, "acme-source", null);
+            assertThatThrownBy(() -> manager.acquire(acme, "job"))
+                    .isInstanceOfSatisfying(PipeForgeException.class, e -> {
+                        assertThat(e.code()).isEqualTo(ErrorCode.DRIVER_MISSING);
+                        assertThat(e.getMessage())
+                                .isEqualTo(
+                                        "PF-PLUG-0003 Plugin 'acme@1.0.0' needs the driver 'acme-driver', which is not installed");
+                    });
+            assertThat(manager.openLoaders()).isZero();
+        }
+    }
+
+    @Test
     void invokerSetsTheContextClassLoader() throws Exception {
         TestPlugins plugins = new TestPlugins(dir);
         plugins.plugin("alpha", "1.0.0", "alpha-source", plugins.library("1"), "");

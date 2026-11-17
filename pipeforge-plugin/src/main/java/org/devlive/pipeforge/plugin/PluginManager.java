@@ -173,14 +173,45 @@ public final class PluginManager implements AutoCloseable {
     }
 
     /**
+     * The driver plugins {@code plugin} requires ({@code requires.drivers}), each in its highest
+     * installed version.
+     *
+     * @throws PipeForgeException {@link ErrorCode#DRIVER_MISSING} for a driver that is not installed
+     */
+    public List<InstalledPlugin> drivers(InstalledPlugin plugin) {
+        List<InstalledPlugin> drivers = new ArrayList<>();
+        for (String id : plugin.descriptor().drivers()) {
+            drivers.add(plugins.values().stream()
+                    .filter(p -> p.id().equals(id))
+                    .filter(p -> p.descriptor().provides().stream().anyMatch(c -> c.type() == PluginType.DRIVER))
+                    .max(Comparator.comparing(InstalledPlugin::version, PluginManager::compareVersions))
+                    .orElseThrow(() -> PipeForgeException.of(ErrorCode.DRIVER_MISSING)
+                            .param("plugin", plugin.coordinate())
+                            .param("driver", id)
+                            .build()));
+        }
+        return drivers;
+    }
+
+    /**
      * Acquires the class loader of a plugin version for an owner (usually a job). The loader is
-     * created on first use and closed when the last lease is closed.
+     * created on first use and closed when the last lease is closed. It holds the jars of the
+     * plugin and, after them, those of the driver plugins it requires; driver jars are third-party
+     * libraries the user installed, so they are not checked for forbidden calls.
+     *
+     * @throws PipeForgeException {@link ErrorCode#DRIVER_MISSING} when a required driver is not installed
      */
     public synchronized PluginLease acquire(InstalledPlugin plugin, String owner) {
         Shared shared = loaded.get(plugin.coordinate());
         if (shared == null) {
             checkForbiddenCalls(plugin);
-            PluginClassLoader loader = new PluginClassLoader(plugin.coordinate(), urls(plugin), options.parent());
+            List<URL> urls = new ArrayList<>(List.of(urls(plugin)));
+            for (InstalledPlugin driver : drivers(plugin)) {
+                urls.addAll(List.of(urls(driver)));
+                LOG.info("Plugin {} uses the driver {}", plugin.coordinate(), driver.coordinate());
+            }
+            PluginClassLoader loader =
+                    new PluginClassLoader(plugin.coordinate(), urls.toArray(URL[]::new), options.parent());
             ErrorRegistry.include(loader);
             shared = new Shared(loader, new PluginInvoker(plugin.coordinate(), loader));
             loaded.put(plugin.coordinate(), shared);

@@ -101,6 +101,39 @@ class PluginCacheTest {
     }
 
     @Test
+    void installsTheDriversThatComeWithAPluginInTheDeployment() throws Exception {
+        TestPlugins plugins = new TestPlugins(dir.resolve("drivers"));
+        Path library = plugins.library("d-3");
+        PluginPackage.Packed acme = PluginPackage.pack(
+                PluginRepository.read(
+                        plugins.pluginRequiring("acme", "1.0.0", "acme-source", library, List.of("acme-driver"))),
+                dir.resolve("master"));
+        PluginPackage.Packed driver = PluginPackage.pack(
+                PluginRepository.read(plugins.driver("acme-driver", "3.0.0", library)), dir.resolve("master"));
+        served.put(acme.sha256(), acme.file());
+        served.put(driver.sha256(), driver.file());
+        PluginRef acmeRef = ChainCodec.pluginRef("acme@1.0.0").toBuilder()
+                .setSha256(acme.sha256())
+                .build();
+        PluginRef driverRef = ChainCodec.pluginRef("acme-driver@3.0.0").toBuilder()
+                .setSha256(driver.sha256())
+                .build();
+        try (PluginCache cache = cache()) {
+            Component component = cache.forRun("run-1", List.of(acmeRef, driverRef))
+                    .resolve(NodeKind.SOURCE, "acme-source", "acme@1.0.0");
+            assertThat(libraryVersion(component)).isEqualTo("d-3");
+            assertThat(fetched).containsExactly("acme@1.0.0", "acme-driver@3.0.0");
+
+            // a deployment without the driver: the plugin cannot load
+            assertThatThrownBy(() -> cache.forRun("run-2", List.of(acmeRef))
+                            .resolve(NodeKind.SOURCE, "acme-source", "acme@1.0.0"))
+                    .isInstanceOfSatisfying(
+                            org.devlive.pipeforge.common.error.PipeForgeException.class, e -> assertThat(e.code())
+                                    .isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.DRIVER_MISSING));
+        }
+    }
+
+    @Test
     void downloadsAPackageOnceAndLoadsItPerRun() throws Exception {
         try (PluginCache cache = cache()) {
             Component one = cache.forRun("run-1", refs()).resolve(NodeKind.SOURCE, "alpha-source", "alpha@1.0.0");

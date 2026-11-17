@@ -151,7 +151,7 @@ public final class MasterProcess implements AutoCloseable {
                     worker.spec().publicKey(),
                     () -> Headers.Epochs.FIRST,
                     retry,
-                    blobs::ref);
+                    blobs::refs);
         });
     }
 

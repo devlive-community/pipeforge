@@ -99,7 +99,7 @@ public final class PluginCache implements AutoCloseable {
                         .param("reason", "the deployment names no package for it")
                         .build();
             }
-            PluginLease lease = lease(runId, plugin, ref);
+            PluginLease lease = lease(runId, plugin, ref, refs);
             Factory factory = lease.factory(kind.pluginType(), type, factoryInterface(kind));
             return new Leased(factory, lease);
         };
@@ -142,7 +142,7 @@ public final class PluginCache implements AutoCloseable {
         all.forEach(this::release);
     }
 
-    private PluginLease lease(String runId, String coordinate, PluginRef ref) {
+    private PluginLease lease(String runId, String coordinate, PluginRef ref, Map<String, PluginRef> refs) {
         synchronized (runs) {
             Loaded loaded = runs.computeIfAbsent(runId, r -> new HashMap<>()).get(coordinate);
             if (loaded != null) {
@@ -150,7 +150,15 @@ public final class PluginCache implements AutoCloseable {
             }
         }
         InstalledPlugin plugin = install(coordinate, ref.getSha256());
-        PluginManager manager = new PluginManager(List.of(plugin), options);
+        // the driver plugins it requires come with it in the deployment
+        List<InstalledPlugin> installed = new java.util.ArrayList<>(List.of(plugin));
+        for (String driver : plugin.descriptor().drivers()) {
+            refs.values().stream()
+                    .filter(r -> r.getId().equals(driver) && !r.getSha256().isEmpty())
+                    .findFirst()
+                    .ifPresent(r -> installed.add(install(r.getId() + "@" + r.getVersion(), r.getSha256())));
+        }
+        PluginManager manager = new PluginManager(installed, options);
         Loaded created = new Loaded(manager, manager.acquire(plugin, "run:" + runId));
         Loaded kept;
         synchronized (runs) {

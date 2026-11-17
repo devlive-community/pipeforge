@@ -267,7 +267,7 @@ final class LocalCluster implements AutoCloseable {
                             keys.publicKey(),
                             () -> Headers.Epochs.FIRST,
                             retry,
-                            ChainCodec::pluginRef));
+                            c -> List.of(ChainCodec.pluginRef(c))));
             connection = new MasterConnection(
                     toMaster,
                     new MasterConnection.Config(

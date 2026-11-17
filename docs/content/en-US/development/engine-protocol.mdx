@@ -60,7 +60,8 @@ the `ChainDescriptor` message inside an envelope that the worker checks before i
 - A worker reads every format version up to its own and refuses newer ones, damaged or truncated
   descriptions with a clear message, before it builds anything.
 - Nodes name their components by plugin and identifier (`fake`, `connector-mysql@1.2.0`); the
-  worker resolves them with its own plugins.
+  worker resolves them with its own plugins. The deployment's `plugins` list each plugin once with
+  the SHA-256 of its package, followed by the driver plugins it requires.
 - A chain starts with a source or reads its first node's input from other tasks, and ends with a
   sink or writes to outputs: one output edge per downstream chain, with its partitioning and one
   subpartition per downstream task. The deployment lists the task's inputs: for every upstream

@@ -8,6 +8,8 @@ package org.devlive.pipeforge.engine.master;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,6 +52,34 @@ public final class PluginBlobs implements BlobServer.Source {
         return ref.toBuilder().setSha256(pack(coordinate).sha256()).build();
     }
 
+    /**
+     * The references a worker needs to load a plugin: the plugin's, then those of the driver
+     * plugins it requires.
+     *
+     * @throws PipeForgeException {@code PF-PLUG-0003} when a required driver is not installed
+     */
+    public List<PluginRef> refs(String coordinate) {
+        List<PluginRef> refs = new ArrayList<>();
+        refs.add(ref(coordinate));
+        if (!StaticComponents.PLUGIN.equals(coordinate)) {
+            InstalledPlugin plugin = installed(coordinate);
+            for (InstalledPlugin driver : plugins.drivers(plugin)) {
+                refs.add(ref(driver.coordinate()));
+            }
+        }
+        return refs;
+    }
+
+    private InstalledPlugin installed(String coordinate) {
+        return plugins.plugins().stream()
+                .filter(p -> p.coordinate().equals(coordinate))
+                .findFirst()
+                .orElseThrow(() -> PipeForgeException.of(ErrorCode.PLUGIN_PACKAGE_UNAVAILABLE)
+                        .param("plugin", coordinate)
+                        .param("reason", "the master has no such plugin")
+                        .build());
+    }
+
     @Override
     public Optional<Path> find(String sha256) {
         return Optional.ofNullable(bySha.get(sha256));
@@ -57,13 +87,7 @@ public final class PluginBlobs implements BlobServer.Source {
 
     private PluginPackage.Packed pack(String coordinate) {
         return packed.computeIfAbsent(coordinate, c -> {
-            InstalledPlugin plugin = plugins.plugins().stream()
-                    .filter(p -> p.coordinate().equals(c))
-                    .findFirst()
-                    .orElseThrow(() -> PipeForgeException.of(ErrorCode.PLUGIN_PACKAGE_UNAVAILABLE)
-                            .param("plugin", c)
-                            .param("reason", "the master has no such plugin")
-                            .build());
+            InstalledPlugin plugin = installed(c);
             try {
                 PluginPackage.Packed result = PluginPackage.pack(plugin, directory);
                 bySha.put(result.sha256(), result.file());
