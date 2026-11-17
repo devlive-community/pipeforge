@@ -65,3 +65,19 @@ default (`pipeforge.master.metrics-interval`).
 
 <Screenshot name="run-metrics" alt="The metrics of a run over time" />
 
+The **Execution plan** tab (`/runs/<id>?tab=plan`) draws the run's job as a graph with its numbers
+on it:
+
+- under each node, the rows it has given (for a sink, the rows it has taken) and its current rate
+- the edges are as thick as the rate of the node they come from, so the busy paths stand out
+- the node the [run analysis](../concepts/plan-and-explain#run-analysis) finds to be the bottleneck
+  has a warning border and mark; the conclusion, evidence and advice follow below the graph
+
+Choose a node to see its rows in and out, filtered and added by expansion, bad rows skipped, bytes
+in and out, and rates in and out. The chosen node is part of the address
+(`/runs/<id>?tab=plan&node=warehouse`). A node's counters add up all of its parallel subtasks.
+How busy each node is and where it waits are not measured per node yet; the overview shows the
+waits of the whole run.
+
+<Screenshot name="run-plan" alt="The execution plan of a run with the bottleneck marked" />
+

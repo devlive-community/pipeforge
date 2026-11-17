@@ -61,6 +61,11 @@ const PAGES: Shot[] = [
     path: `/runs/${RUN_ID}?tab=metrics`,
     ready: { "en-US": "warehouse", "zh-CN": "warehouse" },
   },
+  {
+    name: "run-plan",
+    path: `/runs/${RUN_ID}?tab=plan&node=warehouse`,
+    ready: { "en-US": "Bytes out", "zh-CN": "输出字节" },
+  },
   { name: "error-codes", path: "/errors", ready: { "en-US": "28 codes", "zh-CN": "28 个错误码" } },
   {
     name: "field-mapping",

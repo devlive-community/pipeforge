@@ -20,6 +20,12 @@ export interface DagNode {
   status?: "ok" | "error" | "warning";
   /** The accessible name of the node button. */
   label: string;
+  /** A short line under the node, such as its rows and rate. */
+  metric?: string;
+  /** Marks the node, such as the bottleneck of a run. */
+  emphasis?: boolean;
+  /** The node is the selected one. */
+  selected?: boolean;
 }
 
 const KIND_ICONS: Record<DagNode["kind"], IconName> = { source: "source", transform: "transform", sink: "sink" };
@@ -39,9 +45,12 @@ export function DagCanvas({
   label,
   labels,
   onSelect,
+  edgeWidth,
   className,
 }: {
   nodes: DagNode[];
+  /** The width of the edge from one node to another, 1 to 8; 2 when not given. */
+  edgeWidth?: (from: string, to: string) => number | undefined;
   label: string;
   labels: { zoomIn: string; zoomOut: string; fit: string };
   onSelect?: (id: string) => void;
@@ -126,7 +135,7 @@ export function DagCanvas({
                     d={edgePath(from, to)}
                     fill="none"
                     stroke="var(--dag-line)"
-                    strokeWidth={2}
+                    strokeWidth={Math.min(8, Math.max(1, edgeWidth?.(input, node.id) ?? 2))}
                   />
                 ) : null;
               }),
@@ -140,6 +149,7 @@ export function DagCanvas({
                 key={node.id}
                 type="button"
                 aria-label={node.label}
+                aria-pressed={onSelect && node.selected !== undefined ? node.selected : undefined}
                 data-kind={node.kind}
                 onClick={() => onSelect?.(node.id)}
                 className={cx(
@@ -147,9 +157,12 @@ export function DagCanvas({
                   "transition-colors duration-fast ease-out hover:border-primary",
                   node.status === "error"
                     ? "border-danger"
-                    : node.status === "warning"
+                    : node.status === "warning" || node.emphasis
                       ? "border-warning"
-                      : "border-border",
+                      : node.selected
+                        ? "border-primary"
+                        : "border-border",
+                  node.emphasis && "ring-2 ring-warning-soft",
                 )}
                 style={{ left: p.x, top: p.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
               >
@@ -161,6 +174,12 @@ export function DagCanvas({
                   <span className="block truncate text-xs text-fg-muted">{node.detail}</span>
                 </span>
                 {node.status === "error" ? <Icon name="alert" className="ml-auto shrink-0 text-danger" /> : null}
+                {node.emphasis ? <Icon name="alert" className="ml-auto shrink-0 text-warning" /> : null}
+                {node.metric ? (
+                  <span className="absolute inset-x-0 top-full mt-1 truncate text-center text-xs tabular-nums text-fg-muted">
+                    {node.metric}
+                  </span>
+                ) : null}
               </button>
             );
           })}

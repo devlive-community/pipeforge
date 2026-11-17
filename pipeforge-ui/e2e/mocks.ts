@@ -291,7 +291,26 @@ export function runs() {
 export const RUN_ID = "3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01";
 
 function runDetail() {
-  return { run: runs().runs[0], transitions: [] };
+  return {
+    run: runs().runs[0],
+    definition: [
+      "version: 1",
+      "name: orders-daily",
+      "env:",
+      "  parallelism: 4",
+      "source:",
+      "  - id: orders",
+      "    type: mysql",
+      "transform:",
+      "  - id: enrich",
+      "    type: field-mapper",
+      "sink:",
+      "  - id: warehouse",
+      "    type: postgresql",
+      "",
+    ].join("\n"),
+    transitions: [],
+  };
 }
 
 function runMetrics() {
@@ -311,9 +330,36 @@ function runMetrics() {
     splitsTotal: 16,
     splitsFinished: 9,
     nodes: [
-      { node: "orders", rowsIn: 0, rowsOut: 4_812_000 },
-      { node: "enrich", rowsIn: 4_812_000, rowsOut: 4_790_500 },
-      { node: "warehouse", rowsIn: 4_790_500, rowsOut: 4_790_500 },
+      {
+        node: "orders",
+        rowsIn: 0,
+        rowsOut: 4_812_000,
+        rowsFiltered: 0,
+        rowsExpanded: 0,
+        rowsDirty: 0,
+        bytesIn: 0,
+        bytesOut: 1_203_000_000,
+      },
+      {
+        node: "enrich",
+        rowsIn: 4_812_000,
+        rowsOut: 4_790_500,
+        rowsFiltered: 21_488,
+        rowsExpanded: 0,
+        rowsDirty: 12,
+        bytesIn: 1_203_000_000,
+        bytesOut: 1_149_720_000,
+      },
+      {
+        node: "warehouse",
+        rowsIn: 4_790_500,
+        rowsOut: 4_790_500,
+        rowsFiltered: 0,
+        rowsExpanded: 0,
+        rowsDirty: 0,
+        bytesIn: 1_149_720_000,
+        bytesOut: 0,
+      },
     ],
   };
 }
@@ -325,7 +371,11 @@ function runAnalysis() {
     status: "RUNNING",
     windowFromMs: 85_000,
     windowToMs: 95_000,
-    rates: [],
+    rates: [
+      { node: "orders", rowsInPerSecond: 0, rowsOutPerSecond: 50_650 },
+      { node: "enrich", rowsInPerSecond: 50_650, rowsOutPerSecond: 50_420 },
+      { node: "warehouse", rowsInPerSecond: 50_420, rowsOutPerSecond: 50_420 },
+    ],
     bottleneck: {
       kind: "TARGET",
       node: "warehouse",

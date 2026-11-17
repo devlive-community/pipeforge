@@ -91,4 +91,27 @@ describe("DagCanvas", () => {
     await screen.findByRole("group");
     expect(layer.style.transform).not.toBe(before);
   });
+
+  it("shows metrics under nodes, marks one and sizes the edges", () => {
+    const nodes: DagNode[] = [
+      { id: "a", kind: "source", detail: "fake", inputs: [], label: "a", metric: "10 rows" },
+      { id: "b", kind: "sink", detail: "jdbc", inputs: ["a"], label: "b", emphasis: true, selected: true },
+    ];
+    const { container } = render(
+      <DagCanvas
+        nodes={nodes}
+        label="Graph"
+        labels={{ zoomIn: "In", zoomOut: "Out", fit: "Fit" }}
+        onSelect={() => {}}
+        edgeWidth={() => 20}
+      />,
+    );
+    expect(screen.getByText("10 rows")).toBeInTheDocument();
+    const marked = screen.getByRole("button", { name: "b" });
+    expect(marked).toHaveClass("border-warning");
+    expect(marked).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "a" })).not.toHaveAttribute("aria-pressed");
+    // widths are kept between 1 and 8
+    expect(container.querySelector("path")).toHaveAttribute("stroke-width", "8");
+  });
 });

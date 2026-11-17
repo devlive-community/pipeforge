@@ -175,7 +175,8 @@
     "back": "Runs",
     "tabs": {
       "overview": "Overview",
-      "metrics": "Metrics"
+      "metrics": "Metrics",
+      "plan": "Execution plan"
     },
     "facts": {
       "state": "State",
@@ -240,7 +241,22 @@
     "rowsIn": "Rows in",
     "rowsOut": "Rows out",
     "notFound": "There is no run {id}.",
-    "failed": "The run cannot be loaded: {message}"
+    "failed": "The run cannot be loaded: {message}",
+    "plan": {
+      "graph": "Execution graph of the run",
+      "node": "Node",
+      "nodeMetric": "{rows} rows · {rate}/s",
+      "nodeBottleneck": "{id}, {kind} {type}, the bottleneck of the run",
+      "choose": "Choose a node in the graph to see its rows, bytes and rates.",
+      "isBottleneck": "The run analysis finds this node to be the bottleneck; see below.",
+      "filtered": "Filtered out",
+      "expanded": "Added by expansion",
+      "bytesIn": "Bytes in",
+      "bytesOut": "Bytes out",
+      "rateIn": "Rate in",
+      "rateOut": "Rate out",
+      "noDefinition": "The server has no definition of this run, so there is no graph to show."
+    }
   },
   "plugins": {
     "title": "Plugins",

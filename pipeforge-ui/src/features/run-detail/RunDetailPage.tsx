@@ -15,7 +15,9 @@ import { useT } from "@/i18n";
 import { usePreferences } from "@/state/preferences";
 import { Card, DescriptionList, Empty, PageHeader, Table, Tabs } from "@/ui";
 import { LoadingPanel } from "@/ui/LoadingPanel";
-import { evidenceValue, isAdviceCode, rates, waitShare, type RunAnalysis } from "./analysis";
+import { rates, waitShare, type RunAnalysis } from "./analysis";
+import { BottleneckCard } from "./Bottleneck";
+import { PlanTab } from "./PlanTab";
 
 const TERMINAL: RunState[] = ["SUCCESS", "FAILED", "CANCELLED", "TIMEOUT"];
 
@@ -40,7 +42,6 @@ function Overview({ metrics, analysis }: { metrics: RunMetrics | undefined; anal
   const language = usePreferences((s) => s.language);
   const total = metrics?.splitsTotal ?? 0;
   const finished = metrics?.splitsFinished ?? 0;
-  const bottleneck = analysis?.bottleneck;
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
       <Card title={t("runDetail.rows")}>
@@ -93,55 +94,7 @@ function Overview({ metrics, analysis }: { metrics: RunMetrics | undefined; anal
           <LoadingPanel className="min-h-24" />
         )}
       </Card>
-      <Card title={t("runDetail.bottleneck")} className="lg:col-span-2">
-        {bottleneck ? (
-          <div className="space-y-3">
-            <div>
-              <p className="font-medium text-fg">
-                <span>{t(`runDetail.kinds.${bottleneck.kind}`)}</span>
-                {bottleneck.node ? (
-                  <span className="ml-2 font-mono text-sm text-fg-muted">
-                    {t("runDetail.at", { node: bottleneck.node })}
-                  </span>
-                ) : null}
-              </p>
-              <p className="mt-0.5 text-sm text-fg-muted">{t(`runDetail.kindHints.${bottleneck.kind}`)}</p>
-            </div>
-            {bottleneck.evidence.length > 0 ? (
-              <div>
-                <h3 className="text-xs font-medium text-fg-muted">{t("runDetail.evidence")}</h3>
-                <ul className="mt-1 flex flex-wrap gap-2 text-sm">
-                  {bottleneck.evidence.map((e) => (
-                    <li key={`${e.metric}/${e.node ?? ""}`} className="rounded-control bg-surface-2 px-2 py-0.5">
-                      <span className="font-mono text-xs text-fg-muted">
-                        {e.node ? `${e.node} · ` : ""}
-                        {e.metric}
-                      </span>{" "}
-                      <span className="tabular-nums text-fg">{evidenceValue(e.metric, e.value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {bottleneck.advice.length > 0 ? (
-              <div>
-                <h3 className="text-xs font-medium text-fg-muted">{t("runDetail.advice")}</h3>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-fg">
-                  {bottleneck.advice.map((a) => (
-                    <li key={a.code}>
-                      {isAdviceCode(a.code)
-                        ? t(`runDetail.adviceCodes.${a.code}`, { node: bottleneck.node ?? "" })
-                        : a.text}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-sm text-fg-muted">{t("runDetail.noAnalysis")}</p>
-        )}
-      </Card>
+      <BottleneckCard analysis={analysis} className="lg:col-span-2" />
     </div>
   );
 }
@@ -236,7 +189,13 @@ export function RunDetailPage() {
   const language = usePreferences((s) => s.language);
   const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "metrics" ? "metrics" : "overview";
+  const requested = params.get("tab");
+  const tab = requested === "metrics" || requested === "plan" ? requested : "overview";
+  const select = (node: string) => {
+    const changed = new URLSearchParams(params);
+    changed.set("node", node);
+    setParams(changed, { replace: true });
+  };
   const detail = useRun(id);
   const run = detail.data?.run;
   const live = run ? !TERMINAL.includes(run.status as RunState) : true;
@@ -302,6 +261,7 @@ export function RunDetailPage() {
           const changed = new URLSearchParams(params);
           if (next === "overview") changed.delete("tab");
           else changed.set("tab", next);
+          changed.delete("node");
           setParams(changed, { replace: true });
         }}
         tabs={[
@@ -319,6 +279,19 @@ export function RunDetailPage() {
             id: "metrics",
             label: t("runDetail.tabs.metrics"),
             content: <Metrics id={id} live={live} metrics={metrics.data} />,
+          },
+          {
+            id: "plan",
+            label: t("runDetail.tabs.plan"),
+            content: (
+              <PlanTab
+                definition={detail.data?.definition}
+                metrics={metrics.data}
+                analysis={analysis.isError ? undefined : (analysis.data as unknown as RunAnalysis | undefined)}
+                selected={params.get("node")}
+                onSelect={select}
+              />
+            ),
           },
         ]}
       />

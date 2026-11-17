@@ -102,4 +102,8 @@ test("opens a run from the list and switches to its metrics", async ({ page }) =
   await page.getByRole("tab", { name: "Metrics" }).click();
   await expect(page).toHaveURL(/tab=metrics/);
   await expect(page.getByRole("img", { name: /Read and write rates/ })).toBeVisible();
+  await page.getByRole("tab", { name: "Execution plan" }).click();
+  await page.getByRole("button", { name: /^warehouse, sink postgresql, the bottleneck/ }).click();
+  await expect(page).toHaveURL(/tab=plan&node=warehouse/);
+  await expect(page.getByText("The run analysis finds this node to be the bottleneck; see below.")).toBeVisible();
 });

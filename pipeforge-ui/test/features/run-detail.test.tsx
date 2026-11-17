@@ -8,6 +8,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { evidenceValue, rates, waitShare } from "@/features/run-detail/analysis";
+import { edgeWidthFor, formatBytes } from "@/features/run-detail/PlanTab";
 import { usePreferences } from "@/state/preferences";
 import { fakeServer, renderApp } from "../render";
 
@@ -49,7 +50,10 @@ const ANALYSIS = {
   status: "RUNNING",
   windowFromMs: 0,
   windowToMs: 60_000,
-  rates: [],
+  rates: [
+    { node: "in", rowsInPerSecond: 0, rowsOutPerSecond: 2000 },
+    { node: "out", rowsInPerSecond: 1966.7, rowsOutPerSecond: 1966.7 },
+  ],
   bottleneck: {
     kind: "TARGET",
     node: "out",
@@ -67,9 +71,20 @@ const SAMPLES = [
   { at: "2026-11-17T08:00:30Z", rowsRead: 40_000, rowsWritten: 39_000 },
 ];
 
+const DEFINITION = `version: 1
+name: orders-daily
+source:
+  - id: in
+    type: fake
+sink:
+  - id: out
+    type: jdbc
+    inputs: [in]
+`;
+
 function server(overrides: Record<string, unknown> = {}) {
   return fakeServer({
-    [`/api/v1/runs/${ID}`]: { run: RUN, transitions: [] },
+    [`/api/v1/runs/${ID}`]: { run: RUN, definition: DEFINITION, transitions: [] },
     [`/api/v1/runs/${ID}/metrics`]: METRICS,
     [`/api/v1/runs/${ID}/analysis`]: ANALYSIS,
     [`/api/v1/runs/${ID}/metrics/history`]: SAMPLES,
@@ -110,6 +125,36 @@ describe("RunDetailPage", () => {
     expect(screen.getByRole("img", { name: /40,000 rows read and 39,000 rows written/ })).toBeInTheDocument();
     const nodes = screen.getByRole("table", { name: "Nodes" });
     expect(within(nodes).getAllByText("118,000")).toHaveLength(2);
+  });
+
+  it("draws the execution graph with rows, rates and the bottleneck", async () => {
+    server();
+    const { router } = renderApp(`/runs/${ID}?tab=plan`);
+    const graph = await screen.findByRole("group", { name: "Execution graph of the run" });
+    expect(within(graph).getByText("120K rows · 2K/s")).toBeInTheDocument();
+    // a sink shows the rows it took
+    expect(within(graph).getByText("118K rows · 2K/s")).toBeInTheDocument();
+    const sink = within(graph).getByRole("button", { name: "out, sink jdbc, the bottleneck of the run" });
+    expect(screen.getByText("Choose a node in the graph to see its rows, bytes and rates.")).toBeInTheDocument();
+    expect(screen.getByText("The target is the slowest part")).toBeInTheDocument();
+
+    await userEvent.click(sink);
+    expect(router.state.location.search).toBe("?tab=plan&node=out");
+    expect(sink).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { level: 2, name: "out" })).toBeInTheDocument();
+    expect(screen.getByText("The run analysis finds this node to be the bottleneck; see below.")).toBeInTheDocument();
+    expect(screen.getAllByText("1,967 rows/s")).toHaveLength(2);
+
+    await userEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    expect(router.state.location.search).toBe("");
+  });
+
+  it("explains a run without a definition", async () => {
+    server({ [`/api/v1/runs/${ID}`]: { run: RUN, transitions: [] } });
+    renderApp(`/runs/${ID}?tab=plan`);
+    expect(
+      await screen.findByText("The server has no definition of this run, so there is no graph to show."),
+    ).toBeInTheDocument();
   });
 
   it("explains a chart without samples and a run without analysis", async () => {
@@ -158,5 +203,15 @@ describe("run analysis helpers", () => {
     expect(evidenceValue("rowsRead", 1234.56)).toBe("1,234.6");
     expect(waitShare({ elapsedMs: 0, parallelism: 1 }, 10)).toBe(0);
     expect(waitShare({ elapsedMs: 1000, parallelism: 1 }, 5000)).toBe(1);
+  });
+
+  it("sizes edges by rate and formats bytes", () => {
+    expect(edgeWidthFor(undefined, 100)).toBeUndefined();
+    expect(edgeWidthFor(0, 100)).toBe(1.5);
+    expect(edgeWidthFor(100, 100)).toBe(8);
+    expect(edgeWidthFor(50, 0)).toBeUndefined();
+    expect(formatBytes(512, "en-US")).toBe("512 B");
+    expect(formatBytes(1536, "en-US")).toBe("1.5 KiB");
+    expect(formatBytes(3.2 * 1024 ** 3, "en-US")).toBe("3.2 GiB");
   });
 });

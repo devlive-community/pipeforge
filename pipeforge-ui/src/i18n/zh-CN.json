@@ -175,7 +175,8 @@
     "back": "运行",
     "tabs": {
       "overview": "概览",
-      "metrics": "指标"
+      "metrics": "指标",
+      "plan": "执行计划"
     },
     "facts": {
       "state": "状态",
@@ -240,7 +241,22 @@
     "rowsIn": "输入行数",
     "rowsOut": "输出行数",
     "notFound": "不存在运行 {id}。",
-    "failed": "无法加载运行：{message}"
+    "failed": "无法加载运行：{message}",
+    "plan": {
+      "graph": "运行的执行图",
+      "node": "节点",
+      "nodeMetric": "{rows} 行 · {rate}/秒",
+      "nodeBottleneck": "{id}，{kind} {type}，运行的瓶颈",
+      "choose": "在图中选择一个节点，查看它的行数、字节数和速率。",
+      "isBottleneck": "运行分析认为这个节点是瓶颈，详见下方。",
+      "filtered": "过滤掉的行",
+      "expanded": "展开新增的行",
+      "bytesIn": "输入字节",
+      "bytesOut": "输出字节",
+      "rateIn": "输入速率",
+      "rateOut": "输出速率",
+      "noDefinition": "服务端没有这次运行的定义，无法显示执行图。"
+    }
   },
   "plugins": {
     "title": "插件",
