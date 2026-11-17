@@ -82,6 +82,8 @@
   docs: ["plugins/source/postgres", "plugins/sink/postgres"]
 - paths: ["pipeforge-connectors/connector-postgres/src/main/java/org/devlive/pipeforge/connector/postgres/PostgresDialect.java"]
   docs: ["development/jdbc-dialects"]
+- paths: ["pipeforge-connectors/connector-jdbc-generic/**"]
+  docs: ["plugins/source/jdbc"]
 - paths: ["pipeforge-connector-testkit/**"]
   docs: ["development/testkit"]
 # Plugins: every plugin module has its page; the conventions of plugin builds are part of packaging.

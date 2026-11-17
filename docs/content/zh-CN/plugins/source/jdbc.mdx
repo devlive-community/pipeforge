@@ -1,0 +1,138 @@
+---
+title: JDBC Source
+description: 用 ANSI SQL 并行分片读取任何有 JDBC 驱动的数据库：一张表、一次读多张表，或者一个查询。
+order: 40
+template: plugin
+---
+
+## 简介
+
+通用 JDBC Source（`type: jdbc`）使用 ANSI SQL 和标准 JDBC 类型，读取任何有 JDBC 驱动的数据库中的表：一张表、名称匹配某个模式的所有表，
+或者一个查询的结果。它把表按键范围切分成分片，由各个读取器共同领取，并以流式方式读取行。
+
+适用于没有专用插件的数据库。已有专用插件的数据库，例如 [MySQL](./mysql) 或 [PostgreSQL](./postgres)，请优先使用专用插件：
+它们了解数据库的类型、流式读取方式和错误。插件以 H2 验证；其他数据库只要遵循 ANSI SQL（双引号名称、`schema.table`），
+且驱动报告标准 JDBC 类型，就可以使用。
+
+## 能力
+
+<PluginCapabilities plugin="jdbc" component="source" />
+
+## 已验证版本
+
+<PluginVersions plugin="jdbc" />
+
+## 快速开始
+
+先把数据库的驱动安装为驱动插件（见[前置条件](#前置条件)），然后：
+
+```yaml
+version: 1
+name: h2-to-console
+source:
+  - id: orders
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/shop
+    username: sa
+    password: ${env:DB_PASSWORD}
+    table: public.orders
+sink:
+  - { id: out, type: console }
+```
+
+## 前置条件
+
+- **作为[驱动插件](../../concepts/plugins#驱动插件)安装的 JDBC 驱动。** 插件不带任何驱动，会使用所有已安装的驱动插件
+  （`requires: { drivers: any }`）；由接受作业 URL 的驱动建立连接，或者使用 `driver` 选项指定的类。以 H2 为例：
+
+  ```text
+  plugins/h2-2.2.224/
+  ├── plugin.yaml      id: h2, provides: [{ type: driver, identifier: h2, class: org.h2.Driver }]
+  └── lib/h2-2.2.224.jar
+  ```
+
+  没有驱动接受该 URL 时，作业以 `PF-PLUG-0003` 失败。
+- **网络连通**：Master 和 Worker 都能访问数据库，并且用户有读取表的权限。
+
+## 数据源配置
+
+节点通过 `url`、`username` 和 `password` 连接；有多个已安装的驱动接受该 URL 时，用 `driver` 指定驱动类。驱动属性写在
+`jdbc.properties.<名称>` 中，原样传给驱动：通用方言既不设置默认属性，也没有受控属性。密码不会出现在日志、指标和导出的作业中。
+
+## 节点选项
+
+<PluginOptions plugin="jdbc" component="source" />
+
+## 原生配置项目录
+
+<PluginNativeOptions plugin="jdbc" />
+
+## 类型映射
+
+<PluginTypeMapping plugin="jdbc" />
+
+## 分片与并行
+
+- `split.mode: range`（默认）时，表按 `split.column` 切分；未设置时，如果主键是单个整数列则按主键切分。Source 读取该列的 `MIN` 和 `MAX`，
+  把范围切成 `split.count` 份（默认每个读取器四份）；列可为空时，另有一个分片读取 `NULL` 值。
+- 没有这样的列的表、`split.mode: none` 以及 `query` 都在一个分片中读取。
+- 使用 `tables.include` 时，每张表单独切分，所有表的分片共用一个队列；`INFORMATION_SCHEMA` 永远不会被选中。
+- 每次读取 `fetch-size` 行。有些驱动只在特定条件下流式读取（在事务中、特殊的 fetch size），专用插件会处理这些条件，通用插件不会。
+
+## 一致性语义
+
+每个分片是一个独立的查询，因此读取期间仍在变化的表可能读到不同时刻的行；键在分片之间移动的行可能被读两次或者没有读到。
+需要精确复制时，请读取期间没有写入的表。读取器从 checkpoint 恢复时，不会再次读取已完成的分片，正在读取的分片从头读取。
+
+## 示例
+
+### 读取一个 Schema 中的所有表
+
+```yaml
+version: 1
+name: h2-copy
+source:
+  - id: all
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/shop
+    username: sa
+    password: ${env:DB_PASSWORD}
+    driver: org.h2.Driver
+    tables.include: ["PUBLIC\\..*"]
+    split.count: 16
+sink:
+  - { id: out, type: console }
+```
+
+名称按数据库报告的形式完整匹配：H2 报告大写名称，除非建表时加了引号。
+
+## 指标
+
+Source 报告标准的 Source 指标：`rowsRead`、读取速率，以及已分配和已完成的分片数。值无法读取的行计为坏行，按作业的
+[脏数据策略](../../concepts/dirty-data)处理。
+
+## 性能与调优
+
+- 把 `split.count` 设为并行度的几倍，并在有索引的整数列上切分。
+- 驱动支持时可以调大 `fetch-size`；读取大表时确认内存保持平稳，因为忽略该设置的驱动可能把整个结果读入内存。
+
+## 错误码与排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| `PF-PLUG-0003` | 没有已安装的驱动插件接受该 URL，或者 `driver` 指定的类不在任何驱动插件中 |
+| `PF-CONN-0001` | 无法连接数据库或连接被拒绝 |
+| `PF-AUTH-0001` | 用户名或密码错误 |
+| `PF-META-0001` | 表不存在，或者用户看不到它 |
+| `PF-DATA-0001` | 某列的类型不属于标准 JDBC 类型，例如数组或 JSON |
+
+## 已知限制
+
+- 只支持 ANSI SQL：名称引用方式不同、或者驱动报告厂商类型的数据库需要专用插件。
+- 不支持数组、Map、Row 和 JSON。
+- 只支持有界读取。
+- 只验证了 H2。
+
+## 变更记录
+
+<PluginChangelog plugin="jdbc" />

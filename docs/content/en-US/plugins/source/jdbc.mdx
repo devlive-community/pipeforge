@@ -1,0 +1,153 @@
+---
+title: JDBC source
+description: Read tables of any database with a JDBC driver — one, many at once, or a query — in parallel splits, with ANSI SQL.
+order: 40
+template: plugin
+---
+
+## Introduction
+
+The generic JDBC source (`type: jdbc`) reads tables of any database that has a JDBC driver, with
+ANSI SQL and the standard JDBC types: one table, every table whose name matches a pattern, or the
+result of a query. It splits tables into key ranges that the readers share, and streams the rows.
+
+Use it for databases without a plugin of their own. Where a dedicated plugin exists, such as
+[MySQL](./mysql) or [PostgreSQL](./postgres), prefer it: it knows the database's types, streaming
+and errors. The plugin is verified with H2; other databases work as far as they follow ANSI SQL
+(double-quoted names, `schema.table`) and their drivers report the standard JDBC types.
+
+## Capabilities
+
+<PluginCapabilities plugin="jdbc" component="source" />
+
+## Verified versions
+
+<PluginVersions plugin="jdbc" />
+
+## Quick start
+
+Install the database's driver as a driver plugin (see [Prerequisites](#prerequisites)), then:
+
+```yaml
+version: 1
+name: h2-to-console
+source:
+  - id: orders
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/shop
+    username: sa
+    password: ${env:DB_PASSWORD}
+    table: public.orders
+sink:
+  - { id: out, type: console }
+```
+
+## Prerequisites
+
+- **The JDBC driver as a [driver plugin](../../concepts/plugins#driver-plugins).** The plugin ships
+  no driver and takes every installed driver plugin (`requires: { drivers: any }`); the driver that
+  accepts the job's URL connects, or the class the `driver` option names. For H2:
+
+  ```text
+  plugins/h2-2.2.224/
+  ├── plugin.yaml      id: h2, provides: [{ type: driver, identifier: h2, class: org.h2.Driver }]
+  └── lib/h2-2.2.224.jar
+  ```
+
+  Without a driver that accepts the URL, the job fails with `PF-PLUG-0003`.
+- **Network access** from the master and the workers, and a user that may read the tables.
+
+## Data source configuration
+
+The node connects with `url`, `username` and `password`; `driver` names the driver class when more
+than one installed driver accepts the URL. Properties of the driver go into
+`jdbc.properties.<name>` and are passed as they are: the generic dialect sets none and controls none.
+The password never appears in logs, metrics or exported jobs.
+
+## Node options
+
+<PluginOptions plugin="jdbc" component="source" />
+
+## Native options
+
+<PluginNativeOptions plugin="jdbc" />
+
+## Type mapping
+
+<PluginTypeMapping plugin="jdbc" />
+
+## Splits and parallelism
+
+- With `split.mode: range` (the default) a table is split on `split.column`, or on its primary key
+  when that is a single integer column. The source reads its `MIN` and `MAX` and cuts the range into
+  `split.count` parts (four per reader by default), plus one split for `NULL` values when the
+  column is nullable.
+- A table without such a column, `split.mode: none` and a `query` are read in one split.
+- With `tables.include` every table is split on its own and the splits of all tables share one queue;
+  `INFORMATION_SCHEMA` is never selected.
+- Rows are fetched `fetch-size` at a time. Some drivers stream only under conditions of their own
+  (a transaction, a special fetch size); the dedicated plugins handle those, the generic one does not.
+
+## Consistency
+
+Each split is a separate query, so a table that changes while it is read can show rows from
+different moments, and a row whose key moves between splits can be read twice or not at all. Read a
+table that is not written meanwhile when the copy must be exact. A reader restored from a checkpoint
+does not read its finished splits again and reads the split in progress from its start.
+
+## Examples
+
+### Every table of a schema
+
+```yaml
+version: 1
+name: h2-copy
+source:
+  - id: all
+    type: jdbc
+    url: jdbc:h2:tcp://db.example.com/shop
+    username: sa
+    password: ${env:DB_PASSWORD}
+    driver: org.h2.Driver
+    tables.include: ["PUBLIC\\..*"]
+    split.count: 16
+sink:
+  - { id: out, type: console }
+```
+
+Names are matched whole, as the database reports them: H2 reports upper-case names unless they were
+quoted when created.
+
+## Metrics
+
+The source reports the standard source metrics: `rowsRead`, the read rate and splits assigned and
+finished. Rows whose values cannot be read count as bad rows and follow the job's
+[dirty data policy](../../concepts/dirty-data).
+
+## Performance and tuning
+
+- Set `split.count` to a few times the parallelism and split on an indexed integer column.
+- Raise `fetch-size` when the driver honours it; check that memory stays flat on large tables, since
+  a driver that ignores it may load a whole result.
+
+## Errors and troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| `PF-PLUG-0003` | No installed driver plugin accepts the URL, or the class `driver` names is not in one |
+| `PF-CONN-0001` | The database cannot be reached or refused the connection |
+| `PF-AUTH-0001` | Wrong user or password |
+| `PF-META-0001` | The table does not exist or the user cannot see it |
+| `PF-DATA-0001` | A column has a type outside the standard JDBC types, such as arrays or JSON |
+
+## Known limitations
+
+- ANSI SQL only: databases that quote names differently, or whose drivers report vendor types,
+  need a dedicated plugin.
+- No arrays, maps, rows or JSON.
+- Bounded reads only.
+- Only H2 is verified.
+
+## Changelog
+
+<PluginChangelog plugin="jdbc" />

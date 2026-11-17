@@ -21,7 +21,7 @@ tar -xzf pipeforge-dist/target/pipeforge-0.1.0-SNAPSHOT.tar.gz
 | `bin/` | `pipeforge` (the command) and `pipeforge-master`, `pipeforge-worker`, `pipeforge-standalone` as `.sh` and `.cmd` |
 | `conf/` | `pipeforge.yaml`, `master.yaml`, `worker.yaml`, `logback.xml`, `jvm.options` |
 | `lib/` | the libraries; `lib/logback/` the logging of the cluster processes, `lib/server/` the server |
-| `plugins/` | the plugins the master offers, and the [driver plugins](../concepts/plugins#driver-plugins) you install: `fake`, `mysql` (with the driver plugin installed separately), `postgres`, `field-mapper`, `console`, `blackhole` |
+| `plugins/` | the plugins the master offers, and the [driver plugins](../concepts/plugins#driver-plugins) you install: `fake`, `mysql` (with the driver plugin installed separately), `postgres`, `jdbc` (with the drivers you install), `field-mapper`, `console`, `blackhole` |
 | `logs/`, `run/`, `data/` | created at the first start: logs, process IDs, plugin caches |
 
 The processes need Java 21 or later; `JAVA_HOME` selects the runtime.

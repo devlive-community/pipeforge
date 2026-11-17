@@ -86,7 +86,7 @@ driver the plugin does not load and the job fails with
 [`PF-PLUG-0003`](../reference/errors#pf-plug-0003). On a cluster the master sends the driver's
 package to the workers together with the plugin.
 
-A plugin whose users bring their own driver, such as a generic JDBC plugin,
+A plugin whose users bring their own driver, such as the generic [JDBC plugin](../plugins/source/jdbc),
 writes `requires: { drivers: any }`: its class loader gets the newest version of every installed
 driver plugin, in the order of their ids, and the plugin picks the driver it needs, for example by
 the URL. It loads without any driver; a job fails with `PF-PLUG-0003` only when no installed driver

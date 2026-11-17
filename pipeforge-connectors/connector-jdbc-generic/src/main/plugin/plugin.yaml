@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+id: jdbc
+name: JDBC
+version: 0.1.0-SNAPSHOT
+api-version: "0.x"
+vendor: PipeForge
+license: MIT
+description: Reads tables of any database with a JDBC driver, many at once, in parallel splits, with ANSI SQL. Users install the driver as a driver plugin.
+provides:
+  - { type: source, identifier: jdbc, class: org.devlive.pipeforge.connector.jdbc.generic.JdbcGenericSourceFactory }
+# verified with H2; other databases work as far as they follow ANSI SQL
+datasource:
+  type: h2
+  versions: ["2.2"]
+requires:
+  drivers: any

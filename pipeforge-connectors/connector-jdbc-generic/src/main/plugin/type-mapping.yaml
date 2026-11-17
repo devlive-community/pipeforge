@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# How the generic JDBC source reads the standard JDBC types (java.sql.Types) the driver reports.
+read:
+  - { external: "BIT, BOOLEAN", logical: BOOLEAN }
+  - { external: TINYINT, logical: INT8 }
+  - { external: SMALLINT, logical: INT16 }
+  - { external: INTEGER, logical: INT32 }
+  - { external: BIGINT, logical: INT64 }
+  - { external: REAL, logical: FLOAT32 }
+  - { external: "FLOAT, DOUBLE", logical: FLOAT64 }
+  - { external: "NUMERIC(p, s), DECIMAL(p, s)", logical: "DECIMAL(p, s)", note: "without a precision, or above 38 digits: DECIMAL(38, s)" }
+  - { external: "CHAR(n), VARCHAR(n), NCHAR(n), NVARCHAR(n)", logical: "STRING(n)" }
+  - { external: "LONGVARCHAR, CLOB, NCLOB", logical: STRING }
+  - { external: "BINARY(n), VARBINARY(n)", logical: "BYTES(n)" }
+  - { external: "LONGVARBINARY, BLOB", logical: BYTES }
+  - { external: DATE, logical: DATE }
+  - { external: "TIME(p)", logical: "TIME(p)" }
+  - { external: "TIMESTAMP(p)", logical: "TIMESTAMP(p)" }
+  - { external: "TIMESTAMP WITH TIME ZONE(p)", logical: "TIMESTAMP_LTZ(p)" }
