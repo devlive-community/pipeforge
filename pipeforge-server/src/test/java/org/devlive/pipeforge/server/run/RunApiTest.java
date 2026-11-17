@@ -343,4 +343,78 @@ class RunApiTest {
         assertThat((Integer) JsonPath.read(cluster, "$.slotsUsed")).isEqualTo(1);
         assertThat((Double) JsonPath.read(cluster, "$.usage")).isEqualTo(0.25);
     }
+
+    String preview(String yaml, String extra, int status) throws Exception {
+        String body = "{\"definition\": \""
+                + yaml.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"" + extra + "}";
+        return mvc.perform(post("/api/v1/jobs/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().is(status))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    static final String DOWN =
+            """
+            version: 1
+            name: preview
+            source:
+              - id: src
+                type: fake
+                table: shop.orders
+                columns:
+                  - id INT64 NOT NULL
+                  - amount DECIMAL(10, 2)
+                %s
+            sink:
+              - { id: out, type: down }
+            """;
+
+    @Test
+    void aDryRunShowsWhatTheSinkWouldReceiveAndWritesNothing() throws Exception {
+        String result = preview(DOWN.formatted("rows: 30"), "", 200);
+        assertThat((String) JsonPath.read(result, "$.outcome"))
+                .as("the down sink never ran")
+                .isEqualTo("COMPLETE");
+        assertThat((String) JsonPath.read(result, "$.node")).isEqualTo("src");
+        assertThat((String) JsonPath.read(result, "$.tables[0].table")).isEqualTo("shop.orders");
+        assertThat((List<String>) JsonPath.read(result, "$.tables[0].columns[*].name"))
+                .containsExactly("id", "amount");
+        assertThat((List<Object>) JsonPath.read(result, "$.tables[0].rows")).hasSize(30);
+        assertThat((Object) JsonPath.read(result, "$.tables[0].rows[0][1]"))
+                .as("decimals as text")
+                .isInstanceOf(String.class);
+        assertThat((Integer) JsonPath.read(result, "$.rowsRead")).isEqualTo(30);
+        assertThat((Object) JsonPath.read(result, "$.error")).isNull();
+    }
+
+    @Test
+    void aPreviewStopsAtTheLimitOrTheTimeout() throws Exception {
+        String limited = preview(DOWN.formatted("unbounded: true"), ", \"limit\": 10", 200);
+        assertThat((String) JsonPath.read(limited, "$.outcome")).isEqualTo("LIMIT");
+        assertThat((List<Object>) JsonPath.read(limited, "$.tables[0].rows")).hasSize(10);
+
+        String slow = preview(
+                DOWN.formatted("unbounded: true\n    rows-per-second: 2"),
+                ", \"limit\": 100, \"timeoutSeconds\": 1",
+                200);
+        assertThat((String) JsonPath.read(slow, "$.outcome")).isEqualTo("TIMEOUT");
+        assertThat((List<Object>) JsonPath.read(slow, "$.tables[0].rows")).hasSizeLessThan(100);
+    }
+
+    @Test
+    void previewsANodeAndRefusesUnknownNodesAndInvalidJobs() throws Exception {
+        String node = preview(DOWN.formatted("rows: 5"), ", \"node\": \"src\", \"limit\": 3", 200);
+        assertThat((String) JsonPath.read(node, "$.node")).isEqualTo("src");
+        assertThat((List<Object>) JsonPath.read(node, "$.tables[0].rows")).hasSize(3);
+        assertThat((String) JsonPath.read(preview(DOWN.formatted("rows: 5"), ", \"node\": \"out\"", 200), "$.node"))
+                .as("a sink shows its input")
+                .isEqualTo("src");
+        assertThat((String) JsonPath.read(preview(DOWN.formatted("rows: 5"), ", \"node\": \"nothing\"", 400), "$.code"))
+                .isEqualTo("PF-CONF-0007");
+        assertThat((String) JsonPath.read(preview(DOWN.formatted("rows: -1"), "", 422), "$.code"))
+                .isEqualTo("PF-CONF-0002");
+    }
 }

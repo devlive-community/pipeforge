@@ -33,6 +33,8 @@ export type RunSplit = Schemas["Split"];
 export type RunTask = Schemas["Task"];
 export type LogChunk = Schemas["LogChunk"];
 export type ClusterView = Schemas["ClusterView"];
+export type PreviewRequest = Schemas["PreviewRequest"];
+export type PreviewResult = Schemas["PreviewResult"];
 
 /** Which part of a task's log to read. */
 export interface LogQuery {
@@ -121,6 +123,7 @@ export function createClient(options: ClientOptions = {}) {
     listErrorCodes: () => unwrap(raw.GET("/api/v1/errors")),
     getJobSchema: () => unwrap(raw.GET("/api/v1/jobs/schema")),
     validateJob: (body: JobRequest) => unwrap(raw.POST("/api/v1/jobs/validate", { body })),
+    previewJob: (body: PreviewRequest) => unwrap(raw.POST("/api/v1/jobs/preview", { body })),
     explainJob: (body: JobRequest) => unwrap(raw.POST("/api/v1/explain", { body })),
     evaluateExpression: (body: EvaluationRequest) => unwrap(raw.POST("/api/v1/expressions/evaluate", { body })),
     submitRun: (body: SubmitRequest) => unwrap(raw.POST("/api/v1/runs", { body })),

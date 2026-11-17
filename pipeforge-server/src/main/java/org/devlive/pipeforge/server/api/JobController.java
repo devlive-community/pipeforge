@@ -37,10 +37,30 @@ import org.springframework.web.bind.annotation.RestController;
 public class JobController {
 
     private final JobPlanning planning;
+    private final org.devlive.pipeforge.server.preview.PreviewService previews;
 
-    public JobController(JobPlanning planning) {
+    public JobController(JobPlanning planning, org.devlive.pipeforge.server.preview.PreviewService previews) {
         this.planning = planning;
+        this.previews = previews;
     }
+
+    /**
+     * A job to preview.
+     *
+     * @param definition the job in YAML or JSON
+     * @param variables values for job variables
+     * @param scheduledTime the planned time, the base of date variables; now by default
+     * @param node the node whose output to show; without it, what the job's sink would receive (a dry run)
+     * @param limit rows per table, at most 1000; 100 by default
+     * @param timeoutSeconds how long the preview may run, at most 120; 30 by default
+     */
+    public record PreviewRequest(
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String definition,
+            @Nullable Map<String, String> variables,
+            @Nullable Instant scheduledTime,
+            @Nullable String node,
+            @Nullable Integer limit,
+            @Nullable Integer timeoutSeconds) {}
 
     /**
      * A job definition to check.
@@ -108,6 +128,41 @@ public class JobController {
     public ExplainResult explain(@RequestBody JobRequest request) {
         JobPlan plan = plan(request);
         return new ExplainResult(PlanExplainer.document(plan), PlanExplainer.text(plan));
+    }
+
+    @PostMapping("/jobs/preview")
+    @Operation(
+            operationId = "previewJob",
+            summary = "Preview a job",
+            description = "Runs the job in the server up to a node, or up to its sink for a dry run, with the sinks"
+                    + " replaced by a buffer, at parallelism 1, and returns the first rows of every table there. It"
+                    + " stops at the row limit, at the end of the input or at the timeout; nothing is written to"
+                    + " any target.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "预览作业"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "在服务端运行作业，直到某个节点（试运行时直到 Sink），Sink 被替换为缓冲区，并行度为 1，"
+                                                + "返回该处每张表的前几行。达到行数上限、输入读完或超时时停止；不会写入任何目标端。")
+                            }))
+    public org.devlive.pipeforge.server.preview.PreviewService.PreviewResult preview(
+            @RequestBody PreviewRequest request,
+            @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) @Nullable String accept)
+            throws InterruptedException {
+        if (request == null) {
+            checkRequest(null);
+        }
+        return previews.preview(
+                request.definition(),
+                request.variables(),
+                request.scheduledTime(),
+                request.node(),
+                request.limit() == null ? 100 : request.limit(),
+                java.time.Duration.ofSeconds(request.timeoutSeconds() == null ? 30 : request.timeoutSeconds()),
+                Languages.of(accept));
     }
 
     /** A request without a definition is a client error (400), not a validation result. */

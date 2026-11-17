@@ -147,6 +147,25 @@ and every registered worker with its addresses, labels, resource group, cores an
 with the job that holds each, its running tasks and the time since its last heartbeat, with the
 slot usage of the whole cluster. Without a master, or when it cannot be reached, it answers 503.
 
+## Previews and dry runs
+
+`POST /api/v1/jobs/preview` shows what a job produces without running it on the cluster: the job
+editor's data preview and dry run. The server cuts the job after the chosen `node`, or after the
+input of its sink for a dry run, replaces the sinks with a buffer and runs that part in its own
+process, at parallelism 1. It answers with the first `limit` rows (100 by default, 1,000 at most)
+of every table there and how it ended:
+
+| Outcome | Meaning |
+|---|---|
+| `COMPLETE` | The sources were read to the end |
+| `LIMIT` | A table reached `limit` rows; the job was stopped there |
+| `TIMEOUT` | `timeoutSeconds` (30 by default, 120 at most) was up; the rows read so far |
+| `FAILED` | The job failed; `error` says why |
+
+Nothing is written to any target: the job's sinks are not even planned. The sources are read from
+the server's host, with the server's plugins, so the server needs access to them. At most two
+previews run at once; more wait for one to end, and give up with `PF-CONF-0007` after their timeout.
+
 ## Security
 
 The server has no authentication yet, so it only listens on the loopback interface. Do not set

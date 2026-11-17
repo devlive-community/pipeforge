@@ -41,6 +41,29 @@ public class JobPlanning {
      */
     public JobPlan plan(
             @Nullable String definition, @Nullable Map<String, String> variables, @Nullable Instant scheduledTime) {
+        JobDefinition job = parse(definition, variables, scheduledTime);
+        try (PluginComponents components = new PluginComponents(plugins, "api:" + job.name())) {
+            return plan(job, components);
+        }
+    }
+
+    /** Plans a definition, e.g. one rewritten for a preview, with the components of {@code components}. */
+    public JobPlan plan(JobDefinition job, org.devlive.pipeforge.core.plan.ComponentProvider components) {
+        return new Planner(components, defaults.cluster()).plan(job);
+    }
+
+    /** The plugins of the server, for components that outlive a plan. */
+    public PluginManager plugins() {
+        return plugins;
+    }
+
+    /**
+     * Parses a definition and resolves its variables.
+     *
+     * @throws PipeForgeException {@code PF-CONF-0007} without a definition, else what parsing reports
+     */
+    public JobDefinition parse(
+            @Nullable String definition, @Nullable Map<String, String> variables, @Nullable Instant scheduledTime) {
         if (definition == null || definition.isBlank()) {
             throw PipeForgeException.of(ErrorCode.REQUEST_INVALID)
                     .param("reason", "definition must hold the job in YAML or JSON")
@@ -53,9 +76,6 @@ public class JobPlanning {
         if (scheduledTime != null) {
             context.scheduledTime(scheduledTime);
         }
-        JobDefinition job = JobParser.parse(definition, context.build());
-        try (PluginComponents components = new PluginComponents(plugins, "api:" + job.name())) {
-            return new Planner(components, defaults.cluster()).plan(job);
-        }
+        return JobParser.parse(definition, context.build());
     }
 }

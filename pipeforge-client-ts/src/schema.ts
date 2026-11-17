@@ -129,6 +129,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a job
+         * @description Runs the job in the server up to a node, or up to its sink for a dry run, with the sinks replaced by a buffer, at parallelism 1, and returns the first rows of every table there. It stops at the row limit, at the end of the input or at the timeout; nothing is written to any target.
+         */
+        post: operations["previewJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/schema": {
         parameters: {
             query?: never;
@@ -625,6 +645,40 @@ export interface components {
             plugins?: components["schemas"]["PluginInfo"][];
             unavailable?: components["schemas"]["UnavailablePlugin"][];
         };
+        PreviewColumn: {
+            name?: string;
+            type?: string;
+        };
+        PreviewRequest: {
+            definition: string;
+            /** Format: int32 */
+            limit?: number;
+            node?: string;
+            /** Format: date-time */
+            scheduledTime?: string;
+            /** Format: int32 */
+            timeoutSeconds?: number;
+            variables?: {
+                [key: string]: string;
+            };
+        };
+        PreviewResult: {
+            /** Format: int64 */
+            elapsedMs?: number;
+            error?: components["schemas"]["ErrorInfo"];
+            node?: string;
+            /** @enum {string} */
+            outcome?: "COMPLETE" | "LIMIT" | "TIMEOUT" | "FAILED";
+            /** Format: int64 */
+            rowsRead?: number;
+            tables?: components["schemas"]["PreviewTable"][];
+        };
+        PreviewTable: {
+            columns?: components["schemas"]["PreviewColumn"][];
+            rows?: unknown[][];
+            table?: string;
+            truncated?: boolean;
+        };
         Run: {
             /** Format: date-time */
             endedAt?: string;
@@ -1082,6 +1136,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FunctionInfo"][];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    previewJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Accept-Language"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResult"];
                 };
             };
             /** @description The request is invalid (PF-CONF-0007) */

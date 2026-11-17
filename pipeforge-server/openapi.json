@@ -425,6 +425,78 @@
         }
       }
     },
+    "/api/v1/jobs/preview" : {
+      "post" : {
+        "description" : "Runs the job in the server up to a node, or up to its sink for a dry run, with the sinks replaced by a buffer, at parallelism 1, and returns the first rows of every table there. It stops at the row limit, at the end of the input or at the timeout; nothing is written to any target.",
+        "operationId" : "previewJob",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Accept-Language",
+          "required" : false,
+          "schema" : {
+            "type" : [ "string", "null" ]
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PreviewResult"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Preview a job",
+        "tags" : [ "jobs" ],
+        "x-zh-CN" : {
+          "description" : "在服务端运行作业，直到某个节点（试运行时直到 Sink），Sink 被替换为缓冲区，并行度为 1，返回该处每张表的前几行。达到行数上限、输入读完或超时时停止；不会写入任何目标端。",
+          "summary" : "预览作业"
+        }
+      }
+    },
     "/api/v1/jobs/schema" : {
       "get" : {
         "description" : "The JSON Schema (draft 2020-12) of job definitions, with the options of every installed source, transform and sink, for completion in editors. Validation stays with validateJob.",
@@ -2096,6 +2168,100 @@
             "items" : {
               "$ref" : "#/components/schemas/UnavailablePlugin"
             }
+          }
+        }
+      },
+      "PreviewColumn" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PreviewRequest" : {
+        "type" : "object",
+        "properties" : {
+          "definition" : {
+            "type" : "string"
+          },
+          "limit" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "node" : {
+            "type" : "string"
+          },
+          "scheduledTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "timeoutSeconds" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "variables" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "definition" ]
+      },
+      "PreviewResult" : {
+        "type" : "object",
+        "properties" : {
+          "elapsedMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "error" : {
+            "$ref" : "#/components/schemas/ErrorInfo"
+          },
+          "node" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "COMPLETE", "LIMIT", "TIMEOUT", "FAILED" ]
+          },
+          "rowsRead" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tables" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PreviewTable"
+            }
+          }
+        }
+      },
+      "PreviewTable" : {
+        "type" : "object",
+        "properties" : {
+          "columns" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PreviewColumn"
+            }
+          },
+          "rows" : {
+            "type" : "array",
+            "items" : {
+              "type" : "array",
+              "items" : { }
+            }
+          },
+          "table" : {
+            "type" : "string"
+          },
+          "truncated" : {
+            "type" : "boolean"
           }
         }
       },
