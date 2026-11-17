@@ -33,6 +33,7 @@ import {
 import { suggest, yamlContext } from "./completion";
 import { EXAMPLE_JOB } from "./example";
 import { PlanView } from "./PlanView";
+import { OptionsPanel } from "./OptionsPanel";
 import { DRY_RUN, PreviewPanel, type PreviewState } from "./PreviewPanel";
 import { ProblemList } from "./ProblemList";
 import { diagnosticsOf, problemsOf } from "./problems";
@@ -63,6 +64,7 @@ export function JobEditorPage() {
   const [view, setView] = useState("yaml");
   const [focusedLine, setFocusedLine] = useState<{ number: number } | null>(null);
   const [previewNode, setPreviewNode] = useState(DRY_RUN);
+  const [optionsNode, setOptionsNode] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const previewing = useRef(0);
 
@@ -230,6 +232,7 @@ export function JobEditorPage() {
                       const selected = structure.find((n) => n.id === id);
                       // a source or transform becomes what the preview shows; running it stays a choice
                       if (selected && selected.kind !== "sink") setPreviewNode(id);
+                      setOptionsNode(id);
                       if (selected?.type === "field-mapper") {
                         setChosenMapper(id);
                         openResult("mapping");
@@ -250,7 +253,9 @@ export function JobEditorPage() {
           className={cx(
             "editor-results border-t border-border",
             resultsOpen &&
-              (activeTab === "mapping" || activeTab === "preview" ? "editor-results-mapping" : "editor-results-open"),
+              (activeTab === "mapping" || activeTab === "preview" || activeTab === "options"
+                ? "editor-results-mapping"
+                : "editor-results-open"),
           )}
           collapsed={!resultsOpen}
           panelAction={(panelId) => (
@@ -328,6 +333,20 @@ export function JobEditorPage() {
                   },
                 ]
               : []),
+            {
+              id: "options",
+              label: t("editor.optionEditor.tab"),
+              content: (
+                <OptionsPanel
+                  structure={structure}
+                  definition={definition}
+                  node={optionsNode}
+                  plugin={lastPlan?.nodes?.find((n) => n.id === (optionsNode ?? structure[0]?.id))?.plugin}
+                  onNode={setOptionsNode}
+                  onChange={setDefinition}
+                />
+              ),
+            },
             {
               id: "preview",
               label: t("editor.preview.tab"),

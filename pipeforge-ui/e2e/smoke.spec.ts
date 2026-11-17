@@ -137,3 +137,13 @@ test("dry-runs the job in the editor", async ({ page }) => {
   await expect(page.getByRole("table", { name: "Rows of demo.orders" })).toBeVisible();
   await expect(page.getByText("Stopped at the row limit")).toBeVisible();
 });
+
+test("edits an option of a node into the definition", async ({ page }) => {
+  await page.goto("/editor");
+  await expect(page.getByText("Valid", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Options" }).click();
+  const rows = page.getByRole("textbox", { name: "Value of rows" });
+  await rows.fill("250");
+  await rows.press("Enter");
+  await expect(page.getByTestId("code-editor")).toContainText("rows: 250");
+});

@@ -153,6 +153,19 @@
         "TIMEOUT": "Timed out",
         "FAILED": "Failed"
       }
+    },
+    "optionEditor": {
+      "tab": "Options",
+      "node": "Node",
+      "hint": "Changes are written into the definition at the node; the rest stays as written.",
+      "noNodes": "The job has no nodes yet.",
+      "unknown": "There is no installed component of type {type}, so its options are unknown.",
+      "field": "Value of {key}",
+      "unset": "default",
+      "editInText": "Lists and maps are edited in the definition.",
+      "notANumber": "Not a number",
+      "notAnInteger": "Not a whole number",
+      "outOfRange": "Outside {min} – {max}"
     }
   },
   "runs": {

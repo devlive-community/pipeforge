@@ -153,6 +153,19 @@
         "TIMEOUT": "已超时",
         "FAILED": "失败"
       }
+    },
+    "optionEditor": {
+      "tab": "选项",
+      "node": "节点",
+      "hint": "修改会写回定义中该节点的位置，其余内容保持原样。",
+      "noNodes": "作业还没有节点。",
+      "unknown": "没有安装类型为 {type} 的组件，无法得知它的选项。",
+      "field": "{key} 的值",
+      "unset": "默认",
+      "editInText": "列表和映射请在定义中编辑。",
+      "notANumber": "不是数字",
+      "notAnInteger": "不是整数",
+      "outOfRange": "超出 {min} – {max}"
     }
   },
   "runs": {

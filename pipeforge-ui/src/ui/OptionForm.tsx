@@ -5,8 +5,12 @@
  * project root for full license text.
  */
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "./Badge";
+import { Button } from "./Button";
+import { DropdownMenu } from "./DropdownMenu";
+import { Input } from "./Input";
+import { SegmentedControl } from "./SegmentedControl";
 
 /** One option of a component, as GET /api/v1/components describes it. */
 export interface OptionField {
@@ -31,6 +35,158 @@ export interface OptionFormLabels {
   sensitive: string;
   deprecated: string;
   since: string;
+  /** The labels of the edit mode; needed with `onChange`. */
+  editing?: OptionEditLabels;
+}
+
+export interface OptionEditLabels {
+  /** The value field of an option, e.g. "Value of {key}"; `{key}` is replaced. */
+  field: string;
+  /** The choice that removes the option so that its default applies. */
+  unset: string;
+  /** Shown for lists and maps, which are edited in the text. */
+  editInText: string;
+  notANumber: string;
+  notAnInteger: string;
+  /** Out of range, with `{min}` and `{max}`. */
+  outOfRange: string;
+}
+
+const VARIABLE = /^\$\{[^}]+\}$/;
+
+/**
+ * Turns what was typed for an option into its value: nothing removes the option, a variable
+ * (`${...}`) stays text, numbers of integer and double options become numbers. Returns an error
+ * key when the text is no value of the option.
+ */
+export function parseOptionValue(
+  option: Pick<OptionField, "type" | "min" | "max">,
+  text: string,
+): { value: unknown } | { error: "notANumber" | "notAnInteger" | "outOfRange" } {
+  const trimmed = text.trim();
+  if (trimmed === "") return { value: undefined };
+  if (VARIABLE.test(trimmed)) return { value: trimmed };
+  if (option.type === "int" || option.type === "long" || option.type === "double") {
+    const number = Number(trimmed);
+    if (!Number.isFinite(number)) return { error: "notANumber" };
+    if (option.type !== "double" && !Number.isInteger(number)) return { error: "notAnInteger" };
+    if ((option.min !== undefined && number < option.min) || (option.max !== undefined && number > option.max)) {
+      return { error: "outOfRange" };
+    }
+    return { value: number };
+  }
+  return { value: text };
+}
+
+/** A typed value of an option, written when Enter is pressed or the field is left. */
+function TextValue({
+  option,
+  value,
+  labels,
+  onChange,
+}: {
+  option: OptionField;
+  value: unknown;
+  labels: OptionEditLabels;
+  onChange: (value: unknown) => void;
+}) {
+  const shown = value === undefined || value === null ? "" : String(value);
+  const [text, setText] = useState(shown);
+  const [error, setError] = useState<string | undefined>();
+  // a change of the text elsewhere shows here
+  useEffect(() => {
+    setText(shown);
+    setError(undefined);
+  }, [shown]);
+  const commit = () => {
+    if (text === shown) return;
+    const parsed = parseOptionValue(option, text);
+    if ("error" in parsed) {
+      setError(
+        labels[parsed.error].replace("{min}", String(option.min ?? "…")).replace("{max}", String(option.max ?? "…")),
+      );
+      return;
+    }
+    setError(undefined);
+    onChange(parsed.value);
+  };
+  return (
+    <Input
+      label={labels.field.replace("{key}", option.key)}
+      hideLabel
+      type={option.sensitive && !VARIABLE.test(text) ? "password" : "text"}
+      inputMode={option.type === "int" || option.type === "long" || option.type === "double" ? "decimal" : undefined}
+      placeholder={option.defaultValue !== undefined && option.defaultValue !== null ? format(option.defaultValue) : ""}
+      value={text}
+      error={error}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+      className="mt-2 max-w-md font-mono"
+    />
+  );
+}
+
+/** The control that edits one option, by its type. */
+function OptionValue({
+  option,
+  value,
+  labels,
+  onChange,
+}: {
+  option: OptionField;
+  value: unknown;
+  labels: OptionEditLabels;
+  onChange: (value: unknown) => void;
+}) {
+  const field = labels.field.replace("{key}", option.key);
+  if (option.type === "boolean") {
+    const current = value === true || value === "true" ? "true" : value === false || value === "false" ? "false" : "";
+    return (
+      <div className="mt-2">
+        <SegmentedControl
+          label={field}
+          value={current}
+          onChange={(id) => onChange(id === "" ? undefined : id === "true")}
+          segments={[
+            { id: "", label: labels.unset },
+            { id: "true", label: "true" },
+            { id: "false", label: "false" },
+          ]}
+        />
+      </div>
+    );
+  }
+  if (option.type === "enum" && option.values && option.values.length > 0) {
+    const current = value === undefined || value === null ? "" : String(value);
+    return (
+      <div className="mt-2">
+        <DropdownMenu
+          label={field}
+          align="start"
+          value={current}
+          onSelect={(id) => onChange(id === "" ? undefined : id)}
+          items={[{ id: "", label: labels.unset }, ...option.values.map((v) => ({ id: v, label: v }))]}
+          trigger={(props) => (
+            <Button {...props} size="sm" icon="chevronDown" aria-label={field}>
+              <span className="font-mono">{current || labels.unset}</span>
+            </Button>
+          )}
+        />
+      </div>
+    );
+  }
+  if (option.type === "list" || option.type === "map") {
+    return (
+      <p className="mt-2 text-xs text-fg-muted">
+        {value !== undefined ? <span className="mr-2 font-mono text-fg">{format(value)}</span> : null}
+        {labels.editInText}
+      </p>
+    );
+  }
+  return <TextValue option={option} value={value} labels={labels} onChange={onChange} />;
 }
 
 function format(value: unknown): string {
@@ -41,14 +197,23 @@ function format(value: unknown): string {
  * The options of a component as a form, built from its option rule. This version shows them
  * read-only, as documentation: key, type, requirement, default, range, choices and description.
  */
+/**
+ * The options of a component from its option rule. Read-only by default; with `onChange` each
+ * option gets a control for its type, showing `values` (what the job sets) and reporting changes,
+ * `undefined` to remove an option so that its default applies.
+ */
 export function OptionForm({
   options,
   labels,
   empty,
+  values,
+  onChange,
 }: {
   options: OptionField[];
   labels: OptionFormLabels;
   empty: ReactNode;
+  values?: Record<string, unknown>;
+  onChange?: (key: string, value: unknown) => void;
 }) {
   if (options.length === 0) return <p className="text-sm text-fg-muted">{empty}</p>;
   return (
@@ -102,6 +267,14 @@ export function OptionForm({
               </div>
             ) : null}
           </dl>
+          {onChange && labels.editing ? (
+            <OptionValue
+              option={option}
+              value={values?.[option.key]}
+              labels={labels.editing}
+              onChange={(value) => onChange(option.key, value)}
+            />
+          ) : null}
         </li>
       ))}
     </ul>

@@ -161,7 +161,7 @@ const FAKE_SOURCE = {
     },
     {
       key: "rate",
-      type: "integer",
+      type: "int",
       requirement: "one-of",
       min: 1,
       description: "Rows per second; the source never ends.",

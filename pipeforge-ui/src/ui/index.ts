@@ -22,7 +22,13 @@ export { FileButton } from "./FileButton";
 export { Icon, type IconName } from "./Icon";
 export { IconButton } from "./IconButton";
 export { Input } from "./Input";
-export { OptionForm, type OptionField, type OptionFormLabels } from "./OptionForm";
+export {
+  OptionForm,
+  parseOptionValue,
+  type OptionEditLabels,
+  type OptionField,
+  type OptionFormLabels,
+} from "./OptionForm";
 export { PageHeader } from "./PageHeader";
 export { RowButton } from "./RowButton";
 export { SegmentedControl, type Segment } from "./SegmentedControl";

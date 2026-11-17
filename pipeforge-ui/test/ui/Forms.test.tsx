@@ -8,7 +8,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { Input, OptionForm, SegmentedControl, type OptionFormLabels } from "@/ui";
+import { Input, OptionForm, parseOptionValue, SegmentedControl, type OptionField, type OptionFormLabels } from "@/ui";
 
 const LABELS: OptionFormLabels = {
   requirement: { required: "required", optional: "optional" },
@@ -106,5 +106,95 @@ describe("OptionForm", () => {
   it("says when there are no options", () => {
     render(<OptionForm labels={LABELS} empty="No options" options={[]} />);
     expect(screen.getByText("No options")).toBeInTheDocument();
+  });
+});
+
+const EDITING: OptionFormLabels = {
+  ...LABELS,
+  editing: {
+    field: "Value of {key}",
+    unset: "default",
+    editInText: "Edit in the text",
+    notANumber: "Not a number",
+    notAnInteger: "Not a whole number",
+    outOfRange: "Outside {min} – {max}",
+  },
+};
+
+const EDITABLE: OptionField[] = [
+  { key: "rows", type: "long", requirement: "optional", defaultValue: 1000, min: 0, max: 5000 },
+  { key: "verbose", type: "boolean", requirement: "optional" },
+  { key: "format", type: "enum", requirement: "optional", values: ["table", "json"] },
+  { key: "schema", type: "list", requirement: "required" },
+  { key: "password", type: "string", requirement: "optional", sensitive: true },
+];
+
+describe("OptionForm editing", () => {
+  function Editable({ onChange }: { onChange: (key: string, value: unknown) => void }) {
+    const [values, setValues] = useState<Record<string, unknown>>({ rows: 10, schema: ["id INT64"] });
+    return (
+      <OptionForm
+        options={EDITABLE}
+        labels={EDITING}
+        empty="No options"
+        values={values}
+        onChange={(key, value) => {
+          onChange(key, value);
+          setValues({ ...values, [key]: value });
+        }}
+      />
+    );
+  }
+
+  it("edits each option with a control for its type", async () => {
+    const changes: [string, unknown][] = [];
+    render(<Editable onChange={(key, value) => changes.push([key, value])} />);
+    const rows = screen.getByRole("textbox", { name: "Value of rows" });
+    expect(rows).toHaveValue("10");
+    expect(rows).toHaveAttribute("placeholder", "1000");
+    await userEvent.clear(rows);
+    await userEvent.type(rows, "250{Enter}");
+    await userEvent.click(screen.getByRole("radio", { name: "true" }));
+    await userEvent.click(screen.getByRole("button", { name: "Value of format" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "json" }));
+    expect(changes).toEqual([
+      ["rows", 250],
+      ["verbose", true],
+      ["format", "json"],
+    ]);
+    // lists and maps are shown, not edited
+    expect(screen.getByText('["id INT64"]')).toBeInTheDocument();
+    expect(screen.getByText("Edit in the text")).toBeInTheDocument();
+    // a secret is not shown as typed
+    expect(screen.getByLabelText("Value of password")).toHaveAttribute("type", "password");
+  });
+
+  it("refuses values that are no value of the option, and removes an emptied one", async () => {
+    const changes: [string, unknown][] = [];
+    render(<Editable onChange={(key, value) => changes.push([key, value])} />);
+    const rows = screen.getByRole("textbox", { name: "Value of rows" });
+    await userEvent.clear(rows);
+    await userEvent.type(rows, "9000{Enter}");
+    expect(screen.getByText("Outside 0 – 5000")).toBeInTheDocument();
+    expect(rows).toHaveAttribute("aria-invalid", "true");
+    await userEvent.clear(rows);
+    await userEvent.tab();
+    expect(changes).toEqual([["rows", undefined]]);
+  });
+
+  it("parses typed values", () => {
+    expect(parseOptionValue({ type: "int" }, " 42 ")).toEqual({ value: 42 });
+    expect(parseOptionValue({ type: "int" }, "4.5")).toEqual({ error: "notAnInteger" });
+    expect(parseOptionValue({ type: "double" }, "4.5")).toEqual({ value: 4.5 });
+    expect(parseOptionValue({ type: "long" }, "many")).toEqual({ error: "notANumber" });
+    expect(parseOptionValue({ type: "long" }, "${env:ROWS}")).toEqual({ value: "${env:ROWS}" });
+    expect(parseOptionValue({ type: "duration" }, "30s")).toEqual({ value: "30s" });
+    expect(parseOptionValue({ type: "string" }, "")).toEqual({ value: undefined });
+  });
+
+  it("stays read-only without onChange", () => {
+    render(<OptionForm options={EDITABLE} labels={EDITING} empty="No options" />);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 });

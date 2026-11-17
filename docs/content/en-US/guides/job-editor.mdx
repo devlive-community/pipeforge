@@ -63,6 +63,27 @@ and variables, the nodes with their plugins, parallelism and inputs, the options
 where every value comes from, and the tables each node produces. The **Text** tab shows the same
 plan as text. See [plan and explain](../concepts/plan-and-explain) for what it contains.
 
+## Editing options
+
+The **Options** tab lists the options of a node, from its component as installed on the server: the
+type, whether it is required, the default and range, and a field for its value. Choose the node in
+the tab's menu or in the graph. A change is written into the definition at that node, and the rest
+of the text, comments included, stays as written:
+
+- numbers, durations and text are written when you press **Enter** or leave the field; a number
+  outside the option's range or a word where a number belongs is refused with a message, and a
+  variable such as `${env:ROWS}` is accepted anywhere
+- a yes/no option has **default**, **true** and **false**; a choice has a menu that starts with
+  **default**
+- emptying a field or choosing **default** removes the option, so its default applies
+- lists and maps, such as the columns of the `fake` source, are shown but edited in the definition
+- secret options are not shown as typed
+
+A node written on one line (`{ id: print, type: console }`) is rewritten in block style the first
+time one of its options changes.
+
+<Screenshot name="job-editor-options" alt="The options of a node in the job editor" />
+
 ## Dry run and data preview
 
 **Dry run** in the toolbar runs the job in the server and shows the rows that would reach its

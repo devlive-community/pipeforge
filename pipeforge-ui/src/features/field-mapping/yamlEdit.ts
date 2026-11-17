@@ -44,11 +44,19 @@ function scalar(node: unknown): string | undefined {
 }
 
 /** The node map of {@code nodeId} in the transform list, if it is there. */
-function findNode(document: Document.Parsed, nodeId: string): YAMLMap | undefined {
+const TRANSFORMS = ["transform"];
+const ALL_NODES = ["source", "transform", "sink"];
+
+/** The node with `nodeId` in `sections` (each a list or a single node); mappers are transforms. */
+function findNode(document: Document.Parsed, nodeId: string, sections = TRANSFORMS): YAMLMap | undefined {
   if (!isMap(document.contents)) return undefined;
-  const list = document.contents.get("transform", true);
-  const items = isSeq(list) ? list.items : isMap(list) ? [list] : [];
-  return items.find((item): item is YAMLMap => isMap(item) && scalar(item.get("id", true)) === nodeId);
+  for (const section of sections) {
+    const list = document.contents.get(section, true);
+    const items = isSeq(list) ? list.items : isMap(list) ? [list] : [];
+    const found = items.find((item): item is YAMLMap => isMap(item) && scalar(item.get("id", true)) === nodeId);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function pairOf(map: YAMLMap, key: string): Pair<YamlNode, YamlNode> | undefined {
@@ -182,15 +190,15 @@ function removeLines(source: string, from: number, to: number): string {
 
 type Edit = (node: YAMLMap, source: string) => string;
 
-function edit(source: string, nodeId: string, change: Edit): string {
+function edit(source: string, nodeId: string, change: Edit, sections = TRANSFORMS): string {
   const document = parseDocument(source, PARSE);
   if (document.errors.length > 0) return source;
-  const node = findNode(document, nodeId);
+  const node = findNode(document, nodeId, sections);
   if (!node) return source;
   if (node.flow) {
     // a node written as { id: ..., type: ... } is rewritten in block style, once
     const rewritten = blockNode(node, source);
-    return edit(rewritten, nodeId, change);
+    return edit(rewritten, nodeId, change, sections);
   }
   return change(node, source);
 }
@@ -228,12 +236,36 @@ export function setOption(
   key: OptionKey,
   value: string | string[] | undefined,
 ): string {
-  return edit(source, nodeId, (node, text) => {
-    if (Array.isArray(value)) {
-      return setPair(node, text, key, value.length === 0 ? undefined : listText(value));
-    }
-    return setPair(node, text, key, value === undefined ? undefined : flowText(value));
-  });
+  return edit(source, nodeId, (node, text) => writeOption(node, text, key, value));
+}
+
+function writeOption(node: YAMLMap, text: string, key: string, value: unknown): string {
+  if (Array.isArray(value)) {
+    return setPair(node, text, key, value.length === 0 ? undefined : listText(value.map(String)));
+  }
+  return setPair(node, text, key, value === undefined ? undefined : flowText(value));
+}
+
+/**
+ * Sets any option of a node, keeping the rest of the text as written: a number, boolean or string
+ * as a scalar of that type, a list in flow style, `undefined` (or an empty list) to remove the key.
+ * The text is returned unchanged when it does not parse or has no such node.
+ */
+export function setNodeOption(source: string, nodeId: string, key: string, value: unknown): string {
+  return edit(source, nodeId, (node, text) => writeOption(node, text, key, value), ALL_NODES);
+}
+
+/** The values a node gives `keys`, as parsed; keys it does not set are left out. */
+export function readNodeOptions(source: string, nodeId: string, keys: string[]): Record<string, unknown> {
+  const document = parseDocument(source, PARSE);
+  const node = document.errors.length > 0 ? undefined : findNode(document, nodeId, ALL_NODES);
+  if (!node) return {};
+  const values: Record<string, unknown> = {};
+  for (const key of keys) {
+    const pair = pairOf(node, key);
+    if (pair?.value) values[key] = (pair.value as { toJSON(): unknown }).toJSON();
+  }
+  return values;
 }
 
 /** Adds an entry at the end of {@code mapping}, creating the list when there is none. */
