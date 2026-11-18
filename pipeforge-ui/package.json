@@ -28,7 +28,7 @@
     "@lezer/highlight": "1.2.5",
     "@pipeforge/client": "workspace:*",
     "@pipeforge/design-tokens": "workspace:*",
-    "@tanstack/react-query": "5.105.0",
+    "@tanstack/react-query": "5.107.1",
     "react": "19.2.9",
     "react-dom": "19.2.9",
     "react-router": "8.5.1",
