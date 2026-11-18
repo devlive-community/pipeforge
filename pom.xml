@@ -74,7 +74,7 @@
         <logback.version>1.5.38</logback.version>
         <jackson.version>2.21.7</jackson.version>
         <snakeyaml.version>2.6</snakeyaml.version>
-        <h2.version>2.2.224</h2.version>
+        <h2.version>2.5.252</h2.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <mysql-connector-j.version>8.4.0</mysql-connector-j.version>
         <postgresql.version>42.7.13</postgresql.version>
