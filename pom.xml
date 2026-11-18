@@ -87,7 +87,7 @@
         <json-schema-validator.version>2.0.1</json-schema-validator.version>
         <grpc.version>1.84.1</grpc.version>
         <protobuf-java.version>4.36.2</protobuf-java.version>
-        <netty.version>4.2.19.Final</netty.version>
+        <netty.version>4.2.20.Final</netty.version>
         <!-- Not in the Spring Boot BOM: the release gRPC is built against, in the JRE flavour Calcite uses. -->
         <guava.version>33.6.0-jre</guava.version>
         <!-- Versions above follow the Spring Boot BOM so that the server converges with the libraries. -->
