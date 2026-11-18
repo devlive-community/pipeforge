@@ -218,6 +218,20 @@ class ClusterIT {
                         .asText())
                 .isEqualTo("CANCELLED");
 
+        // the cluster and the server's plan of a job
+        Cluster.Command workers = cluster.pipeforge(home, "cluster", "workers");
+        assertThat(workers.exit()).as(workers.err()).isZero();
+        assertThat(workers.out().lines()).hasSize(3).first().asString().startsWith("WORKER");
+        assertThat(cluster.pipeforge(home, "cluster", "status").out()).contains("Workers  2 connected");
+        Cluster.Command explain = cluster.pipeforge(home, "job", "explain", file.toString(), "-o", "json");
+        assertThat(explain.exit()).as(explain.err()).isZero();
+        assertThat(Cluster.JSON
+                        .readTree(explain.out())
+                        .path("plan")
+                        .path("nodes")
+                        .size())
+                .isEqualTo(2);
+
         Cluster.Command unknown = cluster.pipeforge(home, "run", "status", "no-such-run");
         assertThat(unknown.exit()).isEqualTo(6);
         assertThat(unknown.err()).startsWith("ERROR PF-CONF-0010");

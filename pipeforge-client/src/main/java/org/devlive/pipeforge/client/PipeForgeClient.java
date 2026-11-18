@@ -197,13 +197,34 @@ public final class PipeForgeClient {
     }
 
     public ValidationResult validate(String definition, Map<String, String> variables) {
-        return call(
-                Endpoint.VALIDATE_JOB, Map.of(), Map.of(), Map.of("definition", definition, "variables", variables));
+        return validate(definition, variables, null);
+    }
+
+    /** Checks a job on the server, with the time {@code ${date:...}} variables are based on. */
+    public ValidationResult validate(
+            String definition, Map<String, String> variables, @Nullable Instant scheduledTime) {
+        return call(Endpoint.VALIDATE_JOB, Map.of(), Map.of(), job(definition, variables, scheduledTime));
     }
 
     /** The plan of a job, as the server plans it with its plugins. */
     public ExplainResult explain(String definition, Map<String, String> variables) {
-        return call(Endpoint.EXPLAIN_JOB, Map.of(), Map.of(), Map.of("definition", definition, "variables", variables));
+        return explain(definition, variables, null);
+    }
+
+    /** The plan of a job as the server plans it, with the time {@code ${date:...}} variables are based on. */
+    public ExplainResult explain(String definition, Map<String, String> variables, @Nullable Instant scheduledTime) {
+        return call(Endpoint.EXPLAIN_JOB, Map.of(), Map.of(), job(definition, variables, scheduledTime));
+    }
+
+    private static Map<String, Object> job(
+            String definition, Map<String, String> variables, @Nullable Instant scheduledTime) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("definition", definition);
+        body.put("variables", variables);
+        if (scheduledTime != null) {
+            body.put("scheduledTime", scheduledTime);
+        }
+        return body;
     }
 
     // ------------------------------------------------------------------------------------ helpers

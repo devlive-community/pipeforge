@@ -1,0 +1,3 @@
+WORKER  ADDRESS  SLOTS  TASKS  CORES     HEAP  HEARTBEAT   LABELS
+w1      h1:6124    3/6      3     16  8.0 GiB  1.2s        disk=ssd,zone=a
+w2      h2:6124    0/2      0      4  2.0 GiB  21.0s LATE  -

@@ -34,6 +34,8 @@ import picocli.CommandLine.ScopeType;
             ValidateCommand.class,
             ExplainCommand.class,
             RunCommand.class,
+            org.devlive.pipeforge.cli.command.JobCommand.class,
+            org.devlive.pipeforge.cli.command.ClusterCommand.class,
             ExprCommand.class,
             UiCommand.class,
             VersionCommand.class,

@@ -158,8 +158,13 @@ final class RunViews {
         return table(rows);
     }
 
-    /** Rows as columns of the width of their longest cell; numbers align right. */
+    /** Rows as columns of the width of their longest cell; the first column aligns left, the others right. */
     static String table(List<String[]> rows) {
+        return table(rows, java.util.Set.of(0));
+    }
+
+    /** Rows as columns of the width of their longest cell; the {@code left} columns align left, the others right. */
+    static String table(List<String[]> rows, java.util.Set<Integer> left) {
         int columns = rows.get(0).length;
         int[] widths = new int[columns];
         for (String[] row : rows) {
@@ -172,7 +177,7 @@ final class RunViews {
             StringBuilder line = new StringBuilder();
             for (int i = 0; i < columns; i++) {
                 String cell = row[i];
-                boolean right = i > 0;
+                boolean right = !left.contains(i);
                 String padded = right
                         ? " ".repeat(widths[i] - cell.length()) + cell
                         : cell + " ".repeat(widths[i] - cell.length());

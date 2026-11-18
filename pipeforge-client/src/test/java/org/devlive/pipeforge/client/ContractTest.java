@@ -105,8 +105,8 @@ class ContractTest {
         Map<Endpoint, Set<String>> bodies = Map.of(
                 Endpoint.SUBMIT_RUN, Set.of("definition", "variables", "scheduledTime"),
                 Endpoint.CANCEL_RUN, Set.of("reason"),
-                Endpoint.VALIDATE_JOB, Set.of("definition", "variables"),
-                Endpoint.EXPLAIN_JOB, Set.of("definition", "variables"));
+                Endpoint.VALIDATE_JOB, Set.of("definition", "variables", "scheduledTime"),
+                Endpoint.EXPLAIN_JOB, Set.of("definition", "variables", "scheduledTime"));
         bodies.forEach((endpoint, fields) -> {
             JsonNode body = schema(operation(endpoint)
                     .path("requestBody")

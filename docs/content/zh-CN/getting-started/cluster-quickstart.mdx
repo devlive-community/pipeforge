@@ -28,10 +28,12 @@ java -jar lib/server/pipeforge-server-*-exec.jar \
 确认集群已就绪：
 
 ```bash
-curl -s http://127.0.0.1:8080/api/v1/cluster
+bin/pipeforge cluster status
+bin/pipeforge cluster workers
 ```
 
-返回中列出 Master 和一个 Worker 及其 Slot。
+第一个命令显示 Master、已使用的 Slot 和已连接的 Worker；第二个命令每个 Worker 一行，列出它的 Slot、Task、核数、堆内存、最近心跳和标签；
+超过 15 秒没有心跳的 Worker 会标记为 `延迟`（英文为 `LATE`）。
 
 ## 运行作业
 
@@ -51,6 +53,8 @@ source:
 sink:
   - { id: out, type: blackhole }
 ```
+
+`bin/pipeforge job explain orders.yaml` 显示服务端用它的插件为作业生成的计划，即集群将要运行的内容。
 
 ```bash
 bin/pipeforge run orders.yaml

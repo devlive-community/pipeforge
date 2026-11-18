@@ -37,7 +37,8 @@ unpacked, with each process started by its own script in its own copy of the dis
   with the two others. The master counts a worker as lost after 6 seconds here.
 - **The command**: `bin/pipeforge` of the distribution runs a job on the cluster through the server
   with `--analyze`, then shows its status as JSON, its metrics, analysis and the log of a task; a
-  slow run is detached and cancelled with `--yes`; an unknown run exits with 6.
+  slow run is detached and cancelled with `--yes`; `cluster status`, `cluster workers` and
+  `job explain` show the cluster and the server's plan; an unknown run exits with 6.
 
 Run them after a build of the distribution:
 

@@ -50,8 +50,8 @@ until the run runs.
 | `splits(id)`, `tasks(id)` | `GET /api/v1/runs/{id}/splits`, `/tasks` | `RunSplit`s, `RunTask`s |
 | `readLog(id, LogQuery)` | `GET /api/v1/runs/{id}/logs` | `LogChunk` |
 | `cluster()` | `GET /api/v1/cluster` | `ClusterView`: the master, workers and slots |
-| `validate(definition, variables)` | `POST /api/v1/jobs/validate` | `ValidationResult` |
-| `explain(definition, variables)` | `POST /api/v1/explain` | `ExplainResult`: the plan as JSON and as text |
+| `validate(definition, variables[, scheduledTime])` | `POST /api/v1/jobs/validate` | `ValidationResult` |
+| `explain(definition, variables[, scheduledTime])` | `POST /api/v1/explain` | `ExplainResult`: the plan as JSON and as text |
 
 `RunQuery` and `LogQuery` are built step by step:
 

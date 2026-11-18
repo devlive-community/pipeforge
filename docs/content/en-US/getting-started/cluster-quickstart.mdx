@@ -31,10 +31,13 @@ It listens on `http://127.0.0.1:8080`, where the `pipeforge` command looks by de
 give the address with `--server` or `PIPEFORGE_SERVER`. Check that the cluster is there:
 
 ```bash
-curl -s http://127.0.0.1:8080/api/v1/cluster
+bin/pipeforge cluster status
+bin/pipeforge cluster workers
 ```
 
-The answer lists the master and one worker with its slots.
+The first shows the master, the slots in use and the connected workers, the second one row per
+worker with its slots, tasks, cores, heap, last heartbeat and labels; a worker without a heartbeat
+for over 15 seconds is marked `LATE`.
 
 ## Run a job
 
@@ -54,6 +57,9 @@ source:
 sink:
   - { id: out, type: blackhole }
 ```
+
+`bin/pipeforge job explain orders.yaml` shows the plan the server makes for it, with the server's
+plugins: what the cluster will run.
 
 ```bash
 bin/pipeforge run orders.yaml

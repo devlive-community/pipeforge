@@ -48,8 +48,8 @@ if (!ended.run().status().equals("SUCCESS")) {
 | `splits(id)`、`tasks(id)` | `GET /api/v1/runs/{id}/splits`、`/tasks` | `RunSplit`、`RunTask` 列表 |
 | `readLog(id, LogQuery)` | `GET /api/v1/runs/{id}/logs` | `LogChunk` |
 | `cluster()` | `GET /api/v1/cluster` | `ClusterView`：Master、Worker 和 Slot |
-| `validate(definition, variables)` | `POST /api/v1/jobs/validate` | `ValidationResult` |
-| `explain(definition, variables)` | `POST /api/v1/explain` | `ExplainResult`：JSON 和文本形式的计划 |
+| `validate(definition, variables[, scheduledTime])` | `POST /api/v1/jobs/validate` | `ValidationResult` |
+| `explain(definition, variables[, scheduledTime])` | `POST /api/v1/explain` | `ExplainResult`：JSON 和文本形式的计划 |
 
 `RunQuery` 和 `LogQuery` 可以逐步构建：
 

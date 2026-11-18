@@ -411,6 +411,82 @@
       }
     } ]
   }, {
+    "name" : "job",
+    "anchor" : "cmd-job",
+    "synopsis" : "pipeforge job <command>",
+    "description" : {
+      "en-US" : "Work with jobs on the server.",
+      "zh-CN" : "操作服务端上的作业。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "job explain",
+    "anchor" : "cmd-job-explain",
+    "synopsis" : "pipeforge job explain [options] <file>",
+    "description" : {
+      "en-US" : "Show the plan of a job as the server makes it, with its plugins and settings: what the cluster would run. explain plans with the plugins of this command instead.",
+      "zh-CN" : "显示服务端用它的插件和设置为作业生成的计划，即集群将要运行的内容。explain 则使用本命令的插件生成计划。"
+    },
+    "arguments" : [ {
+      "label" : "<file>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The job file.",
+        "zh-CN" : "作业文件。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--var" ],
+      "label" : "<name=value>",
+      "default" : null,
+      "repeatable" : true,
+      "description" : {
+        "en-US" : "A job variable, as name=value; repeat it for more. Wins over env.variables of the job.",
+        "zh-CN" : "作业变量，写成 name=value，可以重复使用；优先于作业的 env.variables。"
+      }
+    }, {
+      "names" : [ "--scheduled-time" ],
+      "label" : "<time>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The planned time of the run, the base of null, as an ISO-8601 time such as 2026-11-07T00:00:00Z. Defaults to now.",
+        "zh-CN" : "本次运行的计划时间，即 null 的基准，写成 ISO-8601 时间，例如 2026-11-07T00:00:00Z。默认为当前时间。"
+      }
+    } ]
+  }, {
+    "name" : "cluster",
+    "anchor" : "cmd-cluster",
+    "synopsis" : "pipeforge cluster <command>",
+    "description" : {
+      "en-US" : "Show the cluster of the server.",
+      "zh-CN" : "显示服务端连接的集群。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "cluster status",
+    "anchor" : "cmd-cluster-status",
+    "synopsis" : "pipeforge cluster status [options]",
+    "description" : {
+      "en-US" : "Show the master, the slots in use and the workers, late ones counted.",
+      "zh-CN" : "显示 Master、已使用的 Slot 和 Worker，并统计心跳延迟的 Worker。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
+    "name" : "cluster workers",
+    "anchor" : "cmd-cluster-workers",
+    "synopsis" : "pipeforge cluster workers [options]",
+    "description" : {
+      "en-US" : "Show the workers with their slots, tasks, resources, last heartbeat and labels.",
+      "zh-CN" : "显示各 Worker 的 Slot、Task、资源、最近心跳和标签。"
+    },
+    "arguments" : [ ],
+    "options" : [ ]
+  }, {
     "name" : "expr",
     "anchor" : "cmd-expr",
     "synopsis" : "pipeforge expr <command>",

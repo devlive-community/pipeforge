@@ -310,4 +310,61 @@ class RunClusterTest {
         Shell.Result result = shell.run("run", "status", ID);
         assertThat(result.out()).contains("进度   已读完 8 / 8 个分片（100%）").contains("瓶颈 TARGET：目标端最慢 (out)");
     }
+
+    static final String CLUSTER =
+            """
+            {"master": {"address": "master:6123", "version": "0.1.0", "protocol": "1.0"},
+             "slots": 8, "slotsUsed": 3, "usage": 0.375,
+             "workers": [
+               {"id": "w2", "rpcAddress": "h2:6124", "dataAddress": "h2:6125", "labels": {},
+                "cpuCores": 4, "taskHeapBytes": 2147483648, "managedBytes": 0, "networkBytes": 0,
+                "tasksRunning": 0, "sinceHeartbeatMs": 21000,
+                "slots": [{"index": 0, "allocated": false}, {"index": 1, "allocated": false}]},
+               {"id": "w1", "rpcAddress": "h1:6124", "dataAddress": "h1:6125",
+                "labels": {"zone": "a", "disk": "ssd"}, "cpuCores": 16, "taskHeapBytes": 8589934592,
+                "managedBytes": 0, "networkBytes": 0, "tasksRunning": 3, "sinceHeartbeatMs": 1200,
+                "slots": [{"index": 0, "allocated": true, "job": "users"}, {"index": 1, "allocated": true, "job": "users"},
+                          {"index": 2, "allocated": true, "job": "users"}, {"index": 3, "allocated": false},
+                          {"index": 4, "allocated": false}, {"index": 5, "allocated": false}]}]}
+            """;
+
+    @Test
+    void showsTheClusterAndItsWorkers() throws Exception {
+        routes.put("GET /api/v1/cluster", () -> CLUSTER);
+        Shell.Result status = shell.run("cluster", "status");
+        assertThat(status.exit()).isZero();
+        assertThat(status.out())
+                .isEqualTo("Master   master:6123  version 0.1.0  protocol 1.0  up -\n"
+                        + "Slots    3 of 8 in use (38%)\n"
+                        + "Workers  2 connected, 1 late (no heartbeat for over 15 s)\n");
+        Shell.Result workers = shell.run("cluster", "workers");
+        assertThat(workers.exit()).isZero();
+        golden("cluster-workers.txt", workers.out());
+        Shell.Result json = shell.run("cluster", "workers", "-o", "json");
+        assertThat(JSON.readTree(json.out()).get(0).path("id").asText()).isEqualTo("w2");
+        assertThat(shell.run("cluster").exit()).isEqualTo(ExitCode.USAGE.code());
+    }
+
+    @Test
+    void explainsAJobOnTheServer() throws Exception {
+        routes.put("POST /api/v1/explain", () -> "{\"plan\": {\"nodes\": []}, \"text\": \"Job users  mode=batch\"}");
+        Shell.Result text = shell.run(
+                "job", "explain", "jobs/users.yaml", "--var", "day=1", "--scheduled-time", "2026-11-07T00:00:00Z");
+        assertThat(text.exit()).as(text.err()).isZero();
+        assertThat(text.out()).isEqualTo("Job users  mode=batch\n");
+        assertThat(received.get(0))
+                .startsWith("POST /api/v1/explain {\"definition\":\"version: 1\\nname: users\\n")
+                .endsWith("\"variables\":{\"day\":\"1\"},\"scheduledTime\":\"2026-11-07T00:00:00Z\"}");
+        Shell.Result json = shell.run("job", "explain", "jobs/users.yaml", "-o", "json");
+        assertThat(JSON.readTree(json.out()).path("plan").path("nodes").isArray())
+                .isTrue();
+
+        statuses.put("POST /api/v1/explain", 422);
+        routes.put(
+                "POST /api/v1/explain",
+                () -> "{\"code\": \"PF-PLUG-0001\", \"message\": \"The sink plugin 'console' is not installed\"}");
+        Shell.Result invalid = shell.run("job", "explain", "jobs/users.yaml");
+        assertThat(invalid.exit()).isEqualTo(ExitCode.INVALID.code());
+        assertThat(invalid.err()).isEqualTo("ERROR PF-PLUG-0001 The sink plugin 'console' is not installed\n");
+    }
 }
