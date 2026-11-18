@@ -168,6 +168,37 @@ final class Cluster implements AutoCloseable {
         launch("server", masterHome, command, Map.of());
     }
 
+    /** The server's address. */
+    String serverUrl() {
+        return "http://127.0.0.1:" + serverPort;
+    }
+
+    /** What a run of the pipeforge command printed and how it exited. */
+    record Command(int exit, String out, String err) {}
+
+    /** Runs the pipeforge command of {@code home} against the server, in English. */
+    Command pipeforge(Path home, String... args) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>();
+        command.add(home.resolve("bin/pipeforge").toString());
+        command.add("--server");
+        command.add(serverUrl());
+        command.addAll(List.of(args));
+        Path out = Files.createTempFile(dir, "cli", ".out");
+        Path err = Files.createTempFile(dir, "cli", ".err");
+        ProcessBuilder builder = new ProcessBuilder(command)
+                .directory(dir.toFile())
+                .redirectOutput(out.toFile())
+                .redirectError(err.toFile());
+        builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+        builder.environment().put("PIPEFORGE_LANG", "en-US");
+        Process process = builder.start();
+        if (!process.waitFor(5, TimeUnit.MINUTES)) {
+            process.destroyForcibly();
+            throw new AssertionError("pipeforge " + String.join(" ", args) + " did not end");
+        }
+        return new Command(process.exitValue(), Files.readString(out), Files.readString(err));
+    }
+
     /** The name of the worker whose RPC address is {@code address}. */
     String workerAt(String address) {
         return workerPorts.entrySet().stream()

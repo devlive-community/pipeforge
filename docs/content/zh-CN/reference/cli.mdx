@@ -7,7 +7,7 @@ data: cli
 
 ## 运行命令
 
-`pipeforge` 在本机校验、解释和运行作业，计算表达式，启动 Web UI。在源码仓库中构建后从应用目录运行，或者解压发行包
+`pipeforge` 校验、解释和运行作业（在本机或在集群上），计算表达式，启动 Web UI。在源码仓库中构建后从应用目录运行，或者解压发行包
 `pipeforge-<版本>.tar.gz`（由 `pipeforge-dist` 构建，其中也包含[集群进程](../operations/deployment)）：
 
 ```bash
@@ -23,6 +23,12 @@ pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge run --local examples
 `blackhole`，还有 `dev/` 中供 [`pipeforge dev`](#cmd-dev) 使用的[开发环境](../development/local-environment)。运行需要 Java 21 或更高版本；`JAVA_HOME` 指定运行时，`JAVA_OPTS` 添加 JVM 选项。
 
 首次运行会把类数据共享归档写入 `lib/pipeforge.jsa`（安装目录不可写时写入用户的缓存目录）；之后的命令大约 200 毫秒即可启动。
+
+## 服务端
+
+不带 `--local` 的 `pipeforge run <文件>` 以及 `run` 下的命令（`status`、`watch`、`logs`、`metrics`、`analyze`、`cancel`）
+与服务端通信：取 `--server <url>`，其次是 `PIPEFORGE_SERVER`，再次是 `http://127.0.0.1:8080`。用法见[集群快速开始](../getting-started/cluster-quickstart)。
+服务端返回的错误保留原有错误码，并使用命令的语言；运行不存在时以 6 退出，作业不合法时以 3 退出，无法连接服务端时以 1 退出（`PF-CLUS-0008`）。
 
 ## 插件
 

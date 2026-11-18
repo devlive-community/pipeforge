@@ -102,8 +102,10 @@ ports reachable only inside the cluster's network.
 
 The master accepts runs over its RPC (`DispatcherService` of the
 [engine protocol](../development/engine-protocol)): it plans the job with its plugins, places the
-tasks on the workers' slots and follows the run. The server and `pipeforge run` submit jobs to a
-cluster in a later step of the distributed runtime; until then they run jobs in local mode.
+tasks on the workers' slots and follows the run. People and scripts submit jobs to the
+[server](./server#running-jobs-on-a-cluster), which keeps the runs and talks to the master: with
+`pipeforge run <file>` (see the [cluster quickstart](../getting-started/cluster-quickstart)), the
+[Java client](../development/java-client), the REST API or the Web UI.
 
 ## Troubleshooting
 

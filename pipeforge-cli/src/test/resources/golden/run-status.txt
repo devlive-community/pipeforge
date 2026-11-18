@@ -1,0 +1,8 @@
+Run 8f6c1b2e-0000-4000-8000-000000000001  users  SUCCESS  3m05s
+Progress   8 of 8 splits read (100%)
+Read       1,234,567 rows  6,655 rows/s
+Written    1,234,560 rows  6,655 rows/s
+Skipped    3 bad rows
+Bottleneck TARGET: the target is the slowest part (out)
+  → Raise the parallelism of out (now 2)
+  → Check the write latency and the load of the target system

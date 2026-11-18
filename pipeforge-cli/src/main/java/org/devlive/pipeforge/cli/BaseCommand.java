@@ -47,6 +47,9 @@ public abstract class BaseCommand implements Callable<Integer> {
             } catch (PipeForgeException e) {
                 Errors.print(session, e);
                 return ExitCode.ERROR.code();
+            } catch (org.devlive.pipeforge.client.ApiException e) {
+                Errors.print(session, e);
+                return Errors.exit(e).code();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return ExitCode.CANCELLED.code();

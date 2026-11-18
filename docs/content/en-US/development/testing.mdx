@@ -35,6 +35,9 @@ unpacked, with each process started by its own script in its own copy of the dis
   at once, as a crash would. The run must fail with `PF-CLUS-0001` (no heartbeat) or `PF-CLUS-0010`
   (the data connection to it broke), the message must name that worker, and the cluster must go on
   with the two others. The master counts a worker as lost after 6 seconds here.
+- **The command**: `bin/pipeforge` of the distribution runs a job on the cluster through the server
+  with `--analyze`, then shows its status as JSON, its metrics, analysis and the log of a task; a
+  slow run is detached and cancelled with `--yes`; an unknown run exits with 6.
 
 Run them after a build of the distribution:
 

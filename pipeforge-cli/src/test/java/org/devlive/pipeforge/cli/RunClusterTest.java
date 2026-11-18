@@ -1,0 +1,313 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+package org.devlive.pipeforge.cli;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import org.devlive.pipeforge.engine.api.JobMetrics;
+import org.devlive.pipeforge.engine.api.JobStatus;
+import org.devlive.pipeforge.engine.api.RunAnalyzer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+/** The commands that run jobs on a cluster, against a stub of the server. */
+class RunClusterTest {
+
+    static final Path GOLDEN = Path.of("src/test/resources/golden");
+    static final ObjectMapper JSON = new ObjectMapper();
+    static final String ID = "8f6c1b2e-0000-4000-8000-000000000001";
+
+    @TempDir
+    Path dir;
+
+    Shell shell;
+    HttpServer server;
+    final Map<String, Supplier<String>> routes = new ConcurrentHashMap<>();
+    final Map<String, Integer> statuses = new ConcurrentHashMap<>();
+    final List<String> received = new CopyOnWriteArrayList<>();
+
+    @BeforeEach
+    void start() throws IOException {
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.createContext("/", this::handle);
+        server.start();
+        shell = new Shell(dir);
+        shell.variables.put(
+                "PIPEFORGE_SERVER", "http://127.0.0.1:" + server.getAddress().getPort());
+        shell.file(
+                "jobs/users.yaml",
+                """
+                version: 1
+                name: users
+                source:
+                  - { id: src, type: fake, columns: [id INT64 NOT NULL], rows: 5 }
+                sink:
+                  - { id: out, type: console }
+                """);
+    }
+
+    @AfterEach
+    void stop() {
+        server.stop(0);
+    }
+
+    void handle(HttpExchange exchange) throws IOException {
+        String key =
+                exchange.getRequestMethod() + " " + exchange.getRequestURI().getPath();
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        received.add(key
+                + (exchange.getRequestURI().getRawQuery() == null
+                        ? ""
+                        : "?" + exchange.getRequestURI().getRawQuery())
+                + (body.isEmpty() ? "" : " " + body));
+        Supplier<String> route = routes.get(key);
+        byte[] answer = (route == null
+                        ? "{\"code\":\"PF-CONF-0010\",\"message\":\"There is no run " + key + "\"}"
+                        : route.get())
+                .getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.sendResponseHeaders(route == null ? 404 : statuses.getOrDefault(key, 200), answer.length);
+        exchange.getResponseBody().write(answer);
+        exchange.close();
+    }
+
+    static String run(String status, String extra) {
+        return """
+                {"id": "%s", "job": "users", "status": "%s", "submittedAt": "2026-11-17T08:00:00Z",
+                 "startedAt": "2026-11-17T08:00:01Z"%s}
+                """
+                .formatted(ID, status, extra);
+    }
+
+    static final String ENDED = run("SUCCESS", ", \"endedAt\": \"2026-11-17T08:03:06.500Z\"");
+
+    static final String METRICS =
+            """
+            {"elapsedMs": 185500, "parallelism": 2, "rowsRead": 1234567, "rowsWritten": 1234560,
+             "rowsInFlight": 7, "rowsDirty": 3, "readRowsPerSecond": 6655.2, "writeRowsPerSecond": 6655.1,
+             "readerWaitMs": 92000, "writerWaitMs": 400, "throttleWaitMs": 0, "backpressuredMs": 15,
+             "splitsTotal": 8, "splitsFinished": 8,
+             "nodes": [{"node": "src", "rowsIn": 0, "rowsOut": 1234567, "rowsFiltered": 0, "rowsDirty": 3},
+                       {"node": "out", "rowsIn": 1234560, "rowsOut": 1234560, "rowsFiltered": 0, "rowsDirty": 0}]}
+            """;
+
+    /** A run analysis the server could send: a real one, with the bottleneck of a slow target. */
+    static String analysis() throws IOException {
+        ObjectNode json =
+                (ObjectNode) JSON.readTree(RunAnalyzer.analyze("users", JobStatus.SUCCESS, List.of(JobMetrics.EMPTY))
+                        .json());
+        json.set(
+                "bottleneck",
+                JSON.readTree(
+                        """
+                {"kind": "TARGET", "node": "out",
+                 "evidence": [{"metric": "readerWaitShare", "node": null, "value": 0.5}],
+                 "advice": [{"code": "sink-parallelism", "text": "Raise the parallelism of out (now 2)"},
+                            {"code": "check-target", "text": "Check the write latency and the load of the target system"}]}
+                """));
+        return json.toString();
+    }
+
+    void serveEndedRun() throws IOException {
+        routes.put("GET /api/v1/runs/" + ID, () -> "{\"run\": " + ENDED + ", \"transitions\": []}");
+        routes.put("GET /api/v1/runs/" + ID + "/metrics", () -> METRICS);
+        String analysis = analysis();
+        routes.put("GET /api/v1/runs/" + ID + "/analysis", () -> analysis);
+    }
+
+    static void golden(String name, String actual) throws IOException {
+        Path file = GOLDEN.resolve(name);
+        if (Boolean.getBoolean("golden.update")) {
+            Files.writeString(file, actual, StandardCharsets.UTF_8);
+        }
+        assertThat(actual).isEqualTo(Files.readString(file, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void runsAJobOnTheClusterUntilItEnds() throws Exception {
+        AtomicInteger asked = new AtomicInteger();
+        statuses.put("POST /api/v1/runs", 201);
+        routes.put("POST /api/v1/runs", () -> run("QUEUE", ""));
+        routes.put(
+                "GET /api/v1/runs/" + ID,
+                () -> "{\"run\": " + (asked.incrementAndGet() < 2 ? run("RUNNING", "") : ENDED) + "}");
+        routes.put("GET /api/v1/runs/" + ID + "/metrics", () -> METRICS);
+
+        Shell.Result result = shell.run("run", "jobs/users.yaml", "--var", "day=2026-11-17");
+        assertThat(result.exit()).as(result.err()).isZero();
+        assertThat(result.out())
+                .isEqualTo("Job users SUCCESS in 3m05s: read 1,234,567 rows, wrote 1,234,560 rows (6,655 rows/s)\n");
+        assertThat(result.err()).startsWith("Submitted run " + ID + " to http://127.0.0.1:");
+        assertThat(received.get(0))
+                .startsWith("POST /api/v1/runs {\"definition\":\"version: 1\\nname: users\\n")
+                .endsWith("\"variables\":{\"day\":\"2026-11-17\"}}");
+    }
+
+    @Test
+    void aFailedRunExitsWith4AndSaysWhy() {
+        statuses.put("POST /api/v1/runs", 201);
+        routes.put("POST /api/v1/runs", () -> run("QUEUE", ""));
+        routes.put(
+                "GET /api/v1/runs/" + ID,
+                () -> "{\"run\": "
+                        + run(
+                                "FAILED",
+                                """
+                , "endedAt": "2026-11-17T08:00:07Z",
+                "error": {"code": "PF-CLUS-0001", "message": "Worker w1 (h:1) sent no heartbeat for 6 s"}""")
+                        + "}");
+        routes.put("GET /api/v1/runs/" + ID + "/metrics", () -> METRICS);
+        Shell.Result result = shell.run("run", "jobs/users.yaml");
+        assertThat(result.exit()).isEqualTo(ExitCode.RUN_FAILED.code());
+        assertThat(result.out()).endsWith("ERROR PF-CLUS-0001 Worker w1 (h:1) sent no heartbeat for 6 s\n");
+    }
+
+    @Test
+    void detachedOnlySubmitsAndAnInvalidJobExitsWith3() {
+        statuses.put("POST /api/v1/runs", 201);
+        routes.put("POST /api/v1/runs", () -> run("QUEUE", ""));
+        Shell.Result detached = shell.run("run", "--detach", "jobs/users.yaml");
+        assertThat(detached.exit()).isZero();
+        assertThat(detached.out()).isEqualTo(ID + "\n");
+
+        statuses.put("POST /api/v1/runs", 422);
+        routes.put(
+                "POST /api/v1/runs",
+                () ->
+                        """
+                {"code": "PF-PLUG-0001", "message": "The sink plugin 'kafka' is not installed",
+                 "hint": "Install it on the server"}
+                """);
+        Shell.Result invalid = shell.run("run", "jobs/users.yaml");
+        assertThat(invalid.exit()).isEqualTo(ExitCode.INVALID.code());
+        assertThat(invalid.err())
+                .isEqualTo("ERROR PF-PLUG-0001 The sink plugin 'kafka' is not installed\n  Install it on the server\n");
+    }
+
+    @Test
+    void showsTheStatusOfARun() throws Exception {
+        serveEndedRun();
+        Shell.Result text = shell.run("run", "status", ID);
+        assertThat(text.exit()).isZero();
+        golden("run-status.txt", text.out());
+        Shell.Result json = shell.run("run", "status", ID, "-o", "json");
+        assertThat(JSON.readTree(json.out()).path("run").path("status").asText())
+                .isEqualTo("SUCCESS");
+        assertThat(JSON.readTree(json.out()).path("metrics").path("splitsTotal").asInt())
+                .isEqualTo(8);
+        assertThat(JSON.readTree(json.out())
+                        .path("analysis")
+                        .path("bottleneck")
+                        .path("kind")
+                        .asText())
+                .isEqualTo("TARGET");
+    }
+
+    @Test
+    void showsMetricsAndTheAnalysis() throws Exception {
+        serveEndedRun();
+        Shell.Result metrics = shell.run("run", "metrics", ID);
+        assertThat(metrics.exit()).isZero();
+        golden("run-metrics.txt", metrics.out());
+        Shell.Result analyze = shell.run("run", "analyze", ID);
+        assertThat(analyze.exit()).isZero();
+        assertThat(analyze.out()).contains("TARGET").contains("Raise the parallelism of out (now 2)");
+    }
+
+    @Test
+    void anUnknownRunExitsWith6() {
+        Shell.Result result = shell.run("run", "status", "nope");
+        assertThat(result.exit()).isEqualTo(ExitCode.NOT_FOUND.code());
+        assertThat(result.err()).startsWith("ERROR PF-CONF-0010 There is no run GET /api/v1/runs/nope");
+    }
+
+    @Test
+    void watchesARunAsJsonLinesWhenNotOnATerminal() throws Exception {
+        AtomicInteger asked = new AtomicInteger();
+        routes.put(
+                "GET /api/v1/runs/" + ID,
+                () -> "{\"run\": " + (asked.incrementAndGet() < 3 ? run("RUNNING", "") : ENDED) + "}");
+        routes.put("GET /api/v1/runs/" + ID + "/metrics", () -> METRICS);
+        Shell.Result result = shell.run("run", "watch", ID, "--interval", "10ms");
+        assertThat(result.exit()).isZero();
+        List<String> lines = result.out().lines().toList();
+        assertThat(lines).hasSize(3);
+        assertThat(JSON.readTree(lines.get(0)).path("status").asText()).isEqualTo("RUNNING");
+        assertThat(JSON.readTree(lines.get(2)).path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(JSON.readTree(lines.get(2)).path("splitsFinished").asInt()).isEqualTo(8);
+    }
+
+    @Test
+    void showsTheLogsOfTasks() {
+        routes.put(
+                "GET /api/v1/runs/" + ID + "/tasks",
+                () ->
+                        """
+                [{"vertex": "src", "subtask": 0, "attempt": 0, "state": "FINISHED", "worker": "w1"},
+                 {"vertex": "src", "subtask": 1, "attempt": 0, "state": "FINISHED", "worker": "w2"}]
+                """);
+        routes.put(
+                "GET /api/v1/runs/" + ID + "/logs",
+                () -> "{\"text\": \"2026-11-17 08:00:02.000 WARN  slow\\n\", \"offset\": 34, \"eof\": true}");
+        Shell.Result all = shell.run("run", "logs", ID);
+        assertThat(all.exit()).isZero();
+        assertThat(all.out())
+                .isEqualTo("==> src[0] on w1 <==\n2026-11-17 08:00:02.000 WARN  slow\n"
+                        + "==> src[1] on w2 <==\n2026-11-17 08:00:02.000 WARN  slow\n");
+        Shell.Result one = shell.run("run", "logs", ID, "--task", "src[1]", "--level", "warn", "--grep", "slow down");
+        assertThat(one.out()).isEqualTo("2026-11-17 08:00:02.000 WARN  slow\n");
+        assertThat(received)
+                .last()
+                .isEqualTo("GET /api/v1/runs/" + ID
+                        + "/logs?vertex=src&subtask=1&attempt=0&offset=0&contains=slow%20down&level=WARN");
+        assertThat(shell.run("run", "logs", ID, "--task", "dst").err())
+                .startsWith("Error: The run has no task dst; its tasks are src[0], src[1].");
+        assertThat(shell.run("run", "logs", ID, "-f").err())
+                .startsWith("Error: -f follows one task: choose it with --task, one of src[0], src[1].");
+        assertThat(shell.run("run", "logs", ID, "--level", "loud").exit()).isEqualTo(ExitCode.USAGE.code());
+    }
+
+    @Test
+    void cancelsOnlyWhenConfirmed() {
+        routes.put("POST /api/v1/runs/" + ID + "/cancel", () -> run("CANCELLING", ""));
+        Shell.Result unconfirmed = shell.run("run", "cancel", ID);
+        assertThat(unconfirmed.exit()).isEqualTo(ExitCode.USAGE.code());
+        assertThat(unconfirmed.err()).startsWith("Error: Cancelling run " + ID + " needs --yes");
+        assertThat(received).isEmpty();
+
+        Shell.Result cancelled = shell.run("run", "cancel", ID, "--yes", "--reason", "by hand");
+        assertThat(cancelled.exit()).isZero();
+        assertThat(cancelled.out()).isEqualTo("Run " + ID + " is CANCELLING.\n");
+        assertThat(received).containsExactly("POST /api/v1/runs/" + ID + "/cancel {\"reason\":\"by hand\"}");
+    }
+
+    @Test
+    void speaksChinese() throws Exception {
+        serveEndedRun();
+        shell.variables.put("PIPEFORGE_LANG", "zh-CN");
+        Shell.Result result = shell.run("run", "status", ID);
+        assertThat(result.out()).contains("进度   已读完 8 / 8 个分片（100%）").contains("瓶颈 TARGET：目标端最慢 (out)");
+    }
+}

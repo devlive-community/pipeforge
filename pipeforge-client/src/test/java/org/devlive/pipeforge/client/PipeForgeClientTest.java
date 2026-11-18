@@ -167,12 +167,12 @@ class PipeForgeClientTest {
                 r -> new Answer(
                         404,
                         """
-                {"code": "PF-CLUS-0014", "name": "RUN_NOT_FOUND", "message": "There is no run nope",
+                {"code": "PF-CONF-0010", "name": "RUN_NOT_FOUND", "message": "There is no run nope",
                  "hint": "List the runs", "params": {"run": "nope", "missing": null}, "scope": {}}
                 """));
         assertThatThrownBy(() -> client.run("nope")).isInstanceOfSatisfying(ApiException.class, e -> {
             assertThat(e.status()).isEqualTo(404);
-            assertThat(e.code()).isEqualTo("PF-CLUS-0014");
+            assertThat(e.code()).isEqualTo("PF-CONF-0010");
             assertThat(e.getMessage()).isEqualTo("There is no run nope");
             assertThat(e.error().hint()).isEqualTo("List the runs");
             assertThat(e.error().params()).containsEntry("run", "nope").containsEntry("missing", null);

@@ -40,10 +40,23 @@ import picocli.CommandLine.Parameters;
  * {@code pipeforge run --local}: runs a job file in this process and waits for its end. Ctrl-C
  * cancels the job. Running on a cluster arrives with the distributed runtime.
  */
-@Command(name = "run", mixinStandardHelpOptions = true, sortOptions = false)
+@Command(
+        name = "run",
+        mixinStandardHelpOptions = true,
+        sortOptions = false,
+        subcommands = {
+            RunClusterCommands.Status.class,
+            RunClusterCommands.Watch.class,
+            RunClusterCommands.Logs.class,
+            RunClusterCommands.Metrics.class,
+            RunClusterCommands.Analyze.class,
+            RunClusterCommands.Cancel.class
+        })
 public final class RunCommand extends BaseCommand {
 
-    @Parameters(paramLabel = "<file>", descriptionKey = "run.file")
+    // optional for picocli, so that the subcommands need no file; required by execute()
+    @Parameters(paramLabel = "<file>", descriptionKey = "run.file", arity = "0..1")
+    @Nullable
     Path file;
 
     @Option(names = "--local", descriptionKey = "run.local")
@@ -58,6 +71,9 @@ public final class RunCommand extends BaseCommand {
 
     @Option(names = "--analyze", descriptionKey = "run.analyze")
     boolean analyze;
+
+    @Option(names = "--detach", descriptionKey = "run.detach")
+    boolean detach;
 
     @Option(
             names = "--timeout",
@@ -123,10 +139,19 @@ public final class RunCommand extends BaseCommand {
 
     @Override
     protected ExitCode execute(Session session) throws Exception {
-        if (!local && !dryRun) {
-            throw new ParameterException(spec.commandLine(), session.messages().get("run.cluster"));
+        if (file == null) {
+            throw new ParameterException(spec.commandLine(), session.messages().get("run.file-missing"));
+        }
+        if (!local && workers != null) {
+            throw new ParameterException(spec.commandLine(), session.messages().get("run.workers-local"));
+        }
+        if (local && detach) {
+            throw new ParameterException(spec.commandLine(), session.messages().get("run.detach-local"));
         }
         Path path = JobFiles.expand(session, List.of(file)).get(0);
+        if (!local && !dryRun) {
+            return cluster(session, JobFiles.read(path));
+        }
         PluginComponents[] components = new PluginComponents[1];
         try {
             JobPlan plan;
@@ -150,6 +175,105 @@ public final class RunCommand extends BaseCommand {
                 components[0].close();
             }
         }
+    }
+
+    /**
+     * What {@code -o json} prints for a run of the cluster.
+     *
+     * @param analysis the run analysis, with --analyze
+     */
+    public record ClusterResult(
+            org.devlive.pipeforge.client.Run run,
+            org.devlive.pipeforge.client.@Nullable RunMetrics metrics,
+            com.fasterxml.jackson.databind.@Nullable JsonNode analysis) {}
+
+    /**
+     * Submits the job to the server and, unless detached, follows the run until it ends: progress
+     * on a terminal, then the summary; the exit code says how it ended. With --timeout the run is
+     * cancelled when the time is up. Interrupting the command leaves the run running.
+     */
+    private ExitCode cluster(Session session, String definition) throws Exception {
+        org.devlive.pipeforge.client.PipeForgeClient client = session.client();
+        org.devlive.pipeforge.client.Run submitted = client.submitRun(definition, job.variables, job.scheduledTime);
+        if (detach) {
+            session.print(new ClusterResult(submitted, null, null), submitted.id() + "\n");
+            return ExitCode.SUCCESS;
+        }
+        session.note(session.messages().get("run.submitted", submitted.id(), client.server()));
+        boolean progress =
+                session.table() && !session.quiet() && session.environment().interactive();
+        long deadline = timeout == null ? Long.MAX_VALUE : System.nanoTime() + timeout.toNanos();
+        boolean timedOut = false;
+        org.devlive.pipeforge.client.RunDetail detail;
+        try {
+            while (true) {
+                detail = client.run(submitted.id());
+                if (org.devlive.pipeforge.client.PipeForgeClient.ENDED.contains(
+                        detail.run().status())) {
+                    break;
+                }
+                if (!timedOut && System.nanoTime() - deadline >= 0) {
+                    timedOut = true;
+                    client.cancelRun(submitted.id(), "--timeout " + timeout);
+                }
+                if (progress) {
+                    org.devlive.pipeforge.client.RunMetrics now = client.metrics(submitted.id());
+                    session.err()
+                            .print("\r"
+                                    + session.messages()
+                                            .get(
+                                                    "run.progress",
+                                                    RunViews.duration(
+                                                            RunViews.elapsed(detail.run(), java.time.Instant.now())),
+                                                    RunViews.count(now.rowsRead()),
+                                                    RunViews.count(now.rowsWritten()),
+                                                    RunViews.rate(now.writeRowsPerSecond())));
+                    session.err().flush();
+                }
+                Thread.sleep(1000);
+            }
+        } finally {
+            if (progress) {
+                session.err().print("\r\u001b[2K");
+                session.err().flush();
+            }
+        }
+        org.devlive.pipeforge.client.Run run = detail.run();
+        org.devlive.pipeforge.client.RunMetrics metrics = client.metrics(run.id());
+        com.fasterxml.jackson.databind.JsonNode analysis =
+                analyze ? RunClusterCommands.analysis(client, run.id()) : null;
+        StringBuilder text = new StringBuilder();
+        long elapsed = RunViews.elapsed(run, java.time.Instant.now());
+        text.append(session.messages()
+                        .get(
+                                "run.summary",
+                                run.job(),
+                                run.status(),
+                                RunViews.duration(elapsed),
+                                RunViews.count(metrics.rowsRead()),
+                                RunViews.count(metrics.rowsWritten()),
+                                RunViews.rate(elapsed > 0 ? metrics.rowsWritten() * 1000.0 / elapsed : 0)))
+                .append('\n');
+        if (timedOut) {
+            text.append(session.messages().get("run.timeout", timeout)).append('\n');
+        }
+        if (run.error() != null) {
+            text.append("ERROR ")
+                    .append(run.error().code())
+                    .append(' ')
+                    .append(run.error().message())
+                    .append('\n');
+        }
+        if (analysis != null) {
+            String analysisText = org.devlive.pipeforge.engine.api.RunAnalysis.fromJson(analysis.toString())
+                    .text();
+            text.append('\n').append(analysisText);
+            if (!analysisText.endsWith("\n")) {
+                text.append('\n');
+            }
+        }
+        session.print(new ClusterResult(run, metrics, analysis), text.toString());
+        return timedOut ? ExitCode.TIMEOUT : RunViews.exit(run.status());
     }
 
     private ExitCode run(Session session, LocalEngine engine, JobPlan plan) throws Exception {

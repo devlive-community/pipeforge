@@ -141,7 +141,7 @@ public final class PipeForgeClient {
         return call(Endpoint.LIST_RUNS, Map.of(), parameters, null);
     }
 
-    /** The run with its definition and changes of state; {@code PF-CLUS-0014} when there is none. */
+    /** The run with its definition and changes of state; {@code PF-CONF-0010} when there is none. */
     public RunDetail run(String id) {
         return call(Endpoint.GET_RUN, Map.of("id", id), Map.of(), null);
     }

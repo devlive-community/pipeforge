@@ -37,6 +37,37 @@ public final class Errors {
         err.flush();
     }
 
+    /** An error the server described, already in the session's language. */
+    public static void print(Session session, org.devlive.pipeforge.client.ApiException failure) {
+        org.devlive.pipeforge.client.ApiError error = failure.error();
+        PrintStream err = session.err();
+        if (!session.table()) {
+            err.print(Output.render(Map.of("error", error), session.format()));
+        } else {
+            err.println("ERROR " + error.code() + " " + error.message());
+            if (error.hint() != null && !error.hint().isBlank()) {
+                err.println("  " + error.hint());
+            }
+        }
+        if (session.verbose() && failure.getCause() != null) {
+            failure.getCause().printStackTrace(err);
+        }
+        err.flush();
+    }
+
+    /**
+     * The exit code of an error of the server: an unknown object 6, an invalid job 3, a refused
+     * identity 7, anything else 1.
+     */
+    public static ExitCode exit(org.devlive.pipeforge.client.ApiException failure) {
+        return switch (failure.status()) {
+            case 404 -> ExitCode.NOT_FOUND;
+            case 400, 422 -> ExitCode.INVALID;
+            case 401, 403 -> ExitCode.UNAUTHORIZED;
+            default -> ExitCode.ERROR;
+        };
+    }
+
     /** An unexpected exception: a defect, reported as PF-SYS-0001 with the stack trace when verbose. */
     public static void internal(Session session, RuntimeException e) {
         print(

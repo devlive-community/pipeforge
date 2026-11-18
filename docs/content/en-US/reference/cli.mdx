@@ -7,8 +7,8 @@ data: cli
 
 ## Running the command
 
-`pipeforge` validates, explains and runs jobs on this machine, evaluates expressions and starts
-the Web UI. Build it in a checkout and run it from the app directory, or unpack the release
+`pipeforge` validates, explains and runs jobs, on this machine or on a cluster, evaluates
+expressions and starts the Web UI. Build it in a checkout and run it from the app directory, or unpack the release
 `pipeforge-<version>.tar.gz`, which `pipeforge-dist` builds and which also holds the
 [cluster processes](../operations/deployment):
 
@@ -30,6 +30,15 @@ later; `JAVA_HOME` selects the runtime and `JAVA_OPTS` adds JVM options.
 
 The first run writes a class data sharing archive to `lib/pipeforge.jsa` (or to the user's cache
 directory when the installation is not writable); later commands start in about 200 ms.
+
+## Servers
+
+`pipeforge run <file>` without `--local` and the commands under `run` (`status`, `watch`, `logs`,
+`metrics`, `analyze`, `cancel`) talk to a server: `--server <url>`, else `PIPEFORGE_SERVER`, else
+`http://127.0.0.1:8080`. The [cluster quickstart](../getting-started/cluster-quickstart) shows
+them at work. Errors of the server keep their code and come in the language of the command; an
+unknown run exits with 6, an invalid job with 3 and a server that cannot be reached with 1
+(`PF-CLUS-0008`).
 
 ## Plugins
 

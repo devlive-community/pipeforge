@@ -67,6 +67,10 @@ public final class Root implements java.util.concurrent.Callable<Integer> {
     @Nullable
     String lang;
 
+    @Option(names = "--server", paramLabel = "<url>", descriptionKey = "option.server", scope = ScopeType.INHERIT)
+    @Nullable
+    String server;
+
     @Option(names = "--no-color", descriptionKey = "option.no-color", scope = ScopeType.INHERIT)
     boolean noColor;
 

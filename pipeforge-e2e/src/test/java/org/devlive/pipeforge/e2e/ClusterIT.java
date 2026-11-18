@@ -163,6 +163,66 @@ class ClusterIT {
         cluster.await("/api/v1/cluster", c -> c.path("workers").size() == 2, Duration.ofMinutes(1));
     }
 
+    @Test
+    @Order(3)
+    void thePipeforgeCommandRunsJobsOnTheClusterAndFollowsThem() throws Exception {
+        Path home = Path.of(System.getProperty("pipeforge.dist"))
+                .getParent()
+                .getParent()
+                .resolve("e2e-run/master");
+        Path file = home.getParent().resolve("cli-job.yaml");
+        try (Connection connection = postgres();
+                Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE public.orders_cli (LIKE public.orders INCLUDING ALL)");
+            statement.execute("CREATE TABLE public.orders_cancel (LIKE public.orders INCLUDING ALL)");
+        }
+        Files.writeString(file, job("orders-cli", "orders_cli", ""));
+
+        Cluster.Command run = cluster.pipeforge(home, "run", file.toString(), "--analyze");
+        assertThat(run.exit()).as("%s\n%s", run.out(), run.err()).isZero();
+        assertThat(run.out())
+                .startsWith("Job orders-cli SUCCESS in ")
+                .contains("read 1,000,000 rows, wrote 1,000,000 rows");
+        String id = run.err()
+                .lines()
+                .filter(l -> l.startsWith("Submitted run "))
+                .findFirst()
+                .orElseThrow()
+                .split(" ")[2];
+
+        Cluster.Command status = cluster.pipeforge(home, "run", "status", id, "-o", "json");
+        assertThat(status.exit()).isZero();
+        JsonNode json = Cluster.JSON.readTree(status.out());
+        assertThat(json.path("run").path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(json.path("metrics").path("splitsFinished").asInt()).isEqualTo(12);
+        assertThat(cluster.pipeforge(home, "run", "metrics", id).out()).contains("rowsWritten         1,000,000");
+        assertThat(cluster.pipeforge(home, "run", "analyze", id).exit()).isZero();
+        Cluster.Command logs = cluster.pipeforge(home, "run", "logs", id, "--task", "orders[0]");
+        assertThat(logs.exit()).isZero();
+        assertThat(logs.out()).contains(" is running").contains(" finished");
+
+        // a slow run, detached, then cancelled: the command waits for nothing and the run ends
+        Files.writeString(file, job("orders-cancel", "orders_cancel", "  limit.rows-per-second: 5000\n"));
+        Cluster.Command detached = cluster.pipeforge(home, "run", "--detach", file.toString());
+        assertThat(detached.exit()).as(detached.err()).isZero();
+        String slow = detached.out().strip();
+        cluster.await(
+                "/api/v1/runs/" + slow,
+                d -> "RUNNING".equals(d.path("run").path("status").asText()),
+                Duration.ofMinutes(1));
+        Cluster.Command cancel = cluster.pipeforge(home, "run", "cancel", slow, "--yes", "--reason", "end-to-end test");
+        assertThat(cancel.exit()).as(cancel.err()).isZero();
+        assertThat(cluster.await("/api/v1/runs/" + slow, Support::ended, Duration.ofMinutes(1))
+                        .path("run")
+                        .path("status")
+                        .asText())
+                .isEqualTo("CANCELLED");
+
+        Cluster.Command unknown = cluster.pipeforge(home, "run", "status", "no-such-run");
+        assertThat(unknown.exit()).isEqualTo(6);
+        assertThat(unknown.err()).startsWith("ERROR PF-CONF-0010");
+    }
+
     String job(String name, String target, String env) {
         return """
                 version: 1

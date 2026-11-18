@@ -170,7 +170,7 @@ describe("RunDetailPage", () => {
   });
 
   it("says when the run does not exist", async () => {
-    fakeServer({ [`/api/v1/runs/${ID}`]: [404, { code: "PF-CLUS-0014", message: "There is no run" }] });
+    fakeServer({ [`/api/v1/runs/${ID}`]: [404, { code: "PF-CONF-0010", message: "There is no run" }] });
     renderApp(`/runs/${ID}`);
     expect(await screen.findByText(`There is no run ${ID}.`)).toBeInTheDocument();
   });

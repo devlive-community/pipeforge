@@ -34,7 +34,7 @@ public final class ApiException extends RuntimeException {
         return status;
     }
 
-    /** The registered error code, e.g. {@code PF-CLUS-0014}. */
+    /** The registered error code, e.g. {@code PF-CONF-0010}. */
     public String code() {
         return error.code();
     }

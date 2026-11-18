@@ -71,7 +71,7 @@ long next = client.followLog(run.id(), query.withOffset(-64 * 1024), Duration.of
 
 | 情况 | `status()` | `code()` |
 |---|---|---|
-| 服务端拒绝，例如运行不存在 | 对应的 HTTP 状态，例如 404 | 服务端的错误码，例如 `PF-CLUS-0014` |
+| 服务端拒绝，例如运行不存在 | 对应的 HTTP 状态，例如 404 | 服务端的错误码，例如 `PF-CONF-0010` |
 | 无法连接服务端 | 0 | `PF-CLUS-0008` |
 | 返回的不是服务端的错误，例如代理的页面 | 对应的 HTTP 状态 | `PF-SYS-0001` |
 

@@ -1,0 +1,98 @@
+---
+title: Cluster quickstart
+description: Start a cluster of the distribution on one machine, run a job on it with the pipeforge command and follow the run - status, watch, logs, metrics, analysis and cancelling.
+order: 30
+---
+
+The [quickstart](./quickstart) runs a job in the `pipeforge` process. Here the same command sends
+jobs to a cluster: a master that plans and places the tasks, workers that run them, and the server
+that keeps the runs and that the command talks to. Everything runs on one machine; for more
+machines see [deployment](../operations/deployment).
+
+## Start the cluster
+
+In the unpacked distribution, with Java 21:
+
+```bash
+export PIPEFORGE_CLUSTER_TOKEN="$(openssl rand -hex 32)"
+bin/pipeforge-standalone.sh start
+```
+
+The standalone process is a master and a worker in one process; the master listens on port 6123.
+Then start the server and point it at the master:
+
+```bash
+java -jar lib/server/pipeforge-server-*-exec.jar \
+  --pipeforge.master.address=localhost:6123 \
+  --pipeforge.master.token="$PIPEFORGE_CLUSTER_TOKEN"
+```
+
+It listens on `http://127.0.0.1:8080`, where the `pipeforge` command looks by default; elsewhere,
+give the address with `--server` or `PIPEFORGE_SERVER`. Check that the cluster is there:
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/cluster
+```
+
+The answer lists the master and one worker with its slots.
+
+## Run a job
+
+Write a job that takes a while, `orders.yaml`:
+
+```yaml
+version: 1
+name: orders-demo
+source:
+  - id: orders
+    type: fake
+    columns:
+      - id INT64 NOT NULL
+      - amount DECIMAL(10, 2)
+    rows: 5000000
+    splits: 8
+sink:
+  - { id: out, type: blackhole }
+```
+
+```bash
+bin/pipeforge run orders.yaml
+```
+
+Without `--local` the command submits the job to the server, prints the run's ID on the standard
+error, shows the progress while the run runs and its summary when it ends:
+
+```text
+Submitted run 3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01 to http://127.0.0.1:8080.
+Job orders-demo SUCCESS in 4.1s: read 5,000,000 rows, wrote 5,000,000 rows (1,219,512 rows/s)
+```
+
+The time and the rate vary. The exit code says how the run ended: 0 succeeded, 4 failed, 5 timed out (`--timeout` cancels the
+run when the time is up), 8 cancelled. Ctrl-C stops the command, not the run. `--detach` only
+submits the job and prints the run's ID, for scripts that follow it later.
+
+## Follow a run
+
+| Command | Shows |
+|---|---|
+| `pipeforge run status <run>` | State, splits read and the time left, rows and rates, the bottleneck and its advice, the error |
+| `pipeforge run watch <run>` | The status redrawn every two seconds until the run ends, with the nodes; when the output is not a terminal, one JSON line every two seconds. Exits like `run` |
+| `pipeforge run logs <run> [--task orders[0]] [-f] [--level WARN] [--grep text]` | The logs of the tasks, read from their workers through the server; `-f` follows one task until it ends |
+| `pipeforge run metrics <run>` | The metrics of the run and the rows of each node |
+| `pipeforge run analyze <run>` | The [run analysis](../concepts/plan-and-explain#run-analysis): rates, waits, the bottleneck and what to change |
+| `pipeforge run cancel <run> [--reason text]` | Asks the run to stop; it asks first on a terminal, and needs `--yes` elsewhere |
+
+Every command prints JSON with `-o json`, with the fields of the [REST API](../reference/api). An
+unknown run exits with 6 and `PF-CONF-0010`; a server that cannot be reached with 1 and
+`PF-CLUS-0008`. The [Web UI](../guides/runs) shows the same runs.
+
+## Stop the cluster
+
+Stop the server with Ctrl-C, then:
+
+```bash
+bin/pipeforge-standalone.sh stop
+```
+
+The runs stay in the server's [metastore](../operations/metastore), in `~/.pipeforge/metastore` by
+default.

@@ -49,6 +49,12 @@ class CliReferenceTest {
                         "validate",
                         "explain",
                         "run",
+                        "run status",
+                        "run watch",
+                        "run logs",
+                        "run metrics",
+                        "run analyze",
+                        "run cancel",
                         "expr",
                         "expr eval",
                         "ui",
@@ -71,6 +77,6 @@ class CliReferenceTest {
         assertThat((List<Object>) reference.get("exitCodes")).hasSize(10);
         assertThat((List<Map<String, Object>>) reference.get("globalOptions"))
                 .extracting(o -> ((List<String>) o.get("names")).get(0))
-                .containsExactly("-o", "--lang", "--no-color", "-q", "-v", "--plugin-path", "--dev");
+                .containsExactly("-o", "--lang", "--server", "--no-color", "-q", "-v", "--plugin-path", "--dev");
     }
 }

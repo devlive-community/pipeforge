@@ -111,5 +111,6 @@ origin and the schema after each node, for example that `user_id` is the new pri
 - Try an expression on one row before you put it in a mapping:
   `pipeforge expr eval "UPPER(SUBSTRING(name, 1, 1))" --row '{"name": "ada"}'`.
 - Start the Web UI with the same plugins: `pipeforge ui`.
+- Run the job on a cluster: see the [cluster quickstart](./cluster-quickstart).
 - Read about the [job DSL](../reference/job-dsl), the [field mapper](../plugins/transform/field-mapper)
   and every command in the [CLI reference](../reference/cli).

@@ -130,13 +130,19 @@ class CommandsTest {
     }
 
     @Test
-    void runningNeedsLocalInThisVersion() {
+    void withoutLocalTheJobGoesToAServerThatMustBeReachable() throws Exception {
+        int port;
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            port = socket.getLocalPort();
+        }
+        shell.variables.put("PIPEFORGE_SERVER", "127.0.0.1:" + port);
         Shell.Result result = shell.run("run", "jobs/users.yaml");
-        assertThat(result.exit()).isEqualTo(ExitCode.USAGE.code());
+        assertThat(result.exit()).isEqualTo(ExitCode.ERROR.code());
         assertThat(result.err())
-                .isEqualTo(
-                        "Error: Running on a cluster is not available yet: add --local to run the job in this process,"
-                                + " or --dry-run to only plan it.\nRun 'pipeforge run --help' for the usage.\n");
+                .startsWith("ERROR PF-CLUS-0008 The server at http://127.0.0.1:" + port + " cannot be reached");
+        assertThat(shell.run("run", "--workers", "2", "jobs/users.yaml").err())
+                .startsWith("Error: --workers only goes with --local");
+        assertThat(shell.run("run").err()).startsWith("Error: Missing the job file to run");
     }
 
     @Test
@@ -299,7 +305,7 @@ class CommandsTest {
     @Test
     void speaksChinese() throws Exception {
         Shell.Result help = shell.run("--lang", "zh-CN", "run", "--help");
-        assertThat(help.out()).contains("用法：").contains("在本机运行作业文件并等待它结束");
+        assertThat(help.out()).contains("用法：").contains("经由服务端在集群上运行作业文件并等待它结束");
         shell.variables.put("PIPEFORGE_LANG", "zh");
         Shell.Result invalid = shell.run("validate", "jobs/broken.yaml");
         assertThat(invalid.out()).contains("节点 'src' 的选项 'rows'").contains("0 个有效，1 个无效");

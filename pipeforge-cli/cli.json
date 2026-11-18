@@ -1,8 +1,8 @@
 {
   "name" : "pipeforge",
   "description" : {
-    "en-US" : "Validate, explain and run PipeForge jobs on this machine, evaluate expressions and start the Web UI.",
-    "zh-CN" : "在本机校验、解释和运行 PipeForge 作业，计算表达式，启动 Web UI。"
+    "en-US" : "Validate, explain and run PipeForge jobs, on this machine or on a cluster through its server, evaluate expressions and start the Web UI.",
+    "zh-CN" : "校验、解释和运行 PipeForge 作业（在本机，或经由服务端在集群上），计算表达式，启动 Web UI。"
   },
   "globalOptions" : [ {
     "names" : [ "-o", "--output" ],
@@ -21,6 +21,15 @@
     "description" : {
       "en-US" : "Language of messages and errors: en-US or zh-CN. Defaults to PIPEFORGE_LANG, then the system language.",
       "zh-CN" : "提示和错误的语言：en-US 或 zh-CN。默认取 PIPEFORGE_LANG，其次是系统语言。"
+    }
+  }, {
+    "names" : [ "--server" ],
+    "label" : "<url>",
+    "default" : null,
+    "repeatable" : false,
+    "description" : {
+      "en-US" : "The server to run jobs on: an http(s) address. Default: PIPEFORGE_SERVER, else http://127.0.0.1:8080.",
+      "zh-CN" : "运行作业的服务端：http(s) 地址。默认取 PIPEFORGE_SERVER，其次是 http://127.0.0.1:8080。"
     }
   }, {
     "names" : [ "--no-color" ],
@@ -143,15 +152,15 @@
   }, {
     "name" : "run",
     "anchor" : "cmd-run",
-    "synopsis" : "pipeforge run [options] <file>",
+    "synopsis" : "pipeforge run <command>",
     "description" : {
-      "en-US" : "Run a job file on this machine and wait until it ends. Ctrl-C cancels it.",
-      "zh-CN" : "在本机运行作业文件并等待它结束。按 Ctrl-C 取消。"
+      "en-US" : "Run a job file on a cluster through its server and wait until it ends, or with --local on this machine. Ctrl-C stops waiting for a run of the cluster; it goes on.",
+      "zh-CN" : "经由服务端在集群上运行作业文件并等待它结束，或者用 --local 在本机运行。对集群上的运行按 Ctrl-C 只停止等待，运行继续。"
     },
     "arguments" : [ {
       "label" : "<file>",
       "repeatable" : false,
-      "required" : true,
+      "required" : false,
       "description" : {
         "en-US" : "The job file.",
         "zh-CN" : "作业文件。"
@@ -163,8 +172,8 @@
       "default" : null,
       "repeatable" : false,
       "description" : {
-        "en-US" : "Run in this process. Required in this version; running on a cluster comes with the distributed runtime.",
-        "zh-CN" : "在当前进程中运行。本版本必须指定；在集群上运行随分布式运行时提供。"
+        "en-US" : "Run in this process instead of on a cluster.",
+        "zh-CN" : "在当前进程中运行，而不是在集群上运行。"
       }
     }, {
       "names" : [ "--workers" ],
@@ -194,6 +203,15 @@
         "zh-CN" : "运行结束后输出运行分析：节点、速率、等待时间和对账结果。"
       }
     }, {
+      "names" : [ "--detach" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Only submit the job and print the run ID; follow it with run status, watch or logs.",
+        "zh-CN" : "只提交作业并输出运行 ID；之后用 run status、watch 或 logs 跟踪。"
+      }
+    }, {
       "names" : [ "--timeout" ],
       "label" : "<duration>",
       "default" : null,
@@ -219,6 +237,177 @@
       "description" : {
         "en-US" : "The planned time of the run, the base of null, as an ISO-8601 time such as 2026-11-07T00:00:00Z. Defaults to now.",
         "zh-CN" : "本次运行的计划时间，即 null 的基准，写成 ISO-8601 时间，例如 2026-11-07T00:00:00Z。默认为当前时间。"
+      }
+    } ]
+  }, {
+    "name" : "run status",
+    "anchor" : "cmd-run-status",
+    "synopsis" : "pipeforge run status [options] <run>",
+    "description" : {
+      "en-US" : "Show the status of a run: its state, progress and time left, rows and rates, bottleneck and error.",
+      "zh-CN" : "显示运行的状态：状态、进度和剩余时间、行数和速率、瓶颈和错误。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "run watch",
+    "anchor" : "cmd-run-watch",
+    "synopsis" : "pipeforge run watch [options] <run>",
+    "description" : {
+      "en-US" : "Follow a run until it ends: on a terminal a view redrawn every interval, else one JSON line per interval. Exits as the run ended.",
+      "zh-CN" : "跟踪运行直到结束：在终端上按间隔刷新视图，否则每个间隔输出一行 JSON。退出码对应运行的结束方式。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--interval" ],
+      "label" : "<duration>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "How often to ask for the run, e.g. 2s (the default) or 500ms.",
+        "zh-CN" : "查询运行的间隔，例如 2s（默认）或 500ms。"
+      }
+    } ]
+  }, {
+    "name" : "run logs",
+    "anchor" : "cmd-run-logs",
+    "synopsis" : "pipeforge run logs [options] <run>",
+    "description" : {
+      "en-US" : "Show the logs of the tasks of a run, read from their workers through the server.",
+      "zh-CN" : "显示运行中 Task 的日志，经由服务端从 Worker 读取。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--task" ],
+      "label" : "<vertex[subtask]>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The task, as vertex[subtask], e.g. src[3]; all tasks when left out.",
+        "zh-CN" : "Task，写成 vertex[subtask]，例如 src[3]；不指定时显示所有 Task。"
+      }
+    }, {
+      "names" : [ "-f", "--follow" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Keep reading new entries until the task ended.",
+        "zh-CN" : "持续读取新日志，直到 Task 结束。"
+      }
+    }, {
+      "names" : [ "--level" ],
+      "label" : "<level>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Only entries of this level or above: TRACE, DEBUG, INFO, WARN or ERROR.",
+        "zh-CN" : "只显示这个级别及以上的日志：TRACE、DEBUG、INFO、WARN 或 ERROR。"
+      }
+    }, {
+      "names" : [ "--grep" ],
+      "label" : "<text>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Only entries that contain this text.",
+        "zh-CN" : "只显示包含这段文本的日志。"
+      }
+    } ]
+  }, {
+    "name" : "run metrics",
+    "anchor" : "cmd-run-metrics",
+    "synopsis" : "pipeforge run metrics [options] <run>",
+    "description" : {
+      "en-US" : "Show the metrics of a run and of each of its nodes.",
+      "zh-CN" : "显示运行及其每个节点的指标。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "run analyze",
+    "anchor" : "cmd-run-analyze",
+    "synopsis" : "pipeforge run analyze [options] <run>",
+    "description" : {
+      "en-US" : "Show the run analysis: rates, wait times, the bottleneck and what to change.",
+      "zh-CN" : "显示运行分析：速率、等待时间、瓶颈和建议。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "run cancel",
+    "anchor" : "cmd-run-cancel",
+    "synopsis" : "pipeforge run cancel [options] <run>",
+    "description" : {
+      "en-US" : "Ask a run to stop; it ends as CANCELLED once its tasks stopped.",
+      "zh-CN" : "要求运行停止；Task 停止后运行以 CANCELLED 结束。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--reason" ],
+      "label" : "<text>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Why the run is cancelled; kept with the run.",
+        "zh-CN" : "取消运行的原因；与运行一起保存。"
+      }
+    }, {
+      "names" : [ "-y", "--yes" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Cancel without asking; needed when the command does not run on a terminal.",
+        "zh-CN" : "不询问直接取消；命令不在终端上运行时必须指定。"
       }
     } ]
   }, {

@@ -94,8 +94,9 @@ worker: -Xmx4g
 ## 提交作业
 
 Master 通过它的 RPC（[引擎协议](../development/engine-protocol)中的 `DispatcherService`）接收运行：它用自己的插件规划作业，
-把 Task 放到 Worker 的 Slot 上，并跟踪运行。服务和 `pipeforge run` 向集群提交作业会在分布式运行时的后续步骤中提供；
-在此之前它们以本地模式运行作业。
+把 Task 放到 Worker 的 Slot 上，并跟踪运行。用户和脚本把作业提交给[服务端](./server#在集群上运行作业)，由它保存运行记录并与 Master 通信：
+可以使用 `pipeforge run <文件>`（见[集群快速开始](../getting-started/cluster-quickstart)）、[Java 客户端](../development/java-client)、
+REST API 或 Web UI。
 
 ## 排障
 

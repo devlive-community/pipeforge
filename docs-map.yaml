@@ -105,6 +105,8 @@
   docs: ["reference/api"]
 - paths: ["pipeforge-cli/**"]
   docs: ["reference/cli"]
+- paths: ["pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/RunClusterCommands.java", "pipeforge-cli/src/main/java/org/devlive/pipeforge/cli/command/RunViews.java"]
+  docs: ["getting-started/cluster-quickstart"]
 - paths: ["pipeforge-client/**"]
   docs: ["development/java-client"]
 - paths: ["pipeforge-e2e/**"]

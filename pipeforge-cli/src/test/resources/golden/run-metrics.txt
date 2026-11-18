@@ -1,0 +1,18 @@
+METRIC                  VALUE
+elapsed                 3m05s
+parallelism                 2
+rowsRead            1,234,567
+rowsWritten         1,234,560
+rowsInFlight                7
+rowsDirty                   3
+readRowsPerSecond       6,655
+writeRowsPerSecond      6,655
+splits                  8 / 8
+readerWait              1m32s
+writerWait              400ms
+throttleWait              0ms
+backpressured            15ms
+
+NODE         IN        OUT  FILTERED  SKIPPED
+src           0  1,234,567         0        3
+out   1,234,560  1,234,560         0        0

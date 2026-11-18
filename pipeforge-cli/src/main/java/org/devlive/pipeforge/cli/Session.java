@@ -77,6 +77,32 @@ public final class Session implements AutoCloseable {
         return environment.err();
     }
 
+    /** The server's address: --server, else PIPEFORGE_SERVER, else the local server's. */
+    public java.net.URI server() {
+        String value = root.server != null ? root.server : environment.variable("PIPEFORGE_SERVER");
+        String address = value == null || value.isBlank() ? DEFAULT_SERVER : value.strip();
+        try {
+            java.net.URI uri = new java.net.URI(address.contains("://") ? address : "http://" + address);
+            if (uri.getHost() == null) {
+                throw new java.net.URISyntaxException(address, "no host");
+            }
+            return uri;
+        } catch (java.net.URISyntaxException e) {
+            throw new picocli.CommandLine.ParameterException(
+                    new picocli.CommandLine(root), messages.get("server.invalid", address));
+        }
+    }
+
+    /** The address of a server started on this machine with its defaults. */
+    public static final String DEFAULT_SERVER = "http://127.0.0.1:8080";
+
+    /** A client of {@link #server()} that asks for messages in the session's language. */
+    public org.devlive.pipeforge.client.PipeForgeClient client() {
+        return org.devlive.pipeforge.client.PipeForgeClient.builder(server())
+                .language(language())
+                .build();
+    }
+
     /** Prints a result: the table text, or the structured value as JSON or YAML. */
     public void print(Object structured, String table) {
         out().print(table() ? table : Output.render(structured, format()));
