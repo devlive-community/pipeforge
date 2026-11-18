@@ -22,7 +22,7 @@
     "gray-matter": "4.0.3",
     "next": "15.5.29",
     "react": "19.2.9",
-    "react-dom": "19.2.9",
+    "react-dom": "19.3.1",
     "remark-gfm": "4.0.1",
     "shiki": "3.23.0",
     "yaml": "2.8.4"
@@ -37,7 +37,7 @@
     "@testing-library/user-event": "14.6.9",
     "@types/node": "22.20.5",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.7",
+    "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "4.7.0",
     "eslint": "9.39.5",
     "eslint-plugin-react-hooks": "5.2.0",
