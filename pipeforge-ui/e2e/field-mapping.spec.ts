@@ -41,6 +41,10 @@ test("drags an input column onto an output column and the plan follows", async (
   await page.goto("/editor");
   await expect(page.getByText("Valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "rename, transform field-mapper" }).click();
+  await page
+    .getByRole("complementary", { name: "Node configuration" })
+    .getByRole("button", { name: "Mapping" })
+    .click();
   const outputs = page.getByRole("region", { name: "Output columns" });
   await expect(outputs.getByRole("button", { name: "loud, STRING" })).toBeVisible();
 

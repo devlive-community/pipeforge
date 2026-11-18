@@ -9,7 +9,7 @@ import type { PreviewResult } from "@pipeforge/client";
 import { formatCount, formatDuration } from "@/features/runs/format";
 import { useT } from "@/i18n";
 import { usePreferences } from "@/state/preferences";
-import { Badge, Button, DropdownMenu, Table, type BadgeTone } from "@/ui";
+import { Badge, Button, DropdownMenu, LoadingLogo, Table, type BadgeTone } from "@/ui";
 import type { StructureNode } from "./structure";
 
 /** The id of the dry run in the node menu: the whole job up to its sinks. */
@@ -102,7 +102,8 @@ export function PreviewPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {state?.pending ? (
-          <p role="status" className="text-sm text-fg-muted">
+          <p role="status" className="flex items-center gap-2 text-sm text-fg-muted">
+            <LoadingLogo size={20} />
             {t("editor.preview.running")}
           </p>
         ) : state?.error ? (

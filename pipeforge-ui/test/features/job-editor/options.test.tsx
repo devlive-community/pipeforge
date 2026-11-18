@@ -76,7 +76,6 @@ describe("job editor options", () => {
     await screen.findByText("Valid", {}, { timeout: 3000 });
     await userEvent.click(screen.getByRole("radio", { name: "Topology" }));
     await userEvent.click(screen.getByRole("button", { name: /^orders,/ }));
-    await userEvent.click(screen.getByRole("tab", { name: "Options" }));
     const rows = await screen.findByRole("textbox", { name: "Value of rows" });
     expect(rows).toHaveValue("10");
     await userEvent.clear(rows);
@@ -93,8 +92,7 @@ describe("job editor options", () => {
       "/api/v1/jobs/validate": { valid: false, errors: [], warnings: [] },
     });
     renderApp("/editor");
-    await screen.findByRole("heading", { level: 1, name: "Job editor" });
-    await userEvent.click(screen.getByRole("tab", { name: "Options" }));
+    await screen.findByRole("heading", { level: 1, name: /^Job editor/ });
     await userEvent.click(screen.getByRole("button", { name: "Node" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "print (kafka)" }));
     expect(

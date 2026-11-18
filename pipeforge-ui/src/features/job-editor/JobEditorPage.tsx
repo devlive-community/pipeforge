@@ -5,9 +5,12 @@
  * project root for full license text.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Link } from "react-router";
 import { MappingEditor } from "@/features/field-mapping/MappingEditor";
 import { api } from "@/api/client";
+import { PreferenceMenus } from "@/app/PreferenceMenus";
+import { setNodeOption } from "@/features/field-mapping/yamlEdit";
 import { useJobSchema } from "@/api/queries";
 import { useT } from "@/i18n";
 import { CodeEditor } from "@/ui/CodeEditor";
@@ -15,7 +18,6 @@ import { usePreferences } from "@/state/preferences";
 import {
   Badge,
   Button,
-  Card,
   cx,
   DagCanvas,
   FileButton,
@@ -24,13 +26,15 @@ import {
   SegmentedControl,
   LoadingLogo,
   LoadingPanel,
-  Splitter,
   Tabs,
   type CodeEditorHandle,
   type DagNode,
   type EditorCompletion,
 } from "@/ui";
 import { suggest, yamlContext } from "./completion";
+import { EditorLibrary } from "./EditorLibrary";
+import { addComponent, canConnect, COMPONENT_DRAG } from "./graphEdit";
+import { ResizeHandle } from "./ResizeHandle";
 import { EXAMPLE_JOB } from "./example";
 import { PlanView } from "./PlanView";
 import { OptionsPanel } from "./OptionsPanel";
@@ -38,7 +42,7 @@ import { DRY_RUN, PreviewPanel, type PreviewState } from "./PreviewPanel";
 import { ProblemList } from "./ProblemList";
 import { diagnosticsOf, problemsOf } from "./problems";
 import { readSchema } from "./schema";
-import { readStructure } from "./structure";
+import { KINDS, readStructure, type NodeKind } from "./structure";
 import { useDraft } from "./useDraft";
 import { useJobCheck } from "./useJobCheck";
 
@@ -61,7 +65,16 @@ export function JobEditorPage() {
   const { checking, validation, plan } = useJobCheck(definition);
   const [tab, setTab] = useState("problems");
   const [resultsOpen, setResultsOpen] = useState(false);
-  const [view, setView] = useState("yaml");
+  const [view, setView] = useState("graph");
+  const [compactPanel, setCompactPanel] = useState<"library" | "inspector" | null>(null);
+  const libraryButton = useRef<HTMLButtonElement>(null);
+  const inspectorButton = useRef<HTMLButtonElement>(null);
+  const workbench = useRef<HTMLDivElement>(null);
+  const center = useRef<HTMLElement>(null);
+  const [leftWidth, setLeftWidth] = useState(18);
+  const [rightWidth, setRightWidth] = useState(22);
+  const [dockHeight, setDockHeight] = useState<number>();
+  const [graphIssue, setGraphIssue] = useState<string>();
   const [focusedLine, setFocusedLine] = useState<{ number: number } | null>(null);
   const [previewNode, setPreviewNode] = useState(DRY_RUN);
   const [optionsNode, setOptionsNode] = useState<string | null>(null);
@@ -80,6 +93,7 @@ export function JobEditorPage() {
   }, [current]);
 
   const structure = useMemo(() => readStructure(definition), [definition]);
+  const selectedNode = structure.find((node) => node.id === optionsNode) ?? structure[0];
   const problems = useMemo(() => problemsOf(validation.data, structure), [validation.data, structure]);
   const diagnostics = useMemo(() => diagnosticsOf(problems), [problems]);
   const info = useMemo(() => (schema.data ? readSchema(schema.data, language) : null), [schema.data, language]);
@@ -103,6 +117,8 @@ export function JobEditorPage() {
       id: node.id,
       kind: node.kind,
       detail: node.type,
+      kindLabel: kind,
+      selected: node.id === selectedNode?.id,
       inputs: node.inputs,
       status: error ? "error" : validation.data?.valid ? "ok" : undefined,
       label: t(error ? "editor.nodeError" : "editor.nodeLabel", { id: node.id, kind, type: node.type }),
@@ -135,16 +151,21 @@ export function JobEditorPage() {
 
   const name = /^name:\s*(\S+)/m.exec(definition)?.[1] ?? "job";
   const goTo = (line: number) => {
+    setCompactPanel(null);
     setView("yaml");
     setFocusedLine({ number: line });
   };
 
   function openResult(id: string) {
+    setCompactPanel(null);
     setTab(id);
     setResultsOpen(true);
   }
 
-  const canPreview = definition.trim() !== "" && Boolean(validation.data?.valid);
+  const previewTarget = structure.some((node) => node.id === previewNode && node.kind !== "sink")
+    ? previewNode
+    : DRY_RUN;
+  const canPreview = !checking && definition.trim() !== "" && Boolean(validation.data?.valid);
   /** Runs a preview of `node` (or a dry run) on the server; a later preview replaces an earlier one. */
   async function runPreview(node: string) {
     const ticket = ++previewing.current;
@@ -159,223 +180,400 @@ export function JobEditorPage() {
     }
   }
 
+  function selectNode(id: string) {
+    const selected = structure.find((node) => node.id === id);
+    if (!selected) return;
+    setCompactPanel("inspector");
+    setOptionsNode(id);
+    setPreviewNode(selected.kind === "sink" ? DRY_RUN : id);
+    if (selected.kind === "transform" && selected.type === "field-mapper") setChosenMapper(id);
+  }
+
+  function insertComponent(kind: NodeKind, type: string) {
+    if (!info?.types[kind].includes(type)) return;
+    const added = addComponent(definition, kind, type);
+    if (!added) {
+      setGraphIssue(t("editor.invalidYaml"));
+      return;
+    }
+    setDefinition(added.definition);
+    setCompactPanel("inspector");
+    setOptionsNode(added.id);
+    setPreviewNode(kind === "sink" ? DRY_RUN : added.id);
+    if (kind === "transform" && type === "field-mapper") setChosenMapper(added.id);
+    setGraphIssue(undefined);
+    setView("graph");
+    return added.id;
+  }
+
+  function connectNodes(from: string, to: string) {
+    const consumer = structure.find((node) => node.id === to);
+    if (!consumer) return;
+    const next = setNodeOption(definition, to, "inputs", consumer.inputsImplied ? [from] : [...consumer.inputs, from]);
+    if (next === definition) {
+      setGraphIssue(t("editor.invalidYaml"));
+      return;
+    }
+    setDefinition(next);
+    selectNode(to);
+    setGraphIssue(undefined);
+  }
+
+  function removeInput(from: string) {
+    if (!selectedNode || selectedNode.inputs.length < 2) return;
+    const next = setNodeOption(
+      definition,
+      selectedNode.id,
+      "inputs",
+      selectedNode.inputs.filter((id) => id !== from),
+    );
+    if (next === definition) {
+      setGraphIssue(t("editor.invalidYaml"));
+      return;
+    }
+    setDefinition(next);
+    setGraphIssue(undefined);
+  }
+
+  const tallResults = activeTab === "mapping" || activeTab === "preview";
+  const resultHeight = dockHeight ?? (tallResults ? 60 : 32);
   return (
     <div className="editor-workspace">
       <header className="editor-heading">
         <div className="editor-identity">
-          <h1>{t("editor.title")}</h1>
-          <span className="editor-filename">{name}.yaml</span>
+          <Link to="/" className="editor-home" aria-label={t("notFound.back")}>
+            <img src="/favicon.svg" width={26} height={26} alt="" />
+          </Link>
+          <div>
+            <h1>
+              <span className="sr-only">{t("editor.title")} · </span>
+              {name}
+            </h1>
+            <p className="editor-file-label">{t("editor.title")} · YAML</p>
+          </div>
         </div>
         <div className="workspace-page-actions">
-          {status}
-          <FileButton accept=".yaml,.yml,.json" onFile={(_, text) => setDefinition(text)}>
-            {t("editor.import")}
-          </FileButton>
-          <Button icon="play" disabled={!canPreview} onClick={() => void runPreview(DRY_RUN)}>
-            {t("editor.preview.dryRun")}
-          </Button>
-          <Button icon="download" onClick={() => download(`${name}.yaml`, definition)}>
-            {t("editor.export")}
-          </Button>
           <Button icon="undo" variant="ghost" onClick={() => setDefinition(EXAMPLE_JOB)}>
             {t("editor.reset")}
           </Button>
+          <FileButton accept=".yaml,.yml,.json" onFile={(_, text) => setDefinition(text)}>
+            {t("editor.import")}
+          </FileButton>
+          <Button icon="download" onClick={() => download(`${name}.yaml`, definition)}>
+            {t("editor.export")}
+          </Button>
+          <Button variant="primary" icon="play" disabled={!canPreview} onClick={() => void runPreview(DRY_RUN)}>
+            {t("editor.preview.dryRun")}
+          </Button>
+          <PreferenceMenus />
         </div>
       </header>
-      <Card flush className="editor-card flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="editor-view-picker">
-          <SegmentedControl
-            label={t("editor.view")}
-            value={view}
-            onChange={setView}
-            segments={[
-              { id: "yaml", label: "YAML" },
-              { id: "graph", label: t("editor.graph") },
-            ]}
-          />
-        </div>
-        <Splitter
-          className={cx("editor-panes min-h-0 flex-1 overflow-hidden", view === "graph" && "editor-show-graph")}
-          label={t("editor.splitter")}
-          initial={57}
-          first={
-            <section className="editor-pane">
-              <h2 className="editor-pane-title">
-                <Icon name="code" size={15} />
-                {t("editor.editorLabel")}
-              </h2>
-              <div className="min-h-0 flex-1">
-                <CodeEditor
-                  ref={editor}
-                  value={definition}
-                  onChange={setDefinition}
-                  label={t("editor.editorLabel")}
-                  diagnostics={diagnostics}
-                  completion={completion}
+      <div
+        className="editor-grid"
+        ref={workbench}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || event.defaultPrevented || !compactPanel) return;
+          const button = compactPanel === "library" ? libraryButton.current : inspectorButton.current;
+          if (!button?.getClientRects().length) return;
+          setCompactPanel(null);
+          button.focus();
+        }}
+        style={{ "--editor-left": `${leftWidth}%`, "--editor-right": `${rightWidth}%` } as CSSProperties}
+      >
+        <EditorLibrary
+          catalog={info?.types}
+          loading={schema.isPending}
+          nodes={structure}
+          selected={selectedNode?.id}
+          onAdd={insertComponent}
+          onSelect={selectNode}
+          compactOpen={compactPanel === "library"}
+        />
+        <ResizeHandle
+          label={t("editor.resizeLeft")}
+          direction="right"
+          container={workbench}
+          value={leftWidth}
+          minimum={14}
+          maximum={28}
+          onResize={setLeftWidth}
+          onReset={() => setLeftWidth(18)}
+        />
+        <section className="editor-center" aria-label={t("editor.view")} ref={center}>
+          <div className="editor-view-picker">
+            <SegmentedControl
+              label={t("editor.view")}
+              value={view}
+              onChange={setView}
+              segments={[
+                { id: "graph", label: t("editor.graph") },
+                { id: "yaml", label: "YAML" },
+              ]}
+            />
+            <div className="editor-toolbar-end">
+              {status}
+              <div className="editor-panel-toggles">
+                <IconButton
+                  icon="plug"
+                  size="sm"
+                  label={t("editor.library")}
+                  ref={libraryButton}
+                  aria-controls="editor-component-library"
+                  aria-expanded={compactPanel === "library"}
+                  onClick={() => setCompactPanel((panel) => (panel === "library" ? null : "library"))}
+                />
+                <IconButton
+                  icon="transform"
+                  size="sm"
+                  label={t("editor.inspector")}
+                  ref={inspectorButton}
+                  aria-controls="editor-node-configuration"
+                  aria-expanded={compactPanel === "inspector"}
+                  onClick={() => setCompactPanel((panel) => (panel === "inspector" ? null : "inspector"))}
                 />
               </div>
-            </section>
-          }
-          second={
-            <section className="editor-pane">
-              <h2 className="editor-pane-title">
-                <Icon name="topology" size={15} />
-                {t("editor.graph")}
-              </h2>
-              <div className="relative min-h-0 flex-1">
-                {nodes.length > 0 ? (
-                  <DagCanvas
-                    nodes={nodes}
-                    label={t("editor.graphLabel")}
-                    labels={{ zoomIn: t("editor.zoomIn"), zoomOut: t("editor.zoomOut"), fit: t("editor.fit") }}
-                    onSelect={(id) => {
-                      const selected = structure.find((n) => n.id === id);
-                      // a source or transform becomes what the preview shows; running it stays a choice
-                      if (selected && selected.kind !== "sink") setPreviewNode(id);
-                      setOptionsNode(id);
-                      if (selected?.type === "field-mapper") {
-                        setChosenMapper(id);
-                        openResult("mapping");
-                      }
-                      if (selected?.line) goTo(selected.line);
-                    }}
-                  />
-                ) : (
-                  <div className="dag-surface flex h-full min-h-48 items-center justify-center p-4 text-center text-sm text-fg-muted">
-                    {t("editor.graphEmpty")}
-                  </div>
-                )}
-              </div>
-            </section>
-          }
-        />
-        <Tabs
-          className={cx(
-            "editor-results border-t border-border",
-            resultsOpen &&
-              (activeTab === "mapping" || activeTab === "preview" || activeTab === "options"
-                ? "editor-results-mapping"
-                : "editor-results-open"),
-          )}
-          collapsed={!resultsOpen}
-          panelAction={(panelId) => (
-            <IconButton
-              className="mx-2"
-              icon={resultsOpen ? "chevronDown" : "chevronUp"}
-              label={t(resultsOpen ? "editor.hideResults" : "editor.showResults")}
-              aria-controls={panelId}
-              aria-expanded={resultsOpen}
-              onClick={() => setResultsOpen((open) => !open)}
+            </div>
+          </div>
+          {graphIssue ? (
+            <p role="status" className="editor-graph-issue">
+              {graphIssue}
+            </p>
+          ) : null}
+          <div hidden={view !== "yaml"} className="editor-view">
+            <CodeEditor
+              ref={editor}
+              value={definition}
+              onChange={setDefinition}
+              label={t("editor.editorLabel")}
+              diagnostics={diagnostics}
+              completion={completion}
             />
-          )}
-          label={t("editor.panels")}
-          value={activeTab}
-          onChange={openResult}
-          tabs={[
-            {
-              id: "problems",
-              label: t("editor.problems"),
-              badge:
-                problems.length > 0 ? (
-                  <Badge tone={errorCount > 0 ? "danger" : "warning"}>{problems.length}</Badge>
-                ) : null,
-              content: validation.isError ? (
-                <p className="p-4 text-sm text-danger">
-                  {t("editor.serverError", { message: (validation.error as Error).message })}
-                </p>
-              ) : definition.trim() === "" ? (
-                <p className="p-4 text-sm text-fg-muted">{t("editor.emptyDefinition")}</p>
-              ) : !validation.data ? (
-                <LoadingPanel />
-              ) : (
-                <ProblemList problems={problems} onGoTo={goTo} />
-              ),
-            },
-            {
-              id: "plan",
-              label: t("editor.plan"),
-              content: plan?.data?.plan ? (
-                <PlanView plan={plan.data.plan} />
-              ) : plan?.isFetching ? (
-                <LoadingPanel />
-              ) : (
-                <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
-              ),
-            },
-            ...(mapper
-              ? [
-                  {
-                    id: "mapping",
-                    label: t("mapping.tab"),
-                    content: (
-                      <div className="flex h-full min-h-0 flex-col">
-                        {mappers.length > 1 ? (
-                          <div className="border-b border-border px-4 py-2">
-                            <SegmentedControl
-                              label={t("mapping.node")}
-                              value={mapper.id}
-                              onChange={setChosenMapper}
-                              segments={mappers.map((n) => ({ id: n.id, label: n.id }))}
+          </div>
+          <div hidden={view !== "graph"} className="editor-view">
+            <DagCanvas
+              className="editor-canvas"
+              editor
+              nodes={nodes}
+              label={t("editor.graphLabel")}
+              labels={{ zoomIn: t("editor.zoomIn"), zoomOut: t("editor.zoomOut"), fit: t("editor.fit") }}
+              onSelect={selectNode}
+              empty={t("editor.graphEmpty")}
+              editing={{
+                componentDragType: COMPONENT_DRAG,
+                onComponent: (data) => {
+                  try {
+                    const [kind, type]: [NodeKind, string] = JSON.parse(data);
+                    if (KINDS.includes(kind) && typeof type === "string") return insertComponent(kind, type);
+                  } catch {
+                    return;
+                  }
+                },
+                canConnect: (from, to) => canConnect(structure, from, to),
+                onConnect: connectNodes,
+                outputLabel: (id) => t("editor.connectFrom", { id }),
+                inputLabel: (id) => t("editor.connectTo", { id }),
+              }}
+            />
+          </div>
+          <ResizeHandle
+            label={t("editor.resizeResults")}
+            direction="up"
+            container={center}
+            value={resultsOpen ? resultHeight : 14}
+            minimum={14}
+            maximum={68}
+            onResize={(value) => {
+              setDockHeight(value);
+              setResultsOpen(true);
+            }}
+            onReset={() => setDockHeight(undefined)}
+          />
+          <Tabs
+            className={cx("editor-results border-t border-border", resultsOpen && "editor-results-open")}
+            style={{ "--editor-results-size": `${resultHeight}%` } as CSSProperties}
+            collapsed={!resultsOpen}
+            panelAction={(panelId) => (
+              <IconButton
+                className="mx-2"
+                icon={resultsOpen ? "chevronDown" : "chevronUp"}
+                label={t(resultsOpen ? "editor.hideResults" : "editor.showResults")}
+                aria-controls={panelId}
+                aria-expanded={resultsOpen}
+                onClick={() => setResultsOpen((open) => !open)}
+              />
+            )}
+            label={t("editor.panels")}
+            value={activeTab}
+            onChange={openResult}
+            tabs={[
+              {
+                id: "problems",
+                label: t("editor.problems"),
+                badge:
+                  problems.length > 0 ? (
+                    <Badge tone={errorCount > 0 ? "danger" : "warning"}>{problems.length}</Badge>
+                  ) : null,
+                content: validation.isError ? (
+                  <p className="p-4 text-sm text-danger">
+                    {t("editor.serverError", { message: (validation.error as Error).message })}
+                  </p>
+                ) : definition.trim() === "" ? (
+                  <p className="p-4 text-sm text-fg-muted">{t("editor.emptyDefinition")}</p>
+                ) : !validation.data ? (
+                  <LoadingPanel />
+                ) : (
+                  <ProblemList problems={problems} onGoTo={goTo} />
+                ),
+              },
+              {
+                id: "plan",
+                label: t("editor.plan"),
+                content: plan?.data?.plan ? (
+                  <PlanView plan={plan.data.plan} />
+                ) : plan?.isFetching ? (
+                  <LoadingPanel />
+                ) : (
+                  <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
+                ),
+              },
+              ...(mapper
+                ? [
+                    {
+                      id: "mapping",
+                      label: t("mapping.tab"),
+                      content: (
+                        <div className="flex h-full min-h-0 flex-col">
+                          {mappers.length > 1 ? (
+                            <div className="border-b border-border px-4 py-2">
+                              <SegmentedControl
+                                label={t("mapping.node")}
+                                value={mapper.id}
+                                onChange={setChosenMapper}
+                                segments={mappers.map((n) => ({ id: n.id, label: n.id }))}
+                              />
+                            </div>
+                          ) : null}
+                          <div className="min-h-0 flex-1">
+                            <MappingEditor
+                              source={definition}
+                              nodeId={mapper.id}
+                              node={lastPlan?.nodes?.find((n) => n.id === mapper.id)}
+                              stale={!current}
+                              onChange={setDefinition}
                             />
                           </div>
-                        ) : null}
-                        <div className="min-h-0 flex-1">
-                          <MappingEditor
-                            source={definition}
-                            nodeId={mapper.id}
-                            node={lastPlan?.nodes?.find((n) => n.id === mapper.id)}
-                            stale={!current}
-                            onChange={setDefinition}
-                          />
                         </div>
-                      </div>
-                    ),
-                  },
-                ]
-              : []),
-            {
-              id: "options",
-              label: t("editor.optionEditor.tab"),
-              content: (
-                <OptionsPanel
-                  structure={structure}
-                  definition={definition}
-                  node={optionsNode}
-                  plugin={lastPlan?.nodes?.find((n) => n.id === (optionsNode ?? structure[0]?.id))?.plugin}
-                  onNode={setOptionsNode}
-                  onChange={setDefinition}
-                />
-              ),
-            },
-            {
-              id: "preview",
-              label: t("editor.preview.tab"),
-              content: (
-                <PreviewPanel
-                  structure={structure}
-                  definition={definition}
-                  node={previewNode}
-                  onNode={setPreviewNode}
-                  onRun={() => void runPreview(previewNode)}
-                  state={preview}
-                  canRun={canPreview}
-                />
-              ),
-            },
-            {
-              id: "text",
-              label: t("editor.text"),
-              content: plan?.data ? (
-                <pre className="p-4 font-mono text-xs leading-relaxed text-fg">{plan.data.text}</pre>
-              ) : plan?.isFetching ? (
-                <LoadingPanel />
-              ) : (
-                <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
-              ),
-            },
-          ]}
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                id: "preview",
+                label: t("editor.preview.tab"),
+                content: (
+                  <PreviewPanel
+                    structure={structure}
+                    definition={definition}
+                    node={previewTarget}
+                    onNode={setPreviewNode}
+                    onRun={() => void runPreview(previewTarget)}
+                    state={preview?.node === previewTarget ? preview : null}
+                    canRun={canPreview}
+                  />
+                ),
+              },
+              {
+                id: "text",
+                label: t("editor.text"),
+                content: plan?.data ? (
+                  <pre className="p-4 font-mono text-xs leading-relaxed text-fg">{plan.data.text}</pre>
+                ) : plan?.isFetching ? (
+                  <LoadingPanel />
+                ) : (
+                  <p className="p-4 text-sm text-fg-muted">{t("editor.planUnavailable")}</p>
+                ),
+              },
+            ]}
+          />
+        </section>
+        <ResizeHandle
+          label={t("editor.resizeRight")}
+          direction="left"
+          container={workbench}
+          value={rightWidth}
+          minimum={17}
+          maximum={35}
+          onResize={setRightWidth}
+          onReset={() => setRightWidth(22)}
         />
-      </Card>
+        <aside
+          className="editor-inspector"
+          id="editor-node-configuration"
+          data-compact-open={compactPanel === "inspector"}
+          aria-label={t("editor.inspector")}
+        >
+          <h2 className="editor-pane-title">
+            <Icon name="transform" size={15} />
+            {t("editor.inspector")}
+          </h2>
+          <div className="min-h-0 flex-1">
+            <OptionsPanel
+              structure={structure}
+              definition={definition}
+              node={selectedNode?.id ?? null}
+              plugin={lastPlan?.nodes?.find((node) => node.id === selectedNode?.id)?.plugin}
+              actions={
+                selectedNode ? (
+                  <>
+                    <div className="editor-node-actions">
+                      <Button variant="ghost" size="sm" icon="code" onClick={() => goTo(selectedNode.line)}>
+                        {t("editor.openYaml")}
+                      </Button>
+                      {selectedNode.kind !== "sink" ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={!canPreview}
+                          onClick={() => void runPreview(selectedNode.id)}
+                        >
+                          {t("editor.preview.nodeAction")}
+                        </Button>
+                      ) : null}
+                      {selectedNode.kind === "transform" && selectedNode.type === "field-mapper" ? (
+                        <Button variant="secondary" size="sm" onClick={() => openResult("mapping")}>
+                          {t("mapping.tab")}
+                        </Button>
+                      ) : null}
+                    </div>
+                    {selectedNode.inputs.length > 0 ? (
+                      <section className="editor-inputs">
+                        <h3>{t("editor.upstreamInputs")}</h3>
+                        <ul>
+                          {selectedNode.inputs.map((id, index) => (
+                            <li key={`${id}-${index}`}>
+                              <code>{id}</code>
+                              {selectedNode.inputs.length > 1 ? (
+                                <IconButton
+                                  icon="minus"
+                                  size="sm"
+                                  label={t("editor.removeInput", { id })}
+                                  onClick={() => removeInput(id)}
+                                />
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ) : null}
+                  </>
+                ) : null
+              }
+              onNode={selectNode}
+              onChange={setDefinition}
+            />
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

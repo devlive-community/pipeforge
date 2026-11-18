@@ -94,7 +94,7 @@ const PAGES: Shot[] = [
     path: "/editor",
     ready: { "en-US": "Valid", "zh-CN": "合法" },
     draft: EXAMPLE_JOB,
-    tab: { "en-US": "Options", "zh-CN": "选项" },
+    click: { button: { "en-US": "Go to YAML", "zh-CN": "定位到 YAML" } },
   },
   {
     name: "job-editor-preview",

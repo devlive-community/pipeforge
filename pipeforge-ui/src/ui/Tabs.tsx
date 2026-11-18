@@ -5,7 +5,7 @@
  * project root for full license text.
  */
 
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { cx } from "./cx";
 
 export interface TabItem {
@@ -27,6 +27,7 @@ export function Tabs({
   value,
   onChange,
   className,
+  style,
   collapsed = false,
   panelAction,
 }: {
@@ -35,6 +36,7 @@ export function Tabs({
   value?: string;
   onChange?: (id: string) => void;
   className?: string;
+  style?: CSSProperties;
   collapsed?: boolean;
   panelAction?: (panelId: string) => ReactNode;
 }) {
@@ -68,7 +70,7 @@ export function Tabs({
 
   const panel = tabs.find((t) => t.id === selected) ?? tabs[0];
   return (
-    <div className={cx("flex min-h-0 flex-col", className)}>
+    <div className={cx("flex min-h-0 flex-col", className)} style={style}>
       <div className="flex shrink-0 items-center border-b border-border bg-surface-2">
         <div
           role="tablist"

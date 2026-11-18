@@ -57,7 +57,7 @@ const previews = (requests: Recorded[]) =>
 
 async function openEditor() {
   renderApp("/editor");
-  await screen.findByRole("heading", { level: 1, name: "Job editor" });
+  await screen.findByRole("heading", { level: 1, name: /^Job editor/ });
   expect(await screen.findByText("Valid", {}, { timeout: 3000 })).toBeInTheDocument();
 }
 
@@ -100,6 +100,7 @@ describe("job editor preview", () => {
     await userEvent.click(screen.getByRole("button", { name: /^rename,/ }));
     await userEvent.click(screen.getByRole("tab", { name: "Preview" }));
     expect(screen.getByRole("button", { name: "What to preview" })).toHaveTextContent("rename (field-mapper)");
+    expect(screen.queryByRole("table", { name: "Rows of demo.orders" })).not.toBeInTheDocument();
   });
 
   it("reports a failed preview and a server that cannot run one", async () => {

@@ -54,6 +54,25 @@
     "back": "返回概览"
   },
   "editor": {
+    "upstreamInputs": "上游输入",
+    "removeInput": "移除输入 {id}",
+    "library": "组件库",
+    "components": "组件",
+    "addComponent": "添加 {type}",
+    "componentsUnavailable": "组件目录暂不可用。",
+    "resizeLeft": "调整组件库宽度",
+    "resizeRight": "调整属性栏宽度",
+    "resizeResults": "调整结果区高度",
+    "invalidYaml": "请先修复 YAML 语法，再编辑拓扑。",
+    "connectFrom": "{id} 的输出端口",
+    "connectTo": "{id} 的输入端口",
+
+    "nodeList": "作业节点",
+    "searchNodes": "按节点名或插件筛选",
+    "noMatchingNodes": "没有符合条件的节点。",
+    "inspector": "节点配置",
+    "openYaml": "定位到 YAML",
+
     "view": "编辑器视图",
     "showResults": "展开结果",
     "hideResults": "收起结果",
@@ -133,6 +152,7 @@
     "nodeError": "{id}，{kind} {type}，有问题",
     "hint": "提示：{hint}",
     "preview": {
+      "nodeAction": "预览节点",
       "tab": "预览",
       "dryRun": "试运行",
       "node": "{id}（{type}）",
@@ -155,6 +175,7 @@
       }
     },
     "optionEditor": {
+      "details": "参数说明",
       "tab": "选项",
       "node": "节点",
       "hint": "修改会写回定义中该节点的位置，其余内容保持原样。",

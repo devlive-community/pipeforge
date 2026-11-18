@@ -11,7 +11,9 @@ your browser until you export it.
 
 <Screenshot name="job-editor" alt="The job editor with a valid job and its plan" />
 
-On wide screens, YAML and Topology are side by side. On narrow screens, switch between them above the editor. The results panel starts collapsed and opens when validation reports an error. Select a result tab to open it directly.
+The editor fills the browser window and shows the job name in the toolbar. Switch between **Topology** and **YAML** in the center. The left pane shows installed components and the nodes in the current job. The right pane shows properties of the selected node. On wide screens, drag the separators on either side to resize the panes. On narrow screens, open the component library or node properties from the workspace toolbar. Long content scrolls within its pane.
+
+The results pane starts collapsed. Open a result tab or drag the separator above it upward. When a separator has keyboard focus, arrow keys resize the pane. Double-click a separator to reset its size.
 
 ## Opening the editor
 
@@ -65,10 +67,9 @@ plan as text. See [plan and explain](../concepts/plan-and-explain) for what it c
 
 ## Editing options
 
-The **Options** tab lists the options of a node, from its component as installed on the server: the
-type, whether it is required, the default and range, and a field for its value. Choose the node in
-the tab's menu or in the graph. A change is written into the definition at that node, and the rest
-of the text, comments included, stays as written:
+Choose a node from the outline, the topology, or the menu in **Node configuration**. Edit its options
+in the panel. Select **Option details** to see descriptions, defaults, ranges, and choices from
+the installed component. Changes are written at that node in YAML, preserving the surrounding text and comments.
 
 - numbers, durations and text are written when you press **Enter** or leave the field; a number
   outside the option's range or a word where a number belongs is refused with a message, and a
@@ -103,10 +104,9 @@ runs](../operations/server#previews-and-dry-runs) for the limits on the server.
 
 ## The graph
 
-The graph shows the nodes from left to right in the order data flows, and follows the definition
-as you type, even while it is invalid. It fits itself into the available space; drag to pan, use
-**Ctrl** or **Cmd** with the wheel to zoom, or the buttons in its corner. The divider between the
-editor and the graph can be dragged or moved with the arrow keys.
+The topology follows the YAML as you edit. Drag an installed component from **Components** onto the canvas, or select its button to add it with the automatic layout. Drag a node to rearrange its position within the current editor session. Drag an output port onto an input port to update the downstream node's `inputs` in YAML. You can also select the two ports in order with the keyboard. For a node with several upstream inputs, remove individual links from **Upstream inputs** in the properties pane.
+
+Drag an empty area to pan. Hold **Ctrl** or **Cmd** and scroll, or use the zoom controls. Select a node to see its configuration, then choose **Go to YAML** to jump to its definition.
 
 ## Importing and exporting
 

@@ -141,7 +141,6 @@ test("dry-runs the job in the editor", async ({ page }) => {
 test("edits an option of a node into the definition", async ({ page }) => {
   await page.goto("/editor");
   await expect(page.getByText("Valid", { exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Options" }).click();
   const rows = page.getByRole("textbox", { name: "Value of rows" });
   await rows.fill("250");
   await rows.press("Enter");

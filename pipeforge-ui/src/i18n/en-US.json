@@ -54,6 +54,25 @@
     "back": "Back to the overview"
   },
   "editor": {
+    "upstreamInputs": "Upstream inputs",
+    "removeInput": "Remove input {id}",
+    "library": "Component library",
+    "components": "Components",
+    "addComponent": "Add {type}",
+    "componentsUnavailable": "Component catalog unavailable.",
+    "resizeLeft": "Resize component library",
+    "resizeRight": "Resize node properties",
+    "resizeResults": "Resize results",
+    "invalidYaml": "Fix the YAML syntax before editing the topology.",
+    "connectFrom": "Output of {id}",
+    "connectTo": "Input of {id}",
+
+    "nodeList": "Job nodes",
+    "searchNodes": "Filter by node or plugin",
+    "noMatchingNodes": "No matching nodes.",
+    "inspector": "Node configuration",
+    "openYaml": "Go to YAML",
+
     "view": "Editor view",
     "showResults": "Show results",
     "hideResults": "Hide results",
@@ -133,6 +152,7 @@
     "nodeError": "{id}, {kind} {type}, has a problem",
     "hint": "Hint: {hint}",
     "preview": {
+      "nodeAction": "Preview node",
       "tab": "Preview",
       "dryRun": "Dry run",
       "node": "{id} ({type})",
@@ -155,6 +175,7 @@
       }
     },
     "optionEditor": {
+      "details": "Option details",
       "tab": "Options",
       "node": "Node",
       "hint": "Changes are written into the definition at the node; the rest stays as written.",

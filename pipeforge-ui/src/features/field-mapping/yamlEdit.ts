@@ -195,7 +195,13 @@ function edit(source: string, nodeId: string, change: Edit, sections = TRANSFORM
   if (document.errors.length > 0) return source;
   const node = findNode(document, nodeId, sections);
   if (!node) return source;
-  if (node.flow) {
+  const root = document.contents;
+  if (node.flow && isMap(root) && !root.flow) {
+    const section = sections.find((key) => {
+      const item = root.get(key, true);
+      return isSeq(item) && item.flow && item.items.includes(node);
+    });
+    if (section) return change(node, source);
     // a node written as { id: ..., type: ... } is rewritten in block style, once
     const rewritten = blockNode(node, source);
     return edit(rewritten, nodeId, change, sections);
@@ -217,6 +223,15 @@ function keyColumn(node: YAMLMap, source: string): number {
 
 /** Sets option {@code key} to {@code text} (already in YAML form), or removes it when undefined. */
 function setPair(node: YAMLMap, source: string, key: string, text: string | undefined): string {
+  if (node.flow) {
+    if (text === undefined) node.delete(key);
+    else node.set(key, parseDocument(text).contents);
+    const inline = node.clone();
+    inline.comment = undefined;
+    inline.commentBefore = undefined;
+    const replacement = new Document(inline).toString(FLOW_OUT).trimEnd();
+    return splice(source, node.range?.[0] ?? 0, node.range?.[1] ?? 0, replacement);
+  }
   const pair = pairOf(node, key);
   if (pair) {
     const keyStart = pair.key.range?.[0] ?? 0;
@@ -332,4 +347,26 @@ export function removeEntry(source: string, nodeId: string, index: number): stri
     const item = list.items[index] as YamlNode;
     return removeLines(text, item.range?.[0] ?? 0, contentEnd(item));
   });
+}
+
+/** Appends a node to its top-level section. Block sequences keep their original text and comments. */
+export function appendNode(source: string, section: string, node: { id: string; type: string }): string {
+  const document = parseDocument(source);
+  const root = document.contents;
+  if (document.errors.length > 0 || !isMap(root)) return source;
+  const list = root.get(section, true);
+  if (list != null && !isMap(list) && !isSeq(list)) return source;
+  if (isSeq(list) && !list.flow && list.items.length > 0) {
+    const start = list.range?.[0];
+    if (start === undefined) return source;
+    const indent = column(source, start);
+    const entry = " ".repeat(indent) + "- " + blockText(node, indent + 2);
+    return insertLines(source, contentEnd(list), entry);
+  }
+  if (list == null && !root.flow && !root.has(section)) {
+    return insertLines(source, contentEnd(root), section + ":\n  - " + blockText(node, 4));
+  }
+  if (isSeq(list)) list.add(node);
+  else document.set(section, list ? [list, node] : [node]);
+  return document.toString();
 }

@@ -96,7 +96,7 @@ function server() {
 
 async function openEditor() {
   renderApp("/editor");
-  return screen.findByRole("heading", { level: 1, name: "Job editor" });
+  return screen.findByRole("heading", { level: 1, name: /^Job editor/ });
 }
 
 describe("JobEditorPage", () => {

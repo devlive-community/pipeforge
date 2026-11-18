@@ -370,81 +370,393 @@
     font-size: 0.84rem;
   }
 
-  .editor-workspace {
-    display: flex;
+  .workspace-job-editor.workspace {
+    position: fixed;
+    inset: 0;
+    display: block;
     min-height: 0;
-    flex-direction: column;
+    overflow: clip;
   }
-  .editor-heading {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.7rem 1rem;
-    margin-bottom: 0.9rem;
+  .workspace-job-editor .workspace-main {
+    height: 100%;
+    padding: 0;
+    overflow: clip;
   }
-  .editor-identity {
-    display: flex;
-    min-width: 0;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.7rem;
-  }
-  .editor-identity h1 {
-    font-size: clamp(1.2rem, 2vw, 1.5rem);
-    font-weight: 720;
-    line-height: 1.2;
-    letter-spacing: -0.025em;
-  }
-  .editor-filename {
-    min-width: 0;
-    max-width: min(26ch, 60vw);
-    overflow: hidden;
-    padding: 0.2rem 0.45rem;
-    border-radius: var(--pf-radius-control);
-    background: var(--pf-surface-3);
-    color: var(--pf-fg-muted);
-    font-family: var(--font-mono);
-    font-size: 0.73rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .editor-card {
-    min-width: 0;
-  }
-  .editor-view-picker {
-    display: none;
-  }
-  .editor-results {
-    flex: none;
-  }
-  .editor-results-open {
-    height: clamp(9rem, 30%, 15rem);
-  }
-  .editor-results-mapping {
-    height: clamp(14rem, 54%, 32rem);
-  }
-  .editor-pane {
+  .editor-workspace {
+    --editor-panel: color-mix(in oklab, var(--pf-surface) 93%, var(--pf-primary-soft));
+    --editor-line: color-mix(in oklab, var(--pf-border) 88%, var(--pf-primary));
+    --editor-selected: color-mix(in oklab, var(--pf-primary) 16%, var(--pf-surface));
+    --editor-toolbar-height: 3rem;
     display: flex;
     height: 100%;
     min-height: 0;
     flex-direction: column;
+    background: var(--pf-surface);
   }
+  .editor-heading {
+    position: sticky;
+    z-index: 5;
+    top: 0;
+    display: flex;
+    min-height: 3.85rem;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem 1rem;
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--editor-line);
+    background: var(--editor-panel);
+  }
+  .editor-identity {
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.65rem;
+  }
+  .editor-identity > div {
+    min-width: 0;
+  }
+  .editor-home {
+    display: grid;
+    width: 2.2rem;
+    height: 2.2rem;
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--editor-line);
+    border-radius: 0.55rem;
+    background: var(--pf-primary-soft);
+  }
+  .editor-home:hover {
+    border-color: var(--pf-primary);
+  }
+  .editor-identity h1 {
+    overflow: hidden;
+    font-size: 1.05rem;
+    font-weight: 720;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .editor-file-label {
+    margin-top: 0.12rem;
+    color: var(--pf-fg-muted);
+    font-size: 0.7rem;
+  }
+  .editor-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    flex: 1;
+  }
+  .editor-resize {
+    position: relative;
+    z-index: 2;
+    flex: none;
+    touch-action: none;
+    background: var(--editor-line);
+  }
+  .editor-resize:hover,
+  .editor-resize:focus-visible,
+  .editor-resize:active {
+    background: var(--pf-primary-soft);
+    color: var(--pf-primary);
+  }
+  .editor-resize::before {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.55;
+    content: "";
+  }
+  .editor-resize-side {
+    display: none;
+    color: var(--pf-fg-muted);
+    cursor: col-resize;
+  }
+  .editor-resize-side::before {
+    width: 2px;
+    height: 1.45rem;
+  }
+  .editor-resize-dock {
+    height: 6px;
+    color: var(--pf-fg-muted);
+    cursor: row-resize;
+  }
+  .editor-resize-dock::before {
+    width: 1.6rem;
+    height: 2px;
+  }
+  .editor-library,
+  .editor-inspector {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    background: var(--editor-panel);
+  }
+  .editor-library {
+    border-block-start: 1px solid var(--pf-border);
+  }
+  .editor-library-node[draggable="true"] {
+    cursor: grab;
+  }
+  .editor-library-node[draggable="true"]:active {
+    cursor: grabbing;
+  }
+  .editor-library-body {
+    position: relative;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem;
+  }
+  .editor-library-group h3 {
+    margin: 1.05rem 0.25rem 0.4rem;
+    color: var(--pf-fg-muted);
+    font-size: 0.73rem;
+    font-weight: 650;
+  }
+  .editor-library-node {
+    width: 100%;
+    min-height: 3rem;
+    margin-bottom: 0.35rem;
+    padding: 0.4rem;
+    border: 1px solid transparent;
+    text-align: start;
+  }
+  .editor-library-node[aria-pressed="true"] {
+    border-color: color-mix(in oklab, var(--pf-primary) 24%, var(--pf-border));
+    background: var(--editor-selected);
+    color: var(--pf-fg);
+  }
+  .editor-node-icon {
+    display: grid;
+    flex: none;
+    width: 1.9rem;
+    height: 1.9rem;
+    place-items: center;
+    border-radius: var(--pf-radius-control);
+    background: var(--node-fill);
+    color: var(--node-accent);
+  }
+  .editor-center {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .editor-view-picker,
   .editor-pane-title {
     display: flex;
-    min-height: 2.65rem;
+    min-height: var(--editor-toolbar-height);
     flex: none;
     align-items: center;
     gap: 0.5rem;
-    padding-inline: 0.85rem;
+    padding: 0.35rem 0.75rem;
     border-bottom: 1px solid var(--pf-border);
-    background: var(--pf-surface);
+    background: var(--editor-panel);
+  }
+  .editor-view-picker {
+    height: var(--editor-toolbar-height);
+    justify-content: space-between;
+  }
+  .editor-toolbar-end,
+  .editor-panel-toggles {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .editor-panel-toggles {
+    display: none;
+  }
+  .editor-panel-toggles button[aria-expanded="true"] {
+    background: var(--editor-selected);
+    color: var(--pf-primary);
+  }
+  .editor-view-picker [role="radiogroup"] {
+    border-color: transparent;
+    background: transparent;
+    padding: 0;
+  }
+  .editor-view-picker [role="radio"][aria-checked="true"] {
+    --pf-surface: var(--editor-selected);
+    --pf-fg: var(--pf-primary);
+    --pf-shadow-card: 0 0 transparent;
+  }
+  .editor-pane-title {
     color: var(--pf-fg);
     font-size: 0.81rem;
-    font-weight: 650;
+    font-weight: 670;
   }
   .editor-pane-title svg {
     color: var(--pf-primary);
+  }
+  .editor-view {
+    position: relative;
+    min-height: 0;
+    flex: 1;
+  }
+  .editor-view[hidden] {
+    display: none;
+  }
+  .editor-inspector {
+    border-block-start: 1px solid var(--pf-border);
+  }
+  .editor-inspector-node {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.7rem 0.7rem 0.45rem;
+  }
+  .editor-inspector-selector {
+    width: 100%;
+    min-height: 3.15rem;
+    border: 1px solid var(--editor-line);
+    background: var(--pf-surface);
+    text-align: start;
+  }
+  .editor-node-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.55rem;
+  }
+  .editor-node-actions > button {
+    font-size: 0.75rem;
+  }
+  .editor-inputs {
+    margin-top: 0.6rem;
+    font-size: 0.75rem;
+  }
+  .editor-inputs h3 {
+    margin-bottom: 0.3rem;
+    color: var(--pf-fg-muted);
+    font-weight: 630;
+  }
+  .editor-inputs ul {
+    display: flex;
+    max-height: 5rem;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    overflow: auto;
+  }
+  .editor-inputs li {
+    display: inline-flex;
+    min-height: 1.6rem;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.15rem;
+    padding-inline: 0.35rem;
+    border: 1px solid var(--editor-line);
+    border-radius: var(--pf-radius-control);
+    background: var(--pf-surface);
+  }
+  .editor-inputs code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .editor-options-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-block: 0.35rem 0.4rem;
+    color: var(--pf-fg);
+    font-size: 0.8rem;
+    font-weight: 640;
+  }
+  .editor-options-heading button {
+    font-size: 0.75rem;
+  }
+  .editor-options-heading button[aria-pressed="true"] {
+    background: var(--editor-selected);
+    color: var(--pf-primary);
+  }
+  .editor-option-fields {
+    background: var(--pf-surface);
+  }
+  .editor-results {
+    flex: none;
+  }
+  .editor-results [role="tabpanel"] {
+    position: relative;
+  }
+  .editor-results-open {
+    height: min(max(7.5rem, var(--editor-results-size)), max(2.5rem, calc(100% - 8rem)));
+  }
+  .editor-graph-issue {
+    flex: none;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--pf-border);
+    background: var(--pf-danger-soft);
+    color: var(--pf-danger);
+    font-size: 0.8rem;
+  }
+  .dag-port {
+    position: absolute;
+    z-index: 1;
+    width: 0.8rem;
+    height: 0.8rem;
+    translate: -50% -50%;
+    border: 2px solid var(--pf-surface);
+    border-radius: 50%;
+    background: var(--dag-line);
+    box-shadow: 0 0 0 1px var(--editor-line);
+    cursor: crosshair;
+    pointer-events: auto;
+  }
+  .dag-port[data-connect-target],
+  .dag-port[aria-pressed="true"],
+  .dag-port:hover {
+    background: var(--pf-primary);
+    box-shadow: 0 0 0 3px var(--editor-selected);
+  }
+  .editor-center .editor-canvas {
+    --editor-canvas-base: color-mix(in oklab, var(--pf-canvas) 67%, var(--pf-primary-soft));
+    --editor-grid-dot: color-mix(in oklab, var(--pf-primary) 8%, var(--pf-border-strong));
+    --dag-line: color-mix(in oklab, var(--pf-primary) 56%, var(--pf-fg-muted));
+    color: var(--pf-fg-muted);
+    background:
+      radial-gradient(circle, color-mix(in oklab, var(--editor-grid-dot) 77%, transparent) 0.75px, transparent 1px)
+        center / 1.25rem 1.25rem,
+      radial-gradient(ellipse at 48% 44%, var(--pf-surface), transparent 85%),
+      var(--editor-canvas-base);
+  }
+  .editor-canvas .dag-node {
+    --pf-border: var(--editor-line);
+    padding-top: 0.75rem;
+  }
+  .editor-canvas .dag-node::before {
+    position: absolute;
+    inset: 0.15rem 0.55rem auto;
+    height: 0.18rem;
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--node-accent) 75%, var(--node-fill));
+    content: "";
+  }
+  .editor-canvas .dag-node[aria-pressed="true"] {
+    --pf-shadow-card:
+      0 0 0 2px color-mix(in oklab, var(--pf-primary) 18%, transparent),
+      0 3px 8px color-mix(in oklab, var(--pf-fg) 10%, transparent);
+  }
+  .editor-canvas .dag-node > .dag-node-icon {
+    margin-top: 0.1rem;
+  }
+  .editor-canvas .dag-node > span:not(.dag-node-icon):not(.editor-canvas-node-kind) {
+    padding-top: 0.05rem;
+  }
+  .editor-canvas-node-kind {
+    position: absolute;
+    inset: auto 0.7rem 0.45rem;
+    padding-top: 0.28rem;
+    border-top: 1px solid var(--editor-line);
+    color: var(--node-accent);
+    font-size: 0.65rem;
+    font-weight: 620;
   }
   .dag-surface {
     --dag-line: color-mix(in oklab, var(--pf-primary) 47%, var(--pf-border-strong));
@@ -502,9 +814,6 @@
       background: var(--pf-primary);
       content: "";
     }
-    .editor-workspace {
-      height: max(34rem, calc(100dvh - var(--workspace-header) - 2 * var(--workspace-gutter)));
-    }
   }
   @media (min-width: 59rem) {
     .overview-top {
@@ -514,34 +823,49 @@
       grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     }
   }
+  @media (min-width: 67rem) {
+    .editor-grid {
+      grid-template-columns: var(--editor-left) 6px minmax(0, 1fr) 6px var(--editor-right);
+    }
+    .editor-resize-side {
+      display: block;
+    }
+    .editor-library,
+    .editor-inspector {
+      border-block-start: 0;
+    }
+  }
+  @media (width < 67rem) {
+    .editor-panel-toggles {
+      display: flex;
+    }
+    .editor-library,
+    .editor-inspector {
+      position: absolute;
+      z-index: 4;
+      inset-block: var(--editor-toolbar-height) 0;
+      display: none;
+      width: min(21rem, 88%);
+      overflow: hidden;
+      border-block-start: 0;
+      box-shadow: var(--pf-shadow-popover);
+    }
+    .editor-library[data-compact-open="true"],
+    .editor-inspector[data-compact-open="true"] {
+      display: flex;
+    }
+    .editor-library {
+      inset-inline-start: 0;
+      border-inline-end: 1px solid var(--editor-line);
+    }
+    .editor-inspector {
+      inset-inline-end: 0;
+      border-inline-start: 1px solid var(--editor-line);
+    }
+  }
   @media (max-width: 51.99rem) {
     .workspace-page-title {
       letter-spacing: -0.025em;
-    }
-    .editor-view-picker {
-      display: flex;
-      flex: none;
-      padding: 0.55rem 0.65rem;
-      border-bottom: 1px solid var(--pf-border);
-      background: var(--pf-surface);
-    }
-    .editor-card .editor-panes {
-      height: max(18rem, calc(100dvh - 18rem));
-      flex: none;
-    }
-    .editor-panes > .splitter-pane {
-      flex: 1 1 0;
-    }
-    .editor-panes > .splitter-divider,
-    .editor-panes:not(.editor-show-graph) > .splitter-pane:last-child,
-    .editor-show-graph > .splitter-pane:first-child {
-      display: none;
-    }
-    .editor-results-open {
-      height: min(18rem, 45dvh);
-    }
-    .editor-results-mapping {
-      height: min(27rem, 65dvh);
     }
   }
 }

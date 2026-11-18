@@ -42,43 +42,47 @@ export function Shell() {
   const changingPage = Boolean(navigation.location && navigation.location.pathname !== pathname);
   useDocumentPreferences();
   return (
-    <div className="workspace">
+    <div className={cx("workspace", path === "/editor" && "workspace-job-editor")}>
       <a
         href="#content"
         className="sr-only z-50 rounded-control bg-primary px-3 py-2 text-primary-fg focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
       >
         {t("app.skipToContent")}
       </a>
-      <header className="workspace-header">
-        <div className="workspace-brand">
-          <span className="workspace-mark">
-            <img src="/favicon.svg" width={27} height={27} alt="" />
-          </span>
-          {t("app.name")}
-        </div>
-        {current ? (
-          <span className="workspace-location">
-            <Icon name={current.icon} size={15} />
-            {t(current.label)}
-          </span>
-        ) : null}
-        <div className="ml-auto">
-          <PreferenceMenus />
-        </div>
-      </header>
-      <nav aria-label={t("app.mainNavigation")} className="workspace-nav">
-        {NAVIGATION.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            className={({ isActive }) => cx("workspace-link", isActive && "workspace-link-active")}
-          >
-            <Icon name={item.icon} size={17} />
-            <span>{t(item.label)}</span>
-          </NavLink>
-        ))}
-      </nav>
+      {path !== "/editor" ? (
+        <>
+          <header className="workspace-header">
+            <div className="workspace-brand">
+              <span className="workspace-mark">
+                <img src="/favicon.svg" width={27} height={27} alt="" />
+              </span>
+              {t("app.name")}
+            </div>
+            {current ? (
+              <span className="workspace-location">
+                <Icon name={current.icon} size={15} />
+                {t(current.label)}
+              </span>
+            ) : null}
+            <div className="ml-auto">
+              <PreferenceMenus />
+            </div>
+          </header>
+          <nav aria-label={t("app.mainNavigation")} className="workspace-nav">
+            {NAVIGATION.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) => cx("workspace-link", isActive && "workspace-link-active")}
+              >
+                <Icon name={item.icon} size={17} />
+                <span>{t(item.label)}</span>
+              </NavLink>
+            ))}
+          </nav>
+        </>
+      ) : null}
       <main id="content" tabIndex={-1} className="workspace-main">
         <Outlet />
       </main>

@@ -74,7 +74,7 @@ The documentation site runs the same rules, defined once in `@pipeforge/design-t
 | `RowButton` | A full-width selectable row of a list, such as a column of the field mapping editor; `selected` is announced with `aria-pressed` |
 | `FileButton` | Opens the file picker and hands over the file's name and text |
 | `CodeEditor` | YAML or SQL-style expression editing (`language`) with completion and problems; imported from `@/ui/CodeEditor` so that CodeMirror only loads with the pages that use it. Completion is a function of the text and the cursor that returns the suggestions, so pages never touch CodeMirror |
-| `DagCanvas` | A read-only job graph: layered layout from `src/canvas`, pan, zoom, fit, nodes as buttons; a node can carry a `metric` line under it, `emphasis` (a marked node such as a bottleneck) and `selected`, and `edgeWidth` sizes each edge from 1 to 8 |
+| `DagCanvas` | Displays layered job graphs with panning, zoom, and fit. Node metrics, selection, emphasis, and edge widths can be supplied by the caller. The job editor supplies `editing` callbacks for component drops and connections. Node positions stay in the canvas. |
 
 Charts are in `src/charts`, also our own and drawn in SVG with the chart colors of the tokens
 (`chart-1` to `chart-8`). `LineChart` draws lines over time with three levels of the y axis, the

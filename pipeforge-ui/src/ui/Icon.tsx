@@ -39,6 +39,7 @@ const paths = {
   info: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-6v-4m0-4h.01",
   search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm10 2-4.35-4.35",
   plus: "M12 5v14M5 12h14",
+  minus: "M5 12h14",
   trash: "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6",
   play: "M6 4l14 8-14 8z",
   arrowRight: "M5 12h14M13 6l6 6-6 6",
