@@ -1,0 +1,81 @@
+---
+title: Java 客户端
+description: 用 pipeforge-client 从 Java 调用服务端的 REST API：提交和跟踪运行，查看指标、分片、Task 和日志、集群，以及错误处理。
+order: 72
+---
+
+`pipeforge-client` 用于在 Java 中调用服务端的 [REST API](../reference/api)：`pipeforge` 命令使用它，调度系统等其他系统也可以使用。
+它需要 Java 21 和 Jackson，不依赖其他库。
+
+```xml
+<dependency>
+  <groupId>org.devlive.pipeforge</groupId>
+  <artifactId>pipeforge-client</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+## 运行作业
+
+```java
+PipeForgeClient client = PipeForgeClient.builder(URI.create("http://127.0.0.1:8080"))
+    .language("zh-CN")                  // 错误消息的语言；不设置时使用服务端的默认值
+    .timeout(Duration.ofSeconds(60))    // 每次调用的超时
+    .build();
+
+Run run = client.submitRun(Files.readString(Path.of("orders.yaml")), Map.of("day", "2026-11-17"));
+RunDetail ended = client.awaitRun(run.id(), Duration.ofSeconds(2), Duration.ofHours(1));
+if (!ended.run().status().equals("SUCCESS")) {
+    System.err.println(ended.run().error().code() + " " + ended.run().error().message());
+}
+```
+
+`awaitRun` 不断查询运行，直到它结束（`PipeForgeClient.ENDED`）；超时没有结束时抛出 `TimeoutException`，运行本身继续进行。
+也可以传入其他条件，例如等到运行开始。
+
+## 调用
+
+| 调用 | 请求 | 返回 |
+|---|---|---|
+| `version()` | `GET /api/v1/version` | `VersionInfo` |
+| `submitRun(definition, variables[, scheduledTime])` | `POST /api/v1/runs` | `Run`，处于排队状态 |
+| `listRuns(RunQuery)` | `GET /api/v1/runs` | `RunPage`；`next()` 是下一页的令牌 |
+| `run(id)` | `GET /api/v1/runs/{id}` | `RunDetail`：运行、它的定义和状态变化 |
+| `cancelRun(id, reason)` | `POST /api/v1/runs/{id}/cancel` | `Run` |
+| `metrics(id)` | `GET /api/v1/runs/{id}/metrics` | `RunMetrics`，包括每个节点的计数 |
+| `metricsHistory(id, since)` | `GET /api/v1/runs/{id}/metrics/history` | `MetricSample` 列表，从旧到新 |
+| `analysis(id)` | `GET /api/v1/runs/{id}/analysis` | JSON 形式的[运行分析](../concepts/plan-and-explain#运行分析) |
+| `splits(id)`、`tasks(id)` | `GET /api/v1/runs/{id}/splits`、`/tasks` | `RunSplit`、`RunTask` 列表 |
+| `readLog(id, LogQuery)` | `GET /api/v1/runs/{id}/logs` | `LogChunk` |
+| `cluster()` | `GET /api/v1/cluster` | `ClusterView`：Master、Worker 和 Slot |
+| `validate(definition, variables)` | `POST /api/v1/jobs/validate` | `ValidationResult` |
+| `explain(definition, variables)` | `POST /api/v1/explain` | `ExplainResult`：JSON 和文本形式的计划 |
+
+`RunQuery` 和 `LogQuery` 可以逐步构建：
+
+```java
+RunPage failed = client.listRuns(RunQuery.all().withStatuses("FAILED", "TIMEOUT").withJob("orders"));
+
+LogQuery query = LogQuery.of("orders", 0, 0).withLevel("WARN").withContains("timeout");
+long next = client.followLog(run.id(), query.withOffset(-64 * 1024), Duration.ofSeconds(2),
+    System.out::print, chunk -> true);
+```
+
+`followLog` 从查询的偏移量开始读取 Task 日志（负数表示从末尾往回数），把每段文本交给消费者，并不断再次读取，
+直到 Task 结束或谓词要求停止；返回继续读取的偏移量。
+
+## 错误
+
+每次调用都会阻塞到服务端返回。被拒绝时抛出 `ApiException`，其中包含 HTTP 状态和服务端描述的错误：`code()` 是[已登记的错误码](../reference/errors)，
+`error()` 包含消息、提示和消息中的取值。
+
+| 情况 | `status()` | `code()` |
+|---|---|---|
+| 服务端拒绝，例如运行不存在 | 对应的 HTTP 状态，例如 404 | 服务端的错误码，例如 `PF-CLUS-0014` |
+| 无法连接服务端 | 0 | `PF-CLUS-0008` |
+| 返回的不是服务端的错误，例如代理的页面 | 对应的 HTTP 状态 | `PF-SYS-0001` |
+
+## 兼容性
+
+服务端在返回中增加字段时客户端照常工作：它会忽略不认识的字段。客户端的契约测试把每个请求和返回中的每个字段与服务端的 OpenAPI 文档
+（`pipeforge-server/openapi.json`）对照，因此会破坏客户端的 API 改动会让构建失败。同一版本的客户端和服务端总是匹配的。

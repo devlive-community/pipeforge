@@ -105,6 +105,8 @@
   docs: ["reference/api"]
 - paths: ["pipeforge-cli/**"]
   docs: ["reference/cli"]
+- paths: ["pipeforge-client/**"]
+  docs: ["development/java-client"]
 - paths: ["pipeforge-e2e/**"]
   docs: ["development/testing"]
 - paths: ["pipeforge-e2e/src/test/java/org/devlive/pipeforge/e2e/*Benchmark*.java", "tools/benchmark/**", ".github/workflows/benchmark.yml"]

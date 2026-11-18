@@ -43,6 +43,7 @@
         <module>pipeforge-engine</module>
         <module>pipeforge-connector-testkit</module>
         <module>pipeforge-connectors</module>
+        <module>pipeforge-client</module>
         <module>pipeforge-server</module>
         <module>pipeforge-cli</module>
         <module>pipeforge-dist</module>

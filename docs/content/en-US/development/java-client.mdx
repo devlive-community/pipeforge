@@ -1,0 +1,87 @@
+---
+title: Java client
+description: Calling the server's REST API from Java with pipeforge-client - submitting and following runs, their metrics, splits, tasks and logs, the cluster, and errors.
+order: 72
+---
+
+`pipeforge-client` calls the [REST API](../reference/api) of the server from Java: the `pipeforge`
+command uses it, and so can schedulers and other systems. It needs Java 21 and Jackson, nothing
+else.
+
+```xml
+<dependency>
+  <groupId>org.devlive.pipeforge</groupId>
+  <artifactId>pipeforge-client</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+## Running a job
+
+```java
+PipeForgeClient client = PipeForgeClient.builder(URI.create("http://127.0.0.1:8080"))
+    .language("en-US")                  // messages of errors; the server's default when not set
+    .timeout(Duration.ofSeconds(60))    // per call
+    .build();
+
+Run run = client.submitRun(Files.readString(Path.of("orders.yaml")), Map.of("day", "2026-11-17"));
+RunDetail ended = client.awaitRun(run.id(), Duration.ofSeconds(2), Duration.ofHours(1));
+if (!ended.run().status().equals("SUCCESS")) {
+    System.err.println(ended.run().error().code() + " " + ended.run().error().message());
+}
+```
+
+`awaitRun` asks for the run until it ended (`PipeForgeClient.ENDED`) and throws `TimeoutException`
+when it did not end in time; the run goes on. Another condition can be passed, for example to wait
+until the run runs.
+
+## Calls
+
+| Call | Request | Answer |
+|---|---|---|
+| `version()` | `GET /api/v1/version` | `VersionInfo` |
+| `submitRun(definition, variables[, scheduledTime])` | `POST /api/v1/runs` | `Run`, queued |
+| `listRuns(RunQuery)` | `GET /api/v1/runs` | `RunPage`; `next()` is the token of the next page |
+| `run(id)` | `GET /api/v1/runs/{id}` | `RunDetail`: the run, its definition and its changes of state |
+| `cancelRun(id, reason)` | `POST /api/v1/runs/{id}/cancel` | `Run` |
+| `metrics(id)` | `GET /api/v1/runs/{id}/metrics` | `RunMetrics`, with the counters of each node |
+| `metricsHistory(id, since)` | `GET /api/v1/runs/{id}/metrics/history` | `MetricSample`s, oldest first |
+| `analysis(id)` | `GET /api/v1/runs/{id}/analysis` | the [run analysis](../concepts/plan-and-explain#run-analysis) as JSON |
+| `splits(id)`, `tasks(id)` | `GET /api/v1/runs/{id}/splits`, `/tasks` | `RunSplit`s, `RunTask`s |
+| `readLog(id, LogQuery)` | `GET /api/v1/runs/{id}/logs` | `LogChunk` |
+| `cluster()` | `GET /api/v1/cluster` | `ClusterView`: the master, workers and slots |
+| `validate(definition, variables)` | `POST /api/v1/jobs/validate` | `ValidationResult` |
+| `explain(definition, variables)` | `POST /api/v1/explain` | `ExplainResult`: the plan as JSON and as text |
+
+`RunQuery` and `LogQuery` are built step by step:
+
+```java
+RunPage failed = client.listRuns(RunQuery.all().withStatuses("FAILED", "TIMEOUT").withJob("orders"));
+
+LogQuery query = LogQuery.of("orders", 0, 0).withLevel("WARN").withContains("timeout");
+long next = client.followLog(run.id(), query.withOffset(-64 * 1024), Duration.ofSeconds(2),
+    System.out::print, chunk -> true);
+```
+
+`followLog` reads a task log from the query's offset (negative counts back from the end), hands
+every chunk of text to the consumer and reads again until the task ended or the predicate says
+to stop; it returns the offset to continue from.
+
+## Errors
+
+Every call blocks until the server answers. A refusal is an `ApiException` with the HTTP status and
+the error the server described: `code()` is its [registered code](../reference/errors), `error()`
+has the message, the hint and the values in the message.
+
+| Case | `status()` | `code()` |
+|---|---|---|
+| The server refused, for example an unknown run | its HTTP status, e.g. 404 | the server's code, e.g. `PF-CLUS-0014` |
+| The server cannot be reached | 0 | `PF-CLUS-0008` |
+| An answer that is no error of the server, such as a proxy's page | its HTTP status | `PF-SYS-0001` |
+
+## Compatibility
+
+The client keeps working when the server adds fields to its answers: it ignores fields it does not
+know. Its contract tests hold every request and every field of its answers to the server's OpenAPI
+document (`pipeforge-server/openapi.json`), so a change of the API that would break the client
+fails the build. A client and a server of the same version always fit.
