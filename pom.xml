@@ -89,7 +89,7 @@
         <protobuf-java.version>4.36.2</protobuf-java.version>
         <netty.version>4.2.19.Final</netty.version>
         <!-- Not in the Spring Boot BOM: the release gRPC is built against, in the JRE flavour Calcite uses. -->
-        <guava.version>33.6.0-jre</guava.version>
+        <guava.version>33.8.0-jre</guava.version>
         <!-- Versions above follow the Spring Boot BOM so that the server converges with the libraries. -->
         <spring-boot.version>4.1.2</spring-boot.version>
         <springdoc.version>3.2.0</springdoc.version>
