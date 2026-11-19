@@ -9,7 +9,7 @@
   :root {
     --site-header-height: 4.25rem;
     --site-gutter: clamp(1rem, 4vw, 3.75rem);
-    --site-width: 87.5rem;
+    --site-width: 90.5rem;
     --site-heading-spacing: -0.045em;
     --site-display: var(--site-font-geist, Inter), ui-sans-serif, system-ui, sans-serif;
     --site-hero-bg: oklch(98% 0.01 286);

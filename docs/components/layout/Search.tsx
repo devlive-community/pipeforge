@@ -33,7 +33,7 @@ type Searcher = (query: string) => SearchResult[];
  * lists results one after another; arrow keys move a highlight block, Enter opens, Esc
  * closes and returns focus to the trigger.
  */
-export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
+export function Search({ lang, labels, field = false }: { lang: Lang; labels: Labels; field?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -127,13 +127,19 @@ export function Search({ lang, labels }: { lang: Lang; labels: Labels }) {
         ref={trigger}
         variant="secondary"
         size="sm"
+        justify={field ? "start" : "center"}
         onClick={() => setOpen(true)}
         aria-label={labels.search}
         aria-haspopup="dialog"
-        className="h-8 w-8 bg-surface-2 px-0 text-fg-muted sm:w-44 sm:justify-start sm:px-2.5"
+        className={cx(
+          "text-fg-muted",
+          field ? "integration-search" : "h-8 w-8 bg-surface-2 px-0 sm:w-44 sm:justify-start sm:px-2.5",
+        )}
       >
         <Icon name="search" size={15} />
-        <span className="hidden sm:inline">{labels.search}</span>
+        <span className={field ? "min-w-0 truncate" : "hidden sm:inline"}>
+          {field ? labels.searchPlaceholder : labels.search}
+        </span>
         <kbd
           aria-hidden="true"
           className="ml-auto hidden rounded-control border border-border px-1.5 font-sans text-xs sm:inline"

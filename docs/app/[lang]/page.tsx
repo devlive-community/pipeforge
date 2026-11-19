@@ -6,112 +6,88 @@
  */
 
 import type { Metadata } from "next";
-import { FeatureGrid } from "@/components/home/FeatureGrid";
-import { HeroDag } from "@/components/home/HeroDag";
+import { IntegrationCase } from "@/components/home/IntegrationCase";
+import { IntegrationDetails } from "@/components/home/IntegrationDetails";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { REPOSITORY_URL, SiteHeader } from "@/components/layout/SiteHeader";
-import { Screenshot } from "@/components/mdx/Screenshot";
+import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SiteLink } from "@/components/layout/SiteLink";
 import { ButtonLink } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { SiteLink } from "@/components/layout/SiteLink";
 import { navigation } from "@/lib/content";
 import { CURRENT_VERSION, pageUrl } from "@/lib/content-core.mjs";
 import { otherLang, t, toLang } from "@/lib/i18n";
+import { integrationLabels } from "@/lib/integration";
 import { alternates } from "@/lib/site";
 
-const resourceIcons = {
-  "getting-started/quickstart": "terminal",
-  "reference/job-dsl": "code",
-  plugins: "box",
-} as const;
+const capabilityIcons = ["database", "sliders", "activity"] as const;
 
 export async function generateMetadata({ params }: { params: Promise<{ lang: string }> }): Promise<Metadata> {
   const lang = toLang((await params).lang);
-  return { title: { absolute: `PipeForge · ${t(lang).tagline}` }, alternates: alternates(lang, "/") };
+  return {
+    title: { absolute: `PipeForge · ${t(lang).tagline}` },
+    description: integrationLabels(lang).heroText,
+    alternates: alternates(lang, "/"),
+  };
 }
 
 export default async function Home({ params }: { params: Promise<{ lang: string }> }) {
   const lang = toLang((await params).lang);
   const dict = t(lang);
+  const labels = integrationLabels(lang);
   const docsUrl = `/${lang}/${CURRENT_VERSION}/`;
+  const space = lang === "en-US" ? " " : "";
   return (
     <>
       <SiteHeader lang={lang} otherLangHref={`/${otherLang(lang)}/`} sections={navigation(lang)} area="home" />
-      <main id="content">
-        <section className="home-intro">
-          <div className="site-container home-hero">
+      <main id="content" className="integration-home">
+        <div className="site-container">
+          <header className="integration-intro">
             <div>
-              <p className="home-kicker">
-                <Icon name="workflow" size={16} />
-                {dict.tagline}
-              </p>
               <h1>
-                {dict.heroTitle[0]} <span>{dict.heroTitle[1]}</span>
+                {labels.heroTitle[0]}
+                {space}
+                <span>{labels.heroTitle[1]}</span>
+                {space}
+                {labels.heroTitle[2]}
               </h1>
-              <p className="home-summary">{dict.heroText}</p>
-              <div className="home-actions">
-                <ButtonLink
-                  href={pageUrl(lang, CURRENT_VERSION, "getting-started/quickstart")}
-                  variant="primary"
-                  size="lg"
-                  className="home-action"
-                >
-                  {dict.getStarted}
-                  <Icon name="arrowRight" size={17} />
-                </ButtonLink>
-                <ButtonLink href={REPOSITORY_URL} external size="lg" className="home-action">
-                  <Icon name="github" />
-                  {dict.viewSource}
-                </ButtonLink>
-              </div>
+              <p>{labels.heroText}</p>
             </div>
-            <HeroDag lang={lang} label={dict.playground} stages={dict.pipelineStages} />
-          </div>
-          <nav className="site-container home-resources" aria-label={dict.exploreDocs}>
-            {dict.homepageResources.map(([id, title, description]) => (
-              <SiteLink key={id} href={id === "plugins" ? `${docsUrl}#plugins` : pageUrl(lang, CURRENT_VERSION, id)}>
-                <span className="resource-icon">
-                  <Icon name={resourceIcons[id]} size={20} />
-                </span>
-                <span className="resource-copy">
-                  <strong>{title}</strong>
-                  <span>{description}</span>
-                </span>
-                <Icon name="arrowUpRight" size={17} className="resource-arrow" />
-              </SiteLink>
-            ))}
-          </nav>
-        </section>
-        <section className="site-container home-features">
-          <h2>{dict.featureTitle}</h2>
-          <FeatureGrid features={dict.features} />
-        </section>
-        <section className="home-editor">
-          <div className="site-container home-editor-layout">
-            <div>
-              <h2>{dict.editorTitle}</h2>
-              <p>{dict.editorText}</p>
-              <SiteLink
-                href={pageUrl(lang, CURRENT_VERSION, "guides/job-editor")}
-                className="inline-flex items-center gap-2 font-semibold text-primary hover:text-primary-hover"
-              >
-                {dict.editorLink}
-                <Icon name="arrowRight" />
-              </SiteLink>
+            <div className="integration-actions">
+              <ButtonLink href={pageUrl(lang, CURRENT_VERSION, "getting-started/quickstart")} variant="primary">
+                {dict.sections["getting-started"]}
+                <Icon name="arrowRight" size={16} />
+              </ButtonLink>
+              <ButtonLink href={`${docsUrl}#connectors`}>
+                {labels.findConnectors}
+                <Icon name="arrowUpRight" size={16} />
+              </ButtonLink>
             </div>
-            <Screenshot
-              name="job-editor"
-              alt={
-                lang === "zh-CN"
-                  ? "显示 YAML、作业拓扑和执行计划的 PipeForge 作业编辑器"
-                  : "PipeForge job editor showing YAML, the job graph and its execution plan"
-              }
-              lang={lang}
-            />
-          </div>
-        </section>
+          </header>
+          <IntegrationCase lang={lang} />
+          <section className="integration-capabilities" aria-labelledby="integration-capabilities-heading">
+            <header>
+              <h2 id="integration-capabilities-heading">{labels.howItWorks}</h2>
+              <SiteLink href={docsUrl} className="integration-link">
+                {labels.readDocs}
+                <Icon name="arrowRight" size={15} />
+              </SiteLink>
+            </header>
+            <ul>
+              {labels.capabilities.map(([title, description], index) => (
+                <li key={title}>
+                  <h3>
+                    <Icon name={capabilityIcons[index] ?? "workflow"} size={16} />
+                    {title}
+                  </h3>
+                  <p>{description}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <IntegrationDetails lang={lang} />
+        </div>
       </main>
-      <SiteFooter lang={lang} />
+      <SiteFooter lang={lang} compact />
     </>
   );
 }

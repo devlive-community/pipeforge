@@ -9,6 +9,7 @@
 @import "@pipeforge/design-tokens/tokens.css";
 @import "@pipeforge/design-tokens/theme.css";
 @import "./site.css";
+@import "./integration.css";
 
 @source "../app";
 @source "../components";
