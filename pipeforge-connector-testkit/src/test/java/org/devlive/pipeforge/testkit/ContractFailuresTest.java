@@ -61,6 +61,19 @@ class ContractFailuresTest {
     }
 
     @Test
+    void reportsASourceThatReadsRowsAgainAfterARestore() {
+        List<String> failures = failures(run(BrokenConnectors.ForgetfulSource.class));
+
+        assertThat(failures).anySatisfy(f -> assertThat(f)
+                .startsWith("restored after 50% of 2,000 rows at parallelism 1: rows read before the snapshot")
+                .contains("unexpected"));
+        assertThat(failures)
+                .as("only the checkpoint and state compatibility cases fail")
+                .allSatisfy(
+                        f -> assertThat(f).matches("(?s)(restored after|states of earlier versions are restored).*"));
+    }
+
+    @Test
     void reportsOptionsThatDoNotPlan() {
         Events events = run(BrokenConnectors.MissingOptionSource.class);
 

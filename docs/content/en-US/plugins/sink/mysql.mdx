@@ -170,6 +170,7 @@ The sink reports the standard sink metrics: `rowsWritten`, the write rate, the w
 
 ## Known limitations
 
+- The writer keeps no state in a [checkpoint](../../concepts/checkpoint): after a restore, rows written after the last checkpoint are written again, which is harmless only with upserts.
 - Inserts only: no upsert, update or delete yet (M4), and the table must exist (creating it: M3).
 - One table per sink node.
 - At least once: exactly-once with XA transactions arrives in M4.

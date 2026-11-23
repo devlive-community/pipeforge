@@ -58,4 +58,10 @@ class JdbcSinkContractTest extends SinkContract {
             }
         };
     }
+
+    /** The test sink has no plugin.yaml; its skips are those of the JDBC plugins. */
+    @Override
+    protected java.util.Map<String, String> skippedGroups(SinkUnderTest sink) {
+        return java.util.Map.of("state-compat", "the writer keeps no state");
+    }
 }

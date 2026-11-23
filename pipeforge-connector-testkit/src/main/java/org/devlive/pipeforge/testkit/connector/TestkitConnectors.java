@@ -191,7 +191,7 @@ public final class TestkitConnectors {
         @Override
         public SplitEnumerator<IndexSplit, String> restoreEnumerator(
                 EnumeratorContext<IndexSplit> context, String state) {
-            return createEnumerator(context);
+            return new RowsEnumerator(context, RowsEnumerator.parse(state));
         }
 
         @Override
@@ -228,6 +228,23 @@ public final class TestkitConnectors {
             }
         }
 
+        RowsEnumerator(EnumeratorContext<IndexSplit> context, List<IndexSplit> pending) {
+            this.context = context;
+            this.pending.addAll(pending);
+        }
+
+        /** The splits not assigned yet: {@code id:from:to} separated by commas. */
+        static List<IndexSplit> parse(String state) {
+            List<IndexSplit> splits = new ArrayList<>();
+            for (String split : state.split(",", -1)) {
+                if (!split.isEmpty()) {
+                    String[] parts = split.split(":", -1);
+                    splits.add(new IndexSplit(parts[0], Integer.parseInt(parts[1]), Integer.parseInt(parts[2])));
+                }
+            }
+            return splits;
+        }
+
         @Override
         public void start() {}
 
@@ -251,7 +268,11 @@ public final class TestkitConnectors {
 
         @Override
         public String snapshotState(long checkpointId) {
-            return "";
+            return String.join(
+                    ",",
+                    pending.stream()
+                            .map(s -> s.splitId() + ":" + s.from() + ":" + s.to())
+                            .toList());
         }
     }
 

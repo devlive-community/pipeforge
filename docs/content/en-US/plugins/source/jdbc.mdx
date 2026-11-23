@@ -143,6 +143,7 @@ finished. Rows whose values cannot be read count as bad rows and follow the job'
 
 ## Known limitations
 
+- After a restore from a [checkpoint](../../concepts/checkpoint), a reader reads its splits from the start again: rows of a split read before the checkpoint are read again, so recovery gives at-least-once delivery until key-based resume.
 - ANSI SQL only: databases that quote names differently, or whose drivers report vendor types,
   need a dedicated plugin.
 - No arrays, maps, rows or JSON.

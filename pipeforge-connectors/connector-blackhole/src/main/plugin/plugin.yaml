@@ -13,3 +13,5 @@ license: MIT
 description: Discards the rows it receives, optionally at a limited rate. For measuring the engine and sources, and for simulating a slow target.
 provides:
   - { type: sink, identifier: blackhole, class: org.devlive.pipeforge.connector.blackhole.BlackholeSinkFactory }
+skipped-testkit-groups:
+  - { group: state-compat, reason: "no states of earlier versions are kept yet" }

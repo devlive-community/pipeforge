@@ -154,6 +154,7 @@ Source 报告标准的 Source 指标：`rowsRead`、读取速率，以及已分�
 
 ## 已知限制
 
+- 从 [checkpoint](../../concepts/checkpoint) 恢复后，Reader 会从头重新读取它的分片：分片中在 checkpoint 之前读过的行会再读一次，因此在支持按键续传之前，恢复只能保证 at-least-once。
 - 只支持有界读取；变更由 MySQL CDC Source（M5）读取。
 - `tables.include` 作业运行期间新增的表，要到下一次运行才会读取。
 - 尚未验证 MySQL 5.7。

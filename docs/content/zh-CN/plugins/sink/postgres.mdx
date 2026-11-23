@@ -154,6 +154,7 @@ Sink 报告标准的 Sink 指标：`rowsWritten`、写入速率、写入队列�
 
 ## 已知限制
 
+- Writer 在 [checkpoint](../../concepts/checkpoint) 中不保存状态：恢复后，最近一个 checkpoint 之后写入的行会再写一次，只有 upsert 写入时才不受影响。
 - 只支持插入：暂不支持 upsert、更新和删除，表必须已经存在。
 - 每个 Sink 节点只写一张表。
 - 至少一次；精确一次在后续里程碑提供。

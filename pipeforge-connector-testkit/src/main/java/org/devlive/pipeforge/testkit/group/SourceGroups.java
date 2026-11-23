@@ -38,7 +38,12 @@ public final class SourceGroups {
     private SourceGroups() {}
 
     public static List<ContractGroup> all(SourceUnderTest source) {
-        return List.of(options(source), types(source), batch(source));
+        return List.of(
+                options(source),
+                types(source),
+                batch(source),
+                CheckpointGroups.sourceCheckpoint(source),
+                CheckpointGroups.sourceStateCompat(source));
     }
 
     public static ContractGroup options(SourceUnderTest source) {

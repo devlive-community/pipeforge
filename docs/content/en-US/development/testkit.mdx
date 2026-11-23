@@ -14,6 +14,8 @@ from the connector itself, so a plugin only says how to prepare data and how to 
 | `options` | Sources, transforms, sinks | The option rule as the planner applies it: valid options plan, unknown options are rejected, every required option is reported missing (`PF-CONF-0001`), defaults appear in the plan, values outside the range or the choices are rejected (`PF-CONF-0002`), old option names still work, exclusive and conditional options, sensitive values are masked in `explain`; options missing from the baseline get a sample value of their type, lists of objects included |
 | `types` | Sources, sinks | Every logical type round-trips: NULL, minimum and maximum, the largest decimal, empty and 64 KB strings, Unicode, binary, the earliest and latest dates and times, `TIMESTAMP_LTZ` in a time zone other than UTC, arrays, maps, nested rows and JSON |
 | `batch` | Sources, sinks | An empty table, a single row, and a large table at parallelism 1, 4 and 16; for sources, once per split strategy |
+| `checkpoint` | Sources, sinks | A [checkpoint](../concepts/checkpoint) in the middle of the work and a restore. A source reads 2,000 rows at parallelism 1 and 3, is snapshotted after 10, 50 and 90 % of them, and every instance is dropped; new ones restored from the states must read every row exactly once in all. A sink writes half, prepares its commit, is snapshotted and committed, writes on and fails before the next checkpoint; a restored writer commits the restored checkpoint again (committing must be idempotent) and writes the rest: with a committer every row exactly once, without one at least once. States go through the plugin's serializers |
+| `state-compat` | Sources, sinks | The states written by earlier versions of the plugin stay readable: each version kept in `src/test/resources/testkit-state/<plugin>/` is read with the current serializers and restored from |
 | `transform` | Transforms | The tables derived while planning; the rows of an empty input, 1,000 rows, 1,000 rows at parallelism 4 and two input tables, compared with the transform's model and checked against the derived schema; a schema change from the source; a failing row reported at the node with a registered code |
 
 Every job that runs also checks the [row counters](../reference/metrics): `rowsRead` or
@@ -196,7 +198,22 @@ skipped-testkit-groups:
   - { group: types, reason: "the sink discards rows; nothing can be read back" }
 ```
 
-Any group name that is not a testkit group fails the contract, so typos are caught.
+Any group name that is not a testkit group fails the contract, so typos are caught. A source or
+sink that cannot be restored declares `checkpoint` and `state-compat`; one that declares neither
+must pass both.
+
+### State files
+
+`state-compat` reads the states of every version kept for the plugin. When a serializer version
+changes, or for the first run, write the states of the current version and commit them with the
+change:
+
+```bash
+./mvnw test -pl <plugin> -Dpipeforge.testkit.state.update=true
+git add <plugin>/src/test/resources/testkit-state
+```
+
+The files of earlier versions are never rewritten: they are what a running cluster may hold.
 
 ## Running some groups
 

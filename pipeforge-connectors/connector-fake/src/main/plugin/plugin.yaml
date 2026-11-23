@@ -13,3 +13,5 @@ license: MIT
 description: Generates rows from a schema, or replays literal rows, with rate limits, out-of-order event times, bad rows and many tables. For tests, demos and benchmarks.
 provides:
   - { type: source, identifier: fake, class: org.devlive.pipeforge.connector.fake.FakeSourceFactory }
+skipped-testkit-groups:
+  - { group: state-compat, reason: "no states of earlier versions are kept yet" }

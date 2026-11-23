@@ -148,6 +148,7 @@ Source 报告标准的 Source 指标：`rowsRead`、读取速率，以及已分�
 
 ## 已知限制
 
+- 从 [checkpoint](../../concepts/checkpoint) 恢复后，Reader 会从头重新读取它的分片：分片中在 checkpoint 之前读过的行会再读一次，因此在支持按键续传之前，恢复只能保证 at-least-once。
 - 只支持有界读取；CDC 在后续里程碑提供。
 - 分区表通过其分区读取；`tables.include` 不会列出父表。
 - 无法读取几何类型、范围类型，以及布尔、数字和文本以外元素的数组。

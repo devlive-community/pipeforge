@@ -36,6 +36,8 @@ final class Contracts {
             "options",
             "types",
             "batch",
+            "checkpoint",
+            "state-compat",
             "resume",
             "stream",
             "cdc",

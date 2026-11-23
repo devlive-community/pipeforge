@@ -33,7 +33,12 @@ public final class SinkGroups {
     private SinkGroups() {}
 
     public static List<ContractGroup> all(SinkUnderTest sink) {
-        return List.of(options(sink), types(sink), batch(sink));
+        return List.of(
+                options(sink),
+                types(sink),
+                batch(sink),
+                CheckpointGroups.sinkCheckpoint(sink),
+                CheckpointGroups.sinkStateCompat(sink));
     }
 
     public static ContractGroup options(SinkUnderTest sink) {

@@ -128,6 +128,7 @@ Source 报告标准的 Source 指标：`rowsRead`、读取速率，以及已分�
 
 ## 已知限制
 
+- 从 [checkpoint](../../concepts/checkpoint) 恢复后，Reader 会从头重新读取它的分片：分片中在 checkpoint 之前读过的行会再读一次，因此在支持按键续传之前，恢复只能保证 at-least-once。
 - 只支持 ANSI SQL：名称引用方式不同、或者驱动报告厂商类型的数据库需要专用插件。
 - 不支持数组、Map、Row 和 JSON。
 - 只支持有界读取。
