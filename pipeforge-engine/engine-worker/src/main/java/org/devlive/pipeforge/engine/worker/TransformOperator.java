@@ -110,6 +110,11 @@ final class TransformOperator implements ChainOutput {
         next.barrier(barrier);
     }
 
+    @Override
+    public void progress(String splitId, String position) {
+        next.progress(splitId, position);
+    }
+
     void close() {
         Transform current = transform;
         if (current != null) {

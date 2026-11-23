@@ -103,6 +103,7 @@ env:
 | at-least-once | 开启 checkpoint，并且 Source 能从某个位置重新读取 |
 | 效果上的 exactly-once | at-least-once，并且 Sink 按主键幂等写入 |
 | exactly-once | at-least-once，并且 Sink 两阶段提交 |
+| 故障恢复后的 exactly-once | at-least-once，Source 能按位置续传，Sink 与数据一起记录位置（[进度表](../plugins/sink/jdbc#进度表)），两者在同一个 Task 中 |
 | 无保证 | 关闭 checkpoint：失败的运行从头开始 |
 
 - 同一个运行中 checkpoint 编号只增不减，重启之后也不会重复。

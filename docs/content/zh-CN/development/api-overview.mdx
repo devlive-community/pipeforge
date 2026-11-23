@@ -101,6 +101,14 @@ Master 先用 `SinkCommitter`、再用 `GlobalCommitter` 提交这些待提交�
 `restoredCheckpointId()` 返回 Writer 恢复自哪个 checkpoint（全新启动时为 0）。每个 checkpoint 打开一个事务的 Writer 用 `transactionId`
 为它命名，并在恢复时 abort 目标中由之前的尝试留下、checkpoint 编号更大的事务：它们从未提交，也永远不会提交。
 
+### Source 与 Sink 之间的进度
+
+分片能按位置（例如最后读到的键）续传的 Source，用 `ReaderOutput.progress(splitId, position)` 告诉引擎某个分片到这个位置为止的行都已发出，
+并实现 `SupportsResume`（`api.capability`），从某个位置之后继续读取分片。能在目标端、在写入数据的同一个事务中记录位置的 Sink Writer
+实现 `SupportsProgress`：Source 与它在同一个 Task 中时，引擎按行的顺序把位置交给它；Task 重启时向它查询已记录的位置，并在记录的位置比
+checkpoint 中的更靠后时，用 Source 的 `resume` 推进分片。Writer 只把位置和它之前的所有行一起提交。[JDBC 插件](../plugins/sink/jdbc#进度表)
+实现了这两个接口。
+
 ### 坏行
 
 当问题出在某一行的数据上——值无法转换、目标端拒绝的约束、无法解析的记录——请在 `process`、`write` 或 `pollNext` 中针对这一行抛出

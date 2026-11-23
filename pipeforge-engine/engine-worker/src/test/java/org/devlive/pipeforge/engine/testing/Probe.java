@@ -31,6 +31,8 @@ public final class Probe {
     public final List<String> committed = Collections.synchronizedList(new ArrayList<>());
     /** Rows of the transactional collect sink by transaction, until they are committed into {@link #rows}. */
     public final Map<String, List<Row>> staged = new ConcurrentHashMap<>();
+    /** The positions the collect sink recorded, by split. */
+    public final Map<String, String> recorded = new ConcurrentHashMap<>();
     /** The failures the collect sink threw, across attempts. */
     public final java.util.concurrent.atomic.AtomicInteger sinkFailures =
             new java.util.concurrent.atomic.AtomicInteger();

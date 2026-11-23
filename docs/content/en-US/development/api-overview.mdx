@@ -124,6 +124,18 @@ writer that opens a transaction per checkpoint names it with `transactionId`, an
 the transactions with a higher checkpoint ID that an earlier attempt left open in its target: they
 were never committed and never will be.
 
+### Progress between a source and a sink
+
+A source whose splits can resume at a position, such as the last key read, tells the engine with
+`ReaderOutput.progress(splitId, position)` where every row of a split up to that position was
+emitted, and implements `SupportsResume` (`api.capability`) to continue a split after a position. A
+sink writer that can record positions in the target, in the transaction of the rows, implements
+`SupportsProgress`: the engine passes the positions in order with the rows when the source runs in
+the same task, asks for the recorded ones when the task runs again, and moves the splits on with the
+source's `resume` when a recorded position is further than the checkpoint's. The writer commits a
+position only together with every row before it. The [JDBC plugins](../plugins/sink/jdbc#progress-table)
+implement both.
+
 ### Bad rows
 
 When the data of a row is the problem — a value that does not convert, a constraint the target

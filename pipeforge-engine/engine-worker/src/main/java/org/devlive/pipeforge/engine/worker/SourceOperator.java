@@ -53,7 +53,21 @@ final class SourceOperator {
     }
 
     @SuppressWarnings("unchecked")
-    void open(JobContext job, ExpressionCompiler expressions, List<OperatorChain.Element> restored) {
+    /** Reads the positions a sink recorded for splits. */
+    @FunctionalInterface
+    interface Recorded {
+        java.util.Map<String, String> of(java.util.Collection<String> splitIds);
+    }
+
+    /** Where to look up recorded positions when the task runs again; {@code null} otherwise. */
+    private @org.jspecify.annotations.Nullable Recorded recorded;
+
+    void open(
+            JobContext job,
+            ExpressionCompiler expressions,
+            List<OperatorChain.Element> restored,
+            @org.jspecify.annotations.Nullable Recorded recorded) {
+        this.recorded = recorded;
         SourceFactory factory = (SourceFactory) node.component().factory();
         Source<SourceSplit, ?> source = (Source<SourceSplit, ?>) call.call(
                 "create the source", () -> call.created(factory.createSource(NodeContext.of(node, job, expressions))));
@@ -69,7 +83,8 @@ final class SourceOperator {
                 splits.add(call.call(
                         "read a restored split", () -> serializer.deserialize(element.version(), element.bytes())));
             }
-            call.run("add the restored splits", () -> opened.addSplits(splits));
+            List<SourceSplit> resumed = resumed(splits);
+            call.run("add the restored splits", () -> opened.addSplits(resumed));
         }
     }
 
@@ -108,7 +123,8 @@ final class SourceOperator {
                 for (SerializedValue value : add.splits()) {
                     splits.add(call.call("read an assigned split", () -> value.deserialize(serializer)));
                 }
-                call.run("add splits", () -> current.addSplits(splits));
+                List<SourceSplit> resumed = resumed(splits);
+                call.run("add splits", () -> current.addSplits(resumed));
             }
             case OperatorEvent.NoMoreSplits ignored -> call.run(
                     "end the split assignment", current::notifyNoMoreSplits);
@@ -116,6 +132,33 @@ final class SourceOperator {
                 // the chain applies quotas
             }
         }
+    }
+
+    /**
+     * The splits continued after the positions the sink recorded for them, when the source can
+     * resume there: rows the sink committed after the last checkpoint are not read again.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private List<SourceSplit> resumed(List<SourceSplit> splits) {
+        Recorded positions = recorded;
+        if (positions == null
+                || splits.isEmpty()
+                || !(created instanceof org.devlive.pipeforge.api.capability.SupportsResume resuming)) {
+            return splits;
+        }
+        List<String> ids = new ArrayList<>(splits.size());
+        splits.forEach(split -> ids.add(split.splitId()));
+        java.util.Map<String, String> found = positions.of(ids);
+        List<SourceSplit> result = new ArrayList<>(splits.size());
+        for (SourceSplit split : splits) {
+            String position = found.get(split.splitId());
+            result.add(
+                    position == null
+                            ? split
+                            : call.call("resume split " + split.splitId(), () ->
+                                    (SourceSplit) resuming.resume(split, position)));
+        }
+        return result;
     }
 
     /**

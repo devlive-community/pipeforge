@@ -33,4 +33,15 @@ public interface ReaderOutput {
 
     /** Releases the per-split output once the split is finished. */
     default void releaseSplit(String splitId) {}
+
+    /**
+     * Says that every row of {@code splitId} up to {@code position} was emitted, and none after it
+     * yet: a sink that keeps progress (see {@link
+     * org.devlive.pipeforge.api.capability.SupportsProgress}) records it with those rows, and a
+     * restarted reader can continue after it (see {@link
+     * org.devlive.pipeforge.api.capability.SupportsResume}). The position is the source's own text,
+     * such as the last key read. Emit it only where the split could resume. Ignored by default.
+     */
+    @org.devlive.pipeforge.api.annotation.Evolving
+    default void progress(String splitId, String position) {}
 }

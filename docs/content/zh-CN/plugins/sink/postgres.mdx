@@ -79,6 +79,22 @@ Sink 的写入器数量等于其并行度，每个写入器有自己的连接和
 Sink 的语义是**至少一次**。失败的批次会回滚，不会留下任何行；只有在提交成功但确认丢失，或者运行在部分批次提交后重新开始时，
 才会重复写入。目标表有主键时，这些重复的行会因重复键被拒绝，成为坏行而不会被存储两次：`env.dirty.policy: skip` 时被跳过，默认的 `fail` 时作业失败。
 
+### 进度表
+
+运行做 checkpoint、并且 Source 与 Sink 在同一个 Task 中（两者之间没有数据交换，常见的整表复制就是这样）时，失败后重启不必再次写入
+最近一个 checkpoint 之后的行。Sink 在目标表所在的 Schema 中维护一张**进度表**：记录 Source 每个分片已写到的位置，并在写入这些行的
+同一个事务中更新。重启的 Task 以 checkpoint 与进度表中较靠后的位置继续读取每个分片，因此 checkpoint 之后已提交的行不会写两次。
+批次只在 Source 给出位置时提交，所以一批可能多于 `batch-size` 行。
+
+| 选项 | 默认值 | 含义 |
+|---|---|---|
+| `resume.progress-table` | `auto` | `auto`：表已存在或能创建时使用，否则不用进度表继续写入并记录警告；`on`：无法创建表时 Task 失败；`off`：从不使用 |
+| `resume.progress-table-name` | `_pf_progress` | 表名 |
+
+表有 `job_id`、`node_id`、`split_id`、`watermark` 和 `updated_at` 几列；Writer 在输入结束并写完之后删除它负责的分片的记录。用 `tables.include` 读取的 JDBC Source 永远不会选中名为 `_pf_progress` 的表。
+只有能按位置续传的 Source 会用到它，例如 [JDBC Source](../source/jdbc#续传) 的范围分片；没有进度表，或者中间有数据交换时，
+重启后会再次写入最近一个 checkpoint 之后的行。
+
 ## 示例
 
 ### 跳过 PostgreSQL 拒绝的行

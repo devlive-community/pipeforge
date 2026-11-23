@@ -150,6 +150,10 @@ public final class TestConnectors {
     /** The collect sink fails only in this subtask; -1 in every one. */
     static final Option<Integer> FAIL_SUBTASK =
             Options.key("fail-subtask").intType().defaultValue(-1);
+    /** The collect writer keeps the progress of the source's splits, in the probe. */
+    static final Option<Boolean> PROGRESS =
+            Options.key("progress").booleanType().defaultValue(false);
+
     /** The collect sink fails at most this often in all, across attempts. */
     static final Option<Integer> FAIL_TIMES =
             Options.key("fail-times").intType().defaultValue(Integer.MAX_VALUE);
@@ -360,7 +364,16 @@ public final class TestConnectors {
         }
     }
 
-    static class NumbersSource implements Source<NumberSplit, String> {
+    static class NumbersSource
+            implements Source<NumberSplit, String>, org.devlive.pipeforge.api.capability.SupportsResume<NumberSplit> {
+
+        /** A split continues after the id a sink recorded. */
+        @Override
+        public NumberSplit resume(NumberSplit split, String position) {
+            long next = Long.parseLong(position) + 1;
+            return next <= split.from() ? split : new NumberSplit(split.splitId(), next, Math.max(next, split.to()));
+        }
+
         private static final long serialVersionUID = 1L;
         private final transient ReadonlyConfig config;
 
@@ -571,7 +584,7 @@ public final class TestConnectors {
                 // the record is skipped by moving past it before refusing it
                 long bad = next++;
                 if (next >= current.to()) {
-                    finishSplit();
+                    finishSplit(output);
                 }
                 throw new org.devlive.pipeforge.api.row.BadRowException("record " + bad + " is not readable");
             }
@@ -582,15 +595,17 @@ public final class TestConnectors {
             emitted++;
             next++;
             if (next >= current.to()) {
-                finishSplit();
+                finishSplit(output);
             }
             return PollStatus.MORE_AVAILABLE;
         }
 
         /** The current split was read: tells the engine, pauses if asked, then asks for the next. */
-        private void finishSplit() throws InterruptedException {
+        private void finishSplit(ReaderOutput output) throws InterruptedException {
             NumberSplit done = java.util.Objects.requireNonNull(current);
             current = null;
+            // every row of the split was emitted: up to its last id
+            output.progress(done.splitId(), String.valueOf(done.to() - 1));
             context.splitFinished(done.splitId());
             finishedSplits++;
             if (finishedSplits == config.get(PAUSE_AFTER_SPLITS)) {
@@ -732,6 +747,7 @@ public final class TestConnectors {
             return OptionRule.builder()
                     .required(PROBE)
                     .optional(FAIL_AT, FAIL_WITH, SLOW_MS, BLOCK, COMMIT, BAD_IDS, REPORT_IDS, FAIL_SUBTASK, FAIL_TIMES)
+                    .optional(PROGRESS)
                     .build();
         }
 
@@ -870,7 +886,33 @@ public final class TestConnectors {
         }
     }
 
-    static final class CollectWriter implements SinkWriter<String, String> {
+    static final class CollectWriter
+            implements SinkWriter<String, String>, org.devlive.pipeforge.api.capability.SupportsProgress {
+
+        @Override
+        public boolean startProgress(String runId, String nodeId) {
+            probe.events.add("progress of " + runId + "/" + nodeId);
+            return config.get(PROGRESS);
+        }
+
+        @Override
+        public void progress(String splitId, String position) {
+            probe.events.add("progress " + splitId + " " + position + " after " + written + " rows");
+            probe.recorded.put(splitId, position);
+        }
+
+        @Override
+        public java.util.Map<String, String> recordedProgress(java.util.Collection<String> splitIds) {
+            java.util.Map<String, String> found = new java.util.HashMap<>(probe.recorded);
+            found.keySet().retainAll(splitIds);
+            return found;
+        }
+
+        @Override
+        public void forgetProgress() {
+            probe.events.add("forgot the progress");
+        }
+
         private final ReadonlyConfig config;
         private final WriterContext context;
         private final Probe probe;

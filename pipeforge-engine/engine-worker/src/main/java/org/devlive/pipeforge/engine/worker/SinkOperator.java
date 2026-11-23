@@ -93,7 +93,8 @@ final class SinkOperator implements ChainOutput {
             TaskSettings settings,
             ExpressionCompiler expressions,
             long restoredCheckpointId,
-            List<OperatorChain.Element> restored) {
+            List<OperatorChain.Element> restored,
+            boolean sourceInTask) {
         this.subtask = subtask;
         SinkFactory factory = (SinkFactory) node.component().factory();
         Sink<Object, Object> created = (Sink<Object, Object>) call.call(
@@ -121,6 +122,10 @@ final class SinkOperator implements ChainOutput {
         }
         SinkWriter<Object, Object> opened = call.call("create the writer", () -> created.createWriter(context, states));
         writer = opened;
+        if (sourceInTask && opened instanceof org.devlive.pipeforge.api.capability.SupportsProgress keeping) {
+            progress =
+                    call.call("start keeping progress", () -> keeping.startProgress(jobId, node.id())) ? keeping : null;
+        }
         if (settings.asyncWriteBuffer()) {
             buffer = new AsyncWriteBuffer(
                     "writer-" + taskName,
@@ -162,6 +167,38 @@ final class SinkOperator implements ChainOutput {
     private final java.util.TreeMap<Long, byte[]> uncommitted = new java.util.TreeMap<>();
 
     private int committableVersion;
+
+    /** The writer, when it keeps the progress of the splits of this task's source. */
+    private org.devlive.pipeforge.api.capability.@org.jspecify.annotations.Nullable SupportsProgress progress;
+
+    /** A progress marker, kept in order with the rows. */
+    private record Progress(String splitId, String position) {}
+
+    boolean keepsProgress() {
+        return progress != null;
+    }
+
+    /** The positions the writer recorded for these splits. */
+    java.util.Map<String, String> recordedProgress(java.util.Collection<String> splitIds) {
+        var keeping = progress;
+        if (keeping == null) {
+            return java.util.Map.of();
+        }
+        return call.call("read the recorded progress", () -> keeping.recordedProgress(splitIds));
+    }
+
+    @Override
+    public void progress(String splitId, String position) {
+        if (progress == null) {
+            return;
+        }
+        AsyncWriteBuffer async = buffer;
+        if (async != null) {
+            async.add(new Progress(splitId, position), 0);
+        } else {
+            writeNow(opened(), new Progress(splitId, position));
+        }
+    }
 
     /** The states taken at the last barrier, until the chain collects them. */
     private List<StateUploader.Pending> taken = List.of();
@@ -258,6 +295,11 @@ final class SinkOperator implements ChainOutput {
                 throw e;
             }
             metrics.rowsOut.increment();
+        } else if (item instanceof Progress marker) {
+            var keeping = java.util.Objects.requireNonNull(progress);
+            call.run(
+                    "record the progress of " + marker.splitId(),
+                    () -> keeping.progress(marker.splitId(), marker.position()));
         } else {
             call.run("apply a schema change", () -> target.applySchemaChange((SchemaChangeEvent) item));
         }
@@ -277,6 +319,11 @@ final class SinkOperator implements ChainOutput {
         }
         SinkWriter<Object, Object> current = opened();
         Optional<Object> committable = call.call("prepare the commit", () -> current.prepareCommit(checkpointId));
+        var keeping = progress;
+        if (keeping != null) {
+            // everything was written: the input will not be read again
+            call.run("forget the progress", keeping::forgetProgress);
+        }
         List<SerializedValue> all = new ArrayList<>();
         uncommitted.values().forEach(bytes -> all.add(new SerializedValue(committableVersion, bytes)));
         uncommitted.clear();

@@ -588,6 +588,45 @@ class TaskExecutorTest {
     }
 
     @Test
+    void positionsOfTheSourceReachTheSinkAfterTheRowsTheyCover() throws Exception {
+        String probe = Probe.create();
+        TaskStateUpdate end = run(TestConnectors.job(probe, "", null, "progress: true", 1));
+
+        assertThat(end.state()).isEqualTo(TaskState.FINISHED);
+        assertThat(Probe.get(probe).events)
+                .as("in order with the rows, through the write buffer")
+                .containsSubsequence(
+                        "progress of run-1/out",
+                        "progress a 4 after 5 rows",
+                        "progress b 9 after 10 rows",
+                        "forgot the progress");
+
+        String without = Probe.create();
+        run(TestConnectors.job(without, "", null, "", 1));
+        assertThat(Probe.get(without).events).noneMatch(e -> e.startsWith("progress a"));
+    }
+
+    @Test
+    void aTaskThatRunsAgainContinuesItsSplitsWhereTheSinkRecordedThem() throws Exception {
+        String probe = Probe.create();
+        Probe.get(probe).recorded.put("a", "2");
+        TaskDeployment first = ScriptedMaster.deployment(
+                TestConnectors.job(probe, "", null, "progress: true", 1), ScriptedMaster.settings());
+        var again = new org.devlive.pipeforge.engine.rpc.ExecutionAttemptId(
+                first.id().runId(), first.id().vertexId(), first.id().subtask(), 1);
+        TaskDeployment second = new TaskDeployment(
+                again, first.chain(), first.parallelism(), first.settings(), first.run(), null, List.of());
+
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor.deployTask(second).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.FINISHED);
+        }
+        assertThat(ids(Probe.get(probe)))
+                .as("rows 0 to 2 of split a were written by the attempt before")
+                .containsExactly(3L, 4L, 5L, 6L, 7L, 8L, 9L);
+    }
+
+    @Test
     void reportsSourceFailuresWithTheNodeAndSubtask() throws Exception {
         String probe = Probe.create();
         TaskStateUpdate end = run(TestConnectors.job(probe, "fail-at: 3", "", "", 1));

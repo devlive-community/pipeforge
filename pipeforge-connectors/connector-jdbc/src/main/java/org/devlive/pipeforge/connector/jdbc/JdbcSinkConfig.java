@@ -19,6 +19,8 @@ import org.devlive.pipeforge.api.row.TableId;
  * @param batchSize rows per batch and transaction
  * @param maxRetries how often a batch that failed for a transient reason is tried again
  * @param retryBackoff the wait before the first retry; it doubles with every retry
+ * @param progressTable whether to keep a progress table
+ * @param progressTableName its name, in the schema of the target table
  * @param node the node name, for errors
  */
 public record JdbcSinkConfig(
@@ -27,6 +29,8 @@ public record JdbcSinkConfig(
         int batchSize,
         int maxRetries,
         Duration retryBackoff,
+        JdbcProgressMode progressTable,
+        String progressTableName,
         String node)
         implements Serializable {
 
@@ -37,6 +41,8 @@ public record JdbcSinkConfig(
                 config.get(JdbcOptions.BATCH_SIZE),
                 config.get(JdbcOptions.MAX_RETRIES),
                 config.get(JdbcOptions.RETRY_BACKOFF),
+                config.get(JdbcOptions.PROGRESS_TABLE),
+                config.get(JdbcOptions.PROGRESS_TABLE_NAME),
                 node);
     }
 }

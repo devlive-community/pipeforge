@@ -19,11 +19,15 @@ import org.devlive.pipeforge.api.row.TableId;
 /** Finds the tables {@code tables.include} and {@code tables.exclude} select, from JDBC metadata. */
 public final class JdbcTables {
 
+    /** The default name of the progress table of a JDBC sink, which a source never reads. */
+    static final String PROGRESS_TABLE = "_pf_progress";
+
     private JdbcTables() {}
 
     /**
      * The tables whose qualified names ({@code db.table}) match one of {@code include} entirely and
-     * none of {@code exclude}, outside the system schemas, sorted by name.
+     * none of {@code exclude}, outside the system schemas, sorted by name. The progress tables of
+     * JDBC sinks, by their default name, are never included.
      */
     public static List<TableId> discover(
             Connection connection, JdbcDialect dialect, List<String> include, List<String> exclude)
@@ -38,6 +42,9 @@ public final class JdbcTables {
                 TableId table = dialect.tableId(catalog, schema, rs.getString("TABLE_NAME"));
                 String place = table.database() != null ? table.database() : "";
                 if (dialect.systemSchemas().contains(place.toUpperCase(Locale.ROOT))) {
+                    continue;
+                }
+                if (table.table().equalsIgnoreCase(PROGRESS_TABLE)) {
                     continue;
                 }
                 String name = table.toQualifiedName();

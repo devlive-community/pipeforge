@@ -134,6 +134,9 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
                 if (values == null) {
                     if (!result.next()) {
                         JdbcSplit done = current;
+                        if (done != null && keyColumn >= 0 && lastKey != null) {
+                            output.progress(done.splitId(), String.valueOf(lastKey));
+                        }
                         closeSplit();
                         if (done != null) {
                             context.splitFinished(done.splitId());
@@ -152,6 +155,9 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
                     if (emitted >= ROWS_PER_POLL && !same) {
                         ahead = values;
                         atBoundary = true;
+                        // every row up to the last value is out: a sink may record it with them
+                        output.progress(
+                                java.util.Objects.requireNonNull(current).splitId(), String.valueOf(lastKey));
                         return PollStatus.MORE_AVAILABLE;
                     }
                     if (emitted >= ROWS_PER_POLL && groupRows >= config.maxGroupRows()) {

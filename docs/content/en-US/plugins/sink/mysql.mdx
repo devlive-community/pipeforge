@@ -91,6 +91,27 @@ restarts after some batches were committed. With a primary key on the target, su
 refused as duplicate keys and become bad rows instead of being stored twice: with
 `env.dirty.policy: skip` they are skipped, with the default `fail` the job fails.
 
+### Progress table
+
+When the run takes checkpoints and the source runs in the same task as the sink — no exchange
+between them, as in the usual table copy — a restart after a failure need not write the rows since
+the last checkpoint again. The sink keeps a **progress table** in the schema of the target table:
+for every split of the source, the position up to which its rows were written, updated in the
+transaction of those rows. A restarted task reads each split on from the later of its checkpoint
+and its recorded position, so a row committed after the checkpoint is not written twice. A batch
+commits only at a position of the source, so it can hold more than `batch-size` rows.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `resume.progress-table` | `auto` | `auto`: keep the table when it exists or can be created, otherwise write on without it and log a warning; `on`: a table that cannot be created fails the task; `off`: never |
+| `resume.progress-table-name` | `_pf_progress` | Its name |
+
+The table has the columns `job_id`, `node_id`, `split_id`, `watermark` and `updated_at`; a writer
+deletes the rows of its splits once its input ended and was written. A JDBC source reading with
+`tables.include` never selects a table named `_pf_progress`. Only sources that can resume at
+a position use it, such as the range splits of the [JDBC sources](../source/jdbc#resume); without
+it, or across an exchange, a restart writes the rows since the last checkpoint again.
+
 ## Examples
 
 ### Skip the rows MySQL refuses

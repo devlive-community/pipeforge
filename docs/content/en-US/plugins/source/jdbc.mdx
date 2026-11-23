@@ -109,7 +109,9 @@ finished splits are not read again.
 - A whole table (`split.mode: none`, or no integer key to split on), a `query` and the split of NULLs
   resume from their start.
 - Whether the target then receives a row once depends on the sink: see
-  [failure handling](../../concepts/failure-handling#region-restarts).
+  [failure handling](../../concepts/failure-handling#region-restarts). A JDBC sink in the same task
+  records the positions in its [progress table](../sink/jdbc#progress-table), and a restarted reader
+  goes on from there.
 
 ## Examples
 

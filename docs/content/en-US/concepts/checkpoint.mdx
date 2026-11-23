@@ -125,6 +125,7 @@ env:
 | at-least-once | checkpoints and a source that can read again from a position |
 | exactly-once in effect | at-least-once and a sink that writes idempotently by key |
 | exactly-once | at-least-once and a sink that commits in two phases |
+| exactly-once after a failure | at-least-once, a source that resumes at a position and a sink that records it with the rows ([progress table](../plugins/sink/jdbc#progress-table)), in one task |
 | none | checkpoints turned off: a failed run starts over |
 
 - Checkpoint numbers grow within a run and never repeat, also across restarts.

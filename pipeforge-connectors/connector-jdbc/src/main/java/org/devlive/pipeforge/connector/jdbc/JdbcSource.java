@@ -27,7 +27,10 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
  * A bounded JDBC source of one table, of the tables {@code tables.include} selects, or of a query. Plugins create it with their dialect from the
  * options of {@link JdbcOptions#sourceRule}.
  */
-public class JdbcSource implements Source<JdbcSplit, List<JdbcSplit>>, SupportsMultiTable {
+public class JdbcSource
+        implements Source<JdbcSplit, List<JdbcSplit>>,
+                SupportsMultiTable,
+                org.devlive.pipeforge.api.capability.SupportsResume<JdbcSplit> {
 
     private static final long serialVersionUID = 1L;
 
@@ -103,5 +106,25 @@ public class JdbcSource implements Source<JdbcSplit, List<JdbcSplit>>, SupportsM
     @Override
     public VersionedSerializer<List<JdbcSplit>> enumeratorStateSerializer() {
         return JdbcSplit.ListSerializer.INSTANCE;
+    }
+
+    /**
+     * A range split continues after the split column's value a sink recorded, when that is further
+     * than its own watermark; other splits resume from their start.
+     */
+    @Override
+    public JdbcSplit resume(JdbcSplit split, String position) {
+        if (!split.ordered()) {
+            return split;
+        }
+        long value;
+        try {
+            value = Long.parseLong(position);
+        } catch (NumberFormatException e) {
+            // not a position of this source: read the split as it is
+            return split;
+        }
+        Long own = split.watermark();
+        return own != null && own >= value ? split : split.resumedAfter(value);
     }
 }

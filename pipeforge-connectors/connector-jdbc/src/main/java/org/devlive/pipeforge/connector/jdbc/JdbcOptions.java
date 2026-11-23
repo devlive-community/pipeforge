@@ -92,6 +92,18 @@ public final class JdbcOptions {
                     "Rows with the same split column value a reader keeps together so that a split resumes"
                             + " exactly; a larger group lets a checkpoint fall inside it, and the split then resumes before it");
 
+    public static final Option<JdbcProgressMode> PROGRESS_TABLE = Options.key("resume.progress-table")
+            .enumType(JdbcProgressMode.class)
+            .defaultValue(JdbcProgressMode.AUTO)
+            .withDescription(
+                    "Record in the target, with the rows, how far each split of the source was written, so that"
+                            + " a restart does not write rows again: auto, on or off");
+
+    public static final Option<String> PROGRESS_TABLE_NAME = Options.key("resume.progress-table-name")
+            .stringType()
+            .defaultValue(JdbcTables.PROGRESS_TABLE)
+            .withDescription("The progress table, in the schema of the target table");
+
     public static final Option<Integer> BATCH_SIZE = Options.key("batch-size")
             .intType()
             .defaultValue(1000)
@@ -127,6 +139,7 @@ public final class JdbcOptions {
         return OptionRule.builder()
                 .required(URL, TABLE)
                 .optional(USERNAME, PASSWORD, DRIVER, BATCH_SIZE, MAX_RETRIES, RETRY_BACKOFF)
+                .optional(PROGRESS_TABLE, PROGRESS_TABLE_NAME)
                 .optional(extra)
                 .nativeNamespaces(PROPERTIES);
     }

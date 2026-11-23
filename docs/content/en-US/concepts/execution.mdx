@@ -25,7 +25,8 @@ Most integration jobs need no shuffle: the source, its transforms and the sink a
 one with the same parallelism. The engine merges them into one **operator chain** and runs one
 **task** per parallel instance. Inside a task the operators call each other directly: a row goes
 through the whole chain before the reader emits the next one, and nothing is serialized between
-operators.
+operators. Positions a reader reports for its splits travel the chain in order with the rows, to a
+sink that records them (see [progress between a source and a sink](../development/api-overview#progress-between-a-source-and-a-sink)).
 
 ```text
 job: src (p=2) → map (p=2) → out (p=2)

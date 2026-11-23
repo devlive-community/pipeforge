@@ -93,7 +93,8 @@ sink:
 - 同一个值的行数超过 `resume.max-group-rows`（默认 100,000）时，checkpoint 可能落在这些行之间；该分片随后从这个值之前续传，
   会再次读取这些行。
 - 整张表（`split.mode: none`，或者没有可分片的整数键）、`query` 以及 NULL 值的分片从头续传。
-- 目标端是否只收到一次，取决于 Sink：见[失败处理](../../concepts/failure-handling#region-重启)。
+- 目标端是否只收到一次，取决于 Sink：见[失败处理](../../concepts/failure-handling#region-重启)。同一个 Task 中的 JDBC Sink
+  会把位置记录在它的[进度表](../sink/jdbc#进度表)中，重启的 Reader 从那里继续。
 
 ## 示例
 

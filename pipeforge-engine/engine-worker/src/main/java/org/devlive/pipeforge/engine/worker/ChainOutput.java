@@ -21,4 +21,10 @@ interface ChainOutput {
      * are not. Every operator passes it on after the rows it received before it.
      */
     void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier);
+
+    /**
+     * Every row of a split up to a position came before: passed on to a sink that keeps progress;
+     * dropped where rows leave the task, as no sink of this task writes them.
+     */
+    default void progress(String splitId, String position) {}
 }

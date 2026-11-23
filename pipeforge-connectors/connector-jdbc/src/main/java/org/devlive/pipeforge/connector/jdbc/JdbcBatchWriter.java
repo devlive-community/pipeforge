@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import org.devlive.pipeforge.api.row.Row;
+import org.devlive.pipeforge.api.row.TableId;
 import org.devlive.pipeforge.api.sink.SinkWriter;
 import org.devlive.pipeforge.api.sink.WriterContext;
 import org.devlive.pipeforge.api.table.CatalogTable;
@@ -35,8 +36,18 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Since a failed batch leaves no rows behind, the writer is at least once: rows are written
  * again only when a commit was lost.
+ *
+ * <p>With a progress table ({@code resume.progress-table}) the positions of the source's splits
+ * are written in the transaction of the rows before them, and a batch is committed only at a
+ * position: the rows of a value of the split column always commit together with its position. A
+ * batch that reaches ten times {@code batch-size} without a position is committed anyway; its rows
+ * after the last position may be written again after a restart.
  */
-public final class JdbcBatchWriter implements SinkWriter<Void, Void> {
+public final class JdbcBatchWriter
+        implements SinkWriter<Void, Void>, org.devlive.pipeforge.api.capability.SupportsProgress {
+
+    /** How many batches a writer that keeps progress waits for a position before it commits anyway. */
+    static final int BATCHES_WITHOUT_POSITION = 10;
 
     private static final Logger LOG = LoggerFactory.getLogger(JdbcBatchWriter.class);
 
@@ -52,6 +63,14 @@ public final class JdbcBatchWriter implements SinkWriter<Void, Void> {
     private long retries;
     private long splits;
 
+    private @Nullable JdbcProgressTable progress;
+    /** The positions of the rows in {@link #batch}, committed with them. */
+    private final java.util.Map<String, String> positions = new java.util.LinkedHashMap<>();
+    /** The splits this writer recorded positions of. */
+    private final java.util.Set<String> recorded = new java.util.LinkedHashSet<>();
+
+    private boolean warnedWithoutPosition;
+
     JdbcBatchWriter(JdbcSink sink, WriterContext context, CatalogTable input) {
         this.sink = sink;
         this.config = sink.config();
@@ -64,32 +83,117 @@ public final class JdbcBatchWriter implements SinkWriter<Void, Void> {
     @Override
     public void write(Row row) {
         batch.add(row);
-        if (batch.size() >= config.batchSize()) {
+        if (progress == null) {
+            if (batch.size() >= config.batchSize()) {
+                flush();
+            }
+        } else if (batch.size() >= config.batchSize() * BATCHES_WITHOUT_POSITION) {
+            if (!warnedWithoutPosition) {
+                warnedWithoutPosition = true;
+                LOG.warn(
+                        "{}: {} rows came without a position of the source; they are committed without one and may"
+                                + " be written again after a restart",
+                        config.node(),
+                        batch.size());
+            }
             flush();
         }
     }
 
     @Override
     public void flush() {
-        if (batch.isEmpty()) {
+        if (batch.isEmpty() && positions.isEmpty()) {
             return;
         }
         List<Row> rows = List.copyOf(batch);
+        java.util.Map<String, String> reached = java.util.Map.copyOf(positions);
         batch.clear();
-        write(rows);
+        positions.clear();
+        write(rows, reached);
     }
 
-    /** Writes {@code rows}, retrying and splitting as the class describes. */
-    private void write(List<Row> rows) {
+    // ------------------------------------------------------------------ progress
+
+    @Override
+    public boolean startProgress(String runId, String nodeId) {
+        if (config.progressTable() == JdbcProgressMode.OFF) {
+            return false;
+        }
+        try {
+            Connection open = connection();
+            TableId physical = JdbcSchemas.describe(
+                            open, dialect, config.table(), config.connection().target())
+                    .physical();
+            progress = JdbcProgressTable.open(open, dialect, physical, config.progressTableName(), runId, nodeId);
+            return true;
+        } catch (SQLException | RuntimeException e) {
+            rollback();
+            if (config.progressTable() == JdbcProgressMode.ON) {
+                throw e instanceof SQLException failure
+                        ? JdbcErrors.of(
+                                failure, dialect, config.connection(), false, config.table(), config.node(), false)
+                        : (RuntimeException) e;
+            }
+            LOG.warn(
+                    "{}: no progress table {} ({}); after a failure the rows since the last checkpoint are written"
+                            + " again",
+                    config.node(),
+                    config.progressTableName(),
+                    e instanceof SQLException failure ? JdbcErrors.reason(failure) : e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public void progress(String splitId, String position) {
+        positions.put(splitId, position);
+        recorded.add(splitId);
+        if (batch.size() >= config.batchSize()) {
+            flush();
+        }
+    }
+
+    @Override
+    public java.util.Map<String, String> recordedProgress(java.util.Collection<String> splitIds) throws SQLException {
+        JdbcProgressTable table = progress;
+        if (table == null) {
+            return java.util.Map.of();
+        }
+        Connection open = connection();
+        java.util.Map<String, String> found = table.recorded(open, splitIds);
+        open.commit();
+        // this writer goes on with them: it forgets them once it is done, also those it reads no more of
+        recorded.addAll(found.keySet());
+        return found;
+    }
+
+    @Override
+    public void forgetProgress() throws SQLException {
+        JdbcProgressTable table = progress;
+        if (table == null || recorded.isEmpty()) {
+            return;
+        }
+        Connection open = connection();
+        table.forget(open, recorded);
+        open.commit();
+        recorded.clear();
+    }
+
+    // ------------------------------------------------------------------ writing
+
+    /** Writes {@code rows} and the positions they reach, retrying and splitting as the class describes. */
+    private void write(List<Row> rows, java.util.Map<String, String> reached) {
         for (int attempt = 0; ; attempt++) {
             try {
-                execute(rows);
+                execute(rows, reached);
                 return;
             } catch (SQLException e) {
                 rollback();
                 JdbcErrorKind kind = dialect.classify(e);
-                if (kind == JdbcErrorKind.DATA) {
+                if (kind == JdbcErrorKind.DATA && !rows.isEmpty()) {
                     bisect(rows, e);
+                    // the good rows are written; the positions follow in a transaction of their own
+                    write(List.of(), reached);
                     return;
                 }
                 boolean retry = (kind == JdbcErrorKind.TRANSIENT || kind == JdbcErrorKind.CONNECTION)
@@ -123,24 +227,30 @@ public final class JdbcBatchWriter implements SinkWriter<Void, Void> {
         }
         splits++;
         int half = rows.size() / 2;
-        write(rows.subList(0, half));
-        write(rows.subList(half, rows.size()));
+        write(rows.subList(0, half), java.util.Map.of());
+        write(rows.subList(half, rows.size()), java.util.Map.of());
     }
 
-    private void execute(List<Row> rows) throws SQLException {
+    private void execute(List<Row> rows, java.util.Map<String, String> reached) throws SQLException {
         Connection open = connection();
-        PreparedStatement statement = insert;
-        if (statement == null) {
-            statement = open.prepareStatement(sink.target(open, input).insert());
-            insert = statement;
-        }
-        for (Row row : rows) {
-            for (int i = 0; i < types.size(); i++) {
-                dialect.write(statement, i + 1, row.get(i), types.get(i));
+        if (!rows.isEmpty()) {
+            PreparedStatement statement = insert;
+            if (statement == null) {
+                statement = open.prepareStatement(sink.target(open, input).insert());
+                insert = statement;
             }
-            statement.addBatch();
+            for (Row row : rows) {
+                for (int i = 0; i < types.size(); i++) {
+                    dialect.write(statement, i + 1, row.get(i), types.get(i));
+                }
+                statement.addBatch();
+            }
+            statement.executeBatch();
         }
-        statement.executeBatch();
+        JdbcProgressTable table = progress;
+        if (table != null) {
+            table.record(open, reached);
+        }
         open.commit();
     }
 

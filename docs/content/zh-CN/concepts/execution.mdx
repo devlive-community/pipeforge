@@ -20,6 +20,7 @@ Task 收到的描述使用与 Worker 从 Master 收到的相同的二进制格�
 
 大多数数据集成作业不需要 shuffle：Source、它的 Transform 和 Sink 一对一相连，并行度相同。引擎把它们合并成一条**算子链**，
 每个并行实例运行一个 **Task**。Task 内部的算子直接互相调用：一行数据走完整条链之后，Reader 才输出下一行，算子之间不做任何序列化。
+Reader 为分片报告的位置也按行的顺序沿算子链传递，交给记录它们的 Sink（见 [Source 与 Sink 之间的进度](../development/api-overview#source-与-sink-之间的进度)）。
 
 ```text
 作业：src (p=2) → map (p=2) → out (p=2)

@@ -191,13 +191,21 @@ final class OperatorChain {
                     deployment.settings(),
                     expressions,
                     restore.checkpointId(),
-                    restored(restore, chain.tail().id(), "sink", states));
+                    restored(restore, chain.tail().id(), "sink", states),
+                    chain.hasSource());
         }
         for (int i = transforms.size() - 1; i >= 0; i--) {
             transforms.get(i).open(job, subtask, parallelism, expressions);
         }
         if (source != null) {
-            source.open(job, expressions, restored(restore, chain.head().id(), "source", states));
+            // a task that runs again continues its splits from where its sink recorded them, if further
+            boolean again = restore.restores() || deployment.id().attempt() > 0;
+            SinkOperator writer = sink;
+            source.open(
+                    job,
+                    expressions,
+                    restored(restore, chain.head().id(), "source", states),
+                    again && writer != null && writer.keepsProgress() ? writer::recordedProgress : null);
         } else {
             input = new NetworkInput(network(), deployment, chain.head().inputTables());
         }
@@ -528,6 +536,11 @@ final class OperatorChain {
         @Override
         public void collect(SchemaChangeEvent event) {
             next.schemaChange(event);
+        }
+
+        @Override
+        public void progress(String splitId, String position) {
+            next.progress(splitId, position);
         }
     }
 }
