@@ -27,7 +27,56 @@ service DispatcherService {
   rpc ReadTaskLog(ReadTaskLogRequest) returns (stream LogChunk);  // 兼容增加：Master 转发给运行该 Task 的 Worker
   rpc ListSplits(JobRequest) returns (ListSplitsResponse);         // 兼容增加：分片的归属与进度
   rpc GetCluster(ClusterRequest) returns (ClusterStatus);           // 兼容增加：Master 与 Worker 的状态
-  // M2：TriggerSavepoint、StopWithSavepoint
+  rpc TriggerSavepoint(SavepointRequest) returns (SavepointResponse);       // M2
+  rpc StopWithSavepoint(SavepointRequest) returns (SavepointResponse);      // M2：返回时运行已进入 PAUSED
+  rpc ListCheckpoints(JobRequest) returns (ListCheckpointsResponse);        // M2
+}
+
+message SavepointRequest {
+  Header header = 1;
+  string run_id = 2;
+  string name = 3;                      // 为空时用时间戳
+}
+
+message SavepointResponse {
+  int64 checkpoint_id = 1;
+  string path = 2;
+}
+
+enum CheckpointStatus {
+  CHECKPOINT_STATUS_UNSPECIFIED = 0;
+  CHECKPOINT_STATUS_IN_PROGRESS = 1;
+  CHECKPOINT_STATUS_COMPLETED = 2;
+  CHECKPOINT_STATUS_FAILED = 3;
+}
+
+message TaskCheckpoint {
+  ExecutionAttemptId task = 1;
+  bool acknowledged = 2;
+  CheckpointTaskMetrics metrics = 3;
+}
+
+message CheckpointInfo {
+  int64 checkpoint_id = 1;
+  CheckpointType type = 2;
+  CheckpointStatus status = 3;
+  int64 trigger_ms = 4;
+  int64 complete_ms = 5;                // 未完成为 0
+  int64 size = 6;
+  string path = 7;
+  ErrorInfo failure = 8;
+  repeated TaskCheckpoint tasks = 9;
+  string name = 10;                     // savepoint 的名称
+}
+
+message ListCheckpointsResponse {
+  repeated CheckpointInfo checkpoints = 1;   // 新的在前；Master 保留的范围内
+}
+
+message RestoreSettings {
+  string path = 1;                      // checkpoint 或 savepoint 的目录
+  bool allow_non_restored_state = 2;
+  bool allow_other_job = 3;
 }
 
 message SubmitJobRequest {
@@ -40,6 +89,8 @@ message SubmitJobRequest {
   int64 scheduled_time_ms = 7;
   repeated PluginRef plugins = 8;     // Server 选定的插件版本，Master 按它计划
   int64 timeout_ms = 9;               // 0 表示不限
+  RestoreSettings restore = 10;       // M2：从 checkpoint / savepoint 启动、继续暂停的运行
+  int32 attempt = 11;                 // M2：运行的第几次尝试，从 1 开始
 }
 
 message SubmitJobResponse {
@@ -61,7 +112,11 @@ enum RunState {
   RUN_STATE_CANCELLING = 5;
   RUN_STATE_CANCELLED = 6;
   RUN_STATE_TIMEOUT = 7;
-  // M2 起：RUN_STATE_RESTARTING、_PAUSING、_PAUSED、_RETRY_WAIT、_ROLLING_BACK、_INTERRUPTED，按顺序追加
+  RUN_STATE_RESTARTING = 8;           // M2
+  RUN_STATE_PAUSING = 9;              // M2
+  RUN_STATE_PAUSED = 10;              // M2
+  RUN_STATE_RETRY_WAIT = 11;          // M2
+  // M3 起：RUN_STATE_ROLLING_BACK 等，在用到时评审后按顺序追加
 }
 
 message TaskStatus {
@@ -80,6 +135,9 @@ message JobStatus {
   int64 end_ms = 6;                   // 未结束为 0
   ErrorInfo error = 7;
   repeated TaskStatus tasks = 8;
+  int32 attempt = 9;                  // M2
+  int64 last_checkpoint_id = 10;      // M2：最近完成的 checkpoint，没有为 0
+  int64 last_checkpoint_ms = 11;      // M2
 }
 
 message NodeMetrics {

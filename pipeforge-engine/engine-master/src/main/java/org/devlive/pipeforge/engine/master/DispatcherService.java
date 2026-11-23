@@ -339,8 +339,13 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
             case RUN_STATE_FAILED -> State.FAILED;
             case RUN_STATE_CANCELLED -> State.CANCELLED;
             case RUN_STATE_TIMEOUT -> State.TIMEOUT;
-            case RUN_STATE_UNSPECIFIED, UNRECOGNIZED -> throw new IllegalArgumentException(
-                    "Unknown run state " + state);
+                // states of restarts and pauses; this master does not restart or pause runs
+            case RUN_STATE_RESTARTING,
+                    RUN_STATE_PAUSING,
+                    RUN_STATE_PAUSED,
+                    RUN_STATE_RETRY_WAIT,
+                    RUN_STATE_UNSPECIFIED,
+                    UNRECOGNIZED -> throw new IllegalArgumentException("Unknown run state " + state);
         };
     }
 }

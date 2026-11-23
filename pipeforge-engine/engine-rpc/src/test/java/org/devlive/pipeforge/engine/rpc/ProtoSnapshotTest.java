@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -38,8 +39,10 @@ import org.junit.jupiter.api.Test;
 /**
  * Protocol v1 only grows. Every file, message, field, enum value, reserved range and RPC is one
  * line of pipeforge-engine/protocol-compat/rpc/descriptor-v1.txt; each line of that snapshot must
- * still be there. A removed field is accepted only when its number and name are reserved.
- * -Dpipeforge.protocol.update=true adds the new lines to the snapshot once the check passes.
+ * still be there. A removed field is accepted only when its number and name are reserved; a
+ * reserved number may only become a field when it was kept for that field from the start ({@link
+ * #PLACEHOLDERS}). -Dpipeforge.protocol.update=true adds the new lines to the snapshot once the
+ * check passes.
  */
 class ProtoSnapshotTest {
 
@@ -115,6 +118,16 @@ class ProtoSnapshotTest {
         }
     }
 
+    /**
+     * Numbers that v1 reserved for fields that came later, as the specification wrote them: such a
+     * number becomes its field, never any other. Numbers reserved for removed fields are not here.
+     */
+    static final Map<String, String> PLACEHOLDERS = Map.of(
+            "reserved pipeforge.rpc.v1.TaskDeployment 9-9",
+            "field pipeforge.rpc.v1.TaskDeployment 9 restore_state pipeforge.rpc.v1.TaskRestore",
+            "reserved pipeforge.rpc.v1.TaskDeployment 10-10",
+            "field pipeforge.rpc.v1.TaskDeployment 10 restore_checkpoint_id int64");
+
     private static final Pattern FIELD = Pattern.compile("field (\\S+) (\\d+) (\\S+) .*");
     private static final Pattern RESERVED = Pattern.compile("reserved (\\S+) (\\d+)-(\\d+)");
 
@@ -122,7 +135,9 @@ class ProtoSnapshotTest {
     static List<String> breaks(Set<String> snapshot, Set<String> current) {
         List<String> broken = new ArrayList<>();
         for (String line : snapshot) {
-            if (current.contains(line) || reservedNow(line, current)) {
+            if (current.contains(line)
+                    || reservedNow(line, current)
+                    || current.contains(PLACEHOLDERS.getOrDefault(line, "\0"))) {
                 continue;
             }
             broken.add(line);
@@ -164,6 +179,8 @@ class ProtoSnapshotTest {
                     "# ProtoSnapshotTest fails when one disappears or changes. Regenerate with",
                     "# -Dpipeforge.protocol.update=true after a compatible addition."));
             Set<String> merged = new TreeSet<>(snapshot);
+            // a placeholder that became its field is gone for good
+            merged.removeIf(line -> !current.contains(line) && current.contains(PLACEHOLDERS.getOrDefault(line, "\0")));
             merged.addAll(current);
             text.addAll(merged);
             Files.write(SNAPSHOT, text, StandardCharsets.UTF_8);
@@ -208,6 +225,18 @@ class ProtoSnapshotTest {
                         "field pipeforge.rpc.v1.X 3 c int32",
                         "value pipeforge.rpc.v1.E 1 E_ONE",
                         "rpc pipeforge.rpc.v1.S.Call pipeforge.rpc.v1.X -> pipeforge.rpc.v1.Ack");
+    }
+
+    @Test
+    void aPlaceholderBecomesOnlyTheFieldItWasKeptFor() {
+        Set<String> snapshot = Set.of("reserved pipeforge.rpc.v1.TaskDeployment 9-9");
+        assertThat(breaks(snapshot, Set.of(PLACEHOLDERS.get("reserved pipeforge.rpc.v1.TaskDeployment 9-9"))))
+                .isEmpty();
+        assertThat(breaks(snapshot, Set.of("field pipeforge.rpc.v1.TaskDeployment 9 other string")))
+                .containsExactly("reserved pipeforge.rpc.v1.TaskDeployment 9-9");
+        assertThat(breaks(Set.of("reserved pipeforge.rpc.v1.X 3-3"), Set.of("field pipeforge.rpc.v1.X 3 c int32")))
+                .as("a number of a removed field never comes back")
+                .hasSize(1);
     }
 
     @Test

@@ -26,6 +26,23 @@ generates the Java messages and service stubs from them (package
 The [cluster](../concepts/cluster) processes (master, workers) speak it over gRPC; local runs
 (`pipeforge run --local`) use the same interfaces in process.
 
+### Checkpoint messages
+
+Checkpoints add RPCs to three services, all compatible additions to v1:
+
+| RPC | Service | What it does |
+|---|---|---|
+| `TriggerCheckpoint` | `TaskExecutorService` | starts checkpoint *n* at a source task; the other tasks start it when its barrier reaches them; `stop` ends the input after the snapshot (stop-with-savepoint) |
+| `NotifyCheckpointComplete`, `AbortCheckpoint` | `TaskExecutorService` | tells a task that checkpoint *n* is complete, so that sinks commit, or that it was given up |
+| `AcknowledgeCheckpoint`, `DeclineCheckpoint` | `JobMasterService` | a task's part of checkpoint *n*: a `StateHandle` per stateful node (inline bytes or a file of the checkpoint) with its timings, or the error that kept it from taking part |
+| `TriggerSavepoint`, `StopWithSavepoint`, `ListCheckpoints` | `DispatcherService` | savepoints of a run, with or without stopping it, and the checkpoints the master keeps |
+
+`TaskDeployment` carries the states a task restores (`restore_state`, `restore_checkpoint_id`;
+numbers 9 and 10, reserved for them from the start), `SubmitJobRequest` where a run starts from
+(`restore`) and its attempt, `JobStatus` the attempt and the last completed checkpoint, and
+`RunState` the states of restarts and pauses: `RESTARTING` 8, `PAUSING` 9, `PAUSED` 10,
+`RETRY_WAIT` 11. A master that does not know a state refuses it rather than guessing.
+
 ## Conventions
 
 - Every request starts with a `Header`: the protocol version, the master's and the job's epoch (a
@@ -149,8 +166,13 @@ pair of workers shared by all channels between them. Every frame is:
   A frame longer than `task.max-row-bytes` + 1 KB, a wrong magic or a malformed payload closes the
   connection with an `ErrorResponse`.
 - Data buffers hold rows in the row format above; event buffers hold an event type (`0x01` end of
-  partition, `0x02` end of input, `0x03` schema change; `0x10`–`0x1F` are kept for checkpoints and
-  watermarks) and its content.
+  partition, `0x02` end of input, `0x03` schema change, `0x10` checkpoint barrier; `0x11`–`0x1F`
+  are kept for watermarks and stream status) and its content.
+- A checkpoint barrier is 18 bytes: `u64` checkpoint ID, `u64` timestamp in milliseconds, `u8`
+  type (1 checkpoint, 2 savepoint) and `u8` flags (bit 0 `stop`, the others 0). A barrier with
+  another length, type or flag fails the channel. Events need no credit, so a barrier reaches a
+  consumer that has stopped giving credit to the channels that already delivered theirs; but no
+  event overtakes the buffers sent before it.
 - A producer sends a data buffer only while the channel has credit and numbers the buffers of a
   channel from 0; a consumer refuses a buffer out of sequence or without credit.
 - An output that a consumer asks for before it exists is waited for up to the partition request
@@ -233,6 +255,7 @@ there, so the build fails when a change would break a running cluster:
 | Renamed, renumbered or retyped field | Build fails |
 | A unary RPC turned into a stream, or other request or response types | Build fails |
 | Removed field | Build fails, unless its number and name are `reserved` |
+| A reserved number used for a field | Build fails, unless the number was kept for exactly that field from the start (`PLACEHOLDERS` in the test) |
 
 ```text
 ProtoSnapshotTest.theProtocolOnlyGrows

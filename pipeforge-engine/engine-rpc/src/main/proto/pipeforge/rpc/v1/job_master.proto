@@ -19,7 +19,23 @@ service JobMasterService {
   rpc UpdateTaskState(TaskStateUpdate) returns (Ack);
   rpc SendReaderEvent(ReaderEvent) returns (Ack);
   rpc ReportMetrics(stream MetricsReport) returns (Ack);
-  // M2：AcknowledgeCheckpoint、DeclineCheckpoint
+  rpc AcknowledgeCheckpoint(AcknowledgeCheckpointRequest) returns (Ack);    // M2
+  rpc DeclineCheckpoint(DeclineCheckpointRequest) returns (Ack);            // M2
+}
+
+message AcknowledgeCheckpointRequest {
+  Header header = 1;
+  ExecutionAttemptId task = 2;
+  int64 checkpoint_id = 3;
+  repeated StateHandle states = 4;      // 链中每个有状态的节点一个
+  CheckpointTaskMetrics metrics = 5;
+}
+
+message DeclineCheckpointRequest {
+  Header header = 1;
+  ExecutionAttemptId task = 2;
+  int64 checkpoint_id = 3;
+  ErrorInfo reason = 4;
 }
 
 message TaskStateUpdate {

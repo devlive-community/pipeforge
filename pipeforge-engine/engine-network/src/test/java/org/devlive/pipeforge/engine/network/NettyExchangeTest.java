@@ -163,6 +163,34 @@ class NettyExchangeTest {
     }
 
     @Test
+    void aBarrierArrivesBetweenTheRowsItWasSentBetweenWhileCreditIsShort() throws Exception {
+        // two buffers of credit: the stream waits for credit many times around the barrier
+        NetworkOptions options = Exchange.options().withChannels(2, 0);
+        NetworkEnvironment upstream = worker("worker-a", "token", options);
+        NetworkEnvironment downstream = worker("worker-b", "token", options);
+        ResultPartitionId id = partition("source");
+        ResultPartition output = upstream.createPartition(id, 1, codec());
+        InputGate input = remote(downstream, upstream, id, 0);
+        CompletableFuture<Exchange.Received> consumer = read(input, Duration.ZERO);
+        NetworkEvent barrier =
+                new NetworkEvent.CheckpointBarrier(5, 1_000L, NetworkEvent.CheckpointBarrier.Type.CHECKPOINT, false);
+
+        produce(output, 0, 20_000, false).get(60, TimeUnit.SECONDS);
+        output.broadcastEvent(barrier);
+        produce(output, 20_000, 20_000, false).get(60, TimeUnit.SECONDS);
+        output.broadcastEvent(NetworkEvent.END_OF_INPUT_EVENT);
+        output.finish();
+
+        List<Object> stream = consumer.get(60, TimeUnit.SECONDS).stream();
+        assertThat(stream.indexOf(barrier))
+                .as("every row before it, none after it")
+                .isEqualTo(20_000);
+        assertThat(stream.subList(0, 20_000)).isEqualTo(new ArrayList<Object>(Exchange.every(0, 1, 20_000)));
+        assertThat(stream.subList(20_001, 40_001)).isEqualTo(new ArrayList<Object>(Exchange.every(20_000, 1, 40_000)));
+        input.close();
+    }
+
+    @Test
     void aSlowConsumerDoesNotStopAFastOneOnTheSameConnection() throws Exception {
         NetworkEnvironment upstream = worker("worker-a");
         NetworkEnvironment downstream = worker("worker-b");

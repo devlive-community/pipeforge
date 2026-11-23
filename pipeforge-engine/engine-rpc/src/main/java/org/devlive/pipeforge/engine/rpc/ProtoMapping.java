@@ -120,6 +120,98 @@ public final class ProtoMapping {
         return new SerializedValue(value.getVersion(), value.getData().toByteArray());
     }
 
+    // ----------------------------------------------------------------------------- checkpoints
+
+    public static org.devlive.pipeforge.engine.rpc.proto.CheckpointType toProto(CheckpointType type) {
+        return switch (type) {
+            case CHECKPOINT -> org.devlive.pipeforge.engine.rpc.proto.CheckpointType.CHECKPOINT_TYPE_CHECKPOINT;
+            case SAVEPOINT -> org.devlive.pipeforge.engine.rpc.proto.CheckpointType.CHECKPOINT_TYPE_SAVEPOINT;
+        };
+    }
+
+    public static CheckpointType fromProto(org.devlive.pipeforge.engine.rpc.proto.CheckpointType type) {
+        return switch (type) {
+            case CHECKPOINT_TYPE_CHECKPOINT -> CheckpointType.CHECKPOINT;
+            case CHECKPOINT_TYPE_SAVEPOINT -> CheckpointType.SAVEPOINT;
+            case CHECKPOINT_TYPE_UNSPECIFIED, UNRECOGNIZED -> throw new IllegalArgumentException(
+                    "Unknown checkpoint type " + type);
+        };
+    }
+
+    public static org.devlive.pipeforge.engine.rpc.proto.StateHandle toProto(StateHandle handle) {
+        var proto = org.devlive.pipeforge.engine.rpc.proto.StateHandle.newBuilder()
+                .setNodeId(handle.nodeId())
+                .setOperatorKind(handle.operatorKind())
+                .setSerializerVersion(handle.serializerVersion())
+                .setSize(handle.size())
+                .setCrc32C(handle.crc32c());
+        switch (handle.location()) {
+            case StateHandle.Inline inline -> proto.setInline(com.google.protobuf.ByteString.copyFrom(inline.bytes()));
+            case StateHandle.File file -> proto.setFile(file.path());
+        }
+        return proto.build();
+    }
+
+    public static StateHandle fromProto(org.devlive.pipeforge.engine.rpc.proto.StateHandle handle) {
+        StateHandle.Location location =
+                switch (handle.getLocationCase()) {
+                    case INLINE -> new StateHandle.Inline(handle.getInline().toByteArray());
+                    case FILE -> new StateHandle.File(handle.getFile());
+                    case LOCATION_NOT_SET -> throw new IllegalArgumentException(
+                            "The state of node '" + handle.getNodeId() + "' has neither inline bytes nor a file");
+                };
+        return new StateHandle(
+                handle.getNodeId(),
+                handle.getOperatorKind(),
+                handle.getSerializerVersion(),
+                location,
+                handle.getSize(),
+                handle.getCrc32C());
+    }
+
+    public static org.devlive.pipeforge.engine.rpc.proto.CheckpointTaskMetrics toProto(CheckpointTaskMetrics metrics) {
+        return org.devlive.pipeforge.engine.rpc.proto.CheckpointTaskMetrics.newBuilder()
+                .setSyncMs(metrics.syncMs())
+                .setAsyncMs(metrics.asyncMs())
+                .setAlignmentMs(metrics.alignmentMs())
+                .setStateBytes(metrics.stateBytes())
+                .build();
+    }
+
+    public static CheckpointTaskMetrics fromProto(
+            org.devlive.pipeforge.engine.rpc.proto.CheckpointTaskMetrics metrics) {
+        return new CheckpointTaskMetrics(
+                metrics.getSyncMs(), metrics.getAsyncMs(), metrics.getAlignmentMs(), metrics.getStateBytes());
+    }
+
+    /**
+     * The states a task restores, per node in the order given; a node without states (its splits
+     * went back to the enumerator) is kept as an empty list.
+     */
+    public static org.devlive.pipeforge.engine.rpc.proto.TaskRestore toProtoRestore(
+            Map<String, List<StateHandle>> states) {
+        var proto = org.devlive.pipeforge.engine.rpc.proto.TaskRestore.newBuilder();
+        states.forEach((node, handles) -> {
+            var restore = org.devlive.pipeforge.engine.rpc.proto.NodeRestore.newBuilder()
+                    .setNodeId(node);
+            handles.forEach(h -> restore.addStates(toProto(h)));
+            proto.addNodes(restore);
+        });
+        return proto.build();
+    }
+
+    public static Map<String, List<StateHandle>> fromProto(org.devlive.pipeforge.engine.rpc.proto.TaskRestore restore) {
+        Map<String, List<StateHandle>> states = new java.util.LinkedHashMap<>();
+        for (var node : restore.getNodesList()) {
+            List<StateHandle> handles = new ArrayList<>();
+            node.getStatesList().forEach(h -> handles.add(fromProto(h)));
+            if (states.put(node.getNodeId(), List.copyOf(handles)) != null) {
+                throw new IllegalArgumentException("The restore lists node '" + node.getNodeId() + "' twice");
+            }
+        }
+        return states;
+    }
+
     // ----------------------------------------------------------------------------- settings
 
     /** The settings as a message; limits this engine version does not set yet are 0 (the default). */

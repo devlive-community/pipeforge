@@ -13,13 +13,15 @@ import org.devlive.pipeforge.engine.network.buffer.Buffer;
 
 /**
  * An event in a stream of buffers; it always has a buffer of its own, so it keeps its place
- * between the rows. Codes 0x10 to 0x1F are kept for barriers, watermarks and stream status.
+ * between the rows. Events need no credit, but never overtake the buffers before them. Codes 0x11
+ * to 0x1F are kept for watermarks and stream status.
  */
 public sealed interface NetworkEvent {
 
     int END_OF_PARTITION = 0x01;
     int END_OF_INPUT = 0x02;
     int SCHEMA_CHANGE = 0x03;
+    int CHECKPOINT_BARRIER = 0x10;
 
     /** The event type code of the frame. */
     int code();
@@ -77,6 +79,58 @@ public sealed interface NetworkEvent {
         }
     }
 
+    /**
+     * Marks where checkpoint {@code checkpointId} cuts the stream: the rows before it are in the
+     * checkpoint, the rows after it are not. Layout (protocol specification, appendix B): {@code u64
+     * checkpointId}, {@code u64 timestampMs}, {@code u8 type}, {@code u8 flags} with bit 0 for {@code
+     * stop}.
+     *
+     * @param stop for stop-with-savepoint: the sources read nothing after it
+     */
+    record CheckpointBarrier(long checkpointId, long timestampMs, Type type, boolean stop) implements NetworkEvent {
+
+        /** The kind of checkpoint, with its code in the frame. */
+        public enum Type {
+            CHECKPOINT(1),
+            SAVEPOINT(2);
+
+            private final int code;
+
+            Type(int code) {
+                this.code = code;
+            }
+
+            public int code() {
+                return code;
+            }
+
+            static Type of(int code) {
+                for (Type type : values()) {
+                    if (type.code == code) {
+                        return type;
+                    }
+                }
+                throw new IllegalArgumentException("a checkpoint barrier of unknown type " + code);
+            }
+        }
+
+        /** The content after the event type code. */
+        static final int BYTES = 18;
+
+        static final int STOP = 0x01;
+
+        public CheckpointBarrier {
+            if (checkpointId <= 0) {
+                throw new IllegalArgumentException("a checkpoint barrier for checkpoint " + checkpointId);
+            }
+        }
+
+        @Override
+        public int code() {
+            return CHECKPOINT_BARRIER;
+        }
+    }
+
     NetworkEvent END_OF_PARTITION_EVENT = new EndOfPartition();
     NetworkEvent END_OF_INPUT_EVENT = new EndOfInput();
 
@@ -92,6 +146,13 @@ public sealed interface NetworkEvent {
             }
             out.write((int) length);
             out.writeBytes(change.protobuf);
+        } else if (event instanceof CheckpointBarrier barrier) {
+            ByteBuffer content = ByteBuffer.allocate(CheckpointBarrier.BYTES)
+                    .putLong(barrier.checkpointId())
+                    .putLong(barrier.timestampMs())
+                    .put((byte) barrier.type().code())
+                    .put((byte) (barrier.stop() ? CheckpointBarrier.STOP : 0));
+            out.writeBytes(content.array());
         }
         return Buffer.unpooled(Buffer.Kind.EVENT, out.toByteArray());
     }
@@ -130,6 +191,22 @@ public sealed interface NetworkEvent {
                         byte[] bytes = new byte[(int) length];
                         in.get(bytes);
                         yield new SchemaChange(bytes);
+                    }
+                    case CHECKPOINT_BARRIER -> {
+                        if (in.remaining() != CheckpointBarrier.BYTES) {
+                            throw new IllegalArgumentException("a checkpoint barrier of " + in.remaining()
+                                    + " bytes, not " + CheckpointBarrier.BYTES);
+                        }
+                        long checkpointId = in.getLong();
+                        long timestampMs = in.getLong();
+                        CheckpointBarrier.Type type = CheckpointBarrier.Type.of(in.get() & 0xFF);
+                        int flags = in.get() & 0xFF;
+                        if ((flags & ~CheckpointBarrier.STOP) != 0) {
+                            throw new IllegalArgumentException(
+                                    "a checkpoint barrier with unknown flags 0x" + Integer.toHexString(flags));
+                        }
+                        yield new CheckpointBarrier(
+                                checkpointId, timestampMs, type, (flags & CheckpointBarrier.STOP) != 0);
                     }
                     default -> throw new IllegalArgumentException("unknown event type 0x" + Integer.toHexString(code));
                 };

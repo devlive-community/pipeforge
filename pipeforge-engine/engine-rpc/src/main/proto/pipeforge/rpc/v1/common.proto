@@ -120,9 +120,28 @@ message TaskMetrics {               // 累计值：丢失或重复上报都不�
   int64 throttle_wait_nanos = 14;     // 等待作业限流配额的时间
 }
 
-// The types the checkpoint RPCs of several services share (M2).
+// checkpoint 的共用类型（M2，多个服务共用）
 enum CheckpointType {
   CHECKPOINT_TYPE_UNSPECIFIED = 0;
   CHECKPOINT_TYPE_CHECKPOINT = 1;
   CHECKPOINT_TYPE_SAVEPOINT = 2;
+}
+
+message StateHandle {
+  string node_id = 1;
+  string operator_kind = 2;             // source / transform / sink / committer
+  int32 serializer_version = 3;
+  oneof location {
+    bytes inline = 4;
+    string file = 5;                    // 相对 checkpoint 目录的路径
+  }
+  int64 size = 6;
+  uint32 crc32c = 7;
+}
+
+message CheckpointTaskMetrics {
+  int64 sync_ms = 1;                    // 取状态副本
+  int64 async_ms = 2;                   // 上传
+  int64 alignment_ms = 3;
+  int64 state_bytes = 4;
 }

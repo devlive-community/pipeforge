@@ -22,6 +22,21 @@ PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Tas
 
 [集群](../concepts/cluster)进程（Master、Worker）通过 gRPC 使用它；本地运行（`pipeforge run --local`）在进程内使用同一组接口。
 
+### Checkpoint 消息
+
+Checkpoint 在三个服务中增加了 RPC，都是对 v1 的兼容增加：
+
+| RPC | 服务 | 作用 |
+|---|---|---|
+| `TriggerCheckpoint` | `TaskExecutorService` | 在 Source Task 上开始 checkpoint *n*；其他 Task 在 barrier 到达时开始；`stop` 表示快照后结束输入（stop-with-savepoint） |
+| `NotifyCheckpointComplete`、`AbortCheckpoint` | `TaskExecutorService` | 通知 Task checkpoint *n* 已经完成（Sink 随之提交），或者已经放弃 |
+| `AcknowledgeCheckpoint`、`DeclineCheckpoint` | `JobMasterService` | Task 在 checkpoint *n* 中的部分：每个有状态的节点一个 `StateHandle`（内联字节或 checkpoint 中的文件）及耗时，或者让它无法参与的错误 |
+| `TriggerSavepoint`、`StopWithSavepoint`、`ListCheckpoints` | `DispatcherService` | 为运行做 savepoint（可以同时停止运行），以及列出 Master 保留的 checkpoint |
+
+`TaskDeployment` 携带 Task 要恢复的状态（`restore_state`、`restore_checkpoint_id`；编号 9 和 10 从一开始就为它们保留），
+`SubmitJobRequest` 携带运行从哪里开始（`restore`）以及第几次尝试，`JobStatus` 携带尝试次数和最近完成的 checkpoint，
+`RunState` 增加了重启与暂停的状态：`RESTARTING` 8、`PAUSING` 9、`PAUSED` 10、`RETRY_WAIT` 11。Master 遇到不认识的状态时会拒绝，而不是猜测。
+
 ## 约定
 
 - 每个请求都以 `Header` 开头：协议版本、Master 与作业的 epoch（新的 Master 或 JobMaster 的 epoch 一定更大，
@@ -111,8 +126,11 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
   [`PF-CLUS-0007`](../reference/errors#pf-clus-0007) 拒绝；拒绝的一方发送 `ErrorResponse` 后关闭连接。
 - 长度、计数和编号为 varint，字符串为 varint 长度加 UTF-8，ID 为 16 字节。帧长度超过 `task.max-row-bytes` + 1 KB、magic 不对或内容无法解析时，
   以 `ErrorResponse` 关闭连接。
-- 数据缓冲中是按上文行格式编码的行；事件缓冲中是事件类型（`0x01` 子分区结束、`0x02` 输入结束、`0x03` 表结构变化；`0x10`–`0x1F`
-  留给 checkpoint 和 watermark）及其内容。
+- 数据缓冲中是按上文行格式编码的行；事件缓冲中是事件类型（`0x01` 子分区结束、`0x02` 输入结束、`0x03` 表结构变化、`0x10` checkpoint barrier；
+  `0x11`–`0x1F` 留给 watermark 和流状态）及其内容。
+- Checkpoint barrier 共 18 字节：`u64` checkpoint 编号、`u64` 毫秒时间戳、`u8` 类型（1 checkpoint、2 savepoint）和 `u8` 标志位（第 0 位 `stop`，其余为 0）。
+  长度、类型或标志位不符的 barrier 会让通道失败。事件不消耗 credit，因此即使消费者已停止向先收到 barrier 的通道发放 credit，barrier 仍能到达；
+  但任何事件都不会越过在它之前发送的缓冲。
 - 生产者只在通道有 credit 时发送数据缓冲，并为每个通道的缓冲从 0 开始编号；消费者拒绝序号不连续或没有 credit 的缓冲。
 - 消费者请求的输出还不存在时，最多等待一个分区请求超时（30 秒），之后以 [`PF-CLUS-0011`](../reference/errors#pf-clus-0011) 拒绝。
 - 没有发送 `CloseRequest` 就关闭的连接，会让消费者一端未结束的通道、以及生产者一端被它们读取的输出以
@@ -177,6 +195,7 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
 | 字段改名、改编号或改类型 | 构建失败 |
 | 一元 RPC 改为流式，或者请求、响应类型改变 | 构建失败 |
 | 删除字段 | 构建失败，除非它的编号和名称都已 `reserved` |
+| 把保留的编号用作字段 | 构建失败，除非这个编号从一开始就是为这个字段保留的（测试中的 `PLACEHOLDERS`） |
 
 ```text
 ProtoSnapshotTest.theProtocolOnlyGrows

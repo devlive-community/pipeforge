@@ -23,7 +23,34 @@ service TaskExecutorService {
   rpc SendOperatorEvent(OperatorEvent) returns (Ack);
   rpc ReadLog(ReadLogRequest) returns (stream LogChunk);
   rpc FreeSlot(FreeSlotRequest) returns (Ack);
-  // M2：TriggerCheckpoint、NotifyCheckpointComplete、AbortCheckpoint
+  rpc TriggerCheckpoint(TriggerCheckpointRequest) returns (Ack);              // M2
+  rpc NotifyCheckpointComplete(CheckpointNotification) returns (Ack);       // M2
+  rpc AbortCheckpoint(CheckpointNotification) returns (Ack);                // M2
+}
+
+message TriggerCheckpointRequest {
+  Header header = 1;
+  ExecutionAttemptId task = 2;          // 只发给 Source Task；其余 Task 由 barrier 触发
+  int64 checkpoint_id = 3;
+  CheckpointType type = 4;
+  int64 timestamp_ms = 5;
+  bool stop = 6;                        // stop-with-savepoint：快照后 Source 不再读取，发送 EndOfInput
+}
+
+message CheckpointNotification {        // NotifyCheckpointComplete 与 AbortCheckpoint 共用
+  Header header = 1;
+  ExecutionAttemptId task = 2;
+  int64 checkpoint_id = 3;
+  string reason = 4;                    // 只用于 Abort
+}
+
+message NodeRestore {
+  string node_id = 1;
+  repeated StateHandle states = 2;      // 改并行度时可以有多个；Reader 的分片已交还 Enumerator 时为空
+}
+
+message TaskRestore {
+  repeated NodeRestore nodes = 1;
 }
 
 message SlotRequest {
@@ -68,7 +95,8 @@ message TaskDeployment {
   repeated ResourceRef resources = 6;
   repeated InputGateDescriptor inputs = 7;
   repeated ResultPartitionDescriptor outputs = 8;
-  reserved 9, 10;                     // M2：restore_state、restore_checkpoint_id
+  TaskRestore restore_state = 9;      // M2：从 checkpoint / savepoint 恢复时
+  int64 restore_checkpoint_id = 10;   // M2：恢复点编号；0 表示不恢复
   bytes encrypted_secrets = 11;       // 见 2.7；没有敏感选项时为空
   int32 parallelism = 12;
   TaskSettings settings = 13;
@@ -108,17 +136,17 @@ message OperatorEvent {
 message ReadLogRequest {
   Header header = 1;
   ExecutionAttemptId task = 2;
-  int64 offset = 3;                   // 负数表示从末尾往前
-  int64 max_bytes = 4;
-  string contains = 5;                // 关键字过滤，空表示不过滤
-  string min_level = 6;               // TRACE / DEBUG / INFO / WARN / ERROR
-  bool follow = 7;                    // Task 运行中时持续推送
+  int64 offset = 3;                   // 负数表示从末尾往前，并从下一个完整行开始
+  int64 max_bytes = 4;                // 一个分块覆盖的日志长度；0 表示 64KB，上限 4MB
+  string contains = 5;                // 关键字过滤，空表示不过滤；按条目（带时间戳的行及其后续行）整条过滤
+  string min_level = 6;               // TRACE / DEBUG / INFO / WARN / ERROR；空表示不过滤
+  bool follow = 7;                    // Task 运行中时持续推送，直到 Task 结束；读取方取消调用即停止
 }
 
 message LogChunk {
-  int64 offset = 1;
+  int64 offset = 1;                   // 下一次读取继续的位置：本分块覆盖的日志范围的末尾（有过滤时不等于起点加 data 长度）
   bytes data = 2;                     // UTF-8，按整行切分
-  bool eof = 3;
+  bool eof = 3;                       // 已到日志末尾且 Task 已结束：之后不会再有内容
 }
 
 message FreeSlotRequest {
