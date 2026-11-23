@@ -100,6 +100,12 @@ public final class ErrorCode {
     public static final ErrorCode ENUMERATOR_TIMEOUT =
             define("PF-SRC-0004", "ENUMERATOR_TIMEOUT", "node", "operation", "timeoutMs");
 
+    // Checkpoints and state
+    public static final ErrorCode STATE_CORRUPTED =
+            define("PF-CKPT-0002", "STATE_CORRUPTED", "file", "checkpoint", "reason");
+    public static final ErrorCode STATE_INCOMPATIBLE =
+            define("PF-CKPT-0003", "STATE_INCOMPATIBLE", "file", "checkpoint", "reason");
+
     // Sinks
     public static final ErrorCode SINK_FAILED = define("PF-SINK-0001", "SINK_FAILED", "node", "reason");
     public static final ErrorCode COMMIT_FAILED = define("PF-SINK-0003", "COMMIT_FAILED", "node", "reason");

@@ -1,11 +1,42 @@
 # Protocol v1 (pipeforge.rpc.v1): every element, one per line. Lines are only ever added;
 # ProtoSnapshotTest fails when one disappears or changes. Regenerate with
 # -Dpipeforge.protocol.update=true after a compatible addition.
+enum pipeforge.rpc.v1.CheckpointType
 enum pipeforge.rpc.v1.NodeKind
 enum pipeforge.rpc.v1.Partitioning.Kind
 enum pipeforge.rpc.v1.RunState
 enum pipeforge.rpc.v1.SplitState
 enum pipeforge.rpc.v1.TaskState
+field pipeforge.checkpoint.v1.CheckpointMetadata 1 job_id string
+field pipeforge.checkpoint.v1.CheckpointMetadata 10 operators repeated pipeforge.checkpoint.v1.OperatorState
+field pipeforge.checkpoint.v1.CheckpointMetadata 13 attempt int32
+field pipeforge.checkpoint.v1.CheckpointMetadata 14 job_name string
+field pipeforge.checkpoint.v1.CheckpointMetadata 2 run_id string
+field pipeforge.checkpoint.v1.CheckpointMetadata 3 checkpoint_id int64
+field pipeforge.checkpoint.v1.CheckpointMetadata 4 type pipeforge.rpc.v1.CheckpointType
+field pipeforge.checkpoint.v1.CheckpointMetadata 5 trigger_timestamp int64
+field pipeforge.checkpoint.v1.CheckpointMetadata 6 complete_timestamp int64
+field pipeforge.checkpoint.v1.CheckpointMetadata 7 engine_version string
+field pipeforge.checkpoint.v1.CheckpointMetadata 8 dsl_version string
+field pipeforge.checkpoint.v1.CheckpointMetadata 9 variables repeated pipeforge.checkpoint.v1.CheckpointMetadata.VariablesEntry
+field pipeforge.checkpoint.v1.CheckpointMetadata.VariablesEntry 1 key string
+field pipeforge.checkpoint.v1.CheckpointMetadata.VariablesEntry 2 value string
+field pipeforge.checkpoint.v1.OperatorState 1 node_id string
+field pipeforge.checkpoint.v1.OperatorState 2 operator_kind string
+field pipeforge.checkpoint.v1.OperatorState 3 plugin string
+field pipeforge.checkpoint.v1.OperatorState 4 max_parallelism int32
+field pipeforge.checkpoint.v1.OperatorState 5 subtasks repeated pipeforge.checkpoint.v1.SubtaskState
+field pipeforge.checkpoint.v1.OperatorState 6 state_backend string
+field pipeforge.checkpoint.v1.OperatorState 7 parallelism int32
+field pipeforge.checkpoint.v1.SubtaskState 1 subtask int32
+field pipeforge.checkpoint.v1.SubtaskState 2 serializer_version int32
+field pipeforge.checkpoint.v1.SubtaskState 3 inline bytes oneof location
+field pipeforge.checkpoint.v1.SubtaskState 4 file string oneof location
+field pipeforge.checkpoint.v1.SubtaskState 5 size int64
+field pipeforge.checkpoint.v1.SubtaskState 6 crc32c uint32
+field pipeforge.checkpoint.v1.SubtaskState 7 key_group_start int32
+field pipeforge.checkpoint.v1.SubtaskState 8 key_group_end int32
+field pipeforge.checkpoint.v1.SubtaskState 9 shared_files repeated string
 field pipeforge.rpc.v1.AddSplits 1 splits repeated pipeforge.rpc.v1.Versioned
 field pipeforge.rpc.v1.BlobChunk 1 offset int64
 field pipeforge.rpc.v1.BlobChunk 2 data bytes
@@ -348,6 +379,7 @@ field pipeforge.rpc.v1.WorkerInfo 8 slots repeated pipeforge.rpc.v1.SlotStatus
 field pipeforge.rpc.v1.WorkerInfo 9 tasks_running int32
 field pipeforge.rpc.v1.WorkerInfo.LabelsEntry 1 key string
 field pipeforge.rpc.v1.WorkerInfo.LabelsEntry 2 value string
+file pipeforge/checkpoint/v1/checkpoint.proto package pipeforge.checkpoint.v1 java org.devlive.pipeforge.engine.rpc.checkpoint.proto
 file pipeforge/rpc/v1/blob.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/chain.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/common.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
@@ -355,6 +387,10 @@ file pipeforge/rpc/v1/dispatcher.proto package pipeforge.rpc.v1 java org.devlive
 file pipeforge/rpc/v1/job_master.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/resource_manager.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/task_executor.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
+message pipeforge.checkpoint.v1.CheckpointMetadata
+message pipeforge.checkpoint.v1.CheckpointMetadata.VariablesEntry
+message pipeforge.checkpoint.v1.OperatorState
+message pipeforge.checkpoint.v1.SubtaskState
 message pipeforge.rpc.v1.Ack
 message pipeforge.rpc.v1.AddSplits
 message pipeforge.rpc.v1.BlobChunk
@@ -430,6 +466,8 @@ message pipeforge.rpc.v1.Versioned
 message pipeforge.rpc.v1.WorkerHeartbeat
 message pipeforge.rpc.v1.WorkerInfo
 message pipeforge.rpc.v1.WorkerInfo.LabelsEntry
+reserved pipeforge.checkpoint.v1.CheckpointMetadata 11-11
+reserved pipeforge.checkpoint.v1.CheckpointMetadata 12-12
 reserved pipeforge.rpc.v1.TaskDeployment 10-10
 reserved pipeforge.rpc.v1.TaskDeployment 9-9
 rpc pipeforge.rpc.v1.BlobService.GetBlob pipeforge.rpc.v1.BlobRequest -> stream pipeforge.rpc.v1.BlobChunk
@@ -459,6 +497,9 @@ service pipeforge.rpc.v1.DispatcherService
 service pipeforge.rpc.v1.JobMasterService
 service pipeforge.rpc.v1.ResourceManagerService
 service pipeforge.rpc.v1.TaskExecutorService
+value pipeforge.rpc.v1.CheckpointType 0 CHECKPOINT_TYPE_UNSPECIFIED
+value pipeforge.rpc.v1.CheckpointType 1 CHECKPOINT_TYPE_CHECKPOINT
+value pipeforge.rpc.v1.CheckpointType 2 CHECKPOINT_TYPE_SAVEPOINT
 value pipeforge.rpc.v1.NodeKind 0 NODE_KIND_UNSPECIFIED
 value pipeforge.rpc.v1.NodeKind 1 NODE_KIND_SOURCE
 value pipeforge.rpc.v1.NodeKind 2 NODE_KIND_TRANSFORM

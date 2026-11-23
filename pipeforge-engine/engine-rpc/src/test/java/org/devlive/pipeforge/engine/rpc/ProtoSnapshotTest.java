@@ -56,6 +56,9 @@ class ProtoSnapshotTest {
                 TaskStateUpdate.getDescriptor().getFile(),
                 SubmitJobRequest.getDescriptor().getFile(),
                 org.devlive.pipeforge.engine.rpc.proto.BlobRequest.getDescriptor()
+                        .getFile(),
+                // the checkpoint file format (section 5) only grows too
+                org.devlive.pipeforge.engine.rpc.checkpoint.proto.CheckpointMetadata.getDescriptor()
                         .getFile());
     }
 
@@ -174,10 +177,13 @@ class ProtoSnapshotTest {
     @Test
     void everyProtoFileIsDescribed() throws IOException {
         Set<String> described = new TreeSet<>();
-        files().forEach(f -> described.add(Path.of(f.getName()).getFileName().toString()));
+        files().forEach(f -> described.add(f.getName()));
         Set<String> sources = new TreeSet<>();
-        try (Stream<Path> files = Files.list(SOURCES)) {
-            files.forEach(f -> sources.add(f.getFileName().toString()));
+        Path root = Path.of("src", "main", "proto");
+        for (Path directory : List.of(SOURCES, root.resolve("pipeforge/checkpoint/v1"))) {
+            try (Stream<Path> files = Files.list(directory)) {
+                files.forEach(f -> sources.add(root.relativize(f).toString().replace('\\', '/')));
+            }
         }
         assertThat(described).isEqualTo(sources);
     }

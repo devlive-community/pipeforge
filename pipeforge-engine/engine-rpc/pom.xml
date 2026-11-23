@@ -103,6 +103,7 @@
                     <!-- generated code; its use is covered through the mappings -->
                     <excludes>
                         <exclude>org/devlive/pipeforge/engine/rpc/proto/**</exclude>
+                        <exclude>org/devlive/pipeforge/engine/rpc/checkpoint/proto/**</exclude>
                     </excludes>
                 </configuration>
             </plugin>

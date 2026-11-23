@@ -119,3 +119,10 @@ message TaskMetrics {               // 累计值：丢失或重复上报都不�
   repeated DirtySample dirty_samples = 13;  // Task 最先跳过的坏行，最多 20 条
   int64 throttle_wait_nanos = 14;     // 等待作业限流配额的时间
 }
+
+// The types the checkpoint RPCs of several services share (M2).
+enum CheckpointType {
+  CHECKPOINT_TYPE_UNSPECIFIED = 0;
+  CHECKPOINT_TYPE_CHECKPOINT = 1;
+  CHECKPOINT_TYPE_SAVEPOINT = 2;
+}

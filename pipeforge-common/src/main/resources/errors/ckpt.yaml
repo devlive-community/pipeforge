@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2026 devlive-community/pipeforge
+#
+# Licensed under the MIT License. See the LICENSE file in the
+# project root for full license text.
+#
+# Checkpoints and state.
+
+- code: PF-CKPT-0002
+  name: STATE_CORRUPTED
+  message:
+    en-US: "The {file} of checkpoint {checkpoint} is damaged: {reason}"
+    zh-CN: "checkpoint {checkpoint} 的 {file} 已损坏：{reason}"
+  hint:
+    en-US: "The file was cut short, changed or copied from another checkpoint. Recovery falls back to the checkpoint before it; check the checkpoint storage for errors."
+    zh-CN: "文件被截断、被修改或者是从其他 checkpoint 拷来的。恢复时会退回到上一个 checkpoint；请检查 checkpoint 存储是否出错。"
+
+- code: PF-CKPT-0003
+  name: STATE_INCOMPATIBLE
+  message:
+    en-US: "The {file} of checkpoint {checkpoint} cannot be read: {reason}"
+    zh-CN: "无法读取 checkpoint {checkpoint} 的 {file}：{reason}"
+  hint:
+    en-US: "It was written in a format this version does not read, usually by a newer PipeForge. Restore it with the version that wrote it, or start without it."
+    zh-CN: "它使用的格式本版本无法读取，通常是由更新版本的 PipeForge 写入的。请用写入它的版本恢复，或者不使用它启动。"

@@ -20,8 +20,7 @@ PipeForge 集群中有一个负责调度的进程（Master）和多个运行 Tas
 定义位于 `pipeforge-engine/engine-rpc/src/main/proto/pipeforge/rpc/v1/`。构建时由它们生成 Java 消息与服务桩
 （包 `org.devlive.pipeforge.engine.rpc.proto`）；引擎内部使用自己的类型，`ProtoMapping` 在边界上负责两者之间的转换。
 
-当前版本中协议、它的 gRPC 传输、Task 描述以及 Worker 之间的数据交换都已就绪；集群进程（Master、Worker）会在分布式运行时的后续步骤中加入。
-本地运行（`pipeforge run --local`）在进程内使用同一组接口。
+[集群](../concepts/cluster)进程（Master、Worker）通过 gRPC 使用它；本地运行（`pipeforge run --local`）在进程内使用同一组接口。
 
 ## 约定
 
@@ -118,6 +117,25 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
 - 消费者请求的输出还不存在时，最多等待一个分区请求超时（30 秒），之后以 [`PF-CLUS-0011`](../reference/errors#pf-clus-0011) 拒绝。
 - 没有发送 `CloseRequest` 就关闭的连接，会让消费者一端未结束的通道、以及生产者一端被它们读取的输出以
   [`PF-CLUS-0010`](../reference/errors#pf-clus-0010) 失败。
+
+## Checkpoint 文件
+
+一个 checkpoint 是一个目录，其中的文件使用独立的格式，以便更新的引擎也能恢复它。checkpoint 功能正在加入，这里是它们写入时使用的格式。
+两种文件与 Task 描述使用相同的外层结构：magic、格式版本（1）、正文长度、正文和正文的 CRC32C，整数都是大端。
+
+| 文件 | Magic | 正文 |
+|---|---|---|
+| `_metadata` | `PFCP` | Protobuf `CheckpointMetadata`（包 `pipeforge.checkpoint.v1`）：作业、运行、尝试和作业名，checkpoint 的编号和类型（checkpoint 或 savepoint）、时间、本次运行的变量，以及每个节点的插件、并行度和每个子任务的状态 |
+| `<节点>-<子任务>.state`、`enum-<节点>.state` | `PFST` | checkpoint 编号（8 字节）和节点 ID，之后是插件状态序列化器的字节 |
+
+- 不超过 `checkpoint.inline-threshold`（默认 16 KB）的状态直接保存在 `_metadata` 中；更大的状态单独成文件，由 `_metadata` 指出。
+  没有状态的子任务不出现，每个节点都记录写入时的并行度。
+- 状态文件记录它所属的 checkpoint 和节点；放错位置的文件不会被当作别的文件读取。
+- 长度或校验不符、或者属于别处的文件报告 [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002)：恢复时退回到上一个 checkpoint。
+  格式版本比引擎能读取的更新时报告 [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003)。
+- 支持原子改名的存储先写 `_metadata.tmp` 再改名；对象存储先写 `_metadata`，再写一个空的 `_COMPLETED`。只有带完成标记的 checkpoint 才算完成。
+- `CheckpointMetadata` 与 RPC 消息一样只增不改，由同一个快照测试检查。每个已发布格式版本的样本保存在
+  `pipeforge-engine/protocol-compat/checkpoint/` 中，必须一直可以读取。
 
 ## 传输
 

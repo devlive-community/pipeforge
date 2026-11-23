@@ -23,9 +23,7 @@ generates the Java messages and service stubs from them (package
 `org.devlive.pipeforge.engine.rpc.proto`); the engine itself works with its own types, and
 `ProtoMapping` converts between the two at the edge.
 
-In this version the protocol, its gRPC transport, the task descriptions and the data exchange
-between workers are in place; the cluster processes (master, workers) follow in the next steps of
-the distributed runtime. Local runs
+The [cluster](../concepts/cluster) processes (master, workers) speak it over gRPC; local runs
 (`pipeforge run --local`) use the same interfaces in process.
 
 ## Conventions
@@ -159,6 +157,33 @@ pair of workers shared by all channels between them. Every frame is:
   timeout (30 seconds), then refused with [`PF-CLUS-0011`](../reference/errors#pf-clus-0011).
 - A connection that closes without `CloseRequest` fails the unfinished channels at the consumer and
   the outputs they read at the producer with [`PF-CLUS-0010`](../reference/errors#pf-clus-0010).
+
+## Checkpoint files
+
+A checkpoint is a directory of files in a format of its own, so that a later engine can restore
+it. Checkpoints themselves are being added now; this is the format they are written in. Both kinds
+of file have the same envelope as a task description: a magic number, the format version (1), the
+length of the body, the body and its CRC32C, integers big-endian.
+
+| File | Magic | Body |
+|---|---|---|
+| `_metadata` | `PFCP` | Protobuf `CheckpointMetadata` (package `pipeforge.checkpoint.v1`): the job, run, attempt and job name, the checkpoint's number and type (checkpoint or savepoint), its times, the variables of the run, and for every node its plugin, parallelism and the state of each subtask |
+| `<node>-<subtask>.state`, `enum-<node>.state` | `PFST` | The checkpoint's number (8 bytes) and the node's ID, then the bytes of the plugin's state serializer |
+
+- A state up to `checkpoint.inline-threshold` (16 KB by default) is kept inside `_metadata`; a
+  larger one gets its own file, which `_metadata` names. A subtask without state is left out, and
+  every node records the parallelism it was written with.
+- A state file names the checkpoint and node it belongs to; a file copied to the wrong place is not
+  read as another's.
+- A file whose length or checksum does not match, or that belongs elsewhere, is
+  [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002): recovery falls back to the checkpoint before
+  it. A format version newer than the engine reads is
+  [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003).
+- Storage that can rename atomically writes `_metadata.tmp` and renames it; object storage writes
+  `_metadata` and then an empty `_COMPLETED`. Only a checkpoint with its marker counts as complete.
+- `CheckpointMetadata` only grows, like the RPC messages: the same snapshot test checks it. Samples
+  of every released format are kept in `pipeforge-engine/protocol-compat/checkpoint/` and must
+  stay readable.
 
 ## Transport
 

@@ -1,0 +1,56 @@
+/*
+ * Copyright (c) 2026 devlive-community/pipeforge
+ *
+ * Licensed under the MIT License. See the LICENSE file in the
+ * project root for full license text.
+ */
+
+// The checkpoint file format (protocol specification, section 5): the body of _metadata. It only
+// grows, like the RPC protocol; the descriptor snapshot checks it.
+
+syntax = "proto3";
+package pipeforge.checkpoint.v1;
+option java_package = "org.devlive.pipeforge.engine.rpc.checkpoint.proto";
+option java_multiple_files = true;
+
+import "pipeforge/rpc/v1/common.proto";
+
+message CheckpointMetadata {
+  string job_id = 1;
+  string run_id = 2;
+  int64 checkpoint_id = 3;
+  pipeforge.rpc.v1.CheckpointType type = 4;
+  int64 trigger_timestamp = 5;
+  int64 complete_timestamp = 6;
+  string engine_version = 7;
+  string dsl_version = 8;
+  map<string, string> variables = 9;       // the variables of the run
+  repeated OperatorState operators = 10;
+  reserved 11, 12;                         // schema_registry_snapshot (M3), job_state (M7)
+  int32 attempt = 13;                      // the attempt of the run
+  string job_name = 14;                    // checked when a run starts from a savepoint
+}
+
+message OperatorState {
+  string node_id = 1;                      // the stable ID: the node's ID in the job
+  string operator_kind = 2;                // source / transform / sink / enumerator / committer
+  string plugin = 3;                       // plugin ID@version
+  int32 max_parallelism = 4;
+  repeated SubtaskState subtasks = 5;      // an enumerator has one, subtask 0
+  string state_backend = 6;                // heap in M2
+  int32 parallelism = 7;                   // when it was written; subtasks without state are left out
+}
+
+message SubtaskState {
+  int32 subtask = 1;
+  int32 serializer_version = 2;            // the version of the plugin's state serializer
+  oneof location {
+    bytes inline = 3;                      // up to the writer's checkpoint.inline-threshold
+    string file = 4;                       // else a path relative to the checkpoint directory
+  }
+  int64 size = 5;
+  uint32 crc32c = 6;
+  int32 key_group_start = 7;               // keyed state (M6)
+  int32 key_group_end = 8;
+  repeated string shared_files = 9;        // incremental checkpoints (M6)
+}
