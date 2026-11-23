@@ -105,6 +105,8 @@ public final class ErrorCode {
             define("PF-CKPT-0002", "STATE_CORRUPTED", "file", "checkpoint", "reason");
     public static final ErrorCode STATE_INCOMPATIBLE =
             define("PF-CKPT-0003", "STATE_INCOMPATIBLE", "file", "checkpoint", "reason");
+    public static final ErrorCode STORAGE_UNAVAILABLE =
+            define("PF-CKPT-0004", "STORAGE_UNAVAILABLE", "location", "reason");
 
     // Sinks
     public static final ErrorCode SINK_FAILED = define("PF-SINK-0001", "SINK_FAILED", "node", "reason");

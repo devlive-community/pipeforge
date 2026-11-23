@@ -76,6 +76,54 @@ public final class Settings {
             false,
             "The password of the trust store.",
             "信任库的密码。");
+    public static final Setting CHECKPOINT_DIR = define(
+            "checkpoint.dir",
+            "pipeforge",
+            Setting.Type.STRING,
+            null,
+            false,
+            "Where checkpoints are kept, the same for every master and worker: a directory (on NFS, mounted at the same path everywhere) or s3://bucket/prefix. Each process checks at its start that it can write, read and delete there. Without it, runs keep no checkpoints.",
+            "保存 checkpoint 的位置，所有 Master 和 Worker 相同：一个目录（使用 NFS 时在每台机器上挂载到相同的路径），或者 s3://bucket/prefix。每个进程启动时检查能否在那里写入、读取和删除。不设置时运行不保存 checkpoint。");
+    public static final Setting CHECKPOINT_S3_ENDPOINT = define(
+            "checkpoint.s3.endpoint",
+            "pipeforge",
+            Setting.Type.STRING,
+            "",
+            false,
+            "The endpoint of S3-compatible storage, such as OSS, COS or MinIO; empty for AWS S3.",
+            "S3 兼容存储（例如 OSS、COS、MinIO）的端点；使用 AWS S3 时留空。");
+    public static final Setting CHECKPOINT_S3_REGION = define(
+            "checkpoint.s3.region",
+            "pipeforge",
+            Setting.Type.STRING,
+            "us-east-1",
+            false,
+            "The region of the bucket.",
+            "存储桶所在的区域。");
+    public static final Setting CHECKPOINT_S3_PATH_STYLE = define(
+            "checkpoint.s3.path-style",
+            "pipeforge",
+            Setting.Type.BOOLEAN,
+            "false",
+            false,
+            "Address the bucket in the path (endpoint/bucket/key) instead of the host name, as most S3-compatible storage wants.",
+            "在路径中指定存储桶（endpoint/bucket/key），而不是在主机名中；大多数 S3 兼容存储需要这种方式。");
+    public static final Setting CHECKPOINT_S3_ACCESS_KEY = define(
+            "checkpoint.s3.access-key",
+            "pipeforge",
+            Setting.Type.STRING,
+            "",
+            false,
+            "The access key; empty to use the AWS default credentials (environment, profile, instance role).",
+            "访问密钥；留空时使用 AWS 默认凭据（环境变量、配置文件、实例角色）。");
+    public static final Setting CHECKPOINT_S3_SECRET_KEY = define(
+            "checkpoint.s3.secret-key",
+            "pipeforge",
+            Setting.Type.STRING,
+            "",
+            false,
+            "The secret key that goes with the access key.",
+            "与访问密钥对应的私有密钥。");
     public static final Setting PLUGIN_DIRS = define(
             "plugins.dirs",
             "pipeforge",

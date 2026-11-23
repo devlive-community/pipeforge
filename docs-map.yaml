@@ -64,6 +64,8 @@
   docs: ["concepts/execution"]
 - paths: ["pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/RunAnaly*.java", "pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/Bottleneck.java", "pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/AnalyzeText.java"]
   docs: ["concepts/plan-and-explain"]
+- paths: ["pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/checkpoint/**", "pipeforge-engine/checkpoint-s3/**", "pipeforge-dist/src/main/java/org/devlive/pipeforge/dist/CheckpointSetup.java"]
+  docs: ["operations/checkpoint-storage"]
 - paths: ["pipeforge-engine/engine-rpc/**", "pipeforge-engine/engine-network/**", "pipeforge-engine/protocol-compat/**"]
   docs: ["development/engine-protocol"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/ResourceManager*.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/Scheduler.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/SlotTable.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MasterConnection.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/PluginCache.java", "pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/PluginBlobs.java"]

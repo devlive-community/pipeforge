@@ -64,6 +64,8 @@ public final class WorkerProcess implements AutoCloseable {
     private final LogService logs;
     private final PluginCache plugins;
     private final Server server;
+    private final org.devlive.pipeforge.engine.api.checkpoint.@org.jspecify.annotations.Nullable CheckpointStorage
+            checkpoints;
     private final MasterConnection connection;
 
     public WorkerProcess(Configuration config, Path home) {
@@ -71,6 +73,8 @@ public final class WorkerProcess implements AutoCloseable {
         String host = config.optional(Settings.WORKER_HOST).orElseGet(WorkerProcess::hostName);
         int rpcPort = config.integer(Settings.WORKER_RPC_PORT);
         String name = host + ":" + rpcPort;
+        // checked first: a process that cannot keep checkpoints does not start
+        this.checkpoints = CheckpointSetup.open(config, "worker-" + name);
         NetworkOptions exchange = networkOptions(config);
         network = new NetworkEnvironment(name, config.string(Settings.CLUSTER_TOKEN), exchange);
         InetSocketAddress data;
@@ -218,6 +222,12 @@ public final class WorkerProcess implements AutoCloseable {
         plugins.close();
         network.close();
         toMaster.shutdownNow();
+        CheckpointSetup.close(checkpoints);
         threads.shutdownNow();
+    }
+
+    /** The checkpoint storage of {@code checkpoint.dir}, or empty without it. */
+    public java.util.Optional<org.devlive.pipeforge.engine.api.checkpoint.CheckpointStorage> checkpointStorage() {
+        return java.util.Optional.ofNullable(checkpoints);
     }
 }

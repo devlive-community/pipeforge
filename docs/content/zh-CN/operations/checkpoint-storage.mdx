@@ -1,0 +1,105 @@
+---
+title: Checkpoint 存储
+description: 集群保存 checkpoint 的位置（本地目录、共享 NFS 目录或 S3 兼容的对象存储）、如何配置，以及如何判断一个 checkpoint 已经完成。
+order: 25
+---
+
+一个 checkpoint 由一组文件构成：每个 Source、算子和 Sink 的状态，以及列出这些状态的 `_metadata`
+文件。集群把它们写入同一个 **checkpoint 存储**，由 `conf/pipeforge.yaml` 中的 `checkpoint.dir`
+指定。所有 Master 和 Worker 都必须能访问同一个存储，因为重启的运行可能在另外的机器上读取状态。
+
+不设置 `checkpoint.dir` 时，运行不保存 checkpoint。
+
+## 选择存储
+
+| `checkpoint.dir` | 存储 | 适用场景 |
+|---|---|---|
+| `/data/pipeforge/checkpoints` 或 `file:///data/...` | 目录 | 单机（`pipeforge-standalone`），或者每台机器都从 NFS 挂载到**相同路径**的目录 |
+| `s3://bucket/prefix` | S3 或 S3 兼容的对象存储 | 没有共享文件系统的多机集群 |
+
+### 目录或 NFS
+
+```yaml
+# conf/pipeforge.yaml
+checkpoint.dir: /mnt/pipeforge/checkpoints
+```
+
+运行进程的用户需要能在那里写入、读取和删除。使用 NFS 时，在每个 Master 和 Worker 上把同一个导出目录挂载到相同的路径。
+
+### S3 与 S3 兼容存储
+
+```yaml
+# AWS S3：存储桶所在的区域；凭据来自 AWS 默认凭据链
+checkpoint.dir: s3://my-bucket/pipeforge
+checkpoint.s3.region: eu-central-1
+```
+
+其他 S3 兼容存储需要指定端点，通常还要开启路径方式寻址：
+
+```yaml
+# 阿里云 OSS
+checkpoint.dir: s3://my-bucket/pipeforge
+checkpoint.s3.endpoint: https://oss-cn-hangzhou.aliyuncs.com
+checkpoint.s3.region: cn-hangzhou
+checkpoint.s3.access-key: ${OSS_ACCESS_KEY}
+checkpoint.s3.secret-key: ${OSS_SECRET_KEY}
+```
+
+```yaml
+# 腾讯云 COS
+checkpoint.dir: s3://my-bucket-1250000000/pipeforge
+checkpoint.s3.endpoint: https://cos.ap-guangzhou.myqcloud.com
+checkpoint.s3.region: ap-guangzhou
+```
+
+```yaml
+# MinIO 或其他自建服务
+checkpoint.dir: s3://checkpoints/pipeforge
+checkpoint.s3.endpoint: http://minio.internal:9000
+checkpoint.s3.path-style: true
+```
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `checkpoint.s3.endpoint` | 空（AWS） | S3 兼容存储的端点 |
+| `checkpoint.s3.region` | `us-east-1` | 存储桶所在的区域 |
+| `checkpoint.s3.path-style` | `false` | 在路径中指定存储桶（`endpoint/bucket/key`），而不是在主机名中 |
+| `checkpoint.s3.access-key`、`checkpoint.s3.secret-key` | 空 | 访问密钥；不设置时使用 AWS 默认凭据：环境变量、配置文件或实例角色 |
+
+和所有配置项一样，它们也可以用环境变量设置，例如 `PIPEFORGE_CHECKPOINT_S3_SECRET_KEY`，这样密钥就不必写在文件里（见[配置参考](../reference/configuration)）。
+
+## 启动时的检查
+
+每个 Master 和 Worker 启动时会在 `_probes/` 下写入、读回并删除一个小文件。无法使用存储的进程不会启动，并报告
+[`PF-CKPT-0004`](../reference/errors#pf-ckpt-0004)：
+
+```text
+PF-CKPT-0004 无法使用 checkpoint 存储 s3://my-bucket/pipeforge/：... The specified bucket does not exist
+```
+
+提示中列出了需要检查的内容：位置、端点、区域和凭据；使用 NFS 时还要检查目录已经挂载并且可写。
+
+## 目录结构
+
+```text
+<checkpoint.dir>/
+  <job-id>/
+    chk-12/
+      _metadata                 状态清单，最后写入
+      _COMPLETED                仅对象存储
+      enum-<node>.state         Source 的分片枚举器的状态
+      <node>-<subtask>.state    一个并行实例的状态
+    savepoints/
+      <name>-<timestamp>/       savepoint，不会被自动删除
+```
+
+较小的状态直接保存在 `_metadata` 中，不单独成文件。文件带有校验和，损坏的文件会报告为 [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002)，不会被读取。
+
+## 如何判断 checkpoint 已经完成
+
+进程可能在写 checkpoint 的中途停止，这样的 checkpoint 永远不会被使用：
+
+- **目录**：每个文件先以临时名称写入，再改名到位，`_metadata` 最后改名。没有 `_metadata` 的 checkpoint 是不完整的。
+- **对象存储**：写入的对象总是完整出现，但没有改名操作；`_metadata` 写入后再写一个 `_COMPLETED` 标记，没有标记的 checkpoint 是不完整的。
+
+没有任何记录引用的不完整 checkpoint 目录是遗留文件；一天内没有再写入时即可删除。

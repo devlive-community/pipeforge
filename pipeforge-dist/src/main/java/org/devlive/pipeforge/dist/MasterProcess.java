@@ -69,9 +69,13 @@ public final class MasterProcess implements AutoCloseable {
     private final Map<String, TaskExecutorClient> clients = new ConcurrentHashMap<>();
     private final List<ManagedChannel> channels = new ArrayList<>();
     private final Server server;
+    private final org.devlive.pipeforge.engine.api.checkpoint.@org.jspecify.annotations.Nullable CheckpointStorage
+            checkpoints;
 
     public MasterProcess(Configuration config, Path home) {
         this.security = Security.of(config, home);
+        // checked first: a process that cannot keep checkpoints does not start
+        this.checkpoints = CheckpointSetup.open(config, "master");
         Path dir = home.resolve(config.string(Settings.MASTER_DIR));
         List<Path> pluginDirs =
                 config.list(Settings.PLUGIN_DIRS).stream().map(home::resolve).toList();
@@ -184,6 +188,12 @@ public final class MasterProcess implements AutoCloseable {
         if (plugins != null) {
             plugins.close();
         }
+        CheckpointSetup.close(checkpoints);
         threads.shutdownNow();
+    }
+
+    /** The checkpoint storage of {@code checkpoint.dir}, or empty without it. */
+    public java.util.Optional<org.devlive.pipeforge.engine.api.checkpoint.CheckpointStorage> checkpointStorage() {
+        return java.util.Optional.ofNullable(checkpoints);
     }
 }

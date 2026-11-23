@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2026 devlive-community/pipeforge
+
+  Licensed under the MIT License. See the LICENSE file in the
+  project root for full license text.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.devlive.pipeforge</groupId>
+        <artifactId>pipeforge-engine</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>pipeforge-engine-checkpoint-s3</artifactId>
+    <name>PipeForge Checkpoint Storage S3</name>
+    <description>
+        Checkpoint storage on S3 and S3-compatible object storage (OSS, COS and others with an S3 endpoint), with
+        the AWS SDK v2; the master and workers find it by the s3:// scheme.
+    </description>
+
+    <properties>
+        <!-- the version whose whole dependency tree is in the build's repository -->
+        <aws-sdk.version>2.21.45</aws-sdk.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-engine-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>${aws-sdk.version}</version>
+            <exclusions>
+                <!-- the Apache client below is the only HTTP client -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>apache-client</artifactId>
+            <version>${aws-sdk.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

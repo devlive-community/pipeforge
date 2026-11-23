@@ -66,6 +66,12 @@
             <artifactId>pipeforge-engine-worker</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- s3:// checkpoint storage; the processes find it with ServiceLoader -->
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-engine-checkpoint-s3</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-api</artifactId>

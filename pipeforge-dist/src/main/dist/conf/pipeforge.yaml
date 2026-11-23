@@ -33,6 +33,19 @@
 # The password of the trust store.
 # security.tls.trust-store-password: ""
 
+# Where checkpoints are kept, the same for every master and worker: a directory (on NFS, mounted
+# at the same path on every machine) or s3://bucket/prefix. Each process checks at its start that
+# it can write, read and delete there. Without it, runs keep no checkpoints.
+# checkpoint.dir: /data/pipeforge/checkpoints
+
+# S3-compatible storage (OSS, COS, MinIO): the endpoint, and usually path-style addressing. With
+# AWS S3 leave the endpoint empty. Without keys, the AWS default credentials are used.
+# checkpoint.s3.endpoint:
+# checkpoint.s3.region: us-east-1
+# checkpoint.s3.path-style: false
+# checkpoint.s3.access-key:
+# checkpoint.s3.secret-key:
+
 # The directories with plugin packages, relative to the installation directory. The master plans
 # jobs with them and serves them to the workers.
 # plugins.dirs: plugins

@@ -24,6 +24,8 @@ ERROR PF-CONF-0011 Setting 'worker.slot' in conf/worker.yaml is not valid: there
 时长写作 `500ms`、`30s`、`5min`、`2h` 或 `1d`；大小写作 `512`、`32KB`、`64MB` 或 `1GB`；列表写作 YAML 列表或 `a,b,c`；
 映射写作 YAML 映射或 `key=value,key=value`。
 
+密钥一类的设置（例如 `checkpoint.s3.secret-key`）最好用环境变量提供（`PIPEFORGE_CHECKPOINT_S3_SECRET_KEY`），这样就不必写在文件里。
+
 ## 所有设置
 
 <ConfigurationList />

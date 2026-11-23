@@ -85,6 +85,10 @@ master: -Xmx2g
 worker: -Xmx4g
 ```
 
+Checkpoints go to the storage of `checkpoint.dir`, which every master and worker must reach: a
+directory, on NFS at the same path everywhere, or `s3://bucket/prefix`. Each process checks it at
+its start; see [checkpoint storage](./checkpoint-storage).
+
 ## Ports and security
 
 | Port | Setting | Who connects |

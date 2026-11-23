@@ -392,7 +392,8 @@ subtask to their scope. The full list is in the [error reference](../reference/e
   whose rows go to another chain fails the task with `PF-PLAN-0012`. Jobs whose nodes all have the
   same parallelism run in one chain and are not affected.
 - No checkpoints: a failed or cancelled job starts from the beginning when it is run again, and
-  two-phase sinks commit once at the end of the input.
+  two-phase sinks commit once at the end of the input. A cluster can already be given its
+  [checkpoint storage](../operations/checkpoint-storage); runs do not write checkpoints yet.
 - No restarts: the first task failure fails the job.
 - Streaming jobs run until they are cancelled.
 

@@ -30,7 +30,7 @@ class SettingsTest {
             assertThat(variables.add(setting.environmentVariable()))
                     .as(setting.key())
                     .isTrue();
-            assertThat(setting.environmentVariable()).matches("PIPEFORGE_[A-Z_]+");
+            assertThat(setting.environmentVariable()).matches("PIPEFORGE_[A-Z0-9_]+");
             String file = Files.readString(CONF.resolve(setting.file() + ".yaml"), StandardCharsets.UTF_8);
             String line = "# " + setting.key() + ":";
             assertThat(file)

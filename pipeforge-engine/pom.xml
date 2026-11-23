@@ -23,6 +23,7 @@
 
     <modules>
         <module>engine-api</module>
+        <module>checkpoint-s3</module>
         <module>engine-rpc</module>
         <module>engine-network</module>
         <module>engine-master</module>

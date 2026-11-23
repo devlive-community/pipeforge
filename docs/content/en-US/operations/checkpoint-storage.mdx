@@ -1,0 +1,116 @@
+---
+title: Checkpoint storage
+description: Where the cluster keeps checkpoints — a local directory, a shared NFS directory or S3-compatible object storage — how to configure it, and how a checkpoint is known to be complete.
+order: 25
+---
+
+A checkpoint is a set of files: the state of every source, operator and sink, and a `_metadata`
+file that lists them. The cluster writes them to one **checkpoint storage**, set by
+`checkpoint.dir` in `conf/pipeforge.yaml`. Every master and worker must reach the same storage,
+because a run that restarts may read its state on other machines than the ones that wrote it.
+
+Without `checkpoint.dir`, runs keep no checkpoints.
+
+## Choosing a storage
+
+| `checkpoint.dir` | Storage | Use it for |
+|---|---|---|
+| `/data/pipeforge/checkpoints` or `file:///data/...` | a directory | a single machine (`pipeforge-standalone`), or a directory every machine mounts from NFS at the **same path** |
+| `s3://bucket/prefix` | S3 or S3-compatible object storage | clusters of several machines without a shared file system |
+
+### A directory or NFS
+
+```yaml
+# conf/pipeforge.yaml
+checkpoint.dir: /mnt/pipeforge/checkpoints
+```
+
+The user the processes run as needs to write, read and delete there. On NFS, mount the same export
+at the same path on every master and worker.
+
+### S3 and S3-compatible storage
+
+```yaml
+# AWS S3: the region of the bucket; the credentials come from the AWS default chain
+checkpoint.dir: s3://my-bucket/pipeforge
+checkpoint.s3.region: eu-central-1
+```
+
+For other S3-compatible storage give its endpoint, and usually path-style addressing:
+
+```yaml
+# Alibaba Cloud OSS
+checkpoint.dir: s3://my-bucket/pipeforge
+checkpoint.s3.endpoint: https://oss-cn-hangzhou.aliyuncs.com
+checkpoint.s3.region: cn-hangzhou
+checkpoint.s3.access-key: ${OSS_ACCESS_KEY}
+checkpoint.s3.secret-key: ${OSS_SECRET_KEY}
+```
+
+```yaml
+# Tencent Cloud COS
+checkpoint.dir: s3://my-bucket-1250000000/pipeforge
+checkpoint.s3.endpoint: https://cos.ap-guangzhou.myqcloud.com
+checkpoint.s3.region: ap-guangzhou
+```
+
+```yaml
+# MinIO, or another server of your own
+checkpoint.dir: s3://checkpoints/pipeforge
+checkpoint.s3.endpoint: http://minio.internal:9000
+checkpoint.s3.path-style: true
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `checkpoint.s3.endpoint` | empty (AWS) | the endpoint of S3-compatible storage |
+| `checkpoint.s3.region` | `us-east-1` | the region of the bucket |
+| `checkpoint.s3.path-style` | `false` | address the bucket in the path (`endpoint/bucket/key`) instead of the host name |
+| `checkpoint.s3.access-key`, `checkpoint.s3.secret-key` | empty | the keys; without them the AWS default credentials are used: environment variables, the profile file, or the role of the instance |
+
+Like every setting they can also be environment variables, such as
+`PIPEFORGE_CHECKPOINT_S3_SECRET_KEY`, which keeps keys out of the files (see the
+[configuration reference](../reference/configuration)).
+
+## The check at start
+
+Each master and worker writes, reads back and deletes a small file under `_probes/` when it
+starts. A process that cannot use the storage does not start and reports
+[`PF-CKPT-0004`](../reference/errors#pf-ckpt-0004):
+
+```text
+PF-CKPT-0004 The checkpoint storage s3://my-bucket/pipeforge/ cannot be used: ... The specified bucket does not exist
+```
+
+The hint lists what to check: the location, the endpoint, the region and the credentials, and on
+NFS that the directory is mounted and writable.
+
+## The layout
+
+```text
+<checkpoint.dir>/
+  <job-id>/
+    chk-12/
+      _metadata                 the list of states, written last
+      _COMPLETED                only on object storage
+      enum-<node>.state         the state of a source's split enumerator
+      <node>-<subtask>.state    the state of one parallel instance
+    savepoints/
+      <name>-<timestamp>/       savepoints, which are never deleted automatically
+```
+
+Small states are kept inside `_metadata` rather than in files of their own. The files have a
+checksum; a damaged one is reported as [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002) rather than read.
+
+## When a checkpoint is complete
+
+A process can stop half-way through writing a checkpoint. Such a checkpoint is never used:
+
+- **On a directory**, every file is written under a temporary name and renamed into place, and
+  `_metadata` is renamed last. A checkpoint without `_metadata` is incomplete.
+- **On object storage**, a written object appears whole, but there is no rename; a
+  `_COMPLETED` marker is written after `_metadata`, and a checkpoint without the marker is
+  incomplete.
+
+Directories of incomplete checkpoints that nothing refers to are left-overs; once nothing has
+been written to them for a day they can be deleted.

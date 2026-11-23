@@ -272,6 +272,12 @@
                 <artifactId>protobuf-java</artifactId>
                 <version>${protobuf-java.version}</version>
             </dependency>
+            <!-- the AWS SDK's Apache client asks for 1.15, its httpclient for 1.11 -->
+            <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>1.15</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

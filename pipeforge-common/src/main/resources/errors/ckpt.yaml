@@ -23,3 +23,12 @@
   hint:
     en-US: "It was written in a format this version does not read, usually by a newer PipeForge. Restore it with the version that wrote it, or start without it."
     zh-CN: "它使用的格式本版本无法读取，通常是由更新版本的 PipeForge 写入的。请用写入它的版本恢复，或者不使用它启动。"
+
+- code: PF-CKPT-0004
+  name: STORAGE_UNAVAILABLE
+  message:
+    en-US: "The checkpoint storage {location} cannot be used: {reason}"
+    zh-CN: "无法使用 checkpoint 存储 {location}：{reason}"
+  hint:
+    en-US: "Check checkpoint.dir and, for object storage, its endpoint, region and credentials. Every master and worker must reach the same storage: on NFS the same directory at the same path, writable by the user the processes run as."
+    zh-CN: "请检查 checkpoint.dir，以及对象存储的端点、区域和凭据。每个 Master 和 Worker 都必须能访问同一个存储：使用 NFS 时是同一路径下的同一个目录，并且运行进程的用户有写权限。"

@@ -128,6 +128,37 @@ class ProcessTest {
     }
 
     @Test
+    void processesCheckTheirCheckpointStorageAtTheStart() throws Exception {
+        Files.createDirectories(home.resolve("plugins"));
+        Map<String, String> settings = new java.util.HashMap<>(settings(freePorts(3)));
+        Path checkpoints = home.resolve("checkpoints");
+        settings.put("checkpoint.dir", checkpoints.toString());
+        Configuration config = Configuration.load(home.resolve("conf"), Map.of(), settings);
+        try (MasterProcess master = new MasterProcess(config, home);
+                WorkerProcess worker = new WorkerProcess(config, home)) {
+            assertThat(master.checkpointStorage())
+                    .hasValueSatisfying(s -> assertThat(s.location()).isEqualTo(checkpoints.toUri()));
+            assertThat(worker.checkpointStorage()).isPresent();
+            // the probes left nothing behind
+            assertThat(master.checkpointStorage().orElseThrow().list("")).isEmpty();
+        }
+
+        settings.put("checkpoint.dir", "hdfs://namenode/checkpoints");
+        Configuration unknown = Configuration.load(home.resolve("conf"), Map.of(), settings);
+        assertThatThrownBy(() -> new MasterProcess(unknown, home))
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.common.error.PipeForgeException.class, e -> assertThat(e.getMessage())
+                                .startsWith("PF-CKPT-0004 The checkpoint storage hdfs://namenode/checkpoints cannot be"
+                                        + " used: no checkpoint storage takes 'hdfs:' locations; known: file, s3"));
+
+        settings.put("checkpoint.dir", " ");
+        try (MasterProcess master =
+                new MasterProcess(Configuration.load(home.resolve("conf"), Map.of(), settings), home)) {
+            assertThat(master.checkpointStorage()).as("blank is not set").isEmpty();
+        }
+    }
+
+    @Test
     void theNetworkMemoryIsDerivedFromTheHeap() {
         Configuration config =
                 Configuration.load(home.resolve("conf"), Map.of("PIPEFORGE_CLUSTER_TOKEN", "t"), Map.of());
