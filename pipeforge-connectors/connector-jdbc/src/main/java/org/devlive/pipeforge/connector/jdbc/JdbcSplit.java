@@ -28,6 +28,9 @@ import org.jspecify.annotations.Nullable;
  *     Kind#ALL}
  * @param lower with {@link Kind#RANGE}: the smallest value, inclusive; {@code null} for no bound
  * @param upper with {@link Kind#RANGE}: the bound, exclusive; {@code null} for no bound
+ * @param watermark with {@link Kind#RANGE}: the split column's value up to which every row was
+ *     read; a resumed split reads only the rows above it, in the order of the column. {@code null}
+ *     before the first row
  */
 public record JdbcSplit(
         String splitId,
@@ -35,8 +38,41 @@ public record JdbcSplit(
         Kind kind,
         @Nullable String column,
         @Nullable Long lower,
-        @Nullable Long upper)
+        @Nullable Long upper,
+        @Nullable Long watermark)
         implements SourceSplit {
+
+    /** A split that starts at its beginning. */
+    public JdbcSplit(
+            String splitId,
+            @Nullable TableId table,
+            Kind kind,
+            @Nullable String column,
+            @Nullable Long lower,
+            @Nullable Long upper) {
+        this(splitId, table, kind, column, lower, upper, null);
+    }
+
+    /**
+     * Whether the split is read in the order of its column, so that it can resume after a
+     * watermark: ranges of a table; whole tables, queries and NULLs resume from their start.
+     */
+    public boolean ordered() {
+        return kind == Kind.RANGE && column != null && table != null;
+    }
+
+    /** The same split, read up to {@code value} of its column. */
+    public JdbcSplit resumedAfter(long value) {
+        if (!ordered()) {
+            throw new IllegalStateException("Split " + splitId + " is not read in order");
+        }
+        return new JdbcSplit(splitId, table, kind, column, lower, upper, value);
+    }
+
+    /** {@code ORDER BY} for an ordered split, or an empty string. */
+    public String orderBy(JdbcDialect dialect) {
+        return ordered() ? " ORDER BY " + dialect.quote(java.util.Objects.requireNonNull(column)) : "";
+    }
 
     public enum Kind {
         /** The whole table, or the query. */
@@ -62,13 +98,15 @@ public record JdbcSplit(
         if (kind == Kind.NULLS) {
             return quoted + " IS NULL";
         }
+        String range;
         if (lower == null && upper == null) {
-            return quoted + " IS NOT NULL";
+            range = quoted + " IS NOT NULL";
+        } else if (lower == null) {
+            range = quoted + " < ?";
+        } else {
+            range = upper == null ? quoted + " >= ?" : quoted + " >= ? AND " + quoted + " < ?";
         }
-        if (lower == null) {
-            return quoted + " < ?";
-        }
-        return upper == null ? quoted + " >= ?" : quoted + " >= ? AND " + quoted + " < ?";
+        return watermark == null ? range : range + " AND " + quoted + " > ?";
     }
 
     /** The values of the {@code ?} of {@link #predicate}, in order. */
@@ -81,17 +119,20 @@ public record JdbcSplit(
             if (upper != null) {
                 values.add(upper);
             }
+            if (watermark != null) {
+                values.add(watermark);
+            }
         }
         return values;
     }
 
-    /** Writes splits; version 2 adds the table. */
+    /** Writes splits; version 2 adds the table, version 3 the watermark. */
     public static final class Serializer implements VersionedSerializer<JdbcSplit> {
         public static final Serializer INSTANCE = new Serializer();
 
         @Override
         public int version() {
-            return 2;
+            return 3;
         }
 
         @Override
@@ -127,6 +168,7 @@ public record JdbcSplit(
             }
             writeBound(out, split.lower());
             writeBound(out, split.upper());
+            writeBound(out, split.watermark());
         }
 
         static JdbcSplit read(DataInputStream in, int version) throws IOException {
@@ -137,7 +179,10 @@ public record JdbcSplit(
             }
             Kind kind = Kind.valueOf(in.readUTF());
             String column = in.readBoolean() ? in.readUTF() : null;
-            return new JdbcSplit(id, table, kind, column, readBound(in), readBound(in));
+            Long lower = readBound(in);
+            Long upper = readBound(in);
+            Long watermark = version >= 3 ? readBound(in) : null;
+            return new JdbcSplit(id, table, kind, column, lower, upper, watermark);
         }
 
         private static void writeName(DataOutputStream out, @Nullable String name) throws IOException {
@@ -163,13 +208,13 @@ public record JdbcSplit(
         }
     }
 
-    /** Writes the remaining splits of an enumerator; version 2 adds their tables. */
+    /** Writes the remaining splits of an enumerator; version 2 adds their tables, version 3 watermarks. */
     public static final class ListSerializer implements VersionedSerializer<List<JdbcSplit>> {
         public static final ListSerializer INSTANCE = new ListSerializer();
 
         @Override
         public int version() {
-            return 2;
+            return 3;
         }
 
         @Override

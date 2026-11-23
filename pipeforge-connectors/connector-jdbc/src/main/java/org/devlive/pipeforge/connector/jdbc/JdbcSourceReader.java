@@ -32,6 +32,13 @@ import org.jspecify.annotations.Nullable;
  * is described once, when its first split opens.
  *
  * <p>A value the dialect cannot read makes that row a bad row; the reader goes on with the next.
+ *
+ * <p>A range of a table is read in the order of its split column, and a poll ends only where the
+ * column's value changes: the reader reads one row ahead and keeps it for the next poll. A snapshot
+ * therefore falls between two values, and the split resumes after the last value it emitted
+ * (design 06 section 5). A value with more rows than {@code resume.max-group-rows} lets a poll end
+ * inside its rows; a snapshot then resumes before that value, and its rows read so far are read
+ * again. Whole tables, queries and NULLs resume from their start.
  */
 public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
 
@@ -60,6 +67,19 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
     private @Nullable ResultSet rows;
     private @Nullable JdbcSplit current;
     private @Nullable Target target;
+
+    /** The position of the split column among the columns read; -1 when the split is not ordered. */
+    private int keyColumn = -1;
+    /** A row read but not emitted yet: the first of the next value. */
+    private Object @Nullable [] ahead;
+    /** The value of the split column of the last row emitted. */
+    private @Nullable Long lastKey;
+    /** The last value whose rows were all emitted. */
+    private @Nullable Long completeKey;
+    /** The rows of {@link #lastKey} emitted so far. */
+    private int groupRows;
+    /** Whether the last poll ended where the split column's value changes. */
+    private boolean atBoundary;
 
     JdbcSourceReader(JdbcSourceConfig config, JdbcDialect dialect, ReaderContext context) {
         this.config = config;
@@ -106,23 +126,53 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
                 result = open(next);
             }
             Target reading = java.util.Objects.requireNonNull(target);
-            for (int i = 0; i < ROWS_PER_POLL; i++) {
-                if (!result.next()) {
-                    JdbcSplit done = current;
-                    closeSplit();
-                    if (done != null) {
-                        context.splitFinished(done.splitId());
+            atBoundary = false;
+            int emitted = 0;
+            while (true) {
+                Object[] values = ahead;
+                ahead = null;
+                if (values == null) {
+                    if (!result.next()) {
+                        JdbcSplit done = current;
+                        closeSplit();
+                        if (done != null) {
+                            context.splitFinished(done.splitId());
+                        }
+                        request();
+                        return PollStatus.MORE_AVAILABLE;
                     }
-                    request();
+                    values = new Object[reading.types().size()];
+                    for (int c = 0; c < values.length; c++) {
+                        values[c] = dialect.read(result, c + 1, reading.types().get(c));
+                    }
+                }
+                if (keyColumn >= 0) {
+                    long key = ((Number) java.util.Objects.requireNonNull(values[keyColumn])).longValue();
+                    boolean same = lastKey != null && lastKey == key;
+                    if (emitted >= ROWS_PER_POLL && !same) {
+                        ahead = values;
+                        atBoundary = true;
+                        return PollStatus.MORE_AVAILABLE;
+                    }
+                    if (emitted >= ROWS_PER_POLL && groupRows >= config.maxGroupRows()) {
+                        // too many rows of one value to keep together: a snapshot may fall among them
+                        ahead = values;
+                        return PollStatus.MORE_AVAILABLE;
+                    }
+                    if (same) {
+                        groupRows++;
+                    } else {
+                        completeKey = lastKey;
+                        lastKey = key;
+                        groupRows = 1;
+                    }
+                } else if (emitted >= ROWS_PER_POLL) {
+                    ahead = values;
                     return PollStatus.MORE_AVAILABLE;
                 }
-                Object[] values = new Object[reading.types().size()];
-                for (int c = 0; c < values.length; c++) {
-                    values[c] = dialect.read(result, c + 1, reading.types().get(c));
-                }
                 output.collect(GenericRow.of(reading.table().id(), values));
+                emitted++;
             }
-            return PollStatus.MORE_AVAILABLE;
         } catch (SQLException e) {
             JdbcSplit split = current;
             TableId table = split != null && split.table() != null ? split.table() : config.table();
@@ -136,9 +186,10 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
         String sql = split.table() == null
                 ? "SELECT * FROM (" + config.query() + ") pipeforge_query"
                 : dialect.selectQuery(
-                        java.util.Objects.requireNonNull(opened.physical()),
-                        opened.table().columnNames(),
-                        split.predicate(dialect));
+                                java.util.Objects.requireNonNull(opened.physical()),
+                                opened.table().columnNames(),
+                                split.predicate(dialect))
+                        + split.orderBy(dialect);
         PreparedStatement prepared =
                 open.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
         statement = prepared;
@@ -151,7 +202,17 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
         rows = result;
         current = split;
         target = opened;
+        keyColumn = split.ordered() ? indexOf(opened.table().columnNames(), split.column()) : -1;
         return result;
+    }
+
+    private static int indexOf(List<String> columns, @Nullable String column) {
+        for (int i = 0; i < columns.size(); i++) {
+            if (columns.get(i).equalsIgnoreCase(column)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** The table of a split, described when its first split opens; the query when it has none. */
@@ -194,6 +255,12 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
         statement = null;
         current = null;
         target = null;
+        keyColumn = -1;
+        ahead = null;
+        lastKey = null;
+        completeKey = null;
+        groupRows = 0;
+        atBoundary = false;
         try {
             if (result != null) {
                 result.close();
@@ -208,8 +275,11 @@ public final class JdbcSourceReader implements SourceReader<JdbcSplit> {
     @Override
     public List<JdbcSplit> snapshotState(long checkpointId) {
         List<JdbcSplit> unfinished = new ArrayList<>();
-        if (current != null) {
-            unfinished.add(current);
+        JdbcSplit reading = current;
+        if (reading != null) {
+            // between two values every row up to the last one emitted is out; inside a value only those before it
+            Long watermark = keyColumn < 0 ? null : atBoundary ? lastKey : completeKey;
+            unfinished.add(watermark == null ? reading : reading.resumedAfter(watermark));
         }
         unfinished.addAll(splits);
         return unfinished;

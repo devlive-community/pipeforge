@@ -84,6 +84,14 @@ public final class JdbcOptions {
             .withRange(1, null)
             .withDescription("Rows the driver fetches per round trip while it streams a split");
 
+    public static final Option<Integer> RESUME_MAX_GROUP_ROWS = Options.key("resume.max-group-rows")
+            .intType()
+            .defaultValue(100_000)
+            .withRange(1, null)
+            .withDescription(
+                    "Rows with the same split column value a reader keeps together so that a split resumes"
+                            + " exactly; a larger group lets a checkpoint fall inside it, and the split then resumes before it");
+
     public static final Option<Integer> BATCH_SIZE = Options.key("batch-size")
             .intType()
             .defaultValue(1000)
@@ -109,6 +117,7 @@ public final class JdbcOptions {
                 .required(URL)
                 .exclusive(TABLE, QUERY, TABLES_INCLUDE)
                 .optional(USERNAME, PASSWORD, DRIVER, TABLES_EXCLUDE, SPLIT_COLUMN, SPLIT_MODE, SPLIT_COUNT, FETCH_SIZE)
+                .optional(RESUME_MAX_GROUP_ROWS)
                 .optional(extra)
                 .nativeNamespaces(PROPERTIES);
     }

@@ -173,6 +173,19 @@
       "sensitive" : false,
       "deprecatedKeys" : [ ],
       "since" : null
+    }, {
+      "key" : "resume.max-group-rows",
+      "type" : "int",
+      "requirement" : "optional",
+      "default" : 100000,
+      "description" : "Rows with the same split column value a reader keeps together so that a split resumes exactly; a larger group lets a checkpoint fall inside it, and the split then resumes before it",
+      "group" : null,
+      "min" : 1.0,
+      "max" : null,
+      "values" : [ ],
+      "sensitive" : false,
+      "deprecatedKeys" : [ ],
+      "since" : null
     } ],
     "exclusive" : [ [ "table", "query", "tables.include" ] ],
     "conditions" : [ ],

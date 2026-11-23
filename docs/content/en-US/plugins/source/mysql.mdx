@@ -97,9 +97,23 @@ connections. The password never appears in logs, metrics or exported jobs.
 
 Each split is a separate query, so a table that changes while it is read can show rows from
 different moments, and a row whose key moves between splits can be read twice or not at all. Read a
-table that is not written meanwhile, or a replica, when the copy must be exact. A reader restored
-from a checkpoint does not read its finished splits again and reads the split in progress from its
-start.
+table that is not written meanwhile, or a replica, when the copy must be exact.
+
+### Resume
+
+A range split is read in the order of its split column, and a checkpoint always falls between two
+values of the column: the reader reads one row ahead and ends a poll only where the value changes.
+The split's state records the last value read, and a reader restored from the checkpoint reads the
+split on with `<range> AND <column> > <last value> ORDER BY <column>`. Every row of the split is
+then read exactly once across the restore, also when the column has the same value in many rows;
+finished splits are not read again.
+
+- More than `resume.max-group-rows` rows (100,000 by default) with one value let a checkpoint fall
+  among them; that split then resumes before the value and reads its rows again.
+- A whole table (`split.mode: none`, or no integer key to split on), a `query` and the split of NULLs
+  resume from their start.
+- Whether the target then receives a row once depends on the sink: see
+  [failure handling](../../concepts/failure-handling#region-restarts).
 
 ## Examples
 
@@ -172,7 +186,7 @@ finished. Rows whose values cannot be read count as bad rows and follow the job'
 
 ## Known limitations
 
-- After a restore from a [checkpoint](../../concepts/checkpoint), a reader reads its splits from the start again: rows of a split read before the checkpoint are read again, so recovery gives at-least-once delivery until key-based resume.
+- A whole table, a query and the split of NULLs resume from their start after a restore (see Resume under Consistency).
 - Bounded reads only; changes are read by the MySQL CDC source (M5).
 - Tables added while a `tables.include` job runs are not read until the next run.
 - MySQL 5.7 is not verified yet.

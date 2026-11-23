@@ -24,6 +24,8 @@ import org.jspecify.annotations.Nullable;
  * @param splitMode how to split
  * @param splitCount how many ranges; 0 for four per reader
  * @param fetchSize rows per round trip
+ * @param maxGroupRows rows with the same split column value after which a split gives up resuming
+ *     exactly
  * @param node the node name, for errors
  */
 public record JdbcSourceConfig(
@@ -37,6 +39,7 @@ public record JdbcSourceConfig(
         JdbcSplitMode splitMode,
         int splitCount,
         int fetchSize,
+        int maxGroupRows,
         String node)
         implements Serializable {
 
@@ -64,6 +67,7 @@ public record JdbcSourceConfig(
                 config.get(JdbcOptions.SPLIT_MODE),
                 config.get(JdbcOptions.SPLIT_COUNT),
                 config.get(JdbcOptions.FETCH_SIZE),
+                config.get(JdbcOptions.RESUME_MAX_GROUP_ROWS),
                 node);
     }
 }

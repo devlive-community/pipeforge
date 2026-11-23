@@ -62,14 +62,4 @@ class JdbcSourceContractTest extends SourceContract {
             }
         };
     }
-
-    /** The test source has no plugin.yaml; its skips are those of the JDBC plugins. */
-    @Override
-    protected java.util.Map<String, String> skippedGroups(SourceUnderTest source) {
-        return java.util.Map.of(
-                "checkpoint",
-                "a restored reader reads its splits from the start again; key-based resume is not implemented yet",
-                "state-compat",
-                "the reader state is not kept compatible before key-based resume");
-    }
 }

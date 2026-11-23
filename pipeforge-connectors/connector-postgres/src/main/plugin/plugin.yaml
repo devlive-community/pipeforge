@@ -17,6 +17,3 @@ provides:
 datasource:
   type: postgres
   versions: ["14", "16"]
-skipped-testkit-groups:
-  - { group: checkpoint, reason: "a restored reader reads its splits from the start again; key-based resume is not implemented yet" }
-  - { group: state-compat, reason: "the reader state is not kept compatible before key-based resume" }

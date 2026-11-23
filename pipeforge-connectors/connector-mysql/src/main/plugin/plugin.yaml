@@ -19,6 +19,3 @@ datasource:
   versions: ["8.0", "8.4"]
 requires:
   drivers: [mysql-connector-j]
-skipped-testkit-groups:
-  - { group: checkpoint, reason: "a restored reader reads its splits from the start again; key-based resume is not implemented yet" }
-  - { group: state-compat, reason: "the reader state is not kept compatible before key-based resume" }
