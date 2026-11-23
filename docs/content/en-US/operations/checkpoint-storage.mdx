@@ -9,7 +9,9 @@ file that lists them. The cluster writes them to one **checkpoint storage**, set
 `checkpoint.dir` in `conf/pipeforge.yaml`. Every master and worker must reach the same storage,
 because a run that restarts may read its state on other machines than the ones that wrote it.
 
-Without `checkpoint.dir`, runs keep no checkpoints.
+Without `checkpoint.dir`, runs keep no checkpoints. With it, the master also needs the
+[metastore](./metastore#the-master) (`master.metastore.url`), where it records them; how jobs take
+them is described in [checkpoints](../concepts/checkpoint).
 
 ## Choosing a storage
 

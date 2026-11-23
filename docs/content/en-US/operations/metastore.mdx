@@ -45,6 +45,22 @@ Create the database first (`CREATE DATABASE pipeforge` with `utf8mb4` on MySQL).
 right to create tables and indexes in it; the server creates everything else. The log shows the URL
 without its query string, so a password written in the URL does not appear in it.
 
+## The master
+
+With a [checkpoint storage](./checkpoint-storage) (`checkpoint.dir`), the master records the
+checkpoints of runs in the same metastore, so it connects to it too, in `conf/master.yaml`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `master.metastore.url` | none; required with `checkpoint.dir` | The JDBC URL of the server's metastore |
+| `master.metastore.username`, `master.metastore.password` | empty | The user; the password best as `PIPEFORGE_MASTER_METASTORE_PASSWORD` |
+| `master.metastore.driver-dir` | empty | A directory with the JDBC driver, relative to the installation; needed for MySQL, whose driver does not ship |
+| `master.metastore.pool-size` | `4` | The connections the master keeps |
+
+The master does not migrate: it checks at its start that the metastore has the `checkpoint` table
+and refuses to start with `PF-CLUS-0013` otherwise, so start a server of the same version on the
+metastore first. Without `checkpoint.dir` the master does not connect.
+
 ## Tables
 
 | Table | Holds |

@@ -6,6 +6,15 @@
 #
 # Checkpoints and state.
 
+- code: PF-CKPT-0001
+  name: CHECKPOINT_TIMEOUT
+  message:
+    en-US: "Checkpoint {checkpoint} timed out after {timeoutMs} ms; still missing: {missing}"
+    zh-CN: "checkpoint {checkpoint} 在 {timeoutMs} 毫秒后超时；仍未完成的：{missing}"
+  hint:
+    en-US: "The tasks listed did not finish their part in time, usually because of backpressure that holds the barrier back or a slow checkpoint storage. Raise env.checkpoint.timeout, or look at the run's backpressure and the storage."
+    zh-CN: "列出的 Task 没有及时完成自己的部分，通常是背压拖住了 barrier，或者 checkpoint 存储太慢。请调大 env.checkpoint.timeout，或者检查运行的背压与存储。"
+
 - code: PF-CKPT-0002
   name: STATE_CORRUPTED
   message:
@@ -32,3 +41,30 @@
   hint:
     en-US: "Check checkpoint.dir and, for object storage, its endpoint, region and credentials. Every master and worker must reach the same storage: on NFS the same directory at the same path, writable by the user the processes run as."
     zh-CN: "请检查 checkpoint.dir，以及对象存储的端点、区域和凭据。每个 Master 和 Worker 都必须能访问同一个存储：使用 NFS 时是同一路径下的同一个目录，并且运行进程的用户有写权限。"
+
+- code: PF-CKPT-0005
+  name: CHECKPOINT_DECLINED
+  message:
+    en-US: "Task {task} declined checkpoint {checkpoint}: {reason}"
+    zh-CN: "Task {task} 拒绝了 checkpoint {checkpoint}：{reason}"
+  hint:
+    en-US: "A task that is still starting, or a worker that cannot take snapshots, declines. The checkpoint is given up and the next one is tried; the run fails only after env.checkpoint.tolerable-failures failures in a row."
+    zh-CN: "仍在启动的 Task，或者无法做快照的 Worker 会拒绝。这次 checkpoint 会被放弃，之后会尝试下一次；只有连续失败超过 env.checkpoint.tolerable-failures 次，运行才会失败。"
+
+- code: PF-CKPT-0006
+  name: CHECKPOINT_FAILED
+  message:
+    en-US: "Checkpoint {checkpoint} failed: {reason}"
+    zh-CN: "checkpoint {checkpoint} 失败：{reason}"
+  hint:
+    en-US: "The master could not write the checkpoint to the checkpoint storage or record it in the metastore. Check that both are reachable from the master."
+    zh-CN: "Master 无法把 checkpoint 写入 checkpoint 存储，或者无法记入元数据库。请检查 Master 能否访问这两者。"
+
+- code: PF-CKPT-0007
+  name: TOO_MANY_CHECKPOINT_FAILURES
+  message:
+    en-US: "{failures} checkpoints failed in a row, more than the {limit} the job tolerates; the last: {last}"
+    zh-CN: "连续 {failures} 个 checkpoint 失败，超过作业允许的 {limit} 个；最后一个：{last}"
+  hint:
+    en-US: "Without checkpoints a failure would lose more progress than the job allows, so the run fails. Fix the cause of the last failure, or raise env.checkpoint.tolerable-failures."
+    zh-CN: "没有 checkpoint 时，一旦出错丢失的进度会超过作业允许的范围，因此运行失败。请解决最后一次失败的原因，或者调大 env.checkpoint.tolerable-failures。"

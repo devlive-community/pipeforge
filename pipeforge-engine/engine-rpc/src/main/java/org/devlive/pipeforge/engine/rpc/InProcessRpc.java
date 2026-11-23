@@ -57,6 +57,21 @@ public final class InProcessRpc {
             public CompletableFuture<Void> freeSlot(String allocationId) {
                 return dispatcher.dispatch(() -> target.freeSlot(allocationId));
             }
+
+            @Override
+            public CompletableFuture<Void> triggerCheckpoint(CheckpointTrigger trigger) {
+                return dispatcher.dispatch(() -> target.triggerCheckpoint(trigger));
+            }
+
+            @Override
+            public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+                return dispatcher.dispatch(() -> target.notifyCheckpointComplete(task, checkpointId));
+            }
+
+            @Override
+            public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+                return dispatcher.dispatch(() -> target.abortCheckpoint(task, checkpointId, reason));
+            }
         };
         return new Endpoint<>(proxy, dispatcher);
     }
@@ -78,6 +93,19 @@ public final class InProcessRpc {
             @Override
             public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
                 return dispatcher.dispatch(() -> target.reportMetrics(task, metrics));
+            }
+
+            @Override
+            public CompletableFuture<Void> acknowledgeCheckpoint(CheckpointAck ack) {
+                return dispatcher.dispatch(() -> target.acknowledgeCheckpoint(ack));
+            }
+
+            @Override
+            public CompletableFuture<Void> declineCheckpoint(
+                    ExecutionAttemptId task,
+                    long checkpointId,
+                    org.devlive.pipeforge.common.error.PipeForgeException reason) {
+                return dispatcher.dispatch(() -> target.declineCheckpoint(task, checkpointId, reason));
             }
         };
         return new Endpoint<>(proxy, dispatcher);

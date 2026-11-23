@@ -162,12 +162,37 @@ public final class JobMaster {
 
     private @Nullable Source<SourceSplit, ?> source;
 
+    /** The storage and the metastore of checkpoints, or {@code null} on a master without them. */
+    private final org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing;
+
+    /** Takes the checkpoints once the tasks are deployed; {@code null} without checkpoints. */
+    private org.devlive.pipeforge.engine.master.checkpoint.@Nullable CheckpointCoordinator checkpoints;
+
+    /** The checkpoint metrics, published with the job metrics. */
+    private volatile org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Stats checkpointStats =
+            org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Stats.NONE;
+
     /**
      * @param graph the job graph, from {@link ChainTopology#graph}
      * @param onEnded runs once the run has ended and its slots were given back
      */
     public JobMaster(
             JobId id, JobPlan plan, JobGraph graph, SubmitOptions options, Placement placement, Runnable onEnded) {
+        this(id, plan, graph, options, placement, onEnded, null);
+    }
+
+    /**
+     * @param checkpointing the storage and metastore of checkpoints; without them the run takes none
+     */
+    public JobMaster(
+            JobId id,
+            JobPlan plan,
+            JobGraph graph,
+            SubmitOptions options,
+            Placement placement,
+            Runnable onEnded,
+            org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing) {
+        this.checkpointing = checkpointing;
         this.id = id;
         this.plan = plan;
         this.graph = graph;
@@ -295,6 +320,120 @@ public final class JobMaster {
         post(() -> handleReaderMessage(message));
     }
 
+    public void onCheckpointAck(org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+        post(() -> {
+            if (checkpoints != null) {
+                checkpoints.acknowledge(ack);
+                checkpointStats = checkpoints.stats();
+            }
+        });
+    }
+
+    public void onCheckpointDecline(ExecutionAttemptId task, long checkpointId, PipeForgeException reason) {
+        post(() -> {
+            if (checkpoints != null) {
+                checkpoints.decline(task, checkpointId, reason);
+                checkpointStats = checkpoints.stats();
+            }
+        });
+    }
+
+    /** The checkpoint metrics of the run. */
+    public org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Stats checkpointStats() {
+        return checkpointStats;
+    }
+
+    // ------------------------------------------------------------------ checkpoints
+
+    /** Starts the periodic checkpoints, on a master with checkpoint storage and a job that wants them. */
+    @SuppressWarnings("FutureReturnValueIgnored") // the timer runs the action on the job master thread
+    private void startCheckpoints() {
+        var services = checkpointing;
+        if (services == null || !plan.checkpoint().enabled()) {
+            return;
+        }
+        List<org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Node> nodes = new ArrayList<>();
+        for (JobGraph.Vertex vertex : graph.vertices()) {
+            for (PlannedNode node : vertex.nodes()) {
+                nodes.add(new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Node(
+                        node.id(),
+                        node.kind().name().toLowerCase(java.util.Locale.ROOT),
+                        node.plugin(),
+                        vertex.parallelism()));
+            }
+        }
+        var context = new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Context(
+                services.storage(),
+                services.store(),
+                new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Tasks() {
+                    @Override
+                    public List<ExecutionAttemptId> sources() {
+                        return execution.tasks().stream()
+                                .filter(t -> t.vertex().equals(sourceVertex.id()))
+                                .map(JobMaster.this::attempt)
+                                .toList();
+                    }
+
+                    @Override
+                    public List<ExecutionAttemptId> all() {
+                        return execution.tasks().stream()
+                                .map(JobMaster.this::attempt)
+                                .toList();
+                    }
+
+                    @Override
+                    public boolean running() {
+                        return !status.isTerminal()
+                                && status != JobStatus.CANCELLING
+                                && states.values().stream().allMatch(s -> s == TaskState.RUNNING);
+                    }
+
+                    @Override
+                    public TaskExecutorGateway gateway(ExecutionAttemptId task) {
+                        return JobMaster.this.gateway(task(task));
+                    }
+                },
+                this::snapshotEnumerator,
+                (action, delayMs) -> {
+                    var scheduled = thread.schedule(() -> run(action), delayMs, TimeUnit.MILLISECONDS);
+                    return () -> scheduled.cancel(false);
+                },
+                this::post,
+                services.io(),
+                System::currentTimeMillis,
+                this::fail);
+        try {
+            checkpoints = new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator(
+                    plan.checkpoint(),
+                    new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Run(
+                            id.value(), plan.name(), 1, plan.variables(), DispatcherService.engineVersion(), nodes),
+                    context,
+                    0);
+        } catch (PipeForgeException e) {
+            fail(e);
+            return;
+        }
+        checkpoints.start();
+    }
+
+    /** The state of the split enumerator, written with the source's serializer. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Map<String, SerializedValue> snapshotEnumerator(long checkpointId) {
+        SplitEnumerator current = enumerator;
+        Source owner = source;
+        PlannedNode node = sourceVertex.head();
+        if (current == null || owner == null || enumeratorStuck) {
+            throw PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                    .param("checkpoint", checkpointId)
+                    .param("reason", "the enumerator of " + node.id() + " is not running")
+                    .build();
+        }
+        SerializedValue state = onEnumerator(
+                "snapshot the enumerator for checkpoint " + checkpointId,
+                () -> SerializedValue.of(owner.enumeratorStateSerializer(), current.snapshotState(checkpointId)));
+        return Map.of(node.id(), state);
+    }
+
     public void cancel() {
         post(() -> {
             if (status.isTerminal() || status == JobStatus.CANCELLING) {
@@ -353,6 +492,7 @@ public final class JobMaster {
         }
         status(JobStatus.RUNNING);
         refreshTasks();
+        startCheckpoints();
         long interval = settings.metricsInterval().toMillis();
         thread.scheduleAtFixedRate(() -> run(this::publish), interval, interval, TimeUnit.MILLISECONDS);
         long period = QUOTA_PERIOD.toMillis();
@@ -594,10 +734,14 @@ public final class JobMaster {
                 ? JobStatus.FAILED
                 : status == JobStatus.CANCELLING ? JobStatus.CANCELLED : JobStatus.SUCCESS;
         countSplits();
-        JobMetrics last = aggregator.sample(
+        if (checkpoints != null) {
+            checkpoints.stop(end);
+            checkpointStats = checkpoints.stats();
+        }
+        JobMetrics last = withCheckpoints(aggregator.sample(
                 System.nanoTime(),
                 0,
-                end == JobStatus.SUCCESS ? MetricsAggregator.Phase.SUCCEEDED : MetricsAggregator.Phase.STOPPED);
+                end == JobStatus.SUCCESS ? MetricsAggregator.Phase.SUCCEEDED : MetricsAggregator.Phase.STOPPED));
         published = last;
         status(end);
         LOG.info("Job {} ({}) ended: {}", plan.name(), id, end);
@@ -1017,9 +1161,18 @@ public final class JobMaster {
         if (!status.isTerminal()) {
             int running = (int)
                     states.values().stream().filter(s -> s == TaskState.RUNNING).count();
-            published = aggregator.sample(System.nanoTime(), running, MetricsAggregator.Phase.RUNNING);
+            if (checkpoints != null) {
+                checkpointStats = checkpoints.stats();
+            }
+            published = withCheckpoints(aggregator.sample(System.nanoTime(), running, MetricsAggregator.Phase.RUNNING));
             remember(published);
         }
+    }
+
+    private JobMetrics withCheckpoints(JobMetrics metrics) {
+        var stats = checkpointStats;
+        return metrics.withCheckpoints(
+                stats.lastCompletedId(), stats.lastDurationMs(), stats.lastSize(), stats.failures());
     }
 
     private void remember(JobMetrics sample) {

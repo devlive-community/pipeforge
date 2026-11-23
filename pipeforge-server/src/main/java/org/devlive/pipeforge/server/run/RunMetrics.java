@@ -20,6 +20,10 @@ import org.jspecify.annotations.Nullable;
  * @param backpressuredMs time tasks waited for network buffers
  * @param throttleWaitMs time tasks waited for the job's rate limit
  * @param splitsTotal splits the enumerator assigned
+ * @param lastCompletedCheckpointId the last completed checkpoint, 0 before the first
+ * @param lastCheckpointDurationMs how long it took
+ * @param lastCheckpointSize the size of its state
+ * @param checkpointFailures checkpoints that failed in a row
  */
 public record RunMetrics(
         Instant at,
@@ -46,7 +50,70 @@ public record RunMetrics(
         int splitsTotal,
         int splitsFinished,
         List<NodeMetrics> nodes,
-        List<DirtySample> dirtySamples) {
+        List<DirtySample> dirtySamples,
+        long lastCompletedCheckpointId,
+        long lastCheckpointDurationMs,
+        long lastCheckpointSize,
+        long checkpointFailures) {
+
+    /** Metrics of a run without checkpoints. */
+    public RunMetrics(
+            Instant at,
+            long elapsedMs,
+            long rowsRead,
+            long rowsWritten,
+            long rowsFiltered,
+            long rowsExpanded,
+            long rowsDirty,
+            long rowsFailed,
+            long rowsInFlight,
+            double readRowsPerSecond,
+            double writeRowsPerSecond,
+            long readerWaitMs,
+            long writerWaitMs,
+            long backpressuredMs,
+            long throttleWaitMs,
+            long exchangedBytes,
+            long memoryBytes,
+            int queueDepth,
+            int queueCapacity,
+            int tasksRunning,
+            int parallelism,
+            int splitsTotal,
+            int splitsFinished,
+            List<NodeMetrics> nodes,
+            List<DirtySample> dirtySamples) {
+        this(
+                at,
+                elapsedMs,
+                rowsRead,
+                rowsWritten,
+                rowsFiltered,
+                rowsExpanded,
+                rowsDirty,
+                rowsFailed,
+                rowsInFlight,
+                readRowsPerSecond,
+                writeRowsPerSecond,
+                readerWaitMs,
+                writerWaitMs,
+                backpressuredMs,
+                throttleWaitMs,
+                exchangedBytes,
+                memoryBytes,
+                queueDepth,
+                queueCapacity,
+                tasksRunning,
+                parallelism,
+                splitsTotal,
+                splitsFinished,
+                nodes,
+                dirtySamples,
+                0,
+                0,
+                0,
+                0);
+    }
 
     public RunMetrics {
         nodes = List.copyOf(nodes);

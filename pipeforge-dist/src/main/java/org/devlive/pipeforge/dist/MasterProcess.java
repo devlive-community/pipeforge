@@ -71,11 +71,19 @@ public final class MasterProcess implements AutoCloseable {
     private final Server server;
     private final org.devlive.pipeforge.engine.api.checkpoint.@org.jspecify.annotations.Nullable CheckpointStorage
             checkpoints;
+    private final com.zaxxer.hikari.@org.jspecify.annotations.Nullable HikariDataSource metastore;
+    /** Deletes old checkpoints, so that slow storage does not hold up a job master. */
+    private final java.util.concurrent.ExecutorService checkpointIo = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "checkpoint-io");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public MasterProcess(Configuration config, Path home) {
         this.security = Security.of(config, home);
         // checked first: a process that cannot keep checkpoints does not start
         this.checkpoints = CheckpointSetup.open(config, "master");
+        this.metastore = checkpoints == null ? null : openMetastore(config, home);
         Path dir = home.resolve(config.string(Settings.MASTER_DIR));
         List<Path> pluginDirs =
                 config.list(Settings.PLUGIN_DIRS).stream().map(home::resolve).toList();
@@ -100,6 +108,18 @@ public final class MasterProcess implements AutoCloseable {
                 threads,
                 Clock.systemUTC(),
                 1000);
+        if (checkpoints != null && metastore != null) {
+            var store = new org.devlive.pipeforge.engine.master.checkpoint.JdbcCheckpointStore(
+                    metastore, MasterMetastore.safeUrl(config.string(Settings.MASTER_METASTORE_URL)));
+            try {
+                store.check();
+            } catch (RuntimeException e) {
+                close();
+                throw e;
+            }
+            dispatcher.withCheckpoints(
+                    new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(checkpoints, store, checkpointIo));
+        }
         try {
             server = GrpcTransport.serve(
                     config.integer(Settings.MASTER_RPC_PORT),
@@ -121,6 +141,24 @@ public final class MasterProcess implements AutoCloseable {
                 config.string(Settings.CLUSTER_NAME),
                 server.getPort(),
                 plugins.plugins().size());
+    }
+
+    /** The metastore the checkpoints are recorded in, which {@code checkpoint.dir} needs. */
+    private com.zaxxer.hikari.HikariDataSource openMetastore(Configuration config, Path home) {
+        try {
+            var opened = MasterMetastore.open(config, home);
+            if (opened == null) {
+                throw PipeForgeException.of(ErrorCode.SETTING_INVALID)
+                        .param("key", Settings.MASTER_METASTORE_URL.key())
+                        .param("source", "the configuration")
+                        .param("reason", "checkpoint.dir is set, and the master records checkpoints in the metastore")
+                        .build();
+            }
+            return opened;
+        } catch (RuntimeException e) {
+            CheckpointSetup.close(checkpoints);
+            throw e;
+        }
     }
 
     static Scheduler.Strategy strategy(String value) {
@@ -189,6 +227,10 @@ public final class MasterProcess implements AutoCloseable {
             plugins.close();
         }
         CheckpointSetup.close(checkpoints);
+        checkpointIo.shutdown();
+        if (metastore != null) {
+            metastore.close();
+        }
         threads.shutdownNow();
     }
 

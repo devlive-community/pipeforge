@@ -120,16 +120,47 @@ class RpcTest {
                 calls.add(Thread.currentThread().getName() + " metrics");
                 return CompletableFuture.completedFuture(null);
             }
+
+            @Override
+            public CompletableFuture<Void> acknowledgeCheckpoint(CheckpointAck ack) {
+                calls.add(Thread.currentThread().getName() + " ack " + ack.checkpointId());
+                return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public CompletableFuture<Void> declineCheckpoint(
+                    ExecutionAttemptId task,
+                    long checkpointId,
+                    org.devlive.pipeforge.common.error.PipeForgeException reason) {
+                calls.add(Thread.currentThread().getName() + " decline " + checkpointId);
+                return CompletableFuture.completedFuture(null);
+            }
         };
         try (InProcessRpc.Endpoint<JobMasterGateway> endpoint = InProcessRpc.serve("m", target)) {
             endpoint.gateway().updateTaskState(TaskStateUpdate.of(TASK, TaskState.RUNNING));
             endpoint.gateway().sendReaderMessage(new ReaderMessage.SplitRequest(TASK, "src"));
             endpoint.gateway().reportMetrics(TASK, TaskMetricsSnapshot.EMPTY);
+            endpoint.gateway().acknowledgeCheckpoint(new CheckpointAck(TASK, 4, List.of(), CheckpointTaskMetrics.NONE));
+            endpoint.gateway()
+                    .declineCheckpoint(
+                            TASK,
+                            5,
+                            org.devlive.pipeforge.common.error.PipeForgeException.of(
+                                            org.devlive.pipeforge.common.error.ErrorCode.INTERNAL)
+                                    .param("detail", "x")
+                                    .build());
             endpoint.gateway()
                     .updateTaskState(TaskStateUpdate.of(TASK, TaskState.CANCELED))
                     .get(5, TimeUnit.SECONDS);
         }
-        assertThat(calls).containsExactly("rpc-m RUNNING", "rpc-m request", "rpc-m metrics", "rpc-m CANCELED");
+        assertThat(calls)
+                .containsExactly(
+                        "rpc-m RUNNING",
+                        "rpc-m request",
+                        "rpc-m metrics",
+                        "rpc-m ack 4",
+                        "rpc-m decline 5",
+                        "rpc-m CANCELED");
     }
 
     @Test
@@ -159,6 +190,21 @@ class RpcTest {
             public CompletableFuture<Void> freeSlot(String allocationId) {
                 return CompletableFuture.completedFuture(null);
             }
+
+            @Override
+            public CompletableFuture<Void> triggerCheckpoint(CheckpointTrigger trigger) {
+                return CompletableFuture.failedFuture(new IllegalStateException("not a source"));
+            }
+
+            @Override
+            public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+                return CompletableFuture.completedFuture(null);
+            }
         };
         InProcessRpc.Endpoint<TaskExecutorGateway> endpoint = InProcessRpc.serve("w", target);
         TaskExecutorGateway gateway = endpoint.gateway();
@@ -170,6 +216,12 @@ class RpcTest {
                 .hasRootCauseMessage("unknown");
         assertThat(gateway.sendOperatorEvent(TASK, new OperatorEvent.NoMoreSplits("src")))
                 .succeedsWithin(5, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> gateway.triggerCheckpoint(
+                                new CheckpointTrigger(TASK, 1, CheckpointType.CHECKPOINT, 0, false))
+                        .get(5, TimeUnit.SECONDS))
+                .hasRootCauseMessage("not a source");
+        assertThat(gateway.notifyCheckpointComplete(TASK, 1)).succeedsWithin(5, TimeUnit.SECONDS);
+        assertThat(gateway.abortCheckpoint(TASK, 2, "timeout")).succeedsWithin(5, TimeUnit.SECONDS);
         assertThatThrownBy(() -> gateway.requestSlot(new SlotRequest("job", "run", "a1", 2))
                         .get(5, TimeUnit.SECONDS))
                 .hasRootCauseMessage("slot 2 taken");

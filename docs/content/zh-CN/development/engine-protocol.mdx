@@ -36,6 +36,10 @@ Checkpoint 在三个服务中增加了 RPC，都是对 v1 的兼容增加：
 `TaskDeployment` 携带 Task 要恢复的状态（`restore_state`、`restore_checkpoint_id`；编号 9 和 10 从一开始就为它们保留），
 `SubmitJobRequest` 携带运行从哪里开始（`restore`）以及第几次尝试，`JobStatus` 携带尝试次数和最近完成的 checkpoint，
 `RunState` 增加了重启与暂停的状态：`RESTARTING` 8、`PAUSING` 9、`PAUSED` 10、`RETRY_WAIT` 11。Master 遇到不认识的状态时会拒绝，而不是猜测。
+`JobMetrics` 的字段 27 到 30 携带 [checkpoint 指标](../concepts/checkpoint#可观测性)。
+
+Master 按规范第 2.6 节的顺序处理确认：先写 `_metadata`，再在元数据库中把 checkpoint 记为已完成，然后才发送 `NotifyCheckpointComplete`。
+已经带有 `PF-CKPT-0005` 的拒绝会保留原来的原因。
 
 ## 约定
 

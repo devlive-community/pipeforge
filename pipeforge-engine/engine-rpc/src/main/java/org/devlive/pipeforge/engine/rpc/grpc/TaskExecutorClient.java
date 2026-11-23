@@ -129,6 +129,39 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
     }
 
     @Override
+    public CompletableFuture<Void> triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
+        var request = ProtoMapping.toProto(trigger)
+                .setHeader(Headers.create(epochs.get(), TIMEOUT, System::currentTimeMillis))
+                .build();
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .triggerCheckpoint(request));
+    }
+
+    @Override
+    public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+        var request = notification(task, checkpointId, "");
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .notifyCheckpointComplete(request));
+    }
+
+    @Override
+    public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+        var request = notification(task, checkpointId, reason);
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .abortCheckpoint(request));
+    }
+
+    private org.devlive.pipeforge.engine.rpc.proto.CheckpointNotification notification(
+            ExecutionAttemptId task, long checkpointId, String reason) {
+        return org.devlive.pipeforge.engine.rpc.proto.CheckpointNotification.newBuilder()
+                .setHeader(Headers.create(epochs.get(), TIMEOUT, System::currentTimeMillis))
+                .setTask(ProtoMapping.toProto(task))
+                .setCheckpointId(checkpointId)
+                .setReason(reason)
+                .build();
+    }
+
+    @Override
     public CompletableFuture<Void> sendOperatorEvent(ExecutionAttemptId task, OperatorEvent event) {
         long sequence = sequences
                 .computeIfAbsent(new Stream(task, event.node()), s -> new AtomicLong())

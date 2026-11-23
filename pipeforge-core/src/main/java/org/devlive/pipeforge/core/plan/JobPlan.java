@@ -33,6 +33,7 @@ import org.jspecify.annotations.Nullable;
  * @param variables the resolved job variables
  * @param nodes the nodes in topological order (ties in the order written)
  * @param warnings problems that do not stop the job, in a stable order
+ * @param checkpoint how the job takes checkpoints ({@code env.checkpoint.*})
  */
 public record JobPlan(
         String name,
@@ -47,7 +48,40 @@ public record JobPlan(
         List<PlannedNode> nodes,
         List<String> warnings,
         org.devlive.pipeforge.core.dirty.DirtyPolicy dirty,
-        RateLimit limit) {
+        RateLimit limit,
+        CheckpointSettings checkpoint) {
+
+    /** A plan with the default checkpoint settings of its mode. */
+    public JobPlan(
+            String name,
+            @Nullable String description,
+            EngineKind engine,
+            JobMode mode,
+            boolean modeDerived,
+            Delivery delivery,
+            int parallelism,
+            ZoneId timeZone,
+            Map<String, String> variables,
+            List<PlannedNode> nodes,
+            List<String> warnings,
+            org.devlive.pipeforge.core.dirty.DirtyPolicy dirty,
+            RateLimit limit) {
+        this(
+                name,
+                description,
+                engine,
+                mode,
+                modeDerived,
+                delivery,
+                parallelism,
+                timeZone,
+                variables,
+                nodes,
+                warnings,
+                dirty,
+                limit,
+                CheckpointSettings.defaults(mode));
+    }
 
     /** A plan without a rate limit. */
     public JobPlan(
@@ -110,6 +144,7 @@ public record JobPlan(
     public JobPlan {
         java.util.Objects.requireNonNull(dirty, "dirty");
         java.util.Objects.requireNonNull(limit, "limit");
+        java.util.Objects.requireNonNull(checkpoint, "checkpoint");
         variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
         nodes = List.copyOf(nodes);
         warnings = List.copyOf(warnings);

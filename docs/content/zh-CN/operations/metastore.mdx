@@ -42,6 +42,21 @@ pipeforge:
 请先创建数据库（MySQL 上使用 `utf8mb4` 执行 `CREATE DATABASE pipeforge`）。用户需要在其中建表和建索引的权限；其余的都由服务端创建。
 日志中显示的 URL 不带查询串，因此写在 URL 中的密码不会出现在日志里。
 
+## Master
+
+配置了 [Checkpoint 存储](./checkpoint-storage)（`checkpoint.dir`）时，Master 会把运行的 checkpoint 记录在同一个元数据库中，
+因此它也要连接元数据库，配置在 `conf/master.yaml` 中：
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `master.metastore.url` | 无；设置了 `checkpoint.dir` 时必填 | Server 的元数据库的 JDBC URL |
+| `master.metastore.username`、`master.metastore.password` | 空 | 用户；密码最好用 `PIPEFORGE_MASTER_METASTORE_PASSWORD` 提供 |
+| `master.metastore.driver-dir` | 空 | 存放 JDBC 驱动的目录，相对于安装目录；MySQL 的驱动不随发行版提供，需要它 |
+| `master.metastore.pool-size` | `4` | Master 保持的连接数 |
+
+Master 不执行迁移：它在启动时检查元数据库中是否有 `checkpoint` 表，没有时以 `PF-CLUS-0013` 拒绝启动，因此请先在这个元数据库上启动一个同版本的 Server。
+没有设置 `checkpoint.dir` 时，Master 不连接元数据库。
+
 ## 表
 
 | 表 | 内容 |

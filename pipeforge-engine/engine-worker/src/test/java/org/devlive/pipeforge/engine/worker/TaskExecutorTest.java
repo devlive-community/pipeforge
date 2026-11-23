@@ -272,6 +272,39 @@ class TaskExecutorTest {
     }
 
     @Test
+    void declinesCheckpointsOfItsTasksAndIgnoresOthers() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "block: cancel", "", "", 1), ScriptedMaster.settings()))
+                    .get();
+            var other = new org.devlive.pipeforge.engine.rpc.ExecutionAttemptId("other-run", "src", 0, 0);
+            master.executor
+                    .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                            other, 1, org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT, 0, false))
+                    .get();
+            master.executor
+                    .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                            master.id(), 2, org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT, 0, false))
+                    .get();
+            var declined = master.declines.poll(10, TimeUnit.SECONDS);
+            assertThat(declined).isNotNull();
+            assertThat(declined.code()).isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.CHECKPOINT_DECLINED);
+            assertThat(declined.params())
+                    .containsEntry("checkpoint", 2L)
+                    .containsEntry("task", master.id().toString());
+            assertThat(master.declines)
+                    .as("a task of another worker is not declined here")
+                    .isEmpty();
+            assertThat(master.executor.notifyCheckpointComplete(master.id(), 2)).succeedsWithin(Duration.ofSeconds(5));
+            assertThat(master.executor.abortCheckpoint(master.id(), 2, "x")).succeedsWithin(Duration.ofSeconds(5));
+            master.executor.cancelTask(master.id()).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
+        }
+    }
+
+    @Test
     void transformsCanEmitSeveralRowsAndBatchesCanBeSmall() throws Exception {
         String probe = Probe.create();
         TaskSettings tiny = new TaskSettings(true, 3, 1, Duration.ofSeconds(30), TaskSettings.DEFAULT_METRICS_INTERVAL);

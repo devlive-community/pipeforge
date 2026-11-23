@@ -67,6 +67,24 @@ public final class JobMasterService extends JobMasterServiceGrpc.JobMasterServic
     }
 
     @Override
+    public void acknowledgeCheckpoint(
+            org.devlive.pipeforge.engine.rpc.proto.AcknowledgeCheckpointRequest request, StreamObserver<Ack> observer) {
+        handle(observer, request.getHeader(), () -> target.acknowledgeCheckpoint(ProtoMapping.fromProto(request)));
+    }
+
+    @Override
+    public void declineCheckpoint(
+            org.devlive.pipeforge.engine.rpc.proto.DeclineCheckpointRequest request, StreamObserver<Ack> observer) {
+        handle(
+                observer,
+                request.getHeader(),
+                () -> target.declineCheckpoint(
+                        ProtoMapping.fromProto(request.getTask()),
+                        request.getCheckpointId(),
+                        ProtoMapping.fromProto(request.getReason())));
+    }
+
+    @Override
     public StreamObserver<MetricsReport> reportMetrics(StreamObserver<Ack> observer) {
         return new StreamObserver<>() {
             private boolean checked;

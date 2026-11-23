@@ -730,11 +730,19 @@ export interface components {
             at?: string;
             /** Format: int64 */
             backpressuredMs?: number;
+            /** Format: int64 */
+            checkpointFailures?: number;
             dirtySamples?: components["schemas"]["DirtySample"][];
             /** Format: int64 */
             elapsedMs?: number;
             /** Format: int64 */
             exchangedBytes?: number;
+            /** Format: int64 */
+            lastCheckpointDurationMs?: number;
+            /** Format: int64 */
+            lastCheckpointSize?: number;
+            /** Format: int64 */
+            lastCompletedCheckpointId?: number;
             /** Format: int64 */
             memoryBytes?: number;
             nodes?: components["schemas"]["NodeMetrics"][];

@@ -44,7 +44,7 @@ until the run runs.
 | `listRuns(RunQuery)` | `GET /api/v1/runs` | `RunPage`; `next()` is the token of the next page |
 | `run(id)` | `GET /api/v1/runs/{id}` | `RunDetail`: the run, its definition and its changes of state |
 | `cancelRun(id, reason)` | `POST /api/v1/runs/{id}/cancel` | `Run` |
-| `metrics(id)` | `GET /api/v1/runs/{id}/metrics` | `RunMetrics`, with the counters of each node |
+| `metrics(id)` | `GET /api/v1/runs/{id}/metrics` | `RunMetrics`, with the counters of each node and the [checkpoint metrics](../concepts/checkpoint#observability) |
 | `metricsHistory(id, since)` | `GET /api/v1/runs/{id}/metrics/history` | `MetricSample`s, oldest first |
 | `analysis(id)` | `GET /api/v1/runs/{id}/analysis` | the [run analysis](../concepts/plan-and-explain#run-analysis) as JSON |
 | `splits(id)`, `tasks(id)` | `GET /api/v1/runs/{id}/splits`, `/tasks` | `RunSplit`s, `RunTask`s |

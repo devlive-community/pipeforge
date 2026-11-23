@@ -127,12 +127,35 @@ class ProcessTest {
         }
     }
 
+    /** An H2 metastore with the tables the server's migrations create. */
+    static String migratedMetastore(String name) throws Exception {
+        String url = "jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1";
+        Path scripts = Path.of("..", "pipeforge-server", "src", "main", "resources", "db", "metastore", "expand", "h2");
+        try (var connection = java.sql.DriverManager.getConnection(url, "sa", "");
+                var statement = connection.createStatement();
+                var files = Files.list(scripts)) {
+            for (Path script : files.sorted(java.util.Comparator.comparing(
+                            p -> Integer.parseInt(p.getFileName().toString().replaceAll("^V(\\d+)__.*", "$1"))))
+                    .toList()) {
+                for (String sql :
+                        Files.readString(script).replaceAll("(?m)^--.*$", "").split(";")) {
+                    if (!sql.isBlank()) {
+                        statement.execute(sql);
+                    }
+                }
+            }
+        }
+        return url;
+    }
+
     @Test
     void processesCheckTheirCheckpointStorageAtTheStart() throws Exception {
         Files.createDirectories(home.resolve("plugins"));
         Map<String, String> settings = new java.util.HashMap<>(settings(freePorts(3)));
         Path checkpoints = home.resolve("checkpoints");
         settings.put("checkpoint.dir", checkpoints.toString());
+        settings.put("master.metastore.url", migratedMetastore("process-test"));
+        settings.put("master.metastore.username", "sa");
         Configuration config = Configuration.load(home.resolve("conf"), Map.of(), settings);
         try (MasterProcess master = new MasterProcess(config, home);
                 WorkerProcess worker = new WorkerProcess(config, home)) {
@@ -155,6 +178,40 @@ class ProcessTest {
         try (MasterProcess master =
                 new MasterProcess(Configuration.load(home.resolve("conf"), Map.of(), settings), home)) {
             assertThat(master.checkpointStorage()).as("blank is not set").isEmpty();
+        }
+    }
+
+    @Test
+    void aMasterWithCheckpointStorageNeedsAMetastoreWithTheCheckpointTable() throws Exception {
+        Files.createDirectories(home.resolve("plugins"));
+        Map<String, String> settings = new java.util.HashMap<>(settings(freePorts(3)));
+        settings.put("checkpoint.dir", home.resolve("checkpoints").toString());
+        Configuration without = Configuration.load(home.resolve("conf"), Map.of(), settings);
+        assertThatThrownBy(() -> new MasterProcess(without, home))
+                .isInstanceOfSatisfying(org.devlive.pipeforge.common.error.PipeForgeException.class, e -> {
+                    assertThat(e.code()).isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.SETTING_INVALID);
+                    assertThat(e.params()).containsEntry("key", "master.metastore.url");
+                });
+
+        settings.put("master.metastore.url", "jdbc:h2:mem:empty-metastore;DB_CLOSE_DELAY=-1");
+        settings.put("master.metastore.username", "sa");
+        Configuration empty = Configuration.load(home.resolve("conf"), Map.of(), settings);
+        assertThatThrownBy(() -> new MasterProcess(empty, home))
+                .hasMessageContaining("PF-CLUS-0013")
+                .hasMessageContaining("has no checkpoint table");
+
+        settings.put("master.metastore.url", "jdbc:postgresql://127.0.0.1:1/none?user=x&password=secret");
+        settings.put("master.metastore.pool-size", "1");
+        Configuration unreachable = Configuration.load(home.resolve("conf"), Map.of(), settings);
+        assertThatThrownBy(() -> new MasterProcess(unreachable, home))
+                .hasMessageContaining("PF-CLUS-0013")
+                .hasMessageNotContaining("secret");
+
+        // the first attempts released their port: the master starts on it now
+        settings.put("master.metastore.url", migratedMetastore("master-ok"));
+        try (MasterProcess master =
+                new MasterProcess(Configuration.load(home.resolve("conf"), Map.of(), settings), home)) {
+            assertThat(master.checkpointStorage()).isPresent();
         }
     }
 

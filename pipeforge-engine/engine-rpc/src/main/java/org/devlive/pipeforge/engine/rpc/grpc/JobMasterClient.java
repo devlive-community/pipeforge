@@ -82,6 +82,26 @@ public final class JobMasterClient implements JobMasterGateway, AutoCloseable {
     }
 
     @Override
+    public CompletableFuture<Void> acknowledgeCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+        var request = ProtoMapping.toProto(ack).setHeader(header()).build();
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .acknowledgeCheckpoint(request));
+    }
+
+    @Override
+    public CompletableFuture<Void> declineCheckpoint(
+            ExecutionAttemptId task, long checkpointId, PipeForgeException reason) {
+        var request = org.devlive.pipeforge.engine.rpc.proto.DeclineCheckpointRequest.newBuilder()
+                .setHeader(header())
+                .setTask(ProtoMapping.toProto(task))
+                .setCheckpointId(checkpointId)
+                .setReason(ProtoMapping.toProto(reason))
+                .build();
+        return call(() -> stub.withDeadlineAfter(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .declineCheckpoint(request));
+    }
+
+    @Override
     public synchronized CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot snapshot) {
         var report = MetricsReport.newBuilder()
                 .setTask(ProtoMapping.toProto(task))

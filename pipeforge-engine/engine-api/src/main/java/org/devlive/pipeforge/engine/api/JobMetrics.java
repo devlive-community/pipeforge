@@ -79,7 +79,11 @@ public record JobMetrics(
         long memoryBytes,
         long rowsDirty,
         List<DirtySample> dirtySamples,
-        long throttleWaitMs) {
+        long throttleWaitMs,
+        long lastCompletedCheckpointId,
+        long lastCheckpointDurationMs,
+        long lastCheckpointSize,
+        long checkpointFailures) {
 
     /** No data yet. */
     public static final JobMetrics EMPTY = new JobMetrics(
@@ -90,6 +94,106 @@ public record JobMetrics(
         Objects.requireNonNull(writeRowsPerSecond, "writeRowsPerSecond");
         nodes = List.copyOf(nodes);
         dirtySamples = List.copyOf(dirtySamples);
+    }
+
+    /** Metrics of a job without checkpoints. */
+    public JobMetrics(
+            long elapsedMs,
+            long rowsRead,
+            long rowsWritten,
+            long rowsFiltered,
+            long rowsExpanded,
+            long rowsFailed,
+            long rowsInFlight,
+            Rate readRowsPerSecond,
+            Rate writeRowsPerSecond,
+            long readerWaitMs,
+            long writerWaitMs,
+            int parallelism,
+            int tasksRunning,
+            List<NodeMetrics> nodes,
+            long exchangedBytes,
+            long backpressuredMs,
+            double backpressuredRatio,
+            int queueDepth,
+            int queueCapacity,
+            int splitsAssigned,
+            int splitsFinished,
+            long runningMs,
+            long memoryBytes,
+            long rowsDirty,
+            List<DirtySample> dirtySamples,
+            long throttleWaitMs) {
+        this(
+                elapsedMs,
+                rowsRead,
+                rowsWritten,
+                rowsFiltered,
+                rowsExpanded,
+                rowsFailed,
+                rowsInFlight,
+                readRowsPerSecond,
+                writeRowsPerSecond,
+                readerWaitMs,
+                writerWaitMs,
+                parallelism,
+                tasksRunning,
+                nodes,
+                exchangedBytes,
+                backpressuredMs,
+                backpressuredRatio,
+                queueDepth,
+                queueCapacity,
+                splitsAssigned,
+                splitsFinished,
+                runningMs,
+                memoryBytes,
+                rowsDirty,
+                dirtySamples,
+                throttleWaitMs,
+                0,
+                0,
+                0,
+                0);
+    }
+
+    /** These metrics with the checkpoint metrics of the run. */
+    public JobMetrics withCheckpoints(
+            long lastCompletedCheckpointId,
+            long lastCheckpointDurationMs,
+            long lastCheckpointSize,
+            long checkpointFailures) {
+        return new JobMetrics(
+                elapsedMs,
+                rowsRead,
+                rowsWritten,
+                rowsFiltered,
+                rowsExpanded,
+                rowsFailed,
+                rowsInFlight,
+                readRowsPerSecond,
+                writeRowsPerSecond,
+                readerWaitMs,
+                writerWaitMs,
+                parallelism,
+                tasksRunning,
+                nodes,
+                exchangedBytes,
+                backpressuredMs,
+                backpressuredRatio,
+                queueDepth,
+                queueCapacity,
+                splitsAssigned,
+                splitsFinished,
+                runningMs,
+                memoryBytes,
+                rowsDirty,
+                dirtySamples,
+                throttleWaitMs,
+                lastCompletedCheckpointId,
+                lastCheckpointDurationMs,
+                lastCheckpointSize,
+                checkpointFailures);
     }
 
     /** Metrics of a job without a rate limit. */

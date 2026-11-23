@@ -164,7 +164,25 @@ public final class JobParser {
         if (!violations.isEmpty()) {
             throw violations.get(0).toException();
         }
+        positive(config, EnvOptions.CHECKPOINT_INTERVAL, false);
+        positive(config, EnvOptions.CHECKPOINT_TIMEOUT, false);
+        positive(config, EnvOptions.CHECKPOINT_MIN_PAUSE, true);
         return config;
+    }
+
+    /** Durations that must be positive, or at least zero. */
+    private static void positive(
+            ReadonlyConfig config, org.devlive.pipeforge.api.option.Option<java.time.Duration> option, boolean zero) {
+        java.time.Duration value = config.getOptional(option).orElse(null);
+        if (value != null && (value.isNegative() || (!zero && value.isZero()))) {
+            throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                            org.devlive.pipeforge.common.error.ErrorCode.OPTION_INVALID)
+                    .param("option", option.key())
+                    .param("node", "env")
+                    .param("value", value.toString())
+                    .param("reason", zero ? "it cannot be negative" : "it must be longer than zero")
+                    .build();
+        }
     }
 
     private static List<NodeDefinition> nodes(Tree.Mapping job) {

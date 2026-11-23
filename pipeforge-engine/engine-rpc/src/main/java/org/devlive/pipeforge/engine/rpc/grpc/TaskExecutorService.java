@@ -122,6 +122,41 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
     }
 
     @Override
+    public void triggerCheckpoint(
+            org.devlive.pipeforge.engine.rpc.proto.TriggerCheckpointRequest request, StreamObserver<Ack> observer) {
+        org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger;
+        try {
+            trigger = ProtoMapping.fromProto(request);
+        } catch (RuntimeException e) {
+            GrpcTransport.respond(observer, CompletableFuture.failedFuture(e));
+            return;
+        }
+        handle(observer, request.getHeader(), trigger.task().runId(), () -> target.triggerCheckpoint(trigger));
+    }
+
+    @Override
+    public void notifyCheckpointComplete(
+            org.devlive.pipeforge.engine.rpc.proto.CheckpointNotification request, StreamObserver<Ack> observer) {
+        ExecutionAttemptId id = ProtoMapping.fromProto(request.getTask());
+        handle(
+                observer,
+                request.getHeader(),
+                id.runId(),
+                () -> target.notifyCheckpointComplete(id, request.getCheckpointId()));
+    }
+
+    @Override
+    public void abortCheckpoint(
+            org.devlive.pipeforge.engine.rpc.proto.CheckpointNotification request, StreamObserver<Ack> observer) {
+        ExecutionAttemptId id = ProtoMapping.fromProto(request.getTask());
+        handle(
+                observer,
+                request.getHeader(),
+                id.runId(),
+                () -> target.abortCheckpoint(id, request.getCheckpointId(), request.getReason()));
+    }
+
+    @Override
     public void sendOperatorEvent(
             org.devlive.pipeforge.engine.rpc.proto.OperatorEvent request, StreamObserver<Ack> observer) {
         ExecutionAttemptId id = ProtoMapping.fromProto(request.getTarget());

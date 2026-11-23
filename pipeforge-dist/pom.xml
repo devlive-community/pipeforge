@@ -66,6 +66,31 @@
             <artifactId>pipeforge-engine-worker</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- the master's metastore, where it records checkpoints; MySQL comes from driver-dir -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>7.0.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.13</version>
+            <scope>runtime</scope>
+            <exclusions>
+                <!-- annotations only; the expressions module brings another version -->
+                <exclusion>
+                    <groupId>org.checkerframework</groupId>
+                    <artifactId>checker-qual</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <!-- s3:// checkpoint storage; the processes find it with ServiceLoader -->
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>

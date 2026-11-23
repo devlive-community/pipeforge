@@ -75,6 +75,21 @@ class SchedulerTest {
         public CompletableFuture<Void> sendOperatorEvent(ExecutionAttemptId task, OperatorEvent event) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public CompletableFuture<Void> triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     final ResourceManager manager = new ResourceManager(ResourceManager.Settings.DEFAULTS);

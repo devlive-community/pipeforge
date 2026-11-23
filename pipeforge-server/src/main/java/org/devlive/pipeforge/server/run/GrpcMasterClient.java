@@ -284,7 +284,11 @@ public final class GrpcMasterClient implements MasterClient {
                                 d.getMessage(),
                                 d.getRow(),
                                 Instant.ofEpochMilli(d.getAtMs())))
-                        .toList());
+                        .toList(),
+                metrics.getLastCompletedCheckpointId(),
+                metrics.getLastCheckpointDurationMs(),
+                metrics.getLastCheckpointSize(),
+                metrics.getCheckpointFailures());
     }
 
     @Override

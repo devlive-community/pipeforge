@@ -139,7 +139,21 @@ public final class Planner {
                 dirty,
                 new RateLimit(
                         job.env().getOptional(EnvOptions.LIMIT_ROWS).orElse(0L),
-                        job.env().getOptional(EnvOptions.LIMIT_BYTES).orElse(0L)));
+                        job.env().getOptional(EnvOptions.LIMIT_BYTES).orElse(0L)),
+                checkpoint(job, mode));
+    }
+
+    private static CheckpointSettings checkpoint(JobDefinition job, JobMode mode) {
+        var env = job.env();
+        return new CheckpointSettings(
+                env.get(EnvOptions.CHECKPOINT_ENABLED),
+                env.getOptional(EnvOptions.CHECKPOINT_INTERVAL).orElse(CheckpointSettings.defaultInterval(mode)),
+                env.get(EnvOptions.CHECKPOINT_TIMEOUT),
+                env.get(EnvOptions.CHECKPOINT_MIN_PAUSE),
+                env.get(EnvOptions.CHECKPOINT_MAX_CONCURRENT),
+                env.get(EnvOptions.CHECKPOINT_TOLERABLE_FAILURES),
+                env.get(EnvOptions.CHECKPOINT_RETAINED),
+                env.get(EnvOptions.CHECKPOINT_EXTERNALIZED));
     }
 
     private DirtyPolicy dirty(JobDefinition job, List<String> warnings) {

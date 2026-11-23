@@ -69,6 +69,14 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 | `dirty.max-rows` | With `skip`: the bad rows a run may skip | no limit |
 | `limit.rows-per-second` | Rows all sources may read per second together, see [rate limits](../concepts/execution#rate-limits) | no limit |
 | `limit.bytes-per-second` | Bytes, as rows take them in memory, all sources may read per second together | no limit |
+| `checkpoint.enabled` | Take checkpoints, on a cluster with `checkpoint.dir`; see [checkpoints](../concepts/checkpoint) | `true` |
+| `checkpoint.interval` | The time from one checkpoint to the next | `1min` streaming, `5min` batch |
+| `checkpoint.timeout` | How long a checkpoint may take before it fails | `10min` |
+| `checkpoint.min-pause` | The least time from the end of one checkpoint to the start of the next | `0` |
+| `checkpoint.max-concurrent` | Checkpoints in progress at once, 1 to 16 | `1` |
+| `checkpoint.tolerable-failures` | Checkpoints that may fail in a row before the run fails | `3` |
+| `checkpoint.retained` | Completed checkpoints kept, 1 to 1000 | `3` |
+| `checkpoint.externalized` | `RETAIN_ON_CANCELLATION` or `DELETE_ON_CANCELLATION`: the checkpoints of a cancelled run | `RETAIN_ON_CANCELLATION` |
 | `timezone` | An IANA time zone such as `Asia/Shanghai` | `UTC` |
 | `variables` | A mapping of names to values, see [variables](./variables#job-variables) | none |
 | `source.*`, `transform.*`, `sink.*` | Defaults for the options of every node of that kind | none |
@@ -77,6 +85,8 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 - `delivery: exactly-once` requires every sink to commit in two phases or to write idempotently;
   otherwise planning fails and names the sink (`PF-PLAN-0003`).
 - Cluster configuration (`worker.*`, `master.*`, `server.*`, `cluster.*`) cannot be set in a job.
+- `checkpoint.interval` and `checkpoint.timeout` must be longer than zero, `checkpoint.min-pause`
+  cannot be negative (`PF-CONF-0002`).
 
 ## Nodes
 

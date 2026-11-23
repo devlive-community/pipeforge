@@ -1,0 +1,159 @@
+---
+title: Checkpoints
+description: How a run records its progress - when checkpoints are taken, what they hold, what consistency they give, and how they are kept and cleaned up.
+order: 75
+template: feature
+---
+
+## Overview
+
+A **checkpoint** is a consistent picture of a running job: where every source is in its input, what
+every sink has prepared to commit, and the splits the source has not handed out yet. It is written
+to the [checkpoint storage](../operations/checkpoint-storage) and recorded in the
+[metastore](../operations/metastore), so that a run that fails can go on from its last checkpoint
+instead of starting over, and a sink commits exactly what a recorded checkpoint covers.
+
+Checkpoints are taken on a cluster whose `checkpoint.dir` is set; jobs control how often and how
+many with `env.checkpoint.*`.
+
+## How it works
+
+The master coordinates each checkpoint of a run:
+
+1. It takes the state of the source's split enumerator, then asks the tasks that read the source to
+   take part in checkpoint *n*.
+2. Each of them takes its state and sends a **barrier** downstream with the rows; every other task
+   takes its state when the barrier of *n* has reached it on all its inputs. The barrier is a marker
+   in the data stream, so the rows before it are in the checkpoint and the rows after it are not.
+3. Every task acknowledges its part to the master, with where its state is.
+4. Once all tasks acknowledged, the master writes the checkpoint's `_metadata`, records the
+   checkpoint as completed in the metastore, and **only then** tells the tasks that it is complete,
+   which is when sinks commit what they prepared for it.
+
+The order of step 4 matters: the latest completed checkpoint in the metastore is never older than
+data a sink committed, so a run that starts again from it does not commit the same data twice.
+
+A checkpoint **fails** when a task declines it, when it is not complete within
+`env.checkpoint.timeout`, or when the master cannot write or record it. What was written of it is
+deleted and the next one is tried at the next interval. After more failures in a row than
+`env.checkpoint.tolerable-failures`, the run fails, since a failure would then lose more progress
+than the job allows.
+
+## Quick start
+
+Give the cluster a checkpoint storage and the master its metastore, in `conf/pipeforge.yaml` and
+`conf/master.yaml`:
+
+```yaml
+checkpoint.dir: s3://my-bucket/pipeforge
+master.metastore.url: jdbc:postgresql://db:5432/pipeforge
+```
+
+Jobs take a checkpoint every minute (streaming) or five (batch) by default; set another interval in
+the job:
+
+```yaml
+env:
+  checkpoint.interval: 30s
+```
+
+## Configuration
+
+| Option | Default | Meaning |
+|---|---|---|
+| `env.checkpoint.enabled` | `true` | Take checkpoints at all |
+| `env.checkpoint.interval` | `1min` streaming, `5min` batch | The time from one checkpoint to the next; for batch jobs it bounds what a failed run reads again |
+| `env.checkpoint.timeout` | `10min` | How long a checkpoint may take before it fails |
+| `env.checkpoint.min-pause` | `0` | The least time from the end of one checkpoint to the start of the next |
+| `env.checkpoint.max-concurrent` | `1` | The checkpoints that may be in progress at once |
+| `env.checkpoint.tolerable-failures` | `3` | The checkpoints that may fail in a row before the run fails |
+| `env.checkpoint.retained` | `3` | The completed checkpoints kept; older ones are deleted |
+| `env.checkpoint.externalized` | `RETAIN_ON_CANCELLATION` | Keep (`RETAIN_ON_CANCELLATION`) or delete (`DELETE_ON_CANCELLATION`) the checkpoints of a cancelled run |
+
+The cluster side is `checkpoint.dir` with `checkpoint.s3.*` (see
+[checkpoint storage](../operations/checkpoint-storage)) and `master.metastore.*` (see
+[metastore](../operations/metastore#the-master)); the [configuration reference](../reference/configuration)
+lists them all.
+
+## Examples
+
+A streaming job that tolerates no failed checkpoint and keeps the last ten:
+
+```yaml
+env:
+  mode: streaming
+  checkpoint.interval: 20s
+  checkpoint.timeout: 2min
+  checkpoint.tolerable-failures: 0
+  checkpoint.retained: 10
+```
+
+A job that takes no checkpoints, for a preview:
+
+```yaml
+env:
+  checkpoint.enabled: false
+```
+
+## Behavior
+
+| Guarantee | Needs |
+|---|---|
+| at-least-once | checkpoints and a source that can read again from a position |
+| exactly-once in effect | at-least-once and a sink that writes idempotently by key |
+| exactly-once | at-least-once and a sink that commits in two phases |
+| none | checkpoints turned off: a failed run starts over |
+
+- Checkpoint numbers grow within a run and never repeat, also across restarts.
+- Checkpoints start only while every task of the run runs.
+- Savepoints are taken by hand and are never deleted automatically; they do not count toward
+  `retained` or the failures a job tolerates.
+- When a run ends, checkpoints in progress are given up. A run that **succeeded** deletes its
+  checkpoints, a **failed** run keeps them to go on from, and a **cancelled** run follows
+  `env.checkpoint.externalized`.
+
+## Observability
+
+| Metric | Meaning |
+|---|---|
+| `lastCompletedCheckpointId` | The last completed checkpoint, 0 before the first |
+| `lastCheckpointDurationMs` | How long it took from its trigger to being recorded |
+| `lastCheckpointSize` | The size of its state |
+| `checkpointFailures` | Checkpoints that failed in a row; a completed one resets it |
+
+They are part of the run's metrics (see the [metrics reference](../reference/metrics)); the
+metastore table `checkpoint` keeps each checkpoint with its status, size, directory, error and each
+task's part. The master logs every checkpoint that completes or fails.
+
+## Performance and tuning
+
+- Taking a state copies it on the task's thread; writing it happens while the task goes on, so a
+  checkpoint costs the throughput of the copy only.
+- A shorter interval loses less progress on a failure and writes more often; for batch jobs the
+  interval bounds what a failed run reads again.
+- Backpressure holds barriers back: when checkpoints time out, look at the run's backpressure
+  before raising `env.checkpoint.timeout`.
+
+## Troubleshooting
+
+| Error | Cause and fix |
+|---|---|
+| [`PF-CKPT-0001`](../reference/errors#pf-ckpt-0001) | A checkpoint timed out; the message lists the tasks that did not finish |
+| [`PF-CKPT-0005`](../reference/errors#pf-ckpt-0005) | A task declined, for the reason in the message |
+| [`PF-CKPT-0006`](../reference/errors#pf-ckpt-0006) | The master could not write the checkpoint or record it in the metastore |
+| [`PF-CKPT-0007`](../reference/errors#pf-ckpt-0007) | More checkpoints failed in a row than the job tolerates; the run failed with the last cause |
+| [`PF-CONF-0011`](../reference/errors#pf-conf-0011) `master.metastore.url` | `checkpoint.dir` is set without the master's metastore |
+
+## Limitations
+
+- In this version workers do not take snapshots of their tasks yet: they decline every checkpoint
+  (`PF-CKPT-0005`), so on a cluster with `checkpoint.dir` runs fail after
+  `env.checkpoint.tolerable-failures` + 1 checkpoints. Set `env.checkpoint.enabled: false` for jobs
+  on such a cluster until then.
+- Runs do not restart from a checkpoint yet; savepoints cannot be taken from the command line or the
+  Web UI yet.
+- Only aligned checkpoints: a task waits for the barrier on all its inputs.
+
+## Version history
+
+Available since 0.1.0 (M2).

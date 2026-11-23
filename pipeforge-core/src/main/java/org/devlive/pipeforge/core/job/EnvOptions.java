@@ -70,6 +70,54 @@ public final class EnvOptions {
             .withRange(1L, Long.MAX_VALUE)
             .withDescription("Bytes, as rows take them in memory, all sources of the job may read per second together");
 
+    public static final Option<Boolean> CHECKPOINT_ENABLED = Options.key("checkpoint.enabled")
+            .booleanType()
+            .defaultValue(true)
+            .withDescription(
+                    "Take checkpoints, on a cluster with checkpoint.dir; without them a failed run starts over");
+
+    public static final Option<java.time.Duration> CHECKPOINT_INTERVAL = Options.key("checkpoint.interval")
+            .durationType()
+            .noDefault()
+            .withDescription("The time from one checkpoint to the next; 1min for streaming jobs and 5min for batch jobs"
+                    + " when not set");
+
+    public static final Option<java.time.Duration> CHECKPOINT_TIMEOUT = Options.key("checkpoint.timeout")
+            .durationType()
+            .defaultValue(java.time.Duration.ofMinutes(10))
+            .withDescription("How long a checkpoint may take before it fails");
+
+    public static final Option<java.time.Duration> CHECKPOINT_MIN_PAUSE = Options.key("checkpoint.min-pause")
+            .durationType()
+            .defaultValue(java.time.Duration.ZERO)
+            .withDescription("The least time from the end of one checkpoint to the start of the next");
+
+    public static final Option<Integer> CHECKPOINT_MAX_CONCURRENT = Options.key("checkpoint.max-concurrent")
+            .intType()
+            .defaultValue(1)
+            .withRange(1, 16)
+            .withDescription("The checkpoints that may be in progress at once");
+
+    public static final Option<Integer> CHECKPOINT_TOLERABLE_FAILURES = Options.key("checkpoint.tolerable-failures")
+            .intType()
+            .defaultValue(3)
+            .withRange(0, Integer.MAX_VALUE)
+            .withDescription("The checkpoints that may fail in a row before the run fails");
+
+    public static final Option<Integer> CHECKPOINT_RETAINED = Options.key("checkpoint.retained")
+            .intType()
+            .defaultValue(3)
+            .withRange(1, 1000)
+            .withDescription("The completed checkpoints kept; older ones are deleted");
+
+    public static final Option<org.devlive.pipeforge.core.plan.CheckpointSettings.Externalized>
+            CHECKPOINT_EXTERNALIZED = Options.key("checkpoint.externalized")
+                    .enumType(org.devlive.pipeforge.core.plan.CheckpointSettings.Externalized.class)
+                    .defaultValue(
+                            org.devlive.pipeforge.core.plan.CheckpointSettings.Externalized.RETAIN_ON_CANCELLATION)
+                    .withDescription(
+                            "Keep or delete the checkpoints of a cancelled run; a failed run always keeps them");
+
     /** Prefixes of node defaults: {@code source.*}, {@code transform.*} and {@code sink.*}. */
     public static final List<String> NODE_DEFAULT_PREFIXES = List.of("source", "transform", "sink");
 
@@ -86,7 +134,15 @@ public final class EnvOptions {
                     DIRTY_POLICY,
                     DIRTY_MAX_ROWS,
                     LIMIT_ROWS,
-                    LIMIT_BYTES)
+                    LIMIT_BYTES,
+                    CHECKPOINT_ENABLED,
+                    CHECKPOINT_INTERVAL,
+                    CHECKPOINT_TIMEOUT,
+                    CHECKPOINT_MIN_PAUSE,
+                    CHECKPOINT_MAX_CONCURRENT,
+                    CHECKPOINT_TOLERABLE_FAILURES,
+                    CHECKPOINT_RETAINED,
+                    CHECKPOINT_EXTERNALIZED)
             .nativeNamespaces(NODE_DEFAULT_PREFIXES.toArray(String[]::new))
             .build();
 

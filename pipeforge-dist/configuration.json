@@ -228,6 +228,66 @@
       "zh-CN" : "spread 把作业的 Slot 分散到尽量多的 Worker 上，pack 集中到尽量少的 Worker 上。"
     }
   }, {
+    "key" : "master.metastore.url",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : null,
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_METASTORE_URL",
+    "description" : {
+      "en-US" : "The JDBC URL of the metastore the server uses, where the master records checkpoints; required with checkpoint.dir. The server creates the tables, so start a server of this version on it first.",
+      "zh-CN" : "Server 使用的元数据库的 JDBC URL，Master 在其中记录 checkpoint；设置了 checkpoint.dir 时必填。表由 Server 创建，因此请先在它上面启动一个本版本的 Server。"
+    }
+  }, {
+    "key" : "master.metastore.username",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : "",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_METASTORE_USERNAME",
+    "description" : {
+      "en-US" : "The user of the metastore.",
+      "zh-CN" : "元数据库的用户。"
+    }
+  }, {
+    "key" : "master.metastore.password",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : "",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_METASTORE_PASSWORD",
+    "description" : {
+      "en-US" : "The password of the metastore user; best given as PIPEFORGE_MASTER_METASTORE_PASSWORD.",
+      "zh-CN" : "元数据库用户的密码；最好用 PIPEFORGE_MASTER_METASTORE_PASSWORD 提供。"
+    }
+  }, {
+    "key" : "master.metastore.driver-dir",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : "",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_METASTORE_DRIVER_DIR",
+    "description" : {
+      "en-US" : "A directory with the JDBC driver of a database whose driver does not ship, such as MySQL Connector/J; relative to the installation directory.",
+      "zh-CN" : "存放未随发行版提供的 JDBC 驱动（例如 MySQL Connector/J）的目录，相对于安装目录。"
+    }
+  }, {
+    "key" : "master.metastore.pool-size",
+    "file" : "conf/master.yaml",
+    "type" : "int",
+    "default" : "4",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_METASTORE_POOL_SIZE",
+    "description" : {
+      "en-US" : "The connections the master keeps to the metastore.",
+      "zh-CN" : "Master 与元数据库保持的连接数。"
+    }
+  }, {
     "key" : "scheduler.slot-request-timeout",
     "file" : "conf/master.yaml",
     "type" : "duration",

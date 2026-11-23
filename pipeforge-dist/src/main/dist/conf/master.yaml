@@ -29,3 +29,12 @@
 
 # How long a cancelled task may take to stop before its thread is interrupted; the default of the jobs this master runs.
 # task.cancel-timeout: 30s
+
+# The metastore the server uses, where the master records checkpoints; required with checkpoint.dir.
+# The server creates its tables, so start a server of this version on it first. H2 and PostgreSQL
+# drivers ship; for MySQL put Connector/J into driver-dir.
+# master.metastore.url: jdbc:postgresql://db:5432/pipeforge
+# master.metastore.username:
+# master.metastore.password:
+# master.metastore.driver-dir:
+# master.metastore.pool-size: 4

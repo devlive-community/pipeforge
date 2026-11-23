@@ -42,6 +42,12 @@ numbers 9 and 10, reserved for them from the start), `SubmitJobRequest` where a 
 (`restore`) and its attempt, `JobStatus` the attempt and the last completed checkpoint, and
 `RunState` the states of restarts and pauses: `RESTARTING` 8, `PAUSING` 9, `PAUSED` 10,
 `RETRY_WAIT` 11. A master that does not know a state refuses it rather than guessing.
+`JobMetrics` carries the [checkpoint metrics](../concepts/checkpoint#observability) in fields 27 to
+30.
+
+The master answers acknowledgements in the order of section 2.6 of the specification: it writes
+`_metadata`, records the checkpoint as completed in the metastore, and only then sends
+`NotifyCheckpointComplete`. A decline that already carries `PF-CKPT-0005` keeps its reason.
 
 ## Conventions
 

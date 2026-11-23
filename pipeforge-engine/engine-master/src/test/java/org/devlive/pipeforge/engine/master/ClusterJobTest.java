@@ -96,6 +96,31 @@ class ClusterJobTest {
             return endpoint.gateway().freeSlot(allocationId);
         }
 
+        /** Answers triggers in place of the task executor, as barriers would; else the executor does. */
+        volatile java.util.function.@org.jspecify.annotations.Nullable Consumer<
+                        org.devlive.pipeforge.engine.rpc.CheckpointTrigger>
+                barriers;
+
+        @Override
+        public CompletableFuture<Void> triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
+            var answer = barriers;
+            if (answer != null) {
+                answer.accept(trigger);
+                return CompletableFuture.completedFuture(null);
+            }
+            return endpoint.gateway().triggerCheckpoint(trigger);
+        }
+
+        @Override
+        public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+            return endpoint.gateway().notifyCheckpointComplete(task, checkpointId);
+        }
+
+        @Override
+        public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+            return endpoint.gateway().abortCheckpoint(task, checkpointId, reason);
+        }
+
         boolean idle() {
             return slots.snapshot().stream().noneMatch(SlotTable.Slot::allocated);
         }
@@ -158,6 +183,14 @@ class ClusterJobTest {
     }
 
     JobMaster start(JobPlan plan, Duration slotTimeout, SubmitOptions options) {
+        return start(plan, slotTimeout, options, null);
+    }
+
+    JobMaster start(
+            JobPlan plan,
+            Duration slotTimeout,
+            SubmitOptions options,
+            org.devlive.pipeforge.engine.master.checkpoint.@org.jspecify.annotations.Nullable Checkpoints checkpoints) {
         JobId id = JobId.random();
         JobMaster job = new JobMaster(
                 id,
@@ -170,7 +203,8 @@ class ClusterJobTest {
                         Map.of(),
                         Scheduler.Strategy.SPREAD,
                         slotTimeout),
-                () -> jobs.remove(id.value()));
+                () -> jobs.remove(id.value()),
+                checkpoints);
         jobs.add(job);
         job.start();
         return job;
@@ -419,7 +453,125 @@ class ClusterJobTest {
                     ExecutionAttemptId task, org.devlive.pipeforge.engine.rpc.TaskMetricsSnapshot metrics) {
                 return target.reportMetrics(task, metrics);
             }
+
+            @Override
+            public CompletableFuture<Void> acknowledgeCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+                return target.acknowledgeCheckpoint(ack);
+            }
+
+            @Override
+            public CompletableFuture<Void> declineCheckpoint(
+                    ExecutionAttemptId task,
+                    long checkpointId,
+                    org.devlive.pipeforge.common.error.PipeForgeException reason) {
+                return target.declineCheckpoint(task, checkpointId, reason);
+            }
         };
+    }
+
+    static JobPlan withCheckpoints(JobPlan plan, Duration interval, int tolerable, int retained) {
+        return new JobPlan(
+                plan.name(),
+                plan.description(),
+                plan.engine(),
+                plan.mode(),
+                plan.modeDerived(),
+                plan.delivery(),
+                plan.parallelism(),
+                plan.timeZone(),
+                plan.variables(),
+                plan.nodes(),
+                plan.warnings(),
+                plan.dirty(),
+                plan.limit(),
+                new org.devlive.pipeforge.core.plan.CheckpointSettings(
+                        true,
+                        interval,
+                        Duration.ofSeconds(10),
+                        Duration.ZERO,
+                        1,
+                        tolerable,
+                        retained,
+                        org.devlive.pipeforge.core.plan.CheckpointSettings.Externalized.RETAIN_ON_CANCELLATION));
+    }
+
+    @Test
+    void workersThatTakeNoSnapshotsFailTheRunOnceTooManyCheckpointsFailed(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        String probe = Probe.create();
+        JobMaster job = start(
+                withCheckpoints(TestConnectors.job(probe, "block: cancel", "", "", 3), Duration.ofMillis(100), 1, 3),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(result.error().code()).isEqualTo(ErrorCode.TOO_MANY_CHECKPOINT_FAILURES);
+        assertThat(result.error().getMessage()).contains("does not take snapshots of tasks");
+        assertThat(store.rows.values()).hasSizeGreaterThanOrEqualTo(2).allSatisfy(c -> assertThat(c.errorCode())
+                .isEqualTo("PF-CKPT-0005"));
+        assertThat(storage.list("")).as("failed checkpoints leave nothing").isEmpty();
+        awaitSlotsBack();
+    }
+
+    @Test
+    void checkpointsCompleteOnThreeWorkersOnceEveryTaskAcknowledged(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        var running = new java.util.concurrent.atomic.AtomicReference<JobMaster>();
+        // every task acknowledges once a source is triggered, as if the barriers had reached them
+        workers.values()
+                .forEach(w -> w.barriers = trigger -> running.get().tasks().forEach(task -> master.gateway()
+                        .acknowledgeCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointAck(
+                                task.attempt(),
+                                trigger.checkpointId(),
+                                List.of(),
+                                org.devlive.pipeforge.engine.rpc.CheckpointTaskMetrics.NONE))));
+        String probe = Probe.create();
+        JobPlan plan =
+                withCheckpoints(TestConnectors.job(probe, "block: cancel", "", "", 3), Duration.ofMillis(100), 0, 2);
+        // set before the first trigger, which comes an interval after the tasks run
+        JobMaster job = start(
+                plan,
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+        running.set(job);
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (job.checkpointStats().lastCompletedId() < 4) {
+            assertThat(System.nanoTime()).as("four checkpoints completed").isLessThan(deadline);
+            Thread.sleep(20);
+        }
+        assertThat(job.handle().status()).isEqualTo(JobStatus.RUNNING);
+        job.cancel();
+        assertThat(end(job.handle()).status()).isEqualTo(JobStatus.CANCELLED);
+
+        var kept = store.list(job.runId()).stream()
+                .filter(c ->
+                        c.status() == org.devlive.pipeforge.engine.master.checkpoint.CheckpointStore.Status.COMPLETED)
+                .toList();
+        assertThat(kept).as("two retained").hasSize(2);
+        long last = kept.get(0).checkpointId();
+        String directory = org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint(job.runId(), last);
+        assertThat(storage.isComplete(directory)).isTrue();
+        var metadata = org.devlive.pipeforge.engine.rpc.CheckpointFiles.readMetadata(
+                storage.read(directory + "_metadata"), String.valueOf(last));
+        assertThat(metadata.getOperators(0).getOperatorKind()).isEqualTo("enumerator");
+        // the test source's enumerator state: the splits it has not assigned yet, inline
+        assertThat(metadata.getOperators(0).getSubtasks(0).getLocationCase())
+                .isEqualTo(org.devlive.pipeforge.engine.rpc.checkpoint.proto.SubtaskState.LocationCase.INLINE);
+        assertThat(storage.isComplete(
+                        org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint(job.runId(), 1)))
+                .as("older checkpoints are deleted")
+                .isFalse();
+        assertThat(job.handle().metrics().lastCompletedCheckpointId())
+                .isEqualTo(job.checkpointStats().lastCompletedId());
+        awaitSlotsBack();
     }
 
     @Test

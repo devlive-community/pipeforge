@@ -184,6 +184,42 @@ public final class ProtoMapping {
                 metrics.getSyncMs(), metrics.getAsyncMs(), metrics.getAlignmentMs(), metrics.getStateBytes());
     }
 
+    public static org.devlive.pipeforge.engine.rpc.proto.TriggerCheckpointRequest.Builder toProto(
+            CheckpointTrigger trigger) {
+        return org.devlive.pipeforge.engine.rpc.proto.TriggerCheckpointRequest.newBuilder()
+                .setTask(toProto(trigger.task()))
+                .setCheckpointId(trigger.checkpointId())
+                .setType(toProto(trigger.type()))
+                .setTimestampMs(trigger.timestampMs())
+                .setStop(trigger.stop());
+    }
+
+    public static CheckpointTrigger fromProto(org.devlive.pipeforge.engine.rpc.proto.TriggerCheckpointRequest request) {
+        return new CheckpointTrigger(
+                fromProto(request.getTask()),
+                request.getCheckpointId(),
+                fromProto(request.getType()),
+                request.getTimestampMs(),
+                request.getStop());
+    }
+
+    public static org.devlive.pipeforge.engine.rpc.proto.AcknowledgeCheckpointRequest.Builder toProto(
+            CheckpointAck ack) {
+        var proto = org.devlive.pipeforge.engine.rpc.proto.AcknowledgeCheckpointRequest.newBuilder()
+                .setTask(toProto(ack.task()))
+                .setCheckpointId(ack.checkpointId())
+                .setMetrics(toProto(ack.metrics()));
+        ack.states().forEach(state -> proto.addStates(toProto(state)));
+        return proto;
+    }
+
+    public static CheckpointAck fromProto(org.devlive.pipeforge.engine.rpc.proto.AcknowledgeCheckpointRequest request) {
+        List<StateHandle> states = new ArrayList<>();
+        request.getStatesList().forEach(state -> states.add(fromProto(state)));
+        return new CheckpointAck(
+                fromProto(request.getTask()), request.getCheckpointId(), states, fromProto(request.getMetrics()));
+    }
+
     /**
      * The states a task restores, per node in the order given; a node without states (its splits
      * went back to the enumerator) is kept as an empty list.

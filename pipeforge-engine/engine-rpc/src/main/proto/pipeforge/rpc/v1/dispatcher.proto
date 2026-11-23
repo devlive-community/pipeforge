@@ -183,6 +183,10 @@ message JobMetrics {
   int64 rows_dirty = 24;              // 跳过的坏行
   repeated DirtySample dirty_samples = 25;  // 作业最先跳过的坏行，最多 20 条
   int64 throttle_wait_ms = 26;        // Task 等待限流配额的时间之和
+  int64 last_completed_checkpoint_id = 27;  // 最近完成的 checkpoint，没有为 0（M2，冻结后的兼容增加）
+  int64 last_checkpoint_duration_ms = 28;   // 它从触发到完成的耗时
+  int64 last_checkpoint_size = 29;          // 它的状态大小（字节）
+  int64 checkpoint_failures = 30;           // 连续失败的 checkpoint 数，完成一个后归零
 }
 
 message ListJobsRequest {

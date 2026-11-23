@@ -2385,6 +2385,10 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "checkpointFailures" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "dirtySamples" : {
             "type" : "array",
             "items" : {
@@ -2396,6 +2400,18 @@
             "format" : "int64"
           },
           "exchangedBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "lastCheckpointDurationMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "lastCheckpointSize" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "lastCompletedCheckpointId" : {
             "type" : "integer",
             "format" : "int64"
           },

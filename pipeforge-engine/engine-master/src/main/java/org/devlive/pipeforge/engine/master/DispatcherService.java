@@ -260,7 +260,10 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 .setJobId(run.jobId())
                 .setJobName(run.jobName())
                 .setState(toProto(run.state()))
-                .setStartMs(run.started().toEpochMilli());
+                .setStartMs(run.started().toEpochMilli())
+                .setAttempt(1)
+                .setLastCheckpointId(run.lastCheckpointId())
+                .setLastCheckpointMs(run.lastCheckpointMs());
         if (run.ended() != null) {
             status.setEndMs(run.ended().toEpochMilli());
         }
@@ -301,7 +304,11 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 .setParallelism(metrics.parallelism())
                 .setMemoryBytes(metrics.memoryBytes())
                 .setRowsDirty(metrics.rowsDirty())
-                .setThrottleWaitMs(metrics.throttleWaitMs());
+                .setThrottleWaitMs(metrics.throttleWaitMs())
+                .setLastCompletedCheckpointId(metrics.lastCompletedCheckpointId())
+                .setLastCheckpointDurationMs(metrics.lastCheckpointDurationMs())
+                .setLastCheckpointSize(metrics.lastCheckpointSize())
+                .setCheckpointFailures(metrics.checkpointFailures());
         metrics.dirtySamples().forEach(sample -> proto.addDirtySamples(ProtoMapping.toProto(sample)));
         for (NodeMetrics node : metrics.nodes()) {
             proto.addNodes(org.devlive.pipeforge.engine.rpc.proto.NodeMetrics.newBuilder()

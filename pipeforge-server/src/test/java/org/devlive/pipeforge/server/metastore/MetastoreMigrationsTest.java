@@ -253,6 +253,84 @@ class MetastoreMigrationsTest {
 
     @ParameterizedTest
     @EnumSource(MetastoreVendor.class)
+    void theMasterRecordsCheckpointsInTheMigratedSchema(MetastoreVendor vendor) throws Exception {
+        ServerProperties.Metastore settings = fresh(vendor);
+        try (HikariDataSource dataSource = MetastoreDataSources.create(settings)) {
+            var store = new org.devlive.pipeforge.engine.master.checkpoint.JdbcCheckpointStore(
+                    dataSource, settings.safeUrl());
+            org.assertj.core.api.Assertions.assertThatThrownBy(store::check)
+                    .as("before the server migrated it")
+                    .hasMessageContaining("PF-CLUS-0013")
+                    .hasMessageContaining("has no checkpoint table");
+            new MetastoreMigrations(dataSource, vendor, settings.safeUrl()).migrate();
+            store.check();
+
+            Instant at = Instant.parse("2026-11-23T08:00:00.123Z");
+            JdbcClient.create(dataSource)
+                    .sql(
+                            "INSERT INTO job_run_attempt (run_id, attempt, status, started_at) VALUES ('r1', 1, 'RUNNING', ?)")
+                    .param(Timestamp.from(at))
+                    .update();
+            assertThat(store.lastCheckpointId("r1")).isZero();
+            for (long id = 1; id <= 3; id++) {
+                store.begin(new org.devlive.pipeforge.engine.master.checkpoint.CheckpointStore.Checkpoint(
+                        "r1",
+                        id,
+                        "订单 😀",
+                        1,
+                        id == 2
+                                ? org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT
+                                : org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT,
+                        org.devlive.pipeforge.engine.master.checkpoint.CheckpointStore.Status.IN_PROGRESS,
+                        id == 2 ? "SAVEPOINT" : "PERIODIC",
+                        id == 2 ? "before-upgrade" : null,
+                        at.plusSeconds(id),
+                        null,
+                        null,
+                        "r1/chk-" + id + "/",
+                        null,
+                        null,
+                        null));
+            }
+            store.complete("r1", 1, 1, at.plusSeconds(5), 1L << 33, "[{\"task\":\"r1/src/0/0\"}]");
+            store.complete("r1", 2, 1, at.plusSeconds(6), 10, "[]");
+            store.fail("r1", 3, at.plusSeconds(7), "PF-CKPT-0001", "x".repeat(70_000));
+            assertThat(store.lastCheckpointId("r1")).isEqualTo(3);
+            assertThat(store.lastCheckpointId("r2")).isZero();
+
+            var list = store.list("r1");
+            assertThat(list)
+                    .extracting(
+                            org.devlive.pipeforge.engine.master.checkpoint.CheckpointStore.Checkpoint::checkpointId,
+                            c -> c.status().name())
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(3L, "FAILED"),
+                            org.assertj.core.groups.Tuple.tuple(2L, "COMPLETED"),
+                            org.assertj.core.groups.Tuple.tuple(1L, "COMPLETED"));
+            var first = list.get(2);
+            assertThat(first.size()).isEqualTo(1L << 33);
+            assertThat(first.jobName()).isEqualTo("订单 😀");
+            assertThat(first.completedAt()).isEqualTo(at.plusSeconds(5));
+            assertThat(first.tasksJson()).contains("r1/src/0/0");
+            assertThat(list.get(1).name()).isEqualTo("before-upgrade");
+            assertThat(list.get(0).errorMessage()).hasSize(70_000);
+            assertThat(list.get(0).size()).isNull();
+            assertThat(JdbcClient.create(dataSource)
+                            .sql("SELECT last_checkpoint_id FROM job_run_attempt WHERE run_id = 'r1'")
+                            .query(Long.class)
+                            .single())
+                    .as("the last checkpoint of the attempt")
+                    .isEqualTo(2L);
+
+            store.delete("r1", 1);
+            assertThat(store.list("r1")).hasSize(2);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> store.complete("r1", 9, 1, at, 1, "[]"))
+                    .hasMessageContaining("the checkpoint is not recorded");
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MetastoreVendor.class)
     void everyEarlierVersionRunsOnTheLatestSchema(MetastoreVendor vendor) throws Exception {
         ServerProperties.Metastore settings = fresh(vendor);
         try (HikariDataSource dataSource = MetastoreDataSources.create(settings)) {

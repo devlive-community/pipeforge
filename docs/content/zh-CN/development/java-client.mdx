@@ -42,7 +42,7 @@ if (!ended.run().status().equals("SUCCESS")) {
 | `listRuns(RunQuery)` | `GET /api/v1/runs` | `RunPage`；`next()` 是下一页的令牌 |
 | `run(id)` | `GET /api/v1/runs/{id}` | `RunDetail`：运行、它的定义和状态变化 |
 | `cancelRun(id, reason)` | `POST /api/v1/runs/{id}/cancel` | `Run` |
-| `metrics(id)` | `GET /api/v1/runs/{id}/metrics` | `RunMetrics`，包括每个节点的计数 |
+| `metrics(id)` | `GET /api/v1/runs/{id}/metrics` | `RunMetrics`，包括每个节点的计数和 [checkpoint 指标](../concepts/checkpoint#可观测性) |
 | `metricsHistory(id, since)` | `GET /api/v1/runs/{id}/metrics/history` | `MetricSample` 列表，从旧到新 |
 | `analysis(id)` | `GET /api/v1/runs/{id}/analysis` | JSON 形式的[运行分析](../concepts/plan-and-explain#运行分析) |
 | `splits(id)`、`tasks(id)` | `GET /api/v1/runs/{id}/splits`、`/tasks` | `RunSplit`、`RunTask` 列表 |

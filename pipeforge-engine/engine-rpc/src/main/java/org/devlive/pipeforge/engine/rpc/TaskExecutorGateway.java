@@ -34,6 +34,19 @@ public interface TaskExecutorGateway {
     CompletableFuture<Void> freeSlot(String allocationId);
 
     /**
+     * Starts a checkpoint at a source task. The task answers later with {@link
+     * JobMasterGateway#acknowledgeCheckpoint} or {@link JobMasterGateway#declineCheckpoint};
+     * unknown tasks are ignored.
+     */
+    CompletableFuture<Void> triggerCheckpoint(CheckpointTrigger trigger);
+
+    /** Checkpoint {@code checkpointId} is complete: a task's sink may commit what it prepared for it. */
+    CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId);
+
+    /** Checkpoint {@code checkpointId} was given up: a task stops taking part in it. */
+    CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason);
+
+    /**
      * Reads the log of a task, also after the task has ended. Without {@link LogQuery#follow()} one
      * chunk arrives; with it, chunks arrive as the task writes until it ends. The future completes
      * after the last chunk; cancelling it stops following. Fails with {@code PF-CLUS-0012} when the

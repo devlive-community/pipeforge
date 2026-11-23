@@ -101,12 +101,20 @@ public final class ErrorCode {
             define("PF-SRC-0004", "ENUMERATOR_TIMEOUT", "node", "operation", "timeoutMs");
 
     // Checkpoints and state
+    public static final ErrorCode CHECKPOINT_TIMEOUT =
+            define("PF-CKPT-0001", "CHECKPOINT_TIMEOUT", "checkpoint", "timeoutMs", "missing");
     public static final ErrorCode STATE_CORRUPTED =
             define("PF-CKPT-0002", "STATE_CORRUPTED", "file", "checkpoint", "reason");
     public static final ErrorCode STATE_INCOMPATIBLE =
             define("PF-CKPT-0003", "STATE_INCOMPATIBLE", "file", "checkpoint", "reason");
     public static final ErrorCode STORAGE_UNAVAILABLE =
             define("PF-CKPT-0004", "STORAGE_UNAVAILABLE", "location", "reason");
+    public static final ErrorCode CHECKPOINT_DECLINED =
+            define("PF-CKPT-0005", "CHECKPOINT_DECLINED", "checkpoint", "task", "reason");
+    public static final ErrorCode CHECKPOINT_FAILED =
+            define("PF-CKPT-0006", "CHECKPOINT_FAILED", "checkpoint", "reason");
+    public static final ErrorCode TOO_MANY_CHECKPOINT_FAILURES =
+            define("PF-CKPT-0007", "TOO_MANY_CHECKPOINT_FAILURES", "failures", "limit", "last");
 
     // Sinks
     public static final ErrorCode SINK_FAILED = define("PF-SINK-0001", "SINK_FAILED", "node", "reason");

@@ -8,7 +8,8 @@ order: 25
 文件。集群把它们写入同一个 **checkpoint 存储**，由 `conf/pipeforge.yaml` 中的 `checkpoint.dir`
 指定。所有 Master 和 Worker 都必须能访问同一个存储，因为重启的运行可能在另外的机器上读取状态。
 
-不设置 `checkpoint.dir` 时，运行不保存 checkpoint。
+不设置 `checkpoint.dir` 时，运行不保存 checkpoint。设置之后，Master 还需要连接[元数据库](./metastore#master)（`master.metastore.url`），
+并在其中记录 checkpoint；作业如何做 checkpoint 见 [Checkpoint](../concepts/checkpoint)。
 
 ## 选择存储
 

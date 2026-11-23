@@ -230,6 +230,37 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * Tasks do not take snapshots on this worker: a trigger for one of its tasks is declined, so
+     * that the checkpoint fails at once rather than when it times out.
+     */
+    @Override
+    @SuppressWarnings("FutureReturnValueIgnored") // a lost decline ends in the checkpoint's timeout
+    public CompletableFuture<Void> triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
+        if (tasks.containsKey(trigger.task())) {
+            master.declineCheckpoint(
+                    trigger.task(),
+                    trigger.checkpointId(),
+                    org.devlive.pipeforge.common.error.PipeForgeException.of(
+                                    org.devlive.pipeforge.common.error.ErrorCode.CHECKPOINT_DECLINED)
+                            .param("checkpoint", trigger.checkpointId())
+                            .param("task", trigger.task().toString())
+                            .param("reason", "worker " + name + " does not take snapshots of tasks")
+                            .build());
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+        return CompletableFuture.completedFuture(null);
+    }
+
     @Override
     public CompletableFuture<Void> sendOperatorEvent(ExecutionAttemptId id, OperatorEvent event) {
         Task task = tasks.get(id);

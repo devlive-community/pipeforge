@@ -131,6 +131,20 @@ final class ScriptedMaster implements JobMasterGateway, AutoCloseable {
         return CompletableFuture.completedFuture(null);
     }
 
+    final BlockingQueue<org.devlive.pipeforge.common.error.PipeForgeException> declines = new LinkedBlockingQueue<>();
+
+    @Override
+    public CompletableFuture<Void> acknowledgeCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> declineCheckpoint(
+            ExecutionAttemptId task, long checkpointId, org.devlive.pipeforge.common.error.PipeForgeException reason) {
+        declines.add(reason);
+        return CompletableFuture.completedFuture(null);
+    }
+
     @Override
     public synchronized CompletableFuture<Void> sendReaderMessage(ReaderMessage message) {
         messages.add(message);

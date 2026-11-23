@@ -38,6 +38,10 @@ import org.jspecify.annotations.Nullable;
  * @param splitsFinished splits read
  * @param nodes the counters of each node of the plan
  * @param dirtySamples the first bad rows skipped
+ * @param lastCompletedCheckpointId the last completed checkpoint, 0 before the first
+ * @param lastCheckpointDurationMs how long it took
+ * @param lastCheckpointSize the size of its state
+ * @param checkpointFailures checkpoints that failed in a row
  */
 public record RunMetrics(
         @Nullable Instant at,
@@ -64,7 +68,11 @@ public record RunMetrics(
         int splitsTotal,
         int splitsFinished,
         List<NodeMetrics> nodes,
-        List<DirtySample> dirtySamples) {
+        List<DirtySample> dirtySamples,
+        long lastCompletedCheckpointId,
+        long lastCheckpointDurationMs,
+        long lastCheckpointSize,
+        long checkpointFailures) {
 
     public RunMetrics {
         nodes = nodes == null ? List.of() : List.copyOf(nodes);

@@ -294,7 +294,8 @@ committed. A worker that loses its [master](./cluster) cancels all its tasks in 
 
 The result of a job carries its final status, the error with its code and scope (job, run, node,
 subtask) and its [metrics](../reference/metrics); `JobHandle.metrics()` returns them while the job
-runs, refreshed every `metricsInterval`.
+runs, refreshed every `metricsInterval`. On a cluster that takes checkpoints they include the
+[checkpoint metrics](./checkpoint#observability); they stay 0 otherwise.
 
 - **Collection.** Each operator counts its rows with one `LongAdder` increment per row and counter.
   Every task sends a snapshot of its counters to the job master once per `metricsInterval`, and a

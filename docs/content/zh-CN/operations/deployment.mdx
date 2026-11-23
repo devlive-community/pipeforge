@@ -81,7 +81,8 @@ worker: -Xmx4g
 ```
 
 Checkpoint 写入 `checkpoint.dir` 指定的存储，所有 Master 和 Worker 都必须能访问它：一个目录（使用 NFS 时在每台机器上路径相同），或者
-`s3://bucket/prefix`。每个进程启动时都会检查它，见 [Checkpoint 存储](./checkpoint-storage)。
+`s3://bucket/prefix`。每个进程启动时都会检查它，见 [Checkpoint 存储](./checkpoint-storage)。此时 Master 还需要在 `conf/master.yaml` 中配置
+`master.metastore.url`，即 Server 的[元数据库](./metastore#master)，用来记录 checkpoint。
 
 ## 端口与安全
 

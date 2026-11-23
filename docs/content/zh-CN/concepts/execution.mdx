@@ -237,7 +237,8 @@ handle.result().get().status();   // CANCELLED
 ## 可观测性
 
 作业结果中包含最终状态、带错误码和定位（作业、运行、节点、子任务）的错误，以及[指标](../reference/metrics)；作业运行期间
-`JobHandle.metrics()` 返回当前指标，每隔 `metricsInterval` 刷新一次。
+`JobHandle.metrics()` 返回当前指标，每隔 `metricsInterval` 刷新一次。在做 checkpoint 的集群上，指标中还包括
+[checkpoint 指标](./checkpoint#可观测性)，否则它们为 0。
 
 - **采集。** 每个算子按行计数，每行每个计数器只做一次 `LongAdder` 自增。无论 Task 运行在哪个 Worker 上，它都每隔 `metricsInterval`
   把计数快照发给 JobMaster，结束时随最终状态再发一次；JobMaster 按节点和作业汇总。快照中是累计值，因此丢失或迟到的上报只会让指标暂时滞后，

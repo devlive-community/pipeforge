@@ -68,6 +68,14 @@ sink:
 | `dirty.max-rows` | `skip` 时一次运行最多可以跳过的坏行数 | 不限制 |
 | `limit.rows-per-second` | 所有 Source 合计每秒可以读取的行数，见[限流](../concepts/execution#限流) | 不限制 |
 | `limit.bytes-per-second` | 所有 Source 合计每秒可以读取的字节数，按行在内存中的大小计算 | 不限制 |
+| `checkpoint.enabled` | 是否做 checkpoint（集群设置了 `checkpoint.dir` 时），见 [Checkpoint](../concepts/checkpoint) | `true` |
+| `checkpoint.interval` | 两次 checkpoint 之间的间隔 | 流式 `1min`，批处理 `5min` |
+| `checkpoint.timeout` | 一次 checkpoint 最长可以用多久，超过即失败 | `10min` |
+| `checkpoint.min-pause` | 一次 checkpoint 结束到下一次开始的最短间隔 | `0` |
+| `checkpoint.max-concurrent` | 同时进行的 checkpoint 数，1 到 16 | `1` |
+| `checkpoint.tolerable-failures` | 连续失败多少次之后运行失败 | `3` |
+| `checkpoint.retained` | 保留的已完成 checkpoint 数，1 到 1000 | `3` |
+| `checkpoint.externalized` | `RETAIN_ON_CANCELLATION` 或 `DELETE_ON_CANCELLATION`：被取消的运行的 checkpoint 如何处理 | `RETAIN_ON_CANCELLATION` |
 | `timezone` | IANA 时区，例如 `Asia/Shanghai` | `UTC` |
 | `variables` | 名称到取值的映射，见[变量](./variables#作业变量) | 无 |
 | `source.*`、`transform.*`、`sink.*` | 同类所有节点的选项默认值 | 无 |
@@ -75,6 +83,7 @@ sink:
 - `mode: batch` 而存在无界 Source 时报错（`PF-PLAN-0011`）。
 - `delivery: exactly-once` 要求每个 Sink 都支持两阶段提交或幂等写入，否则计划失败并指出是哪个 Sink（`PF-PLAN-0003`）。
 - 集群配置（`worker.*`、`master.*`、`server.*`、`cluster.*`）不能写在作业中。
+- `checkpoint.interval` 和 `checkpoint.timeout` 必须大于零，`checkpoint.min-pause` 不能为负数（`PF-CONF-0002`）。
 
 ## 节点
 

@@ -163,7 +163,11 @@ field pipeforge.rpc.v1.JobMetrics 23 memory_bytes int64
 field pipeforge.rpc.v1.JobMetrics 24 rows_dirty int64
 field pipeforge.rpc.v1.JobMetrics 25 dirty_samples repeated pipeforge.rpc.v1.DirtySample
 field pipeforge.rpc.v1.JobMetrics 26 throttle_wait_ms int64
+field pipeforge.rpc.v1.JobMetrics 27 last_completed_checkpoint_id int64
+field pipeforge.rpc.v1.JobMetrics 28 last_checkpoint_duration_ms int64
+field pipeforge.rpc.v1.JobMetrics 29 last_checkpoint_size int64
 field pipeforge.rpc.v1.JobMetrics 3 nodes repeated pipeforge.rpc.v1.NodeMetrics
+field pipeforge.rpc.v1.JobMetrics 30 checkpoint_failures int64
 field pipeforge.rpc.v1.JobMetrics 4 splits_total int32
 field pipeforge.rpc.v1.JobMetrics 5 splits_finished int32
 field pipeforge.rpc.v1.JobMetrics 6 elapsed_ms int64

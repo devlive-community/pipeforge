@@ -109,6 +109,26 @@ class GrpcTransportTest {
             return CompletableFuture.completedFuture(null);
         }
 
+        final List<String> checkpoints = new CopyOnWriteArrayList<>();
+
+        @Override
+        public CompletableFuture<Void> triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
+            checkpoints.add("trigger " + trigger);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+            checkpoints.add("complete " + task + " " + checkpointId);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+            checkpoints.add("abort " + task + " " + checkpointId + " " + reason);
+            return CompletableFuture.completedFuture(null);
+        }
+
         volatile CompletableFuture<Void> following = new CompletableFuture<>();
 
         @Override
@@ -155,6 +175,22 @@ class GrpcTransportTest {
         @Override
         public CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot snapshot) {
             metrics.add(snapshot);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        final List<org.devlive.pipeforge.engine.rpc.CheckpointAck> acks = new CopyOnWriteArrayList<>();
+        final List<PipeForgeException> declines = new CopyOnWriteArrayList<>();
+
+        @Override
+        public CompletableFuture<Void> acknowledgeCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+            acks.add(ack);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> declineCheckpoint(
+                ExecutionAttemptId task, long checkpointId, PipeForgeException reason) {
+            declines.add(reason);
             return CompletableFuture.completedFuture(null);
         }
     }
@@ -464,6 +500,47 @@ class GrpcTransportTest {
             PipeForgeException custom = failure(client.sendReaderMessage(
                     new ReaderMessage.Custom(TASK, "src", new org.devlive.pipeforge.api.source.ReaderEvent() {})));
             assertThat(custom.getMessage()).contains("Custom reader events of node 'src'");
+        }
+    }
+
+    @Test
+    void checkpointsTravelBothWays() {
+        TaskExecutorClient client = executor(new Headers.Epochs(1, 1));
+        var trigger = new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                TASK, 3, org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT, 1_000L, true);
+        client.triggerCheckpoint(trigger).join();
+        client.notifyCheckpointComplete(TASK, 3).join();
+        client.abortCheckpoint(TASK, 4, "timed out").join();
+        assertThat(worker.checkpoints)
+                .containsExactly("trigger " + trigger, "complete " + TASK + " 3", "abort " + TASK + " 4 timed out");
+
+        try (JobMasterClient tasks = new JobMasterClient(channel, "master", retry)) {
+            var ack = new org.devlive.pipeforge.engine.rpc.CheckpointAck(
+                    TASK,
+                    3,
+                    List.of(new org.devlive.pipeforge.engine.rpc.StateHandle(
+                            "src",
+                            "source",
+                            1,
+                            new org.devlive.pipeforge.engine.rpc.StateHandle.File("src-0.state"),
+                            40_000,
+                            7)),
+                    new org.devlive.pipeforge.engine.rpc.CheckpointTaskMetrics(1, 20, 0, 40_000));
+            tasks.acknowledgeCheckpoint(ack).join();
+            tasks.declineCheckpoint(
+                            TASK,
+                            4,
+                            PipeForgeException.of(ErrorCode.CHECKPOINT_DECLINED)
+                                    .param("checkpoint", 4)
+                                    .param("task", TASK.toString())
+                                    .param("reason", "not ready")
+                                    .build())
+                    .join();
+            assertThat(master.acks).containsExactly(ack);
+            assertThat(master.declines).singleElement().satisfies(e -> {
+                assertThat(e.code()).isEqualTo(ErrorCode.CHECKPOINT_DECLINED);
+                assertThat(e.params()).containsEntry("reason", "not ready");
+            });
         }
     }
 

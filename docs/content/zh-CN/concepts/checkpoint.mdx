@@ -1,0 +1,136 @@
+---
+title: Checkpoint
+description: 运行如何记录自己的进度：何时做 checkpoint、其中保存了什么、提供什么一致性，以及如何保留和清理。
+order: 75
+template: feature
+---
+
+## 概述
+
+**checkpoint** 是运行中作业的一致快照：每个 Source 读到了输入的哪里，每个 Sink 准备提交什么，以及 Source 还没有分配出去的分片。
+它被写入 [Checkpoint 存储](../operations/checkpoint-storage)并记录在[元数据库](../operations/metastore)中，这样失败的运行可以从最近的 checkpoint 继续，
+而不是从头开始；Sink 提交的也正好是一个已记录的 checkpoint 所覆盖的数据。
+
+只有设置了 `checkpoint.dir` 的集群才会做 checkpoint；作业通过 `env.checkpoint.*` 控制频率和数量。
+
+## 原理
+
+每个 checkpoint 都由 Master 协调：
+
+1. Master 先取 Source 的分片枚举器的状态，再通知读取 Source 的 Task 参与 checkpoint *n*。
+2. 这些 Task 取自己的状态，并随数据向下游发送 **barrier**；其他 Task 在所有输入都收到 *n* 的 barrier 后取自己的状态。
+   barrier 是数据流中的标记，它之前的行属于这个 checkpoint，之后的不属于。
+3. 每个 Task 向 Master 确认自己的部分，并告知状态保存在哪里。
+4. 收齐所有 Task 的确认后，Master 写入 checkpoint 的 `_metadata`，在元数据库中把它记为已完成，**然后**才通知各个 Task 它已完成，
+   Sink 此时才提交为它准备的数据。
+
+第 4 步的顺序很关键：元数据库中最近完成的 checkpoint 永远不会早于 Sink 已提交的数据，因此从它重新开始的运行不会把同一批数据提交两次。
+
+Task 拒绝、在 `env.checkpoint.timeout` 内没有完成、或者 Master 无法写入或记录时，checkpoint **失败**。已经写入的部分会被删除，
+在下一个间隔再尝试。连续失败超过 `env.checkpoint.tolerable-failures` 次时运行失败，因为此时一旦出错丢失的进度会超过作业允许的范围。
+
+## 快速上手
+
+在 `conf/pipeforge.yaml` 和 `conf/master.yaml` 中为集群配置 checkpoint 存储，并为 Master 配置元数据库：
+
+```yaml
+checkpoint.dir: s3://my-bucket/pipeforge
+master.metastore.url: jdbc:postgresql://db:5432/pipeforge
+```
+
+作业默认每分钟（流式）或每五分钟（批处理）做一次 checkpoint；可以在作业中设置其他间隔：
+
+```yaml
+env:
+  checkpoint.interval: 30s
+```
+
+## 配置
+
+| 选项 | 默认值 | 含义 |
+|---|---|---|
+| `env.checkpoint.enabled` | `true` | 是否做 checkpoint |
+| `env.checkpoint.interval` | 流式 `1min`，批处理 `5min` | 两次 checkpoint 之间的间隔；对批处理作业，它决定失败的运行最多重读多少数据 |
+| `env.checkpoint.timeout` | `10min` | 一次 checkpoint 最长可以用多久，超过即失败 |
+| `env.checkpoint.min-pause` | `0` | 一次 checkpoint 结束到下一次开始的最短间隔 |
+| `env.checkpoint.max-concurrent` | `1` | 同时进行的 checkpoint 数 |
+| `env.checkpoint.tolerable-failures` | `3` | 连续失败多少次之后运行失败 |
+| `env.checkpoint.retained` | `3` | 保留的已完成 checkpoint 数，更早的会被删除 |
+| `env.checkpoint.externalized` | `RETAIN_ON_CANCELLATION` | 运行被取消后保留（`RETAIN_ON_CANCELLATION`）还是删除（`DELETE_ON_CANCELLATION`）它的 checkpoint |
+
+集群一侧是 `checkpoint.dir` 和 `checkpoint.s3.*`（见 [Checkpoint 存储](../operations/checkpoint-storage)）以及 `master.metastore.*`
+（见[元数据库](../operations/metastore#master)）；[配置参考](../reference/configuration)列出了全部配置项。
+
+## 示例
+
+不允许 checkpoint 失败、保留最近十个的流式作业：
+
+```yaml
+env:
+  mode: streaming
+  checkpoint.interval: 20s
+  checkpoint.timeout: 2min
+  checkpoint.tolerable-failures: 0
+  checkpoint.retained: 10
+```
+
+不做 checkpoint 的作业，用于预览：
+
+```yaml
+env:
+  checkpoint.enabled: false
+```
+
+## 行为与语义
+
+| 保证 | 需要 |
+|---|---|
+| at-least-once | 开启 checkpoint，并且 Source 能从某个位置重新读取 |
+| 效果上的 exactly-once | at-least-once，并且 Sink 按主键幂等写入 |
+| exactly-once | at-least-once，并且 Sink 两阶段提交 |
+| 无保证 | 关闭 checkpoint：失败的运行从头开始 |
+
+- 同一个运行中 checkpoint 编号只增不减，重启之后也不会重复。
+- 只有运行的所有 Task 都在运行时才会开始 checkpoint。
+- savepoint 由用户手动触发，不会被自动删除；它不计入 `retained`，也不计入作业允许的失败次数。
+- 运行结束时，进行中的 checkpoint 被放弃。**成功**的运行删除自己的 checkpoint，**失败**的运行保留它们以便继续，
+  **被取消**的运行按 `env.checkpoint.externalized` 处理。
+
+## 可观测性
+
+| 指标 | 含义 |
+|---|---|
+| `lastCompletedCheckpointId` | 最近完成的 checkpoint，第一个完成之前为 0 |
+| `lastCheckpointDurationMs` | 它从触发到被记录的耗时 |
+| `lastCheckpointSize` | 它的状态大小 |
+| `checkpointFailures` | 连续失败的 checkpoint 数，有 checkpoint 完成后归零 |
+
+它们属于运行的指标（见[指标参考](../reference/metrics)）；元数据库的 `checkpoint` 表保存每个 checkpoint 的状态、大小、目录、错误以及每个 Task 的部分。
+Master 会在日志中记录每个完成或失败的 checkpoint。
+
+## 性能与调优
+
+- 取状态时在 Task 的线程上复制一份；写入在 Task 继续处理时进行，因此 checkpoint 对吞吐的影响只有复制的那一下。
+- 间隔越短，出错时丢失的进度越少，但写入越频繁；对批处理作业，间隔决定失败的运行最多重读多少数据。
+- 背压会拖慢 barrier：checkpoint 超时时，先检查运行的背压，再考虑调大 `env.checkpoint.timeout`。
+
+## 排障
+
+| 错误 | 原因与解决 |
+|---|---|
+| [`PF-CKPT-0001`](../reference/errors#pf-ckpt-0001) | checkpoint 超时；消息中列出了没有完成的 Task |
+| [`PF-CKPT-0005`](../reference/errors#pf-ckpt-0005) | Task 拒绝参与，原因见消息 |
+| [`PF-CKPT-0006`](../reference/errors#pf-ckpt-0006) | Master 无法写入 checkpoint，或无法在元数据库中记录它 |
+| [`PF-CKPT-0007`](../reference/errors#pf-ckpt-0007) | 连续失败的 checkpoint 超过作业允许的次数；运行以最后一次的原因失败 |
+| [`PF-CONF-0011`](../reference/errors#pf-conf-0011) `master.metastore.url` | 设置了 `checkpoint.dir`，但没有配置 Master 的元数据库 |
+
+## 限制
+
+- 本版本的 Worker 还不会为 Task 做快照：它们会拒绝每一次 checkpoint（`PF-CKPT-0005`），因此在设置了 `checkpoint.dir` 的集群上，
+  运行会在 `env.checkpoint.tolerable-failures` + 1 次 checkpoint 之后失败。在此之前，请为这类集群上的作业设置 `env.checkpoint.enabled: false`。
+- 运行还不能从 checkpoint 重新开始；也还不能从命令行或 Web UI 做 savepoint。
+- 只有对齐的 checkpoint：Task 要等所有输入都收到 barrier。
+
+## 版本
+
+自 0.1.0（M2）起提供。

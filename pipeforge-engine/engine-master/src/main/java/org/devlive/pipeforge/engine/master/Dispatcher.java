@@ -98,7 +98,21 @@ public final class Dispatcher implements AutoCloseable {
             State state,
             List<RunStates.Transition> transitions,
             @Nullable PipeForgeException error,
-            List<JobMaster.TaskView> tasks) {
+            List<JobMaster.TaskView> tasks,
+            long lastCheckpointId,
+            long lastCheckpointMs) {
+
+        /** A run without checkpoints. */
+        public RunStatus(
+                String runId,
+                String jobId,
+                String jobName,
+                State state,
+                List<RunStates.Transition> transitions,
+                @Nullable PipeForgeException error,
+                List<JobMaster.TaskView> tasks) {
+            this(runId, jobId, jobName, state, transitions, error, tasks, 0, 0);
+        }
 
         public Instant started() {
             return transitions.get(0).at();
@@ -139,7 +153,9 @@ public final class Dispatcher implements AutoCloseable {
                     states.state(),
                     states.transitions(),
                     error,
-                    master.tasks());
+                    master.tasks(),
+                    master.checkpointStats().lastCompletedId(),
+                    master.checkpointStats().lastCompletedAtMs());
         }
     }
 
@@ -151,6 +167,7 @@ public final class Dispatcher implements AutoCloseable {
     private final Clock clock;
     private final int retained;
     private final Map<String, Run> runs = new LinkedHashMap<>();
+    private volatile org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpoints;
 
     /**
      * @param timers runs the timeouts of runs
@@ -171,6 +188,12 @@ public final class Dispatcher implements AutoCloseable {
         this.timers = timers;
         this.clock = clock;
         this.retained = retained;
+    }
+
+    /** Runs submitted from now on take checkpoints with these, as their jobs ask. */
+    public Dispatcher withCheckpoints(org.devlive.pipeforge.engine.master.checkpoint.Checkpoints checkpoints) {
+        this.checkpoints = checkpoints;
+        return this;
     }
 
     /**
@@ -201,7 +224,8 @@ public final class Dispatcher implements AutoCloseable {
                     ChainTopology.graph(plan),
                     planned.options() != null ? planned.options() : options,
                     placements.forRun(plan),
-                    () -> jobs.remove(submission.runId()));
+                    () -> jobs.remove(submission.runId()),
+                    checkpoints);
             run = new Run(submission, plan, master);
             runs.put(submission.runId(), run);
             trim();

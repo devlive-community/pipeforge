@@ -11,7 +11,7 @@
 #   name:        lower camel case, as in the JSON output
 #   scope:       job | node
 #   type:        counter | gauge | meter | timer
-#   unit:        rows | ms | rows/s | ratio | bytes | batches | splits | tasks
+#   unit:        rows | ms | rows/s | ratio | bytes | batches | splits | tasks | checkpoints | id
 
 - name: elapsedMs
   scope: job
@@ -204,6 +204,38 @@
   description:
     en-US: "Time tasks waited for the rate limit of the job (env.limit), summed over tasks."
     zh-CN: "Task 等待作业限流（env.limit）的时间，按 Task 求和。"
+
+- name: lastCompletedCheckpointId
+  scope: job
+  type: gauge
+  unit: id
+  description:
+    en-US: "The number of the last completed checkpoint of the run; 0 before the first."
+    zh-CN: "运行最近完成的 checkpoint 的编号；第一个完成之前为 0。"
+
+- name: lastCheckpointDurationMs
+  scope: job
+  type: gauge
+  unit: ms
+  description:
+    en-US: "How long the last completed checkpoint took, from its trigger until it was recorded as complete."
+    zh-CN: "最近完成的 checkpoint 从触发到被记为完成的耗时。"
+
+- name: lastCheckpointSize
+  scope: job
+  type: gauge
+  unit: bytes
+  description:
+    en-US: "The size of the state of the last completed checkpoint."
+    zh-CN: "最近完成的 checkpoint 的状态大小。"
+
+- name: checkpointFailures
+  scope: job
+  type: gauge
+  unit: checkpoints
+  description:
+    en-US: "Checkpoints that failed in a row (timed out, declined or not written); a completed checkpoint resets it. The run fails once it exceeds env.checkpoint.tolerable-failures."
+    zh-CN: "连续失败（超时、被拒绝或写入失败）的 checkpoint 数；有 checkpoint 完成后归零。超过 env.checkpoint.tolerable-failures 时运行失败。"
 
 - name: rowsIn
   scope: node

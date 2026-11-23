@@ -65,6 +65,25 @@ public final class JobMasters implements JobMasterGateway, ResourceManager.Liste
     }
 
     @Override
+    public CompletableFuture<Void> acknowledgeCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+        JobMaster job = runs.get(ack.task().runId());
+        if (job != null) {
+            job.onCheckpointAck(ack);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> declineCheckpoint(
+            ExecutionAttemptId task, long checkpointId, org.devlive.pipeforge.common.error.PipeForgeException reason) {
+        JobMaster job = runs.get(task.runId());
+        if (job != null) {
+            job.onCheckpointDecline(task, checkpointId, reason);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
     public void workerLost(ResourceManager.WorkerLost lost) {
         runs.values().forEach(job -> job.workerLost(lost.workerId(), lost.error()));
     }

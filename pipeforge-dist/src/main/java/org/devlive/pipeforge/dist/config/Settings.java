@@ -174,6 +174,46 @@ public final class Settings {
             false,
             "spread puts the slots of a job on as many workers as possible, pack on as few as possible.",
             "spread 把作业的 Slot 分散到尽量多的 Worker 上，pack 集中到尽量少的 Worker 上。");
+    public static final Setting MASTER_METASTORE_URL = define(
+            "master.metastore.url",
+            "master",
+            Setting.Type.STRING,
+            null,
+            false,
+            "The JDBC URL of the metastore the server uses, where the master records checkpoints; required with checkpoint.dir. The server creates the tables, so start a server of this version on it first.",
+            "Server 使用的元数据库的 JDBC URL，Master 在其中记录 checkpoint；设置了 checkpoint.dir 时必填。表由 Server 创建，因此请先在它上面启动一个本版本的 Server。");
+    public static final Setting MASTER_METASTORE_USERNAME = define(
+            "master.metastore.username",
+            "master",
+            Setting.Type.STRING,
+            "",
+            false,
+            "The user of the metastore.",
+            "元数据库的用户。");
+    public static final Setting MASTER_METASTORE_PASSWORD = define(
+            "master.metastore.password",
+            "master",
+            Setting.Type.STRING,
+            "",
+            false,
+            "The password of the metastore user; best given as PIPEFORGE_MASTER_METASTORE_PASSWORD.",
+            "元数据库用户的密码；最好用 PIPEFORGE_MASTER_METASTORE_PASSWORD 提供。");
+    public static final Setting MASTER_METASTORE_DRIVER_DIR = define(
+            "master.metastore.driver-dir",
+            "master",
+            Setting.Type.STRING,
+            "",
+            false,
+            "A directory with the JDBC driver of a database whose driver does not ship, such as MySQL Connector/J; relative to the installation directory.",
+            "存放未随发行版提供的 JDBC 驱动（例如 MySQL Connector/J）的目录，相对于安装目录。");
+    public static final Setting MASTER_METASTORE_POOL_SIZE = define(
+            "master.metastore.pool-size",
+            "master",
+            Setting.Type.INT,
+            "4",
+            false,
+            "The connections the master keeps to the metastore.",
+            "Master 与元数据库保持的连接数。");
     public static final Setting SLOT_REQUEST_TIMEOUT = define(
             "scheduler.slot-request-timeout",
             "master",

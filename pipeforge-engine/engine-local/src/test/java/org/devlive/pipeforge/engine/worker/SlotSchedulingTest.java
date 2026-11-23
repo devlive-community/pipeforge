@@ -62,6 +62,20 @@ class SlotSchedulingTest {
                 ExecutionAttemptId task, TaskMetricsSnapshot metrics) {
             return java.util.concurrent.CompletableFuture.completedFuture(null);
         }
+
+        @Override
+        public java.util.concurrent.CompletableFuture<Void> acknowledgeCheckpoint(
+                org.devlive.pipeforge.engine.rpc.CheckpointAck ack) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public java.util.concurrent.CompletableFuture<Void> declineCheckpoint(
+                ExecutionAttemptId task,
+                long checkpointId,
+                org.devlive.pipeforge.common.error.PipeForgeException reason) {
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
     };
 
     final String masterName = "master-" + UUID.randomUUID();

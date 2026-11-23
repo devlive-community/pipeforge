@@ -20,4 +20,11 @@ public interface JobMasterGateway {
 
     /** The current metrics of a running task, sent periodically; the final ones come with its final state. */
     CompletableFuture<Void> reportMetrics(ExecutionAttemptId task, TaskMetricsSnapshot metrics);
+
+    /** A task took its part of a checkpoint. */
+    CompletableFuture<Void> acknowledgeCheckpoint(CheckpointAck ack);
+
+    /** A task cannot take part in a checkpoint, for {@code reason}. */
+    CompletableFuture<Void> declineCheckpoint(
+            ExecutionAttemptId task, long checkpointId, org.devlive.pipeforge.common.error.PipeForgeException reason);
 }
