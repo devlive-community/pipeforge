@@ -88,7 +88,9 @@ with the source's split serializer, exactly as they would between machines.
 ### The mailbox
 
 Each task has one thread and a **mailbox**. The thread alternates between handling mail (split
-assignments, cancellation, later checkpoints and timers) and reading data:
+assignments, cancellation, checkpoint triggers, later timers) and reading data. While a checkpoint
+runs, the job master holds a reader's new splits until the reader took its state (see
+[checkpoints](./checkpoint#barriers-and-alignment)):
 
 ```text
 loop:

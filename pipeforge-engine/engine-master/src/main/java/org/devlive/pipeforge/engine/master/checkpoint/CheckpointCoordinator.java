@@ -84,6 +84,32 @@ public final class CheckpointCoordinator {
         Map<String, SerializedValue> snapshot(long checkpointId);
     }
 
+    /**
+     * Holds split assignments while a checkpoint runs ({@link SplitAssignmentValve}); the
+     * coordinator triggers the sources once {@link #close} completed.
+     */
+    public interface Valve {
+        CompletableFuture<Void> close(long checkpointId);
+
+        void open(ExecutionAttemptId source, long checkpointId);
+
+        void openAll(long checkpointId);
+
+        /** For runs without split assignments to hold. */
+        Valve NONE = new Valve() {
+            @Override
+            public CompletableFuture<Void> close(long checkpointId) {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public void open(ExecutionAttemptId source, long checkpointId) {}
+
+            @Override
+            public void openAll(long checkpointId) {}
+        };
+    }
+
     /** A node of the job, as {@code _metadata} describes it. */
     public record Node(String id, String kind, String plugin, int parallelism) {}
 
@@ -109,6 +135,7 @@ public final class CheckpointCoordinator {
             CheckpointStore store,
             Tasks tasks,
             Enumerators enumerators,
+            Valve valve,
             Timer timer,
             Executor post,
             Executor io,
@@ -261,6 +288,18 @@ public final class CheckpointCoordinator {
         checkpoint.cancelTimeout =
                 context.timer().schedule(() -> timeout(id), settings.timeout().toMillis());
         LOG.info("Run {}: checkpoint {} ({}) triggered", run.runId(), id, reason);
+        // split events sent before the enumerator's snapshot reach the readers before the trigger
+        context.valve().close(id).whenComplete((ignored, error) -> context.post()
+                .execute(() -> {
+                    if (pending.get(id) == checkpoint) {
+                        triggerSources(checkpoint, type, now);
+                    }
+                }));
+        return checkpoint.result;
+    }
+
+    private void triggerSources(Pending checkpoint, CheckpointType type, long now) {
+        long id = checkpoint.id;
         for (ExecutionAttemptId source : context.tasks().sources()) {
             context.tasks()
                     .gateway(source)
@@ -271,7 +310,6 @@ public final class CheckpointCoordinator {
                         }
                     });
         }
-        return checkpoint.result;
     }
 
     // -------------------------------------------------------------------------------- answers
@@ -283,6 +321,10 @@ public final class CheckpointCoordinator {
             return;
         }
         checkpoint.acks.add(ack);
+        if (context.tasks().sources().contains(ack.task())) {
+            // the reader's snapshot holds what it was sent: assignments held since may go out
+            context.valve().open(ack.task(), ack.checkpointId());
+        }
         if (checkpoint.waiting.isEmpty()) {
             complete(checkpoint);
         }
@@ -371,6 +413,7 @@ public final class CheckpointCoordinator {
         // recorded as completed: only now may the sinks commit
         pending.remove(checkpoint.id);
         checkpoint.cancelTimeout.run();
+        context.valve().openAll(checkpoint.id);
         failures = 0;
         lastEndMs = completedAt;
         stats = new Stats(checkpoint.id, completedAt - checkpoint.triggeredAt, size, 0, completedAt);
@@ -541,6 +584,7 @@ public final class CheckpointCoordinator {
             return;
         }
         checkpoint.cancelTimeout.run();
+        context.valve().openAll(checkpoint.id);
         long now = context.clock().getAsLong();
         lastEndMs = now;
         LOG.warn("Run {}: checkpoint {} failed: {}", run.runId(), checkpoint.id, error.getMessage());

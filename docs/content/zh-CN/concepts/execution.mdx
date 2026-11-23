@@ -68,7 +68,8 @@ Source 的分片枚举器（SplitEnumerator）运行在 JobMaster 中。Reader �
 
 ### Mailbox
 
-每个 Task 有一个线程和一个 **mailbox**。线程交替处理 mail（分片分配、取消，以及后续的 checkpoint 和定时器）和读取数据：
+每个 Task 有一个线程和一个 **mailbox**。线程交替处理 mail（分片分配、取消、checkpoint 通知，以及后续的定时器）和读取数据。
+checkpoint 进行期间，JobMaster 会把 Reader 的新分片留到它取完状态之后再发出（见 [Checkpoint](./checkpoint#barrier-与对齐)）：
 
 ```text
 循环：

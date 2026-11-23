@@ -50,6 +50,13 @@ their barriers arrive too; only then does it take its state and pass the barrier
 ended does not hold the alignment back. While a channel waits it takes no more buffers, so its
 upstream task slows down rather than the rows piling up.
 
+Splits keep their place too. The source's enumerator hands out splits while the job runs, so a
+split could be assigned after the enumerator's state was taken and reach its reader after the
+reader's state was taken: it would be in neither. The master prevents it. Once it took the
+enumerator's state it waits until the splits sent before have reached their readers, and only then
+triggers them; splits assigned after the enumerator's state wait at the master until their reader
+took its state, and then go out in order. Every split is in exactly one of the two.
+
 Taking a state only copies it; writing it to the checkpoint storage happens on threads of the
 worker while the task reads on, and the task acknowledges once its states are written. States up to
 16 KB travel in the acknowledgement and end up inside `_metadata`.

@@ -165,6 +165,11 @@ public final class JobMaster {
     /** The storage and the metastore of checkpoints, or {@code null} on a master without them. */
     private final org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing;
 
+    /** Sends split events to the readers, held while a checkpoint needs it. */
+    private final org.devlive.pipeforge.engine.master.checkpoint.SplitAssignmentValve splitEvents =
+            new org.devlive.pipeforge.engine.master.checkpoint.SplitAssignmentValve(
+                    (reader, event) -> gateway(readerTask(reader)).sendOperatorEvent(reader(reader), event));
+
     /** Takes the checkpoints once the tasks are deployed; {@code null} without checkpoints. */
     private org.devlive.pipeforge.engine.master.checkpoint.@Nullable CheckpointCoordinator checkpoints;
 
@@ -394,6 +399,26 @@ public final class JobMaster {
                     }
                 },
                 this::snapshotEnumerator,
+                new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Valve() {
+                    @Override
+                    public java.util.concurrent.CompletableFuture<Void> close(long checkpointId) {
+                        List<Integer> all = new ArrayList<>();
+                        for (int reader = 0; reader < parallelism; reader++) {
+                            all.add(reader);
+                        }
+                        return splitEvents.close(checkpointId, all);
+                    }
+
+                    @Override
+                    public void open(ExecutionAttemptId source, long checkpointId) {
+                        splitEvents.open(source.subtask(), checkpointId);
+                    }
+
+                    @Override
+                    public void openAll(long checkpointId) {
+                        splitEvents.openAll(checkpointId);
+                    }
+                },
                 (action, delayMs) -> {
                     var scheduled = thread.schedule(() -> run(action), delayMs, TimeUnit.MILLISECONDS);
                     return () -> scheduled.cancel(false);
@@ -919,10 +944,8 @@ public final class JobMaster {
                 values.add(callSource(
                         "write split " + split.splitId(), () -> SerializedValue.of(owner.splitSerializer(), split)));
             }
-            gateway(readerTask(reader))
-                    .sendOperatorEvent(
-                            reader(reader),
-                            new OperatorEvent.AddSplits(sourceVertex.head().id(), values));
+            splitEvents.send(
+                    reader, new OperatorEvent.AddSplits(sourceVertex.head().id(), values));
         });
     }
 
@@ -949,12 +972,9 @@ public final class JobMaster {
         }
 
         @Override
-        @SuppressWarnings("FutureReturnValueIgnored") // a lost event fails its task, which reports it
         public void signalNoMoreSplits(int readerId) {
-            gateway(readerTask(readerId))
-                    .sendOperatorEvent(
-                            reader(readerId),
-                            new OperatorEvent.NoMoreSplits(sourceVertex.head().id()));
+            splitEvents.send(
+                    readerId, new OperatorEvent.NoMoreSplits(sourceVertex.head().id()));
         }
     }
 

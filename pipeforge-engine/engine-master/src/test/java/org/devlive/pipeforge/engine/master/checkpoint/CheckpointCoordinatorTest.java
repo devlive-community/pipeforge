@@ -149,6 +149,7 @@ class CheckpointCoordinatorTest {
     }
 
     final ManualTimer timer = new ManualTimer();
+    CheckpointCoordinator.Valve valve = CheckpointCoordinator.Valve.NONE;
     final MemoryCheckpointStore store = new MemoryCheckpointStore();
     final Workers workers = new Workers();
     final List<PipeForgeException> runFailures = new ArrayList<>();
@@ -190,6 +191,7 @@ class CheckpointCoordinatorTest {
                 store,
                 tasks,
                 id -> Map.of("src", new SerializedValue(3, enumeratorState)),
+                valve,
                 timer,
                 Runnable::run,
                 Runnable::run,
@@ -286,6 +288,42 @@ class CheckpointCoordinatorTest {
         assertThat(coordinator.stats().lastSize()).isGreaterThan(300);
         timer.advance(10_000);
         assertThat(workers.of("trigger")).hasSize(4).endsWith("trigger src-1 2");
+    }
+
+    @Test
+    void theSourcesAreTriggeredOnceTheSplitEventsSentBeforeWereDelivered() {
+        CompletableFuture<Void> delivered = new CompletableFuture<>();
+        List<String> valveCalls = new ArrayList<>();
+        valve = new CheckpointCoordinator.Valve() {
+            @Override
+            public CompletableFuture<Void> close(long checkpointId) {
+                valveCalls.add("close " + checkpointId);
+                return delivered;
+            }
+
+            @Override
+            public void open(ExecutionAttemptId source, long checkpointId) {
+                valveCalls.add("open " + source.subtask() + " " + checkpointId);
+            }
+
+            @Override
+            public void openAll(long checkpointId) {
+                valveCalls.add("open all " + checkpointId);
+            }
+        };
+        CheckpointCoordinator coordinator = coordinator(settings(3, 3));
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+        assertThat(valveCalls).containsExactly("close 1");
+        assertThat(workers.triggers).as("an assignment is still on its way").isEmpty();
+        delivered.complete(null);
+        assertThat(workers.of("trigger")).containsExactly("trigger src-0 1", "trigger src-1 1");
+
+        coordinator.acknowledge(ack(SINK, 1));
+        coordinator.acknowledge(ack(SRC1, 1));
+        coordinator.acknowledge(ack(SRC0, 1));
+        assertThat(valveCalls)
+                .as("a reader's valve opens with its own ack; all open when the checkpoint ends")
+                .containsExactly("close 1", "open 1 1", "open 0 1", "open all 1");
     }
 
     @Test
