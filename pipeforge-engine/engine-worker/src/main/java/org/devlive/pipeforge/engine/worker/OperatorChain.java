@@ -119,6 +119,8 @@ final class OperatorChain {
         }
         transforms = List.copyOf(reversed.reversed());
         first = next;
+        ChainOutput head = next;
+        aligned = (barrier, nanos) -> head.barrier(barrier);
         if (chain.hasSource()) {
             PlannedNode node = chain.source();
             source = new SourceOperator(
@@ -186,6 +188,50 @@ final class OperatorChain {
         }
     }
 
+    // ------------------------------------------------------------------ checkpoints
+
+    /** Takes the checkpoint of an aligned barrier; the first operator receives the barrier by default. */
+    private NetworkInput.Aligned aligned;
+
+    /** Who takes the checkpoint once a barrier arrived on every input channel; set before polling. */
+    void onAligned(NetworkInput.Aligned handler) {
+        this.aligned = handler;
+    }
+
+    boolean hasSource() {
+        return source != null;
+    }
+
+    /**
+     * The states of the chain for a checkpoint, taken on the task thread before the barrier moves
+     * on: the reader's splits. Transforms keep no state; the sink's comes with sink state.
+     */
+    List<StateUploader.Pending> snapshot(long checkpointId) {
+        List<StateUploader.Pending> states = new ArrayList<>();
+        if (source != null) {
+            states.add(source.snapshot(checkpointId, deployment.id().subtask()));
+        }
+        return states;
+    }
+
+    /** Sends the barrier down the chain, after every row read before it. */
+    void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {
+        first.barrier(barrier);
+    }
+
+    void notifyCheckpointComplete(long checkpointId) {
+        if (source != null) {
+            source.notifyCheckpointComplete(checkpointId);
+        }
+    }
+
+    void abortCheckpoint(long checkpointId) {
+        NetworkInput current = input;
+        if (current != null) {
+            current.abort(checkpointId);
+        }
+    }
+
     /** Whether a poll waits for data itself, so the task need not wait for mail in between. */
     boolean pollWaits() {
         return source == null;
@@ -215,7 +261,7 @@ final class OperatorChain {
             if (current == null) {
                 throw new IllegalStateException("the input of " + deployment.id() + " is not open");
             }
-            return current.poll(first);
+            return current.poll(first, aligned);
         } finally {
             if (measured) {
                 clock.endRead();
@@ -384,6 +430,15 @@ final class OperatorChain {
                 throw new IllegalStateException("the outputs are not open");
             }
             current.schemaChange(event);
+        }
+
+        @Override
+        public void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {
+            NetworkOutput current = target;
+            if (current == null) {
+                throw new IllegalStateException("the outputs are not open");
+            }
+            current.barrier(barrier);
         }
     }
 

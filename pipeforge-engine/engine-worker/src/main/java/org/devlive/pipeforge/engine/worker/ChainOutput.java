@@ -15,4 +15,10 @@ interface ChainOutput {
     void row(Row row);
 
     void schemaChange(SchemaChangeEvent event);
+
+    /**
+     * A checkpoint cuts the stream here: the rows before it are in the checkpoint, those after it
+     * are not. Every operator passes it on after the rows it received before it.
+     */
+    void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier);
 }

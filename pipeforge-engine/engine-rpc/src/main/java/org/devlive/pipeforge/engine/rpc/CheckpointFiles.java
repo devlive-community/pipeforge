@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.CRC32C;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
@@ -153,6 +155,55 @@ public final class CheckpointFiles {
         return state;
     }
 
+    // ------------------------------------------------------------------------------------ lists
+
+    /**
+     * The body of a list state, such as a reader's splits (section 5.2.1): the number of elements,
+     * then each as its length and the element serializer's bytes, lengths as varints.
+     */
+    public static byte[] writeList(List<byte[]> elements) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            CodedOutputStream out = CodedOutputStream.newInstance(bytes);
+            out.writeUInt32NoTag(elements.size());
+            for (byte[] element : elements) {
+                out.writeUInt32NoTag(element.length);
+                out.writeRawBytes(element);
+            }
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * The elements of a list state.
+     *
+     * @param name the file or node, for the error message
+     */
+    public static List<byte[]> readList(byte[] body, String name, String checkpoint) {
+        ByteBuffer in = ByteBuffer.wrap(body);
+        int count = varint(in, name, checkpoint);
+        if (count < 0 || count > body.length) {
+            throw corrupted(name, checkpoint, "it says it holds " + count + " elements in " + body.length + " bytes");
+        }
+        List<byte[]> elements = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            int length = varint(in, name, checkpoint);
+            if (length < 0 || length > in.remaining()) {
+                throw corrupted(name, checkpoint, "element " + i + " runs past the end of the state");
+            }
+            byte[] element = new byte[length];
+            in.get(element);
+            elements.add(element);
+        }
+        if (in.hasRemaining()) {
+            throw corrupted(name, checkpoint, in.remaining() + " bytes follow the last element");
+        }
+        return elements;
+    }
+
     // ------------------------------------------------------------------------------------- envelope
 
     static byte[] wrap(int magic, byte[] body) {
@@ -208,7 +259,7 @@ public final class CheckpointFiles {
         int value = 0;
         for (int shift = 0; shift < 35; shift += 7) {
             if (!buffer.hasRemaining()) {
-                throw corrupted(file, checkpoint, "the node ID's length runs past the end of the file");
+                throw corrupted(file, checkpoint, "a length runs past the end of the file");
             }
             byte b = buffer.get();
             value |= (b & 0x7F) << shift;
@@ -216,7 +267,7 @@ public final class CheckpointFiles {
                 return value;
             }
         }
-        throw corrupted(file, checkpoint, "the node ID's length is malformed");
+        throw corrupted(file, checkpoint, "a length is malformed");
     }
 
     private static PipeForgeException corrupted(String file, String checkpoint, String reason) {

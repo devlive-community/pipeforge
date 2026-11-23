@@ -343,6 +343,7 @@ public final class CheckpointCoordinator {
                     .setAttempt(run.attempt())
                     .setJobName(run.jobName());
             size = operators(checkpoint, metadata);
+            copyStaged(checkpoint);
             byte[] bytes = CheckpointFiles.writeMetadata(metadata.build());
             size += bytes.length;
             context.storage().complete(checkpoint.directory, bytes);
@@ -401,8 +402,36 @@ public final class CheckpointCoordinator {
                 discard(retained.removeFirst());
             }
         }
+        if (!staging(checkpoint).equals(checkpoint.directory)) {
+            deleteFiles(staging(checkpoint));
+        }
         checkpoint.result.complete(completed);
         resume();
+    }
+
+    /**
+     * The directory where the tasks write the files of a checkpoint: they know its number, not the
+     * name of a savepoint, so the files of a savepoint are copied from there into it.
+     */
+    private String staging(Pending checkpoint) {
+        return CheckpointPaths.checkpoint(run.runId(), checkpoint.id);
+    }
+
+    private void copyStaged(Pending checkpoint) throws IOException {
+        String staging = staging(checkpoint);
+        if (staging.equals(checkpoint.directory)) {
+            return;
+        }
+        for (CheckpointAck ack : checkpoint.acks) {
+            for (StateHandle handle : ack.states()) {
+                if (handle.location() instanceof StateHandle.File file) {
+                    context.storage()
+                            .write(
+                                    checkpoint.directory + file.path(),
+                                    context.storage().read(staging + file.path()));
+                }
+            }
+        }
     }
 
     /** Adds the states of the enumerators and the tasks to {@code _metadata}; the size of them all. */
@@ -529,6 +558,9 @@ public final class CheckpointCoordinator {
             }
         }
         deleteFiles(checkpoint.directory);
+        if (!staging(checkpoint).equals(checkpoint.directory)) {
+            deleteFiles(staging(checkpoint));
+        }
         for (ExecutionAttemptId task : context.tasks().all()) {
             context.tasks().gateway(task).abortCheckpoint(task, checkpoint.id, error.getMessage());
         }

@@ -55,6 +55,8 @@ final class Task implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Task.class);
     private static final long MIN_IDLE_NANOS = TimeUnit.MILLISECONDS.toNanos(1);
     private static final long MAX_IDLE_NANOS = TimeUnit.MILLISECONDS.toNanos(100);
+    /** Aligning longer than this means severe backpressure (checkpoint design, section 3.2). */
+    static final long ALIGNMENT_WARN_NANOS = TimeUnit.SECONDS.toNanos(30);
 
     private final TaskDeployment deployment;
     private final JobMasterGateway master;
@@ -75,6 +77,8 @@ final class Task implements Runnable {
     private final TaskMemory memory;
     private final DirtyRows dirty;
     private volatile @Nullable PluginThreads threads;
+    /** Writes the states of checkpoints; {@code null} until the executor sets it. */
+    private volatile @Nullable StateUploader uploader;
 
     Task(TaskDeployment deployment, JobMasterGateway master, Consumer<Task> onTerminated) {
         this(deployment, master, null, onTerminated);
@@ -119,6 +123,119 @@ final class Task implements Runnable {
 
     ExecutionAttemptId id() {
         return deployment.id();
+    }
+
+    /** Where the states of this task's checkpoints are written; set before {@link #start}. */
+    void uploader(StateUploader uploader) {
+        this.uploader = uploader;
+    }
+
+    // ------------------------------------------------------------------ checkpoints
+
+    /**
+     * Starts a checkpoint at this source task, on the task thread between two reads. A task that
+     * does not run yet, or reads no source, declines.
+     */
+    void triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
+        OperatorChain operators = chain;
+        if (operators == null || state.get() != TaskState.RUNNING || !operators.hasSource()) {
+            decline(
+                    trigger.checkpointId(),
+                    operators == null || state.get() != TaskState.RUNNING
+                            ? "the task does not run yet"
+                            : "the task reads no source; it takes part when the barrier reaches it");
+            return;
+        }
+        if (trigger.stop()) {
+            decline(trigger.checkpointId(), "this worker cannot stop a run with a savepoint");
+            return;
+        }
+        var barrier = new org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier(
+                trigger.checkpointId(),
+                trigger.timestampMs(),
+                trigger.type() == org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT
+                        ? org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier.Type.SAVEPOINT
+                        : org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier.Type.CHECKPOINT,
+                false);
+        mailbox.put(() -> checkpoint(barrier, 0));
+    }
+
+    void notifyCheckpointComplete(long checkpointId) {
+        mailbox.put(() -> {
+            OperatorChain operators = chain;
+            if (operators != null) {
+                operators.notifyCheckpointComplete(checkpointId);
+            }
+        });
+    }
+
+    void abortCheckpoint(long checkpointId) {
+        mailbox.put(() -> {
+            OperatorChain operators = chain;
+            if (operators != null) {
+                operators.abortCheckpoint(checkpointId);
+            }
+        });
+    }
+
+    /**
+     * Takes this task's part of a checkpoint, on the task thread: the states first, then the
+     * barrier moves on, so the states hold exactly the rows before it. The states are written on
+     * the uploader's threads while the task goes on; the master hears of them afterwards.
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // the callback reports to the master
+    private void checkpoint(
+            org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier, long alignmentNanos) {
+        OperatorChain operators = chain;
+        StateUploader states = uploader;
+        long id = barrier.checkpointId();
+        if (operators == null || states == null) {
+            decline(id, "the task cannot take snapshots");
+            return;
+        }
+        long started = System.nanoTime();
+        List<StateUploader.Pending> taken = operators.snapshot(id);
+        operators.barrier(barrier);
+        long syncMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+        long bytes = taken.stream().mapToLong(p -> p.body().length).sum();
+        long uploading = System.nanoTime();
+        if (alignmentNanos > ALIGNMENT_WARN_NANOS) {
+            LOG.warn(
+                    "Task {} waited {} ms for the barriers of checkpoint {}: its inputs are backpressured",
+                    deployment.id(),
+                    TimeUnit.NANOSECONDS.toMillis(alignmentNanos),
+                    id);
+        }
+        states.upload(deployment.id(), id, taken).whenComplete((handles, error) -> {
+            if (error != null) {
+                Throwable cause = error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                        ? error.getCause()
+                        : error;
+                master.declineCheckpoint(deployment.id(), id, PipeForgeException.wrap(cause));
+                return;
+            }
+            master.acknowledgeCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointAck(
+                    deployment.id(),
+                    id,
+                    handles,
+                    new org.devlive.pipeforge.engine.rpc.CheckpointTaskMetrics(
+                            syncMs,
+                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - uploading),
+                            TimeUnit.NANOSECONDS.toMillis(alignmentNanos),
+                            bytes)));
+        });
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored") // a lost decline ends in the checkpoint's timeout
+    private void decline(long checkpointId, String reason) {
+        master.declineCheckpoint(
+                deployment.id(),
+                checkpointId,
+                PipeForgeException.of(org.devlive.pipeforge.common.error.ErrorCode.CHECKPOINT_DECLINED)
+                        .param("checkpoint", checkpointId)
+                        .param("task", deployment.id().toString())
+                        .param("reason", reason)
+                        .build());
     }
 
     TaskDeployment deployment() {
@@ -173,6 +290,7 @@ final class Task implements Runnable {
                 throw new CancelledException();
             }
             operators.open();
+            operators.onAligned(this::checkpoint);
             runningSince = System.nanoTime();
             transition(TaskState.RUNNING);
             LOG.info("Task {} is running", deployment.id());

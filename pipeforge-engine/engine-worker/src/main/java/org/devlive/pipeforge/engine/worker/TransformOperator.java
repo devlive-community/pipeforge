@@ -103,6 +103,12 @@ final class TransformOperator implements ChainOutput {
         }
     }
 
+    @Override
+    public void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {
+        // transforms keep no state in this version
+        next.barrier(barrier);
+    }
+
     void close() {
         Transform current = transform;
         if (current != null) {

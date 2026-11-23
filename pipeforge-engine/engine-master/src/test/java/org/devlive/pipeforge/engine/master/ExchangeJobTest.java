@@ -108,6 +108,13 @@ class ExchangeJobTest {
     }
 
     JobMaster start(JobPlan plan, SubmitOptions options) {
+        return start(plan, options, null);
+    }
+
+    JobMaster start(
+            JobPlan plan,
+            SubmitOptions options,
+            org.devlive.pipeforge.engine.master.checkpoint.@org.jspecify.annotations.Nullable Checkpoints checkpoints) {
         JobId id = JobId.random();
         JobMaster job = new JobMaster(
                 id,
@@ -120,7 +127,8 @@ class ExchangeJobTest {
                         Map.of(),
                         Scheduler.Strategy.SPREAD,
                         Duration.ofSeconds(5)),
-                () -> jobs.remove(id.value()));
+                () -> jobs.remove(id.value()),
+                checkpoints);
         jobs.add(job);
         job.start();
         return job;
@@ -196,6 +204,53 @@ class ExchangeJobTest {
             }
         });
         return owners;
+    }
+
+    @Test
+    void theWritersOfAHashExchangeAlignTheBarriersOfBothReaders(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        String probe = Probe.create();
+        JobPlan plan = ClusterJobTest.withCheckpoints(
+                pipeline(probe, "rows: 20000, splits: 8, unbounded: true, endless: true", 2, "", 3),
+                Duration.ofMillis(100),
+                0,
+                3);
+        assertThat(ChainTopology.graph(plan).edges())
+                .singleElement()
+                .satisfies(edge -> assertThat(edge.partitioning().kind()).isEqualTo(Partitioning.Kind.HASH));
+        JobMaster job = start(
+                plan,
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (job.checkpointStats().lastCompletedId() < 3) {
+            assertThat(System.nanoTime()).as("three checkpoints completed").isLessThan(deadline);
+            Thread.sleep(20);
+        }
+        job.cancel();
+        assertThat(job.handle().result().get(30, TimeUnit.SECONDS).status()).isEqualTo(JobStatus.CANCELLED);
+
+        var completed = store.list(job.runId()).stream()
+                .filter(c ->
+                        c.status() == org.devlive.pipeforge.engine.master.checkpoint.CheckpointStore.Status.COMPLETED)
+                .toList();
+        assertThat(completed).isNotEmpty().allSatisfy(c -> assertThat(c.tasksJson())
+                .as("both readers and all three writers took part")
+                .contains("/src/0/0", "/src/1/0", "/out/0/0", "/out/1/0", "/out/2/0"));
+        long last = completed.get(0).checkpointId();
+        var metadata = org.devlive.pipeforge.engine.rpc.CheckpointFiles.readMetadata(
+                storage.read(org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint(job.runId(), last)
+                        + "_metadata"),
+                String.valueOf(last));
+        assertThat(metadata.getOperatorsList())
+                .extracting(o -> o.getOperatorKind(), o -> o.getSubtasksCount())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("enumerator", 1),
+                        org.assertj.core.groups.Tuple.tuple("source", 2));
+        awaitIdle();
     }
 
     @Test

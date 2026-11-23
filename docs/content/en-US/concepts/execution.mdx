@@ -132,6 +132,9 @@ channel per upstream subpartition.
 - **Backpressure**: a slow consumer stops giving credit, its producer's buffers fill up, and writing
   the next row waits until one is free. The wait reaches the source, which stops reading. Only that
   output is held back: other channels on the same connection keep flowing.
+- **Checkpoint barriers**: during a checkpoint, a consumer stops reading a channel that delivered
+  the barrier until the barriers of its other channels arrived (see
+  [checkpoints](./checkpoint#barriers-and-alignment)).
 - Tasks on the same worker hand buffers over in memory, with the same credit and order. Tasks on
   different workers use one TCP connection per pair of workers, shared by all their channels; an idle
   connection sends a ping every 30 seconds, and one silent for three intervals is closed.

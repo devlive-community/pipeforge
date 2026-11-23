@@ -89,7 +89,7 @@ Checkpoints go to the storage of `checkpoint.dir`, which every master and worker
 directory, on NFS at the same path everywhere, or `s3://bucket/prefix`. Each process checks it at
 its start; see [checkpoint storage](./checkpoint-storage). The master then also needs
 `master.metastore.url` in `conf/master.yaml`, the server's [metastore](./metastore#the-master),
-where it records the checkpoints.
+where it records the checkpoints. The workers write the states of their tasks to the same storage.
 
 ## Ports and security
 

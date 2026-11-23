@@ -496,13 +496,23 @@ class ClusterJobTest {
     }
 
     @Test
-    void workersThatTakeNoSnapshotsFailTheRunOnceTooManyCheckpointsFailed(
+    void declinedCheckpointsFailTheRunOnceMoreFailedInARowThanTolerated(
             @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
         var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
         var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        workers.values()
+                .forEach(w -> w.barriers = trigger -> master.gateway()
+                        .declineCheckpoint(
+                                trigger.task(),
+                                trigger.checkpointId(),
+                                org.devlive.pipeforge.common.error.PipeForgeException.of(ErrorCode.CHECKPOINT_DECLINED)
+                                        .param("checkpoint", trigger.checkpointId())
+                                        .param("task", trigger.task().toString())
+                                        .param("reason", "the disk is full")
+                                        .build()));
         String probe = Probe.create();
         JobMaster job = start(
-                withCheckpoints(TestConnectors.job(probe, "block: cancel", "", "", 3), Duration.ofMillis(100), 1, 3),
+                withCheckpoints(TestConnectors.job(probe, "endless: true", "", "", 3), Duration.ofMillis(100), 1, 3),
                 Duration.ofSeconds(5),
                 SubmitOptions.defaults(),
                 new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
@@ -510,7 +520,7 @@ class ClusterJobTest {
         JobResult result = end(job.handle());
         assertThat(result.status()).isEqualTo(JobStatus.FAILED);
         assertThat(result.error().code()).isEqualTo(ErrorCode.TOO_MANY_CHECKPOINT_FAILURES);
-        assertThat(result.error().getMessage()).contains("does not take snapshots of tasks");
+        assertThat(result.error().getMessage()).contains("the disk is full");
         assertThat(store.rows.values()).hasSizeGreaterThanOrEqualTo(2).allSatisfy(c -> assertThat(c.errorCode())
                 .isEqualTo("PF-CKPT-0005"));
         assertThat(storage.list("")).as("failed checkpoints leave nothing").isEmpty();
@@ -518,29 +528,20 @@ class ClusterJobTest {
     }
 
     @Test
-    void checkpointsCompleteOnThreeWorkersOnceEveryTaskAcknowledged(
-            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+    void checkpointsOfThreeWorkersHoldTheReadersSplits(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
         var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
         var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
-        var running = new java.util.concurrent.atomic.AtomicReference<JobMaster>();
-        // every task acknowledges once a source is triggered, as if the barriers had reached them
-        workers.values()
-                .forEach(w -> w.barriers = trigger -> running.get().tasks().forEach(task -> master.gateway()
-                        .acknowledgeCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointAck(
-                                task.attempt(),
-                                trigger.checkpointId(),
-                                List.of(),
-                                org.devlive.pipeforge.engine.rpc.CheckpointTaskMetrics.NONE))));
         String probe = Probe.create();
-        JobPlan plan =
-                withCheckpoints(TestConnectors.job(probe, "block: cancel", "", "", 3), Duration.ofMillis(100), 0, 2);
-        // set before the first trigger, which comes an interval after the tasks run
         JobMaster job = start(
-                plan,
+                withCheckpoints(
+                        TestConnectors.job(probe, "rows: 600, splits: 6, endless: true", "", "", 3),
+                        Duration.ofMillis(100),
+                        0,
+                        2),
                 Duration.ofSeconds(5),
                 SubmitOptions.defaults(),
                 new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
-        running.set(job);
 
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (job.checkpointStats().lastCompletedId() < 4) {
@@ -558,13 +559,17 @@ class ClusterJobTest {
         assertThat(kept).as("two retained").hasSize(2);
         long last = kept.get(0).checkpointId();
         String directory = org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint(job.runId(), last);
-        assertThat(storage.isComplete(directory)).isTrue();
         var metadata = org.devlive.pipeforge.engine.rpc.CheckpointFiles.readMetadata(
                 storage.read(directory + "_metadata"), String.valueOf(last));
-        assertThat(metadata.getOperators(0).getOperatorKind()).isEqualTo("enumerator");
-        // the test source's enumerator state: the splits it has not assigned yet, inline
-        assertThat(metadata.getOperators(0).getSubtasks(0).getLocationCase())
-                .isEqualTo(org.devlive.pipeforge.engine.rpc.checkpoint.proto.SubtaskState.LocationCase.INLINE);
+        assertThat(metadata.getOperatorsList())
+                .extracting(o -> o.getOperatorKind(), o -> o.getSubtasksCount())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("enumerator", 1),
+                        org.assertj.core.groups.Tuple.tuple("source", 3));
+        assertThat(metadata.getOperators(1).getSubtasksList())
+                .extracting(org.devlive.pipeforge.engine.rpc.checkpoint.proto.SubtaskState::getSubtask)
+                .containsExactlyInAnyOrder(0, 1, 2);
+        assertThat(kept.get(0).tasksJson()).contains("/src/0/0", "/src/1/0", "/src/2/0");
         assertThat(storage.isComplete(
                         org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint(job.runId(), 1)))
                 .as("older checkpoints are deleted")

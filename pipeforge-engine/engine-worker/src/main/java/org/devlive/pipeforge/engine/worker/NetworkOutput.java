@@ -120,6 +120,14 @@ final class NetworkOutput implements ChainOutput {
                 .build();
     }
 
+    /** Sends the barrier on every subpartition of every output, after the rows written before it. */
+    @Override
+    public void barrier(NetworkEvent.CheckpointBarrier barrier) {
+        for (Edge edge : edges) {
+            edge.partition().broadcastEvent(barrier);
+        }
+    }
+
     /** Ends every output after the rows written: the consumers read them to the end. */
     void finish() {
         for (Edge edge : edges) {

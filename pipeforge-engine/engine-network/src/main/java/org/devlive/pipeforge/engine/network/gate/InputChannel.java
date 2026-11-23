@@ -28,6 +28,10 @@ public abstract sealed class InputChannel permits LocalInputChannel, RemoteInput
     // guarded by the gate's lock
     boolean queued;
     boolean ended;
+    /** Not read while a checkpoint aligns: it delivered its barrier (protocol, section 3.3). */
+    boolean blocked;
+    /** Had a buffer while it was blocked; queued again when it is unblocked. */
+    boolean parked;
 
     InputChannel(InputGate gate, int index, ResultPartitionId partition, int subpartition, int exclusive) {
         this.gate = gate;

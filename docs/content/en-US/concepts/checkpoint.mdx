@@ -39,6 +39,21 @@ deleted and the next one is tried at the next interval. After more failures in a
 `env.checkpoint.tolerable-failures`, the run fails, since a failure would then lose more progress
 than the job allows.
 
+### Barriers and alignment
+
+A source task takes its reader's state, which is its splits and how far it read each, on its own thread between
+two reads, and then sends the barrier on: every row read before the snapshot is before the
+barrier. Tasks chained together pass the barrier along at once. A task that reads from several
+upstream tasks, such as a writer behind a hash exchange, **aligns**: once the barrier of *n*
+arrived on one input channel, it stops reading that channel and goes on reading the others until
+their barriers arrive too; only then does it take its state and pass the barrier on. A channel that
+ended does not hold the alignment back. While a channel waits it takes no more buffers, so its
+upstream task slows down rather than the rows piling up.
+
+Taking a state only copies it; writing it to the checkpoint storage happens on threads of the
+worker while the task reads on, and the task acknowledges once its states are written. States up to
+16 KB travel in the acknowledgement and end up inside `_metadata`.
+
 ## Quick start
 
 Give the cluster a checkpoint storage and the master its metastore, in `conf/pipeforge.yaml` and
@@ -146,12 +161,12 @@ task's part. The master logs every checkpoint that completes or fails.
 
 ## Limitations
 
-- In this version workers do not take snapshots of their tasks yet: they decline every checkpoint
-  (`PF-CKPT-0005`), so on a cluster with `checkpoint.dir` runs fail after
-  `env.checkpoint.tolerable-failures` + 1 checkpoints. Set `env.checkpoint.enabled: false` for jobs
-  on such a cluster until then.
+- Sinks keep no state in their checkpoints yet, and two-phase sinks commit at the end of the run,
+  not per checkpoint; transforms keep no state.
 - Runs do not restart from a checkpoint yet; savepoints cannot be taken from the command line or the
-  Web UI yet.
+  Web UI yet, and a worker declines to stop a run with a savepoint.
+- A task that waited longer than 30 seconds for the barriers of a checkpoint logs a warning about
+  backpressure; the limit cannot be changed yet.
 - Only aligned checkpoints: a task waits for the barrier on all its inputs.
 
 ## Version history

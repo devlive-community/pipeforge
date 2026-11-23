@@ -136,6 +136,12 @@ public final class InputGate implements AutoCloseable {
                         return null;
                     }
                     channel = available.poll();
+                    if (channel != null && channel.blocked) {
+                        // read again once the checkpoint aligned; its buffers hold back its credit
+                        channel.queued = false;
+                        channel.parked = true;
+                        continue;
+                    }
                     if (channel != null) {
                         channel.queued = false;
                         break;
@@ -176,6 +182,39 @@ public final class InputGate implements AutoCloseable {
             }
             return new Next(channel.index, buffer);
         }
+    }
+
+    /**
+     * Stops reading a channel until {@link #unblock}: its buffers stay in it, so it gives no credit
+     * back and its producer stops once the credit it has is used. Events need no credit, so the
+     * barriers of the other channels still arrive.
+     */
+    public synchronized void block(int index) {
+        channels.get(index).blocked = true;
+    }
+
+    /** Reads a channel again; buffers that arrived meanwhile come first. */
+    public void unblock(int index) {
+        InputChannel channel = channels.get(index);
+        boolean parked;
+        synchronized (this) {
+            channel.blocked = false;
+            parked = channel.parked;
+            channel.parked = false;
+        }
+        if (parked) {
+            available(channel);
+        }
+    }
+
+    /** Whether a channel is blocked. */
+    public synchronized boolean isBlocked(int index) {
+        return channels.get(index).blocked;
+    }
+
+    /** Whether a channel has ended: its producer finished it. */
+    public synchronized boolean isEnded(int index) {
+        return channels.get(index).ended;
     }
 
     /** Whether every channel has ended. */

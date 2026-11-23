@@ -422,6 +422,33 @@ class CheckpointCoordinatorTest {
     }
 
     @Test
+    void theFilesOfASavepointAreCopiedFromWhereTheTasksWroteThem() throws Exception {
+        CheckpointCoordinator coordinator = coordinator(settings(3, 3));
+        var savepoint = coordinator.trigger(CheckpointType.SAVEPOINT, "SAVEPOINT", "upgrade");
+        // the task wrote its file where checkpoint 1 would be: it knows the number only
+        storage.write("run-1/chk-1/src-0.state", CheckpointFiles.writeState(1, "src", new byte[] {4, 2}));
+        coordinator.acknowledge(new CheckpointAck(
+                SRC0,
+                1,
+                List.of(new StateHandle("src", "source", 1, new StateHandle.File("src-0.state"), 2, 9)),
+                CheckpointTaskMetrics.NONE));
+        coordinator.acknowledge(ack(SRC1, 1));
+        coordinator.acknowledge(ack(SINK, 1));
+        String directory = savepoint.join().directory();
+        assertThat(CheckpointFiles.readState(storage.read(directory + "src-0.state"), 1, "src", "src-0.state"))
+                .containsExactly(4, 2);
+        assertThat(storage.list("run-1/chk-1/")).as("the staged files are gone").isEmpty();
+
+        coordinator.trigger(CheckpointType.SAVEPOINT, "SAVEPOINT", "failing");
+        storage.write("run-1/chk-2/src-0.state", new byte[] {1});
+        coordinator.decline(
+                SINK,
+                2,
+                PipeForgeException.of(ErrorCode.INTERNAL).param("detail", "x").build());
+        assertThat(storage.list("run-1/chk-2/")).isEmpty();
+    }
+
+    @Test
     void onlyAsManyCheckpointsAtOnceAsAllowedAndAPauseBetweenThem() {
         CheckpointSettings settings = new CheckpointSettings(
                 true,

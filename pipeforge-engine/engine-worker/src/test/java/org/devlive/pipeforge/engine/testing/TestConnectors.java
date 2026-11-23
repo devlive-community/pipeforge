@@ -94,6 +94,9 @@ public final class TestConnectors {
             Options.key("pause-after-splits").intType().defaultValue(0);
 
     static final Option<String> BLOCK = Options.key("block").stringType().defaultValue("none");
+    /** The reader never ends: once its splits are read it has nothing available, without blocking. */
+    static final Option<Boolean> ENDLESS = Options.key("endless").booleanType().defaultValue(false);
+
     static final Option<Boolean> SCHEMA_CHANGE =
             Options.key("schema-change").booleanType().defaultValue(false);
     /** {@code start} blocks the enumerator in start() until it is interrupted. */
@@ -306,7 +309,8 @@ public final class TestConnectors {
                             PAD,
                             THREAD,
                             BAD_RECORD_AT,
-                            OWN_LIMIT)
+                            OWN_LIMIT,
+                            ENDLESS)
                     .build();
         }
 
@@ -531,7 +535,7 @@ public final class TestConnectors {
             if (current == null) {
                 current = splits.poll();
                 if (current == null) {
-                    return noMore ? PollStatus.END_OF_INPUT : PollStatus.NOTHING_AVAILABLE;
+                    return noMore && !config.get(ENDLESS) ? PollStatus.END_OF_INPUT : PollStatus.NOTHING_AVAILABLE;
                 }
                 next = current.from();
             }
@@ -577,7 +581,14 @@ public final class TestConnectors {
 
         @Override
         public List<NumberSplit> snapshotState(long checkpointId) {
-            return List.copyOf(splits);
+            // the split being read continues at the next row not emitted yet
+            List<NumberSplit> state = new ArrayList<>();
+            if (current != null) {
+                state.add(new NumberSplit(current.splitId(), next, current.to()));
+            }
+            state.addAll(splits);
+            probe.events.add("snapshot " + checkpointId + " after " + emitted + " rows");
+            return state;
         }
 
         @Override

@@ -20,6 +20,7 @@ import org.devlive.pipeforge.api.source.Source;
 import org.devlive.pipeforge.api.source.SourceReader;
 import org.devlive.pipeforge.api.source.SourceSplit;
 import org.devlive.pipeforge.core.plan.PlannedNode;
+import org.devlive.pipeforge.engine.rpc.CheckpointFiles;
 import org.devlive.pipeforge.engine.rpc.ExecutionAttemptId;
 import org.devlive.pipeforge.engine.rpc.JobMasterGateway;
 import org.devlive.pipeforge.engine.rpc.OperatorEvent;
@@ -104,6 +105,33 @@ final class SourceOperator {
                 // the chain applies quotas
             }
         }
+    }
+
+    /**
+     * The reader's state for a checkpoint: its splits, each written with the split serializer, as
+     * a list state (protocol specification, section 5.2.1).
+     */
+    StateUploader.Pending snapshot(long checkpointId, int subtask) {
+        SourceReader<SourceSplit> current = opened();
+        VersionedSerializer<SourceSplit> serializer = splitSerializer;
+        if (serializer == null) {
+            throw new IllegalStateException("The reader of " + node.id() + " is not open");
+        }
+        List<SourceSplit> splits = call.call("snapshot the reader", () -> current.snapshotState(checkpointId));
+        List<byte[]> written = new ArrayList<>(splits.size());
+        for (SourceSplit split : splits) {
+            written.add(call.call("write split " + split.splitId(), () -> serializer.serialize(split)));
+        }
+        return new StateUploader.Pending(
+                node.id(), "source", subtask, serializer.version(), CheckpointFiles.writeList(written));
+    }
+
+    /** Checkpoint {@code checkpointId} is complete: the reader may let its source know. */
+    void notifyCheckpointComplete(long checkpointId) {
+        SourceReader<SourceSplit> current = opened();
+        call.run(
+                "notify the reader of checkpoint " + checkpointId,
+                () -> current.notifyCheckpointComplete(checkpointId));
     }
 
     /** Interrupts a blocking read; called from another thread. Failures are ignored: the task is stopping. */

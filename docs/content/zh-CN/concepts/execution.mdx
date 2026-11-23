@@ -101,6 +101,7 @@ Task 线程：… → 攒批 ──► 有界队列 ──► 写线程：SinkWr
 - **credit**：每个输入通道有 2 个专属缓冲，生产者报告积压时，还可以从输入的 8 个浮动缓冲中借用。只有通道有 credit 时，
   生产者才发送数据缓冲；事件不需要 credit。
 - **背压**：慢的消费者不再给出 credit，生产者的缓冲被占满，写下一行时等待空闲缓冲。等待一直传到 Source，使它停止读取。
+- **checkpoint barrier**：做 checkpoint 时，某个通道收到 barrier 后，消费者暂时不再读取这个通道，直到其他通道的 barrier 也到达（见 [Checkpoint](./checkpoint#barrier-与对齐)）。
   只有这个输出被拖慢：同一条连接上的其他通道照常传输。
 - 同一 Worker 上的 Task 在内存中交接缓冲，credit 和顺序规则相同。不同 Worker 上的 Task 之间，每对 Worker 使用一条 TCP 连接，
   所有通道共用；空闲的连接每 30 秒发送一次 ping，连续三个间隔没有任何消息的连接会被关闭。

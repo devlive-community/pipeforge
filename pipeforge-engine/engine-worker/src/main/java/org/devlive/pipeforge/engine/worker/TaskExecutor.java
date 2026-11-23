@@ -54,6 +54,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs;
     private final MemoryLimits limits;
     private final Options options;
+    private final StateUploader uploader;
     private final java.util.List<String> leaked = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final String name;
     private volatile java.util.function.Consumer<String> runEnded = run -> {};
@@ -110,10 +111,20 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
      *     null} for twice the cancel timeout of its job
      * @param leakGrace how long after a task ended its plugin threads may take to end
      */
-    public record Options(MemoryLimits memory, @Nullable Duration cancelKillTimeout, Duration leakGrace) {
+    public record Options(
+            MemoryLimits memory,
+            @Nullable Duration cancelKillTimeout,
+            Duration leakGrace,
+            org.devlive.pipeforge.engine.api.checkpoint.@Nullable CheckpointStorage checkpointStorage,
+            int inlineThreshold) {
 
         /** Default memory limits, the kill timeout of local runs, one second of grace. */
-        public static final Options DEFAULTS = new Options(MemoryLimits.DEFAULTS, null, Duration.ofSeconds(1));
+        public static final Options DEFAULTS = new Options(
+                MemoryLimits.DEFAULTS,
+                null,
+                Duration.ofSeconds(1),
+                null,
+                org.devlive.pipeforge.engine.rpc.CheckpointFiles.DEFAULT_INLINE_THRESHOLD);
 
         public Options {
             java.util.Objects.requireNonNull(memory, "memory");
@@ -121,15 +132,25 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         }
 
         public static Options of(MemoryLimits memory) {
-            return new Options(memory, null, DEFAULTS.leakGrace());
+            return new Options(memory, null, DEFAULTS.leakGrace(), null, DEFAULTS.inlineThreshold());
         }
 
         public Options withCancelKillTimeout(Duration timeout) {
-            return new Options(memory, timeout, leakGrace);
+            return new Options(memory, timeout, leakGrace, checkpointStorage, inlineThreshold);
         }
 
         public Options withLeakGrace(Duration grace) {
-            return new Options(memory, cancelKillTimeout, grace);
+            return new Options(memory, cancelKillTimeout, grace, checkpointStorage, inlineThreshold);
+        }
+
+        /** Where the tasks write states larger than the inline threshold. */
+        public Options withCheckpointStorage(org.devlive.pipeforge.engine.api.checkpoint.CheckpointStorage storage) {
+            return new Options(memory, cancelKillTimeout, leakGrace, storage, inlineThreshold);
+        }
+
+        /** States up to this size travel in the acknowledgement; larger ones become files. */
+        public Options withInlineThreshold(int bytes) {
+            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, bytes);
         }
     }
 
@@ -143,6 +164,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             org.devlive.pipeforge.engine.worker.log.@Nullable LogService logs,
             Options options) {
         this.options = options;
+        this.uploader = new StateUploader(options.checkpointStorage(), options.inlineThreshold(), name);
         this.limits = options.memory();
         this.name = name;
         this.logs = logs;
@@ -204,6 +226,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             }
         }
         Task task = new Task(deployment, master, network, logs, limits, this::terminated);
+        task.uploader(uploader);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Task " + deployment.id() + " is already deployed"));
@@ -230,34 +253,31 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         return CompletableFuture.completedFuture(null);
     }
 
-    /**
-     * Tasks do not take snapshots on this worker: a trigger for one of its tasks is declined, so
-     * that the checkpoint fails at once rather than when it times out.
-     */
+    /** Starts a checkpoint at a source task; triggers for tasks not here are ignored. */
     @Override
-    @SuppressWarnings("FutureReturnValueIgnored") // a lost decline ends in the checkpoint's timeout
     public CompletableFuture<Void> triggerCheckpoint(org.devlive.pipeforge.engine.rpc.CheckpointTrigger trigger) {
-        if (tasks.containsKey(trigger.task())) {
-            master.declineCheckpoint(
-                    trigger.task(),
-                    trigger.checkpointId(),
-                    org.devlive.pipeforge.common.error.PipeForgeException.of(
-                                    org.devlive.pipeforge.common.error.ErrorCode.CHECKPOINT_DECLINED)
-                            .param("checkpoint", trigger.checkpointId())
-                            .param("task", trigger.task().toString())
-                            .param("reason", "worker " + name + " does not take snapshots of tasks")
-                            .build());
+        Task task = tasks.get(trigger.task());
+        if (task != null) {
+            task.triggerCheckpoint(trigger);
         }
         return CompletableFuture.completedFuture(null);
     }
 
     @Override
-    public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId task, long checkpointId) {
+    public CompletableFuture<Void> notifyCheckpointComplete(ExecutionAttemptId id, long checkpointId) {
+        Task task = tasks.get(id);
+        if (task != null) {
+            task.notifyCheckpointComplete(checkpointId);
+        }
         return CompletableFuture.completedFuture(null);
     }
 
     @Override
-    public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId task, long checkpointId, String reason) {
+    public CompletableFuture<Void> abortCheckpoint(ExecutionAttemptId id, long checkpointId, String reason) {
+        Task task = tasks.get(id);
+        if (task != null) {
+            task.abortCheckpoint(checkpointId);
+        }
         return CompletableFuture.completedFuture(null);
     }
 
@@ -391,6 +411,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     public void close() {
         tasks.values().forEach(Task::cancel);
         watchdog.shutdownNow();
+        uploader.close();
     }
 
     private static Duration timeoutOf(Task task) {

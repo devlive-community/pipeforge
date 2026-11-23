@@ -33,9 +33,23 @@ final class NetworkInput {
     /** How long one poll waits for a buffer before the task looks at its mail again. */
     static final Duration POLL = Duration.ofMillis(20);
 
+    /** Takes a checkpoint once its barrier arrived on every channel; on the task thread. */
+    interface Aligned {
+        void aligned(NetworkEvent.CheckpointBarrier barrier, long alignmentNanos);
+    }
+
     private final InputGate gate;
     private final RowCodec codec;
     private final String node;
+
+    /** The checkpoint whose barriers are being aligned, or 0. */
+    private long aligning;
+
+    private NetworkEvent.@org.jspecify.annotations.Nullable CheckpointBarrier pending;
+    private boolean[] arrived = new boolean[0];
+    private long alignmentStart;
+    /** Barriers up to this checkpoint are of checkpoints that ended: they are dropped. */
+    private long done;
 
     /**
      * @param tables the tables the first node reads; the producer numbers them in the same order
@@ -78,14 +92,31 @@ final class NetworkInput {
 
     /** Hands the rows of the next buffer to {@code next}; waits up to {@link #POLL} for one. */
     PollStatus poll(ChainOutput next) throws InterruptedException {
+        return poll(next, (barrier, nanos) -> next.barrier(barrier));
+    }
+
+    /**
+     * Hands the rows of the next buffer to {@code next}; waits up to {@link #POLL} for one. A
+     * checkpoint barrier blocks its channel until the barrier arrived on every channel that has
+     * not ended (protocol specification, section 3.3); then {@code aligned} takes the checkpoint.
+     */
+    PollStatus poll(ChainOutput next, Aligned aligned) throws InterruptedException {
+        completeAlignment(aligned);
         InputGate.Next arrived = gate.next(POLL);
         if (arrived == null) {
+            // a channel may have ended while the others waited at their barriers
+            completeAlignment(aligned);
             return gate.isFinished() ? PollStatus.END_OF_INPUT : PollStatus.NOTHING_AVAILABLE;
         }
         Buffer buffer = arrived.buffer();
         try {
             if (buffer.isEvent()) {
                 NetworkEvent event = NetworkEvent.fromBuffer(buffer);
+                if (event instanceof NetworkEvent.CheckpointBarrier barrier) {
+                    barrier(arrived.channel(), barrier);
+                    completeAlignment(aligned);
+                    return PollStatus.MORE_AVAILABLE;
+                }
                 if (event instanceof NetworkEvent.SchemaChange) {
                     throw PipeForgeException.of(ErrorCode.TOPOLOGY_UNSUPPORTED)
                             .param("node", node)
@@ -106,6 +137,63 @@ final class NetworkInput {
             buffer.recycle();
         }
         return PollStatus.MORE_AVAILABLE;
+    }
+
+    private void barrier(int channel, NetworkEvent.CheckpointBarrier barrier) {
+        long id = barrier.checkpointId();
+        if (id <= done || (aligning != 0 && id < aligning)) {
+            // of a checkpoint that was given up, or older than the one aligning
+            return;
+        }
+        if (id > aligning) {
+            // a newer checkpoint: the older one was given up, its abort is still on its way
+            unblockAll();
+            aligning = id;
+            pending = barrier;
+            arrived = new boolean[gate.channels()];
+            alignmentStart = System.nanoTime();
+        }
+        arrived[channel] = true;
+        gate.block(channel);
+    }
+
+    private void completeAlignment(Aligned aligned) {
+        NetworkEvent.CheckpointBarrier barrier = pending;
+        if (barrier == null) {
+            return;
+        }
+        for (int channel = 0; channel < arrived.length; channel++) {
+            if (!arrived[channel] && !gate.isEnded(channel)) {
+                return;
+            }
+        }
+        long nanos = System.nanoTime() - alignmentStart;
+        unblockAll();
+        done = Math.max(done, aligning);
+        aligning = 0;
+        pending = null;
+        aligned.aligned(barrier, nanos);
+    }
+
+    private void unblockAll() {
+        for (int channel = 0; channel < gate.channels(); channel++) {
+            gate.unblock(channel);
+        }
+    }
+
+    /** Checkpoint {@code checkpointId} was given up: stop aligning it and drop its later barriers. */
+    void abort(long checkpointId) {
+        if (aligning == checkpointId) {
+            unblockAll();
+            aligning = 0;
+            pending = null;
+        }
+        done = Math.max(done, checkpointId);
+    }
+
+    /** The checkpoint being aligned, or 0. */
+    long aligning() {
+        return aligning;
     }
 
     /** Bytes of the network buffers the input holds now. */

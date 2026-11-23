@@ -124,6 +124,10 @@ final class SinkOperator implements ChainOutput {
         accept(event);
     }
 
+    /** The end of the chain: the writer's snapshot is taken here once sinks keep state. */
+    @Override
+    public void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {}
+
     private void accept(Object item) {
         if (item instanceof Row) {
             metrics.rowsIn.increment();

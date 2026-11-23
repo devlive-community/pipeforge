@@ -26,6 +26,12 @@
             <artifactId>pipeforge-engine-rpc</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- checkpoint storage, where tasks write their states -->
+        <dependency>
+            <groupId>org.devlive.pipeforge</groupId>
+            <artifactId>pipeforge-engine-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.devlive.pipeforge</groupId>
             <artifactId>pipeforge-engine-network</artifactId>

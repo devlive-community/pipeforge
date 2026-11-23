@@ -203,6 +203,11 @@ length of the body, the body and its CRC32C, integers big-endian.
   every node records the parallelism it was written with.
 - A state file names the checkpoint and node it belongs to; a file copied to the wrong place is not
   read as another's.
+- A list state, such as a reader's splits, is a varint count, then each element as a varint length
+  and the element serializer's bytes; `serializer_version` is the element serializer's. Inline
+  states have the same layout.
+- Tasks write their files under `chk-<n>/` of the checkpoint's number; for a savepoint the master
+  copies them into `savepoints/<name>-<time>/` and deletes them there.
 - A file whose length or checksum does not match, or that belongs elsewhere, is
   [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002): recovery falls back to the checkpoint before
   it. A format version newer than the engine reads is

@@ -272,13 +272,22 @@ class TaskExecutorTest {
     }
 
     @Test
-    void declinesCheckpointsOfItsTasksAndIgnoresOthers() throws Exception {
+    void aSourceTaskSnapshotsItsReaderAtATriggerAndIgnoresOthersTasks() throws Exception {
         String probe = Probe.create();
         try (ScriptedMaster master = ScriptedMaster.tenRows()) {
             master.executor
                     .deployTask(ScriptedMaster.deployment(
-                            TestConnectors.job(probe, "block: cancel", "", "", 1), ScriptedMaster.settings()))
+                            TestConnectors.job(probe, "endless: true", "", "", 1), ScriptedMaster.settings()))
                     .get();
+            // ten rows in two splits, both read: the reader has nothing more and keeps running
+            int finished = 0;
+            while (finished < 2) {
+                var message = master.messages.poll(10, TimeUnit.SECONDS);
+                assertThat(message).as("both splits read").isNotNull();
+                if (message instanceof org.devlive.pipeforge.engine.rpc.ReaderMessage.SplitsFinished done) {
+                    finished += done.splitIds().size();
+                }
+            }
             var other = new org.devlive.pipeforge.engine.rpc.ExecutionAttemptId("other-run", "src", 0, 0);
             master.executor
                     .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
@@ -288,19 +297,90 @@ class TaskExecutorTest {
                     .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
                             master.id(), 2, org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT, 0, false))
                     .get();
+            var ack = master.acks.poll(10, TimeUnit.SECONDS);
+            assertThat(ack).isNotNull();
+            assertThat(ack.checkpointId()).isEqualTo(2);
+            assertThat(ack.states()).singleElement().satisfies(state -> {
+                assertThat(state.nodeId()).isEqualTo("src");
+                assertThat(state.operatorKind()).isEqualTo("source");
+                assertThat(state.location())
+                        .as("every split read: an empty list, inline")
+                        .isEqualTo(new org.devlive.pipeforge.engine.rpc.StateHandle.Inline(new byte[] {0}));
+            });
+            assertThat(Probe.get(probe).events).contains("snapshot 2 after 10 rows");
+            assertThat(master.acks).as("a task of another worker is not here").isEmpty();
+
+            master.executor
+                    .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                            master.id(), 3, org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT, 0, true))
+                    .get();
             var declined = master.declines.poll(10, TimeUnit.SECONDS);
             assertThat(declined).isNotNull();
             assertThat(declined.code()).isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.CHECKPOINT_DECLINED);
-            assertThat(declined.params())
-                    .containsEntry("checkpoint", 2L)
-                    .containsEntry("task", master.id().toString());
-            assertThat(master.declines)
-                    .as("a task of another worker is not declined here")
-                    .isEmpty();
+            assertThat(declined.params()).containsEntry("checkpoint", 3L);
+            assertThat(declined.getMessage()).contains("cannot stop a run with a savepoint");
+
             assertThat(master.executor.notifyCheckpointComplete(master.id(), 2)).succeedsWithin(Duration.ofSeconds(5));
-            assertThat(master.executor.abortCheckpoint(master.id(), 2, "x")).succeedsWithin(Duration.ofSeconds(5));
+            assertThat(master.executor.abortCheckpoint(master.id(), 4, "x")).succeedsWithin(Duration.ofSeconds(5));
             master.executor.cancelTask(master.id()).get();
             assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
+        }
+    }
+
+    @Test
+    void theTaskReadsOnWhileItsStateIsWritten(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        BlockingStorage storage = new BlockingStorage(dir);
+        List<org.devlive.pipeforge.engine.rpc.SerializedValue> splits = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            splits.add(TestConnectors.split("s" + i, i * 250_000, (i + 1) * 250_000));
+        }
+        // every state is written as a file, which the storage holds back
+        TaskExecutor.Options options =
+                TaskExecutor.Options.DEFAULTS.withCheckpointStorage(storage).withInlineThreshold(0);
+        try (ScriptedMaster master = new ScriptedMaster(splits, null, null, null, options)) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "endless: true", "", "", 1), ScriptedMaster.settings()))
+                    .get();
+            awaitFinishedSplits(master, 1);
+            master.executor
+                    .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                            master.id(), 1, org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT, 0, false))
+                    .get();
+            assertThat(storage.writing.await(10, TimeUnit.SECONDS)).isTrue();
+            // the snapshot was taken while splits were left to read
+            String snapshot = Probe.get(probe).events.stream()
+                    .filter(e -> e.startsWith("snapshot 1 after "))
+                    .findFirst()
+                    .orElseThrow();
+            long before = Long.parseLong(snapshot.replaceAll("\\D+", " ").trim().split(" ")[1]);
+            assertThat(before).isLessThan(1_000_000);
+            // the upload hangs; the task reads the remaining splits meanwhile
+            awaitFinishedSplits(master, 3);
+            assertThat(master.acks).as("the upload still hangs").isEmpty();
+
+            storage.release.countDown();
+            var ack = master.acks.poll(10, TimeUnit.SECONDS);
+            assertThat(ack).isNotNull();
+            assertThat(ack.states()).singleElement().satisfies(state -> assertThat(state.location())
+                    .isEqualTo(new org.devlive.pipeforge.engine.rpc.StateHandle.File("src-0.state")));
+            assertThat(ack.metrics().asyncMs()).as("it waited for the storage").isPositive();
+            assertThat(storage.exists("run-1/chk-1/src-0.state")).isTrue();
+            master.executor.cancelTask(master.id()).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
+        }
+    }
+
+    static void awaitFinishedSplits(ScriptedMaster master, int count) throws InterruptedException {
+        int finished = 0;
+        while (finished < count) {
+            var message = master.messages.poll(10, TimeUnit.SECONDS);
+            assertThat(message).as("%s splits read", count).isNotNull();
+            if (message instanceof org.devlive.pipeforge.engine.rpc.ReaderMessage.SplitsFinished done) {
+                finished += done.splitIds().size();
+            }
         }
     }
 

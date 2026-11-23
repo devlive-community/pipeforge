@@ -101,14 +101,13 @@ public final class WorkerProcess implements AutoCloseable {
                         config.integer(Settings.WORKER_LOG_MAX_FILES),
                         config.duration(Settings.WORKER_LOG_RETENTION)));
         threads.scheduleWithFixedDelay(this::cleanLogs, 1, 60, TimeUnit.MINUTES);
+        TaskExecutor.Options options = TaskExecutor.Options.of(memoryLimits(config, exchange, slots))
+                .withCancelKillTimeout(config.duration(Settings.CANCEL_KILL_TIMEOUT));
+        if (checkpoints != null) {
+            options = options.withCheckpointStorage(checkpoints);
+        }
         executor = new TaskExecutor(
-                name,
-                new JobMasterClient(toMaster, "the master", retry),
-                table,
-                network,
-                logs,
-                TaskExecutor.Options.of(memoryLimits(config, exchange, slots))
-                        .withCancelKillTimeout(config.duration(Settings.CANCEL_KILL_TIMEOUT)));
+                name, new JobMasterClient(toMaster, "the master", retry), table, network, logs, options);
         plugins = new PluginCache(
                 new BlobClient(toMaster)::fetch,
                 home.resolve(config.string(Settings.WORKER_DIR)).resolve("plugins"),

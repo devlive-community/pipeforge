@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.engine.rpc.checkpoint.proto.CheckpointMetadata;
@@ -152,6 +153,30 @@ class CheckpointFilesTest {
                 .isFalse();
     }
 
+    static List<byte[]> splits() {
+        return List.of(
+                "orders[0, 1000) at 420".getBytes(java.nio.charset.StandardCharsets.UTF_8), new byte[0], new byte[300]);
+    }
+
+    @Test
+    void listStatesFrameTheirElements() {
+        byte[] body = CheckpointFiles.writeList(splits());
+        assertThat(body[0]).as("the count").isEqualTo((byte) 3);
+        assertThat(CheckpointFiles.readList(body, "orders-1.state", "7")).containsExactlyElementsOf(splits());
+        assertThat(CheckpointFiles.readList(CheckpointFiles.writeList(List.of()), "x", "7"))
+                .isEmpty();
+        assertThatThrownBy(() ->
+                        CheckpointFiles.readList(java.util.Arrays.copyOf(body, body.length - 1), "orders-1.state", "7"))
+                .hasMessageContaining("element 2 runs past the end of the state");
+        assertThatThrownBy(() ->
+                        CheckpointFiles.readList(java.util.Arrays.copyOf(body, body.length + 2), "orders-1.state", "7"))
+                .hasMessageContaining("2 bytes follow the last element");
+        assertThatThrownBy(() -> CheckpointFiles.readList(new byte[] {(byte) 0x80}, "x", "7"))
+                .hasMessageContaining("a length runs past the end");
+        assertThatThrownBy(() -> CheckpointFiles.readList(new byte[] {100}, "x", "7"))
+                .hasMessageContaining("it says it holds 100 elements in 1 bytes");
+    }
+
     /**
      * The files of format 1 stay readable: later engines read these bytes. -Dpipeforge.protocol.update
      * writes them anew, only when the format version changes.
@@ -160,6 +185,15 @@ class CheckpointFilesTest {
     void theGoldenFilesOfFormat1AreRead() throws Exception {
         Path metadata = GOLDEN.resolve("_metadata");
         Path state = GOLDEN.resolve("warehouse-2.state");
+        Path list = GOLDEN.resolve("orders-1.state");
+        if (Boolean.getBoolean("pipeforge.protocol.update") || !Files.exists(list)) {
+            Files.write(list, CheckpointFiles.writeState(7, "orders", CheckpointFiles.writeList(splits())));
+        }
+        assertThat(CheckpointFiles.readList(
+                        CheckpointFiles.readState(Files.readAllBytes(list), 7, "orders", "orders-1.state"),
+                        "orders-1.state",
+                        "7"))
+                .containsExactlyElementsOf(splits());
         if (Boolean.getBoolean("pipeforge.protocol.update") || !Files.exists(metadata)) {
             Files.createDirectories(GOLDEN);
             Files.write(metadata, CheckpointFiles.writeMetadata(sample()));
