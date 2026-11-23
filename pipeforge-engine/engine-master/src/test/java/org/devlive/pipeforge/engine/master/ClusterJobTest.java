@@ -565,7 +565,9 @@ class ClusterJobTest {
                 .extracting(o -> o.getOperatorKind(), o -> o.getSubtasksCount())
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("enumerator", 1),
-                        org.assertj.core.groups.Tuple.tuple("source", 3));
+                        org.assertj.core.groups.Tuple.tuple("source", 3),
+                        org.assertj.core.groups.Tuple.tuple("sink", 3),
+                        org.assertj.core.groups.Tuple.tuple("committer", 3));
         assertThat(metadata.getOperators(1).getSubtasksList())
                 .extracting(org.devlive.pipeforge.engine.rpc.checkpoint.proto.SubtaskState::getSubtask)
                 .containsExactlyInAnyOrder(0, 1, 2);
@@ -576,6 +578,49 @@ class ClusterJobTest {
                 .isFalse();
         assertThat(job.handle().metrics().lastCompletedCheckpointId())
                 .isEqualTo(job.checkpointStats().lastCompletedId());
+        awaitSlotsBack();
+    }
+
+    @Test
+    void theCommittablesOfCompletedCheckpointsAreCommittedAndNoOthers(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        String probe = Probe.create();
+        JobMaster job = start(
+                withCheckpoints(
+                        TestConnectors.job(probe, "rows: 600, splits: 6, endless: true", "", "commit: two-phase", 3),
+                        Duration.ofMillis(100),
+                        0,
+                        2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (job.checkpointStats().lastCompletedId() < 3) {
+            assertThat(System.nanoTime()).as("three checkpoints completed").isLessThan(deadline);
+            Thread.sleep(20);
+        }
+        job.cancel();
+        assertThat(end(job.handle()).status()).isEqualTo(JobStatus.CANCELLED);
+
+        java.util.Set<Long> completed = new java.util.HashSet<>();
+        store.rows.values().stream()
+                .filter(c ->
+                        c.status() == org.devlive.pipeforge.engine.master.checkpoint.CheckpointStore.Status.COMPLETED)
+                .forEach(c -> completed.add(c.checkpointId()));
+        // checkpoints beyond the two retained were deleted from the store; their numbers are all lower
+        long lowest = completed.stream().mapToLong(Long::longValue).min().orElseThrow();
+        assertThat(Probe.get(probe).committed).isNotEmpty().allSatisfy(c -> {
+            long checkpoint = Long.parseLong(c.substring(c.indexOf('@') + 1));
+            assertThat(checkpoint < lowest || completed.contains(checkpoint))
+                    .as("%s belongs to a completed checkpoint", c)
+                    .isTrue();
+        });
+        assertThat(Probe.get(probe).committed)
+                .as("every sink committed for the last completed checkpoint")
+                .filteredOn(c -> c.endsWith("@" + job.checkpointStats().lastCompletedId()))
+                .hasSize(3);
         awaitSlotsBack();
     }
 

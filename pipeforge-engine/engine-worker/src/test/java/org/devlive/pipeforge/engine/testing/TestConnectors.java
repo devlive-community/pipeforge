@@ -744,7 +744,10 @@ public final class TestConnectors {
                     @Override
                     public List<String> commit(List<String> committables) {
                         probe.commitAttempts++;
-                        probe.committed.addAll(committables);
+                        // committing again what was committed is a success, as a target would see it
+                        committables.stream()
+                                .filter(c -> !probe.committed.contains(c))
+                                .forEach(probe.committed::add);
                         return List.of();
                     }
 

@@ -81,6 +81,24 @@ Enumerator 在 JobMaster 中运行，而不是在 Worker 上，并遵守以下�
 `Sink` 在计划阶段校验输入表并创建 Writer。Writer 负责 `write`、`flush`，需要 exactly-once 时在 `prepareCommit`
 中产生待提交物，由 `SinkCommitter` 或 `GlobalCommitter` 在 checkpoint 完成后提交。
 
+### Sink 状态与提交
+
+checkpoint 的 barrier 到达 Sink 时，它之前的每一行都已交给 Writer，引擎在 Task 线程上依次调用：
+
+1. `flush()` 和 `prepareCommit(checkpointId)`：Writer 让已写入的数据持久但尚不可见（例如预提交一个事务），并返回描述它的待提交物；
+2. `snapshotState(checkpointId)`：Writer 在恢复后继续工作所需的内容，例如事务 ID 前缀或正在写的文件。flush 之后缓冲必须为空。
+
+两者都用 Sink 的序列化器（`committableSerializer`、`writerStateSerializer`）写入 checkpoint。checkpoint 被记为已完成后，
+Master 先用 `SinkCommitter`、再用 `GlobalCommitter` 提交这些待提交物；最后一个 checkpoint 之后产生的待提交物在运行结束时提交。
+待提交物永远不会在它所属的 checkpoint 完成之前被提交。
+
+**提交必须幂等。** 恢复后引擎会再次提交恢复点 checkpoint 的待提交物，因为运行可能停在记录 checkpoint 与提交之间；
+对已经提交过的内容再次提交必须成功。
+
+**事务 ID。** `WriterContext.transactionId(checkpointId)` 返回 `<jobId>-<nodeId>-<subtask>-<checkpointId>`，在运行重启前后保持不变；
+`restoredCheckpointId()` 返回 Writer 恢复自哪个 checkpoint（全新启动时为 0）。每个 checkpoint 打开一个事务的 Writer 用 `transactionId`
+为它命名，并在恢复时 abort 目标中由之前的尝试留下、checkpoint 编号更大的事务：它们从未提交，也永远不会提交。
+
 ### 坏行
 
 当问题出在某一行的数据上——值无法转换、目标端拒绝的约束、无法解析的记录——请在 `process`、`write` 或 `pollNext` 中针对这一行抛出

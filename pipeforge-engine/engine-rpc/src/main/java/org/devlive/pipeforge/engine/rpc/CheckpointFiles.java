@@ -69,6 +69,11 @@ public final class CheckpointFiles {
         return "enum-" + nodeId + ".state";
     }
 
+    /** The file name of a sink's committable: {@code commit-<nodeId>-<subtask>.state}. */
+    public static String committableFile(String nodeId, int subtask) {
+        return "commit-" + nodeId + "-" + subtask + ".state";
+    }
+
     /** Whether a state of {@code size} bytes goes into {@code _metadata}, up to {@code threshold}. */
     public static boolean inline(long size, int threshold) {
         return size <= threshold;

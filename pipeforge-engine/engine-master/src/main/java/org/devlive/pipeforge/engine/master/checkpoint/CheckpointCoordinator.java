@@ -110,6 +110,18 @@ public final class CheckpointCoordinator {
         };
     }
 
+    /**
+     * Commits the committables of a completed checkpoint: the sinks' committers, then a global
+     * committer. Called once the checkpoint is recorded as completed, before the tasks hear of it;
+     * committing must be idempotent, since a restore commits them again.
+     */
+    @FunctionalInterface
+    public interface Committer {
+        void commit(long checkpointId, List<SerializedValue> committables);
+
+        Committer NONE = (checkpointId, committables) -> {};
+    }
+
     /** A node of the job, as {@code _metadata} describes it. */
     public record Node(String id, String kind, String plugin, int parallelism) {}
 
@@ -135,6 +147,7 @@ public final class CheckpointCoordinator {
             CheckpointStore store,
             Tasks tasks,
             Enumerators enumerators,
+            Committer committer,
             Valve valve,
             Timer timer,
             Executor post,
@@ -417,6 +430,19 @@ public final class CheckpointCoordinator {
         failures = 0;
         lastEndMs = completedAt;
         stats = new Stats(checkpoint.id, completedAt - checkpoint.triggeredAt, size, 0, completedAt);
+        try {
+            List<SerializedValue> committables = committables(checkpoint);
+            if (!committables.isEmpty()) {
+                context.committer().commit(checkpoint.id, committables);
+            }
+        } catch (IOException | RuntimeException e) {
+            // the checkpoint stays completed: a restore from it commits its committables again
+            context.failRun()
+                    .accept(
+                            e instanceof PipeForgeException failure
+                                    ? failure
+                                    : failed(checkpoint.id, "reading its committables: " + e.getMessage()));
+        }
         for (ExecutionAttemptId task : context.tasks().all()) {
             context.tasks()
                     .gateway(task)
@@ -450,6 +476,31 @@ public final class CheckpointCoordinator {
         }
         checkpoint.result.complete(completed);
         resume();
+    }
+
+    /** The committables the sinks prepared for a checkpoint, from its acknowledgements. */
+    private List<SerializedValue> committables(Pending checkpoint) throws IOException {
+        List<SerializedValue> committables = new ArrayList<>();
+        for (CheckpointAck ack : checkpoint.acks) {
+            for (StateHandle handle : ack.states()) {
+                if (!handle.operatorKind().equals("committer")) {
+                    continue;
+                }
+                byte[] body =
+                        switch (handle.location()) {
+                            case StateHandle.Inline inline -> inline.bytes();
+                            case StateHandle.File file -> CheckpointFiles.readState(
+                                    context.storage().read(checkpoint.directory + file.path()),
+                                    checkpoint.id,
+                                    handle.nodeId(),
+                                    file.path());
+                        };
+                for (byte[] element : CheckpointFiles.readList(body, handle.nodeId(), String.valueOf(checkpoint.id))) {
+                    committables.add(new SerializedValue(handle.serializerVersion(), element));
+                }
+            }
+        }
+        return committables;
     }
 
     /**

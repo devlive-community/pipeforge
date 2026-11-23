@@ -6,12 +6,14 @@
  */
 package org.devlive.pipeforge.engine.worker;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
 import org.devlive.pipeforge.api.factory.SinkFactory;
 import org.devlive.pipeforge.api.row.Row;
+import org.devlive.pipeforge.api.serialization.VersionedSerializer;
 import org.devlive.pipeforge.api.sink.Sink;
 import org.devlive.pipeforge.api.sink.SinkWriter;
 import org.devlive.pipeforge.api.sink.WriterContext;
@@ -19,6 +21,7 @@ import org.devlive.pipeforge.api.table.SchemaChangeEvent;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.plan.PlannedNode;
+import org.devlive.pipeforge.engine.rpc.CheckpointFiles;
 import org.devlive.pipeforge.engine.rpc.SerializedValue;
 import org.devlive.pipeforge.engine.rpc.TaskSettings;
 import org.jspecify.annotations.Nullable;
@@ -42,6 +45,7 @@ final class SinkOperator implements ChainOutput {
     private @Nullable Sink<Object, Object> sink;
     private @Nullable SinkWriter<Object, Object> writer;
     private @Nullable AsyncWriteBuffer buffer;
+    private int subtask;
 
     /**
      * @param slot the clock slot of the writer on the task thread
@@ -81,13 +85,28 @@ final class SinkOperator implements ChainOutput {
     }
 
     @SuppressWarnings("unchecked")
-    void open(JobContext job, int subtask, int parallelism, TaskSettings settings, ExpressionCompiler expressions) {
+    void open(
+            JobContext job,
+            String jobId,
+            int subtask,
+            int parallelism,
+            TaskSettings settings,
+            ExpressionCompiler expressions) {
+        this.subtask = subtask;
         SinkFactory factory = (SinkFactory) node.component().factory();
         Sink<Object, Object> created = (Sink<Object, Object>)
                 call.call("create the sink", () -> factory.createSink(NodeContext.of(node, job, expressions)));
         sink = created;
         WriterContext context = new TaskWriterContext(
-                job, subtask, parallelism, call.classLoader(), threads.factory(call), this::reportBadRow);
+                job,
+                subtask,
+                parallelism,
+                call.classLoader(),
+                threads.factory(call),
+                this::reportBadRow,
+                jobId,
+                node.id(),
+                0);
         SinkWriter<Object, Object> opened =
                 call.call("create the writer", () -> created.createWriter(context, List.of()));
         writer = opened;
@@ -124,9 +143,54 @@ final class SinkOperator implements ChainOutput {
         accept(event);
     }
 
-    /** The end of the chain: the writer's snapshot is taken here once sinks keep state. */
+    /** The states taken at the last barrier, until the chain collects them. */
+    private List<StateUploader.Pending> taken = List.of();
+
+    /**
+     * The end of the chain: every row before the barrier is written and flushed, then the writer
+     * prepares the commit of the checkpoint and gives its state. The committable is committed once
+     * the checkpoint is complete; the state lets the writer go on after a restore.
+     */
     @Override
-    public void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {}
+    public void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {
+        long id = barrier.checkpointId();
+        AsyncWriteBuffer async = buffer;
+        if (async != null) {
+            async.flush();
+        }
+        SinkWriter<Object, Object> current = opened();
+        Sink<Object, Object> owner = sink;
+        if (owner == null) {
+            throw new IllegalStateException("The sink of " + node.id() + " is not open");
+        }
+        Optional<Object> committable =
+                call.call("prepare the commit of checkpoint " + id, () -> current.prepareCommit(id));
+        List<Object> state = call.call("snapshot the writer", () -> current.snapshotState(id));
+        VersionedSerializer<Object> states = call.call("get the writer state serializer", owner::writerStateSerializer);
+        VersionedSerializer<Object> committables =
+                call.call("get the committable serializer", owner::committableSerializer);
+        List<byte[]> written = new ArrayList<>();
+        for (Object value : state == null ? List.of() : state) {
+            written.add(call.call("write the writer state", () -> states.serialize(value)));
+        }
+        List<byte[]> prepared = new ArrayList<>();
+        if (committable != null && committable.isPresent()) {
+            Object value = committable.get();
+            prepared.add(call.call("write the committable", () -> committables.serialize(value)));
+        }
+        taken = List.of(
+                new StateUploader.Pending(
+                        node.id(), "sink", subtask, states.version(), CheckpointFiles.writeList(written)),
+                new StateUploader.Pending(
+                        node.id(), "committer", subtask, committables.version(), CheckpointFiles.writeList(prepared)));
+    }
+
+    /** The states of the last barrier; empty until one reached the sink. */
+    List<StateUploader.Pending> takeSnapshot() {
+        List<StateUploader.Pending> states = taken;
+        taken = List.of();
+        return states;
+    }
 
     private void accept(Object item) {
         if (item instanceof Row) {
@@ -261,18 +325,26 @@ final class SinkOperator implements ChainOutput {
         metrics.rowsOut.decrement();
     }
 
-    private record TaskWriterContext(
+    record TaskWriterContext(
             JobContext job,
             int subtaskIndex,
             int parallelism,
             ClassLoader classLoader,
             java.util.concurrent.ThreadFactory threadFactory,
-            java.util.function.BiConsumer<Row, String> badRows)
+            java.util.function.BiConsumer<Row, String> badRows,
+            String jobId,
+            String nodeId,
+            long restoredCheckpointId)
             implements WriterContext {
 
         @Override
         public void reportBadRow(Row row, String reason) {
             badRows.accept(row, reason);
+        }
+
+        @Override
+        public String transactionId(long checkpointId) {
+            return jobId + "-" + nodeId + "-" + subtaskIndex + "-" + checkpointId;
         }
     }
 }

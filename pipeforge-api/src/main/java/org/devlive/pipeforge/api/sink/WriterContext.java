@@ -44,4 +44,26 @@ public interface WriterContext {
     default java.util.concurrent.ThreadFactory threadFactory() {
         return java.util.concurrent.Executors.defaultThreadFactory();
     }
+
+    /**
+     * The ID of the transaction this writer opens for checkpoint {@code checkpointId}: {@code
+     * <jobId>-<nodeId>-<subtask>-<checkpointId>}. It is the same across restarts of the run, so a
+     * writer finds the transactions an earlier attempt left open by it.
+     *
+     * @throws UnsupportedOperationException on an engine without checkpoints
+     */
+    default String transactionId(long checkpointId) {
+        throw new UnsupportedOperationException("this engine gives no transaction IDs");
+    }
+
+    /**
+     * The checkpoint the writer was restored from, 0 when it starts fresh. On restore, a writer
+     * that commits in two phases aborts the transactions of later checkpoints that an earlier
+     * attempt left open ({@link #transactionId} with a higher checkpoint ID): they were never
+     * committed and never will be. The committables of the restored checkpoint itself are committed
+     * again by the engine, so committing must be idempotent.
+     */
+    default long restoredCheckpointId() {
+        return 0;
+    }
 }

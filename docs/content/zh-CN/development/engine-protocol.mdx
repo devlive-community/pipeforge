@@ -154,6 +154,8 @@ Task 随**描述**一起下发：它运行的节点链、每个节点的选项�
   没有状态的子任务不出现，每个节点都记录写入时的并行度。
 - 状态文件记录它所属的 checkpoint 和节点；放错位置的文件不会被当作别的文件读取。
 - 列表状态（例如 Reader 的分片）先是 varint 个数，然后每个元素为 varint 长度加元素序列化器的输出；`serializer_version` 是元素序列化器的版本。内联状态的结构相同。
+- Sink 有两项状态：Writer 状态（`operator_kind = sink`）和待提交物（`operator_kind = committer`，0 或 1 个元素的列表，较大时单独成文件
+  `commit-<node>-<subtask>.state`）；Master 在把 checkpoint 记为已完成后提交其中的待提交物。
 - Task 把文件写在 checkpoint 编号对应的 `chk-<n>/` 下；对于 savepoint，Master 把它们复制到 `savepoints/<name>-<time>/`，再删除原处的文件。
 - 长度或校验不符、或者属于别处的文件报告 [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002)：恢复时退回到上一个 checkpoint。
   格式版本比引擎能读取的更新时报告 [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003)。

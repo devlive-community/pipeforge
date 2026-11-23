@@ -168,8 +168,8 @@ task's part. The master logs every checkpoint that completes or fails.
 
 ## Limitations
 
-- Sinks keep no state in their checkpoints yet, and two-phase sinks commit at the end of the run,
-  not per checkpoint; transforms keep no state.
+- Transforms keep no state. Sinks commit per checkpoint on the master (see
+  [sink state and commits](../development/api-overview#sink-state-and-commits)).
 - Runs do not restart from a checkpoint yet; savepoints cannot be taken from the command line or the
   Web UI yet, and a worker declines to stop a run with a savepoint.
 - A task that waited longer than 30 seconds for the barriers of a checkpoint logs a warning about

@@ -150,6 +150,8 @@ class CheckpointCoordinatorTest {
 
     final ManualTimer timer = new ManualTimer();
     CheckpointCoordinator.Valve valve = CheckpointCoordinator.Valve.NONE;
+    final List<String> committed = new ArrayList<>();
+    PipeForgeException commitFails;
     final MemoryCheckpointStore store = new MemoryCheckpointStore();
     final Workers workers = new Workers();
     final List<PipeForgeException> runFailures = new ArrayList<>();
@@ -191,6 +193,13 @@ class CheckpointCoordinatorTest {
                 store,
                 tasks,
                 id -> Map.of("src", new SerializedValue(3, enumeratorState)),
+                (checkpointId, values) -> {
+                    if (commitFails != null) {
+                        throw commitFails;
+                    }
+                    values.forEach(
+                            v -> committed.add(checkpointId + ":" + new String(v.bytes(), StandardCharsets.UTF_8)));
+                },
                 valve,
                 timer,
                 Runnable::run,
@@ -324,6 +333,47 @@ class CheckpointCoordinatorTest {
         assertThat(valveCalls)
                 .as("a reader's valve opens with its own ack; all open when the checkpoint ends")
                 .containsExactly("close 1", "open 1 1", "open 0 1", "open all 1");
+    }
+
+    static StateHandle committable(ExecutionAttemptId task, String value) {
+        byte[] body = CheckpointFiles.writeList(List.of(value.getBytes(StandardCharsets.UTF_8)));
+        return new StateHandle(task.vertexId(), "committer", 1, new StateHandle.Inline(body), body.length, 0);
+    }
+
+    @Test
+    void theCommittablesOfACheckpointAreCommittedOnceItIsRecordedAndBeforeTheTasksHear() throws Exception {
+        CheckpointCoordinator coordinator = coordinator(settings(3, 3));
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+        coordinator.acknowledge(ack(SRC0, 1));
+        coordinator.acknowledge(ack(SRC1, 1));
+        // a committable inline, and one in a file of the checkpoint
+        byte[] filed = CheckpointFiles.writeList(List.of("txn-b".getBytes(StandardCharsets.UTF_8)));
+        storage.write("run-1/chk-1/commit-sink-0.state", CheckpointFiles.writeState(1, "sink", filed));
+        coordinator.acknowledge(new CheckpointAck(
+                SINK,
+                1,
+                List.of(
+                        committable(SINK, "txn-a"),
+                        new StateHandle(
+                                "sink", "committer", 1, new StateHandle.File("commit-sink-0.state"), filed.length, 0)),
+                CheckpointTaskMetrics.NONE));
+        assertThat(committed).containsExactly("1:txn-a", "1:txn-b");
+        assertThat(store.get(RUN, 1).status()).isEqualTo(CheckpointStore.Status.COMPLETED);
+        assertThat(workers.of("complete")).hasSize(3);
+
+        // a failed commit fails the run; the checkpoint stays completed for a restore
+        commitFails = PipeForgeException.of(ErrorCode.COMMIT_FAILED)
+                .param("node", "sink")
+                .param("reason", "target unavailable")
+                .build();
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+        coordinator.acknowledge(ack(SRC0, 2));
+        coordinator.acknowledge(ack(SRC1, 2));
+        coordinator.acknowledge(
+                new CheckpointAck(SINK, 2, List.of(committable(SINK, "txn-c")), CheckpointTaskMetrics.NONE));
+        assertThat(runFailures).singleElement().satisfies(e -> assertThat(e.code())
+                .isEqualTo(ErrorCode.COMMIT_FAILED));
+        assertThat(store.get(RUN, 2).status()).isEqualTo(CheckpointStore.Status.COMPLETED);
     }
 
     @Test

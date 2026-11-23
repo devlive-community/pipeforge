@@ -194,8 +194,9 @@ final class Task implements Runnable {
             return;
         }
         long started = System.nanoTime();
-        List<StateUploader.Pending> taken = operators.snapshot(id);
+        List<StateUploader.Pending> taken = new java.util.ArrayList<>(operators.snapshot(id));
         operators.barrier(barrier);
+        taken.addAll(operators.sinkSnapshot());
         long syncMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
         long bytes = taken.stream().mapToLong(p -> p.body().length).sum();
         long uploading = System.nanoTime();

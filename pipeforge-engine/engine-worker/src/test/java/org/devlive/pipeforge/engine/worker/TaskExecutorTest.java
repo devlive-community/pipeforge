@@ -300,13 +300,16 @@ class TaskExecutorTest {
             var ack = master.acks.poll(10, TimeUnit.SECONDS);
             assertThat(ack).isNotNull();
             assertThat(ack.checkpointId()).isEqualTo(2);
-            assertThat(ack.states()).singleElement().satisfies(state -> {
-                assertThat(state.nodeId()).isEqualTo("src");
-                assertThat(state.operatorKind()).isEqualTo("source");
-                assertThat(state.location())
-                        .as("every split read: an empty list, inline")
-                        .isEqualTo(new org.devlive.pipeforge.engine.rpc.StateHandle.Inline(new byte[] {0}));
-            });
+            assertThat(ack.states())
+                    .filteredOn(s -> s.operatorKind().equals("source"))
+                    .singleElement()
+                    .satisfies(state -> {
+                        assertThat(state.nodeId()).isEqualTo("src");
+                        assertThat(state.operatorKind()).isEqualTo("source");
+                        assertThat(state.location())
+                                .as("every split read: an empty list, inline")
+                                .isEqualTo(new org.devlive.pipeforge.engine.rpc.StateHandle.Inline(new byte[] {0}));
+                    });
             assertThat(Probe.get(probe).events).contains("snapshot 2 after 10 rows");
             assertThat(master.acks).as("a task of another worker is not here").isEmpty();
 
@@ -322,6 +325,47 @@ class TaskExecutorTest {
 
             assertThat(master.executor.notifyCheckpointComplete(master.id(), 2)).succeedsWithin(Duration.ofSeconds(5));
             assertThat(master.executor.abortCheckpoint(master.id(), 4, "x")).succeedsWithin(Duration.ofSeconds(5));
+            master.executor.cancelTask(master.id()).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
+        }
+    }
+
+    @Test
+    void theSinkWritesEverythingBeforeTheBarrierAndPreparesItsCommit() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "endless: true", "", "commit: two-phase", 1),
+                            ScriptedMaster.settings()))
+                    .get();
+            awaitFinishedSplits(master, 2);
+            master.executor
+                    .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                            master.id(), 1, org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT, 0, false))
+                    .get();
+            var ack = master.acks.poll(10, TimeUnit.SECONDS);
+            assertThat(ack).isNotNull();
+            assertThat(Probe.get(probe).rows)
+                    .as("every row before the barrier was written")
+                    .hasSize(10);
+            assertThat(ack.states())
+                    .extracting(
+                            org.devlive.pipeforge.engine.rpc.StateHandle::nodeId,
+                            org.devlive.pipeforge.engine.rpc.StateHandle::operatorKind)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("src", "source"),
+                            org.assertj.core.groups.Tuple.tuple("out", "sink"),
+                            org.assertj.core.groups.Tuple.tuple("out", "committer"));
+            var committer = ack.states().get(2);
+            byte[] body = ((org.devlive.pipeforge.engine.rpc.StateHandle.Inline) committer.location()).bytes();
+            assertThat(org.devlive.pipeforge.engine.rpc.CheckpointFiles.readList(body, "out", "1"))
+                    .singleElement()
+                    .satisfies(c -> assertThat(new String(c, java.nio.charset.StandardCharsets.UTF_8))
+                            .isEqualTo("0:10@1"));
+            assertThat(Probe.get(probe).committed)
+                    .as("committed only once the checkpoint is complete")
+                    .isEmpty();
             master.executor.cancelTask(master.id()).get();
             assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
         }
@@ -364,8 +408,11 @@ class TaskExecutorTest {
             storage.release.countDown();
             var ack = master.acks.poll(10, TimeUnit.SECONDS);
             assertThat(ack).isNotNull();
-            assertThat(ack.states()).singleElement().satisfies(state -> assertThat(state.location())
-                    .isEqualTo(new org.devlive.pipeforge.engine.rpc.StateHandle.File("src-0.state")));
+            assertThat(ack.states())
+                    .filteredOn(s -> s.operatorKind().equals("source"))
+                    .singleElement()
+                    .satisfies(state -> assertThat(state.location())
+                            .isEqualTo(new org.devlive.pipeforge.engine.rpc.StateHandle.File("src-0.state")));
             assertThat(ack.metrics().asyncMs()).as("it waited for the storage").isPositive();
             assertThat(storage.exists("run-1/chk-1/src-0.state")).isTrue();
             master.executor.cancelTask(master.id()).get();

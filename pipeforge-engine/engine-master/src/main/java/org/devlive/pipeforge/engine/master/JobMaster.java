@@ -399,6 +399,13 @@ public final class JobMaster {
                     }
                 },
                 this::snapshotEnumerator,
+                new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Committer() {
+                    @Override
+                    public void commit(long checkpointId, List<SerializedValue> values) {
+                        LOG.info("Job {} ({}) commits checkpoint {}", plan.name(), id, checkpointId);
+                        JobMaster.this.commit(values);
+                    }
+                },
                 new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Valve() {
                     @Override
                     public java.util.concurrent.CompletableFuture<Void> close(long checkpointId) {
@@ -779,8 +786,17 @@ public final class JobMaster {
 
     // ------------------------------------------------------------------ commit
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    /** Commits what the sinks prepared after the last checkpoint, at the end of the run. */
     private void commit() {
+        commit(committables);
+    }
+
+    /**
+     * Commits committables with the sink's committer, then its global committer; the committers
+     * must take a committable they committed before as committed.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void commit(List<SerializedValue> committables) {
         if (committables.isEmpty()) {
             return;
         }

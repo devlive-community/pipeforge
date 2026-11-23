@@ -92,6 +92,33 @@ A `Sink` validates its input tables while planning and creates writers. Writers 
 and, for exactly-once delivery, produce committables in `prepareCommit`; a `SinkCommitter` or
 `GlobalCommitter` commits them after the checkpoint completes.
 
+### Sink state and commits
+
+When a checkpoint's barrier reaches a sink, every row before it was handed to the writer, and the
+engine calls, on the task thread:
+
+1. `flush()` and `prepareCommit(checkpointId)`: the writer makes what it wrote durable but not yet
+   visible, for example by preparing a transaction, and returns a committable describing it;
+2. `snapshotState(checkpointId)`: what the writer needs to go on after a restore, such as the
+   prefix of its transaction IDs or its open files. Buffers must be empty after the flush.
+
+Both are written with the sink's serializers (`committableSerializer`, `writerStateSerializer`)
+into the checkpoint. Once the checkpoint is recorded as complete, the master commits the
+committables with the `SinkCommitter`, then the `GlobalCommitter`; committables prepared after the
+last checkpoint are committed when the run ends. A committable is never committed before its
+checkpoint completed.
+
+**Committing must be idempotent.** After a restore the engine commits the committables of the
+restored checkpoint again, since the run may have stopped between recording the checkpoint and
+committing; committing something already committed must succeed.
+
+**Transaction IDs.** `WriterContext.transactionId(checkpointId)` gives
+`<jobId>-<nodeId>-<subtask>-<checkpointId>`, the same across restarts of the run, and
+`restoredCheckpointId()` the checkpoint the writer was restored from (0 when it starts fresh). A
+writer that opens a transaction per checkpoint names it with `transactionId`, and on restore aborts
+the transactions with a higher checkpoint ID that an earlier attempt left open in its target: they
+were never committed and never will be.
+
 ### Bad rows
 
 When the data of a row is the problem — a value that does not convert, a constraint the target

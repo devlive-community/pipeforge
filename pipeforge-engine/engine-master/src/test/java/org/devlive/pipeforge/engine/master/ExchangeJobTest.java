@@ -249,7 +249,9 @@ class ExchangeJobTest {
                 .extracting(o -> o.getOperatorKind(), o -> o.getSubtasksCount())
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("enumerator", 1),
-                        org.assertj.core.groups.Tuple.tuple("source", 2));
+                        org.assertj.core.groups.Tuple.tuple("source", 2),
+                        org.assertj.core.groups.Tuple.tuple("sink", 3),
+                        org.assertj.core.groups.Tuple.tuple("committer", 3));
         awaitIdle();
     }
 

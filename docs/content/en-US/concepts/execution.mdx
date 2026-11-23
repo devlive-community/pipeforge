@@ -162,7 +162,8 @@ changed; the readers get their new quotas at once.
 
 A sink that commits in two phases returns a committable from `prepareCommit`. When every task has
 finished, the job master commits them with the sink's committer and then its global committer, and
-only then reports `SUCCESS`. A run without checkpoints commits once, as checkpoint 1.
+only then reports `SUCCESS`. A run without checkpoints commits once, as checkpoint 1; a run with
+checkpoints commits what each checkpoint covers once it completes, and the rest at the end.
 
 ### Job states
 
@@ -397,9 +398,10 @@ subtask to their scope. The full list is in the [error reference](../reference/e
 - Schema changes cannot cross a data exchange yet: a schema change that reaches the end of a chain
   whose rows go to another chain fails the task with `PF-PLAN-0012`. Jobs whose nodes all have the
   same parallelism run in one chain and are not affected.
-- No checkpoints: a failed or cancelled job starts from the beginning when it is run again, and
-  two-phase sinks commit once at the end of the input. A cluster can already be given its
-  [checkpoint storage](../operations/checkpoint-storage); runs do not write checkpoints yet.
+- Local runs and clusters without `checkpoint.dir` take no [checkpoints](./checkpoint): two-phase
+  sinks commit once at the end of the input. On a cluster with checkpoints, sinks commit per
+  checkpoint, but a failed run cannot go on from its last checkpoint yet: run again, it starts from
+  the beginning.
 - No restarts: the first task failure fails the job.
 - Streaming jobs run until they are cancelled.
 

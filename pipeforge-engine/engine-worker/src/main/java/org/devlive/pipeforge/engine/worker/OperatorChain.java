@@ -157,7 +157,7 @@ final class OperatorChain {
             }
         }
         if (sink != null) {
-            sink.open(job, subtask, parallelism, deployment.settings(), expressions);
+            sink.open(job, deployment.run().jobId(), subtask, parallelism, deployment.settings(), expressions);
         }
         for (int i = transforms.size() - 1; i >= 0; i--) {
             transforms.get(i).open(job, subtask, parallelism, expressions);
@@ -217,6 +217,11 @@ final class OperatorChain {
     /** Sends the barrier down the chain, after every row read before it. */
     void barrier(org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier barrier) {
         first.barrier(barrier);
+    }
+
+    /** The sink's states of the barrier that just passed: its writer's state and committable. */
+    List<StateUploader.Pending> sinkSnapshot() {
+        return sink == null ? List.of() : sink.takeSnapshot();
     }
 
     void notifyCheckpointComplete(long checkpointId) {

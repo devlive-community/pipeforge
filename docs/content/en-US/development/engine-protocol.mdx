@@ -206,6 +206,9 @@ length of the body, the body and its CRC32C, integers big-endian.
 - A list state, such as a reader's splits, is a varint count, then each element as a varint length
   and the element serializer's bytes; `serializer_version` is the element serializer's. Inline
   states have the same layout.
+- A sink has two states: its writer's (`operator_kind = sink`) and its committable
+  (`operator_kind = committer`, a list of 0 or 1, in a file `commit-<node>-<subtask>.state` when it
+  is large); the master commits the committables of a checkpoint once it recorded it as complete.
 - Tasks write their files under `chk-<n>/` of the checkpoint's number; for a savepoint the master
   copies them into `savepoints/<name>-<time>/` and deletes them there.
 - A file whose length or checksum does not match, or that belongs elsewhere, is

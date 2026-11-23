@@ -73,7 +73,9 @@ final class StateUploader implements AutoCloseable {
                         "the state of " + state.nodeId() + " is " + state.body().length
                                 + " bytes, and this worker has no checkpoint storage (checkpoint.dir)"));
             }
-            String file = CheckpointFiles.stateFile(state.nodeId(), state.subtask());
+            String file = state.kind().equals("committer")
+                    ? CheckpointFiles.committableFile(state.nodeId(), state.subtask())
+                    : CheckpointFiles.stateFile(state.nodeId(), state.subtask());
             try {
                 target.write(
                         CheckpointPaths.checkpoint(task.runId(), checkpointId) + file,
