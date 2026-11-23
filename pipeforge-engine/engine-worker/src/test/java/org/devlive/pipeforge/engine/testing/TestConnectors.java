@@ -216,6 +216,10 @@ public final class TestConnectors {
                     .param("reason", "boom")
                     .build();
             case "io" -> new IOException(what + " broke");
+                // classified by the collect sink as transient
+            case "deadlock" -> new IOException(what + " deadlocked");
+                // classified by the numbers factory as an authentication failure
+            case "denied" -> new SecurityException(what + " denied");
             default -> new IllegalStateException(what + " broke");
         };
     }
@@ -285,7 +289,18 @@ public final class TestConnectors {
         }
     }
 
-    static final class NumbersFactory implements SourceFactory {
+    static final class NumbersFactory implements SourceFactory, org.devlive.pipeforge.api.capability.ErrorClassifier {
+        @Override
+        public PipeForgeException classify(Throwable error) {
+            return error instanceof SecurityException
+                    ? PipeForgeException.of(ErrorCode.AUTH_FAILED)
+                            .param("target", "numbers")
+                            .param("user", "test")
+                            .param("reason", error.getMessage())
+                            .build()
+                    : null;
+        }
+
         @Override
         public String identifier() {
             return "numbers";
@@ -720,8 +735,26 @@ public final class TestConnectors {
         }
     }
 
-    static final class CollectSink implements Sink<String, String> {
+    static final class CollectSink
+            implements Sink<String, String>, org.devlive.pipeforge.api.capability.ErrorClassifier {
         private static final long serialVersionUID = 1L;
+
+        @Override
+        public PipeForgeException classify(Throwable error) {
+            if (error instanceof IOException
+                    && String.valueOf(error.getMessage()).endsWith("deadlocked")) {
+                return PipeForgeException.of(ErrorCode.SINK_FAILED)
+                        .param("node", "collect")
+                        .param("reason", error.getMessage())
+                        .kind(org.devlive.pipeforge.common.error.ErrorKind.TRANSIENT)
+                        .build();
+            }
+            if (error instanceof SecurityException) {
+                throw new IllegalStateException("the classifier broke");
+            }
+            return null;
+        }
+
         private final transient ReadonlyConfig config;
 
         CollectSink(ReadonlyConfig config) {

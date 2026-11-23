@@ -94,8 +94,8 @@ final class SinkOperator implements ChainOutput {
             ExpressionCompiler expressions) {
         this.subtask = subtask;
         SinkFactory factory = (SinkFactory) node.component().factory();
-        Sink<Object, Object> created = (Sink<Object, Object>)
-                call.call("create the sink", () -> factory.createSink(NodeContext.of(node, job, expressions)));
+        Sink<Object, Object> created = (Sink<Object, Object>) call.call(
+                "create the sink", () -> call.created(factory.createSink(NodeContext.of(node, job, expressions))));
         sink = created;
         WriterContext context = new TaskWriterContext(
                 job,

@@ -482,6 +482,41 @@ class TaskExecutorTest {
     }
 
     @Test
+    void pluginClassifiersTurnLibraryExceptionsIntoRegisteredErrors() throws Exception {
+        String probe = Probe.create();
+        TaskStateUpdate end = run(TestConnectors.job(probe, "", "", "fail-at: 3, fail-with: deadlock", 1));
+
+        assertThat(end.state()).isEqualTo(TaskState.FAILED);
+        PipeForgeException error = end.error();
+        assertThat(error.code()).isEqualTo(ErrorCode.SINK_FAILED);
+        assertThat(error.kind()).isEqualTo(org.devlive.pipeforge.common.error.ErrorKind.TRANSIENT);
+        assertThat(error.scope().node()).isEqualTo("out");
+        assertThat(error.scope().subtask()).isZero();
+        assertThat(error.getCause()).isInstanceOf(java.io.IOException.class).hasMessageEndingWith("deadlocked");
+
+        String denied = Probe.create();
+        PipeForgeException auth = run(TestConnectors.job(denied, "fail-at: 3, fail-with: denied", "", "", 1))
+                .error();
+        assertThat(auth.code()).as("the factory classifies").isEqualTo(ErrorCode.AUTH_FAILED);
+        assertThat(auth.kind()).isEqualTo(org.devlive.pipeforge.common.error.ErrorKind.FATAL);
+        assertThat(auth.scope().node()).isEqualTo("src");
+        assertThat(auth.getCause()).isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void aClassifierThatThrowsIsIgnored() throws Exception {
+        String probe = Probe.create();
+        PipeForgeException error = run(TestConnectors.job(probe, "", "", "fail-at: 3, fail-with: denied", 1))
+                .error();
+
+        assertThat(error.code()).isEqualTo(ErrorCode.SINK_FAILED);
+        assertThat(error.kind()).isEqualTo(org.devlive.pipeforge.common.error.ErrorKind.FATAL);
+        assertThat(error.getCause()).isInstanceOf(SecurityException.class);
+        assertThat(error.getCause().getSuppressed()).singleElement().satisfies(e -> assertThat(e)
+                .hasMessage("the classifier broke"));
+    }
+
+    @Test
     void reportsTransformFailuresAsPluginCallFailures() throws Exception {
         String probe = Probe.create();
         TaskStateUpdate end = run(TestConnectors.job(probe, "", "fail-at: 2, fail-with: io", "", 1));

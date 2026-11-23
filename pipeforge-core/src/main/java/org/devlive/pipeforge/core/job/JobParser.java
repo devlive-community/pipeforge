@@ -167,6 +167,20 @@ public final class JobParser {
         positive(config, EnvOptions.CHECKPOINT_INTERVAL, false);
         positive(config, EnvOptions.CHECKPOINT_TIMEOUT, false);
         positive(config, EnvOptions.CHECKPOINT_MIN_PAUSE, true);
+        positive(config, EnvOptions.RESTART_DELAY, true);
+        positive(config, EnvOptions.RESTART_INITIAL, false);
+        positive(config, EnvOptions.RESTART_MAX, true);
+        positive(config, EnvOptions.RESTART_RESET_AFTER, true);
+        positive(config, EnvOptions.RESTART_INTERVAL, false);
+        if (config.get(EnvOptions.RESTART_MAX).compareTo(config.get(EnvOptions.RESTART_INITIAL)) < 0) {
+            throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                            org.devlive.pipeforge.common.error.ErrorCode.OPTION_INVALID)
+                    .param("option", EnvOptions.RESTART_MAX.key())
+                    .param("node", "env")
+                    .param("value", config.get(EnvOptions.RESTART_MAX).toString())
+                    .param("reason", "it cannot be shorter than restart.initial")
+                    .build();
+        }
         return config;
     }
 

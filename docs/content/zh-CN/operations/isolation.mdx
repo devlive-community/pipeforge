@@ -39,7 +39,7 @@ Source 读取的每一行都按它在内存中的估算大小计量——对象�
 
 ## 插件代码
 
-对插件的每次调用都以插件的 ClassLoader 作为线程上下文 ClassLoader。插件抛出的错误如果带有错误码则保留，否则对 Source 归为
+对插件的每次调用都以插件的 ClassLoader 作为线程上下文 ClassLoader。插件抛出的错误如果带有错误码则保留；否则插件有 `ErrorClassifier` 时由它转换（见[失败处理](../concepts/failure-handling)），再否则对 Source 归为
 `PF-SRC-0001`、对 Sink 归为 `PF-SINK-0001`、对 Transform 归为 `PF-PLUG-0007`，并给出节点和当时的操作；插件需要却没有带上的类
 （`NoClassDefFoundError` 等链接错误）也按同样方式报告，而不会让 Worker 停止。
 

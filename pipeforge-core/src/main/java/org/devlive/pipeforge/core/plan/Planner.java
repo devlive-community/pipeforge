@@ -140,7 +140,49 @@ public final class Planner {
                 new RateLimit(
                         job.env().getOptional(EnvOptions.LIMIT_ROWS).orElse(0L),
                         job.env().getOptional(EnvOptions.LIMIT_BYTES).orElse(0L)),
-                checkpoint(job, mode));
+                checkpoint(job, mode),
+                restart(job, warnings));
+    }
+
+    /** The restart settings; options the strategy does not use are reported as warnings. */
+    private static RestartSettings restart(JobDefinition job, List<String> warnings) {
+        var env = job.env();
+        RestartSettings.Strategy strategy = env.get(EnvOptions.RESTART_STRATEGY);
+        List<org.devlive.pipeforge.api.option.Option<?>> used =
+                switch (strategy) {
+                    case NONE -> List.of();
+                    case FIXED_DELAY -> List.of(EnvOptions.RESTART_ATTEMPTS, EnvOptions.RESTART_DELAY);
+                    case EXPONENTIAL_BACKOFF -> List.of(
+                            EnvOptions.RESTART_INITIAL,
+                            EnvOptions.RESTART_MAX,
+                            EnvOptions.RESTART_MULTIPLIER,
+                            EnvOptions.RESTART_RESET_AFTER);
+                    case FAILURE_RATE -> List.of(
+                            EnvOptions.RESTART_MAX_FAILURES, EnvOptions.RESTART_INTERVAL, EnvOptions.RESTART_DELAY);
+                };
+        for (var option : List.of(
+                EnvOptions.RESTART_ATTEMPTS,
+                EnvOptions.RESTART_DELAY,
+                EnvOptions.RESTART_INITIAL,
+                EnvOptions.RESTART_MAX,
+                EnvOptions.RESTART_MULTIPLIER,
+                EnvOptions.RESTART_RESET_AFTER,
+                EnvOptions.RESTART_MAX_FAILURES,
+                EnvOptions.RESTART_INTERVAL)) {
+            if (env.contains(option) && !used.contains(option)) {
+                warnings.add("env." + option.key() + " has no effect with restart.strategy " + strategy.id());
+            }
+        }
+        return new RestartSettings(
+                strategy,
+                env.get(EnvOptions.RESTART_ATTEMPTS),
+                env.get(EnvOptions.RESTART_DELAY),
+                env.get(EnvOptions.RESTART_INITIAL),
+                env.get(EnvOptions.RESTART_MAX),
+                env.get(EnvOptions.RESTART_MULTIPLIER),
+                env.get(EnvOptions.RESTART_RESET_AFTER),
+                env.get(EnvOptions.RESTART_MAX_FAILURES),
+                env.get(EnvOptions.RESTART_INTERVAL));
     }
 
     private static CheckpointSettings checkpoint(JobDefinition job, JobMode mode) {

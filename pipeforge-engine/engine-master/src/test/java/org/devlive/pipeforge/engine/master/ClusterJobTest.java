@@ -296,6 +296,37 @@ class ClusterJobTest {
     }
 
     @Test
+    void failuresAreClassifiedAndTheRestartStrategyIsAsked() throws Exception {
+        String transientProbe = Probe.create();
+        JobMaster deadlocked = start(
+                TestConnectors.job(transientProbe, "rows: 300, splits: 3", "", "fail-at: 5, fail-with: deadlock", 3),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults());
+        JobResult first = end(deadlocked.handle());
+        assertThat(first.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(first.error().kind()).isEqualTo(org.devlive.pipeforge.common.error.ErrorKind.TRANSIENT);
+        assertThat(deadlocked.decision())
+                .as("the default strategy allows a restart after ten seconds")
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.engine.master.failure.FailureHandler.Restart.class,
+                        restart -> assertThat(restart.delay()).isEqualTo(Duration.ofSeconds(10)));
+        awaitSlotsBack();
+
+        String fatalProbe = Probe.create();
+        JobMaster denied = start(
+                TestConnectors.job(fatalProbe, "rows: 300, splits: 3, fail-at: 5, fail-with: denied", "", "", 3),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults());
+        JobResult second = end(denied.handle());
+        assertThat(second.error().code()).isEqualTo(ErrorCode.AUTH_FAILED);
+        assertThat(denied.decision())
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.engine.master.failure.FailureHandler.Fail.class,
+                        fail -> assertThat(fail.exhausted()).isFalse());
+        awaitSlotsBack();
+    }
+
+    @Test
     void theFirstFailedTaskFailsTheJobAndCancelsTheOthers() throws Exception {
         String probe = Probe.create();
         JobResult result = end(submit(

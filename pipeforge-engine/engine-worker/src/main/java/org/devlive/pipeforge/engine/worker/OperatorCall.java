@@ -10,7 +10,9 @@ import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.ErrorScope;
 import org.devlive.pipeforge.common.error.PipeForgeException;
 import org.devlive.pipeforge.core.job.NodeKind;
+import org.devlive.pipeforge.core.plan.ErrorClassifiers;
 import org.devlive.pipeforge.core.plan.PlannedNode;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The boundary around every call into an operator's plugin code: sets the plugin's context class
@@ -21,8 +23,11 @@ import org.devlive.pipeforge.core.plan.PlannedNode;
  *   <li>a {@link PipeForgeException} keeps its code; the node and subtask are added to its scope
  *       unless it already names a node (an error from a downstream operator passes through the
  *       upstream operators unchanged);
- *   <li>anything else becomes {@code PF-SRC-0001} for sources, {@code PF-SINK-0001} for sinks and
- *       {@code PF-PLUG-0007} for transforms, with the original exception as the cause.
+ *   <li>anything else goes to the plugin's {@link org.devlive.pipeforge.api.capability.ErrorClassifier}
+ *       (the created source, sink or transform first, then the factory), and what it returns is
+ *       treated like an error the plugin threw;
+ *   <li>what no classifier knows becomes {@code PF-SRC-0001} for sources, {@code PF-SINK-0001} for
+ *       sinks and {@code PF-PLUG-0007} for transforms, with the original exception as the cause.
  * </ul>
  */
 final class OperatorCall {
@@ -42,6 +47,8 @@ final class OperatorCall {
     private final PlannedNode node;
     private final ClassLoader loader;
     private final ErrorScope scope;
+    /** The source, sink or transform the factory created, once it did. */
+    private volatile @Nullable Object component;
 
     OperatorCall(PlannedNode node, ClassLoader loader, ErrorScope task) {
         this.node = node;
@@ -51,6 +58,12 @@ final class OperatorCall {
 
     String node() {
         return node.id();
+    }
+
+    /** Records the source, sink or transform the factory created, which may classify errors. */
+    <T> T created(T value) {
+        component = value;
+        return value;
     }
 
     ClassLoader classLoader() {
@@ -97,14 +110,16 @@ final class OperatorCall {
                     .cause(bad)
                     .build();
         }
-        if (error instanceof PipeForgeException e) {
+        PipeForgeException known = error instanceof PipeForgeException e ? e : classified(error);
+        if (known != null) {
+            PipeForgeException e = known;
             if (e.scope().node() != null) {
                 return e;
             }
             PipeForgeException.Builder builder = PipeForgeException.of(e.code())
                     .scope(merged(e.scope()))
                     .kind(e.kind())
-                    .cause(e.getCause());
+                    .cause(e.getCause() != null || e == error ? e.getCause() : error);
             e.params().forEach(builder::param);
             return builder.build();
         }
@@ -119,6 +134,18 @@ final class OperatorCall {
                         .param("node", node.id())
                         .param("reason", operation + ": " + reason);
         return builder.scope(scope).cause(error).build();
+    }
+
+    /** What the plugin's classifiers make of {@code error}, asked with the plugin's class loader. */
+    private @Nullable PipeForgeException classified(Throwable error) {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(loader);
+        try {
+            return ErrorClassifiers.classify(error, component, node.component().factory());
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
     }
 
     /** The scope of a plugin's own error, completed with the job, run, node and subtask of this operator. */

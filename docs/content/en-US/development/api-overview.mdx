@@ -128,6 +128,37 @@ it fails the job or skips and counts the row. A writer that learns about a refus
 flushes a batch reports it with `WriterContext.reportBadRow(row, reason)`. Any other exception
 fails the job.
 
+### Errors of a library
+
+Whether the engine restarts a run after an error depends on the error's
+[kind](../concepts/failure-handling): transient errors may restart it, fatal ones never do. An
+exception a plugin throws without a code becomes `PF-SRC-0001`, `PF-SINK-0001` or `PF-PLUG-0007`,
+which are fatal. A plugin whose library throws exceptions that mean something specific implements
+`ErrorClassifier` (`api.capability`) on its factory, or on the source, sink or transform the
+factory creates, and maps them to registered codes:
+
+```java
+public final class MySink implements Sink<MyCommittable, MyState>, ErrorClassifier {
+    @Override
+    public @Nullable PipeForgeException classify(Throwable error) {
+        if (error instanceof SQLException e && e.getErrorCode() == 1045) {
+            return PipeForgeException.of(ErrorCode.AUTH_FAILED)
+                    .param("target", url).param("user", user).param("reason", e.getMessage()).build();
+        }
+        if (error instanceof SQLTransientException e) {
+            return PipeForgeException.of(ErrorCode.SINK_FAILED)
+                    .param("node", "my-sink").param("reason", e.getMessage())
+                    .kind(ErrorKind.TRANSIENT).build();
+        }
+        return null; // the engine's default
+    }
+}
+```
+
+The engine asks the created component first, then the factory, adds the node and subtask to the
+error and keeps the exception as its cause. `classify` must not throw: an exception it throws is
+ignored and kept as suppressed on the original exception.
+
 ### Threads of a plugin
 
 A reader or writer that needs threads of its own, for example to fetch ahead or write in the

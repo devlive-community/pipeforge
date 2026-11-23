@@ -66,6 +66,8 @@
   docs: ["concepts/plan-and-explain"]
 - paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/checkpoint/**", "pipeforge-core/src/main/java/org/devlive/pipeforge/core/plan/CheckpointSettings.java"]
   docs: ["concepts/checkpoint"]
+- paths: ["pipeforge-engine/engine-master/src/main/java/org/devlive/pipeforge/engine/master/failure/**", "pipeforge-core/src/main/java/org/devlive/pipeforge/core/plan/RestartSettings.java", "pipeforge-core/src/main/java/org/devlive/pipeforge/core/plan/ErrorClassifiers.java", "pipeforge-api/src/main/java/org/devlive/pipeforge/api/capability/ErrorClassifier.java"]
+  docs: ["concepts/failure-handling"]
 - paths: ["pipeforge-dist/src/main/java/org/devlive/pipeforge/dist/MasterMetastore.java"]
   docs: ["operations/metastore"]
 - paths: ["pipeforge-engine/engine-api/src/main/java/org/devlive/pipeforge/engine/api/checkpoint/**", "pipeforge-engine/checkpoint-s3/**", "pipeforge-dist/src/main/java/org/devlive/pipeforge/dist/CheckpointSetup.java"]

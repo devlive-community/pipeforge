@@ -77,6 +77,15 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 | `checkpoint.tolerable-failures` | Checkpoints that may fail in a row before the run fails | `3` |
 | `checkpoint.retained` | Completed checkpoints kept, 1 to 1000 | `3` |
 | `checkpoint.externalized` | `RETAIN_ON_CANCELLATION` or `DELETE_ON_CANCELLATION`: the checkpoints of a cancelled run | `RETAIN_ON_CANCELLATION` |
+| `restart.strategy` | `none`, `fixed-delay`, `exponential-backoff` or `failure-rate`: what a run does after a failure that may succeed when retried; see [failure handling](../concepts/failure-handling) | `fixed-delay` |
+| `restart.attempts` | `fixed-delay`: the restarts in all | `3` |
+| `restart.delay` | `fixed-delay` and `failure-rate`: the wait before each restart | `10s` |
+| `restart.initial` | `exponential-backoff`: the wait before the first restart | `1s` |
+| `restart.max` | `exponential-backoff`: the longest wait | `5min` |
+| `restart.multiplier` | `exponential-backoff`: how much longer each wait is than the one before, 1 to 1000 | `2` |
+| `restart.reset-after` | `exponential-backoff`: after running this long without a failure, the next wait is `restart.initial` again | `1h` |
+| `restart.max-failures` | `failure-rate`: the failures allowed within `restart.interval` | `3` |
+| `restart.interval` | `failure-rate`: the window the failures are counted in | `5min` |
 | `timezone` | An IANA time zone such as `Asia/Shanghai` | `UTC` |
 | `variables` | A mapping of names to values, see [variables](./variables#job-variables) | none |
 | `source.*`, `transform.*`, `sink.*` | Defaults for the options of every node of that kind | none |
@@ -87,6 +96,9 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 - Cluster configuration (`worker.*`, `master.*`, `server.*`, `cluster.*`) cannot be set in a job.
 - `checkpoint.interval` and `checkpoint.timeout` must be longer than zero, `checkpoint.min-pause`
   cannot be negative (`PF-CONF-0002`).
+- `restart.initial` and `restart.interval` must be longer than zero, the other `restart.*` waits
+  cannot be negative, and `restart.max` cannot be shorter than `restart.initial` (`PF-CONF-0002`).
+  A `restart.*` option the chosen strategy does not use is reported as a warning.
 
 ## Nodes
 

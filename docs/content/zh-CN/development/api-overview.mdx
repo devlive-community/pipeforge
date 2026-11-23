@@ -105,6 +105,34 @@ Master 先用 `SinkCommitter`、再用 `GlobalCommitter` 提交这些待提交�
 `BadRowException`。引擎按作业的[脏数据策略](../concepts/dirty-data)处理：让作业失败，或者跳过该行并计数。只有在写出批次时才知道
 某行被拒绝的 Writer，用 `WriterContext.reportBadRow(row, reason)` 报告它。其他异常会让作业失败。
 
+### 第三方库的错误
+
+出错后引擎是否重启运行，取决于错误的[类型](../concepts/failure-handling)：暂时性错误可以重启，致命错误不会。
+插件抛出的没有错误码的异常会变成 `PF-SRC-0001`、`PF-SINK-0001` 或 `PF-PLUG-0007`，它们都是致命错误。
+如果插件所用的库抛出的异常有特定含义，插件可以在工厂上、或者在工厂创建的 Source、Sink、Transform 上实现
+`ErrorClassifier`（`api.capability`），把它们转换为登记过的错误码：
+
+```java
+public final class MySink implements Sink<MyCommittable, MyState>, ErrorClassifier {
+    @Override
+    public @Nullable PipeForgeException classify(Throwable error) {
+        if (error instanceof SQLException e && e.getErrorCode() == 1045) {
+            return PipeForgeException.of(ErrorCode.AUTH_FAILED)
+                    .param("target", url).param("user", user).param("reason", e.getMessage()).build();
+        }
+        if (error instanceof SQLTransientException e) {
+            return PipeForgeException.of(ErrorCode.SINK_FAILED)
+                    .param("node", "my-sink").param("reason", e.getMessage())
+                    .kind(ErrorKind.TRANSIENT).build();
+        }
+        return null; // 交给引擎的默认处理
+    }
+}
+```
+
+引擎先问创建出来的组件，再问工厂；返回的错误会补上节点和子任务，原始异常作为它的 cause。`classify` 不应抛出异常：
+它抛出的异常会被忽略，并作为 suppressed 附加到原始异常上。
+
 ### 插件的线程
 
 需要自己线程的 Reader 或 Writer（例如预取或后台写入）从 `context.threadFactory()` 获取线程。引擎以 Task 为它们命名，

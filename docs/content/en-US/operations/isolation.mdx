@@ -47,7 +47,8 @@ Local runs (`pipeforge run --local`) check the row size but do not limit task me
 ## Plugin code
 
 Every call into a plugin runs with the plugin's class loader as the context class loader. An error
-it throws keeps its code when it has one, and otherwise becomes `PF-SRC-0001` for a source,
+it throws keeps its code when it has one, is otherwise mapped by the plugin's `ErrorClassifier`
+(see [failure handling](../concepts/failure-handling)) when it has one, and otherwise becomes `PF-SRC-0001` for a source,
 `PF-SINK-0001` for a sink or `PF-PLUG-0007` for a transform, naming the node and what it was doing;
 a class the plugin needs but does not bring (`NoClassDefFoundError` and other linkage errors) is
 reported the same way instead of stopping the worker.

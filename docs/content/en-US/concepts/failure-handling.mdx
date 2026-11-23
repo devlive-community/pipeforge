@@ -1,0 +1,123 @@
+---
+title: Failure handling
+description: How the engine sorts the errors of a run into transient, data and fatal ones, and how env.restart decides whether and when a failed run restarts.
+order: 78
+template: feature
+omit:
+  performance: Failure handling runs only when something fails and has no effect on throughput.
+---
+
+## Overview
+
+When a task of a run fails, the job master decides what happens next. The **kind** of the error
+decides whether a restart could help, and the job's **restart strategy** (`env.restart`) decides
+whether the run may restart once more and how long it waits first.
+
+## How it works
+
+Every error carries a registered [error code](./errors), and every code has a kind:
+
+| Kind | Examples | What the run does |
+|---|---|---|
+| transient | lost connections (`CONN`), missing resources (`RES`), lost workers (`CLUS`), source or sink errors a plugin marked as transient | asks the restart strategy |
+| data | conversion failures, constraint violations, too many bad rows (`DATA`) | fails: bad rows are handled by the [dirty data policy](./dirty-data) inside the task, and a run that reached the master with one would read the same rows again |
+| fatal | configuration, plans, plugins, authentication, metadata, internal errors; source and sink errors nobody classified | fails: retrying cannot help |
+
+The kind comes from the code's registry entry or its category. A plugin can set it for a single
+error, and a plugin whose library throws its own exceptions classifies them with an
+`ErrorClassifier` (see [errors of a library](../development/api-overview#errors-of-a-library)), for
+example a MySQL sink that maps vendor error 1045 to `PF-AUTH-0001` (fatal) and a deadlock to a
+transient `PF-SINK-0001`. An exception nobody classifies becomes `PF-SRC-0001`, `PF-SINK-0001` or
+`PF-PLUG-0007`, which are fatal.
+
+Only transient failures go to the restart strategy, and only they count against it:
+
+| Strategy | Restarts |
+|---|---|
+| `fixed-delay` (default) | `restart.attempts` times in all, each after `restart.delay` |
+| `exponential-backoff` | without a limit; the first wait is `restart.initial`, each later one `restart.multiplier` times longer up to `restart.max`. A failure more than `restart.reset-after` after the one before starts again at `restart.initial` |
+| `failure-rate` | after `restart.delay`, as long as no more than `restart.max-failures` failures happened within the last `restart.interval`, this one included |
+| `none` | never |
+
+## Quick start
+
+A job against a flaky target that may restart any number of times, waiting longer each time:
+
+```yaml
+env:
+  restart:
+    strategy: exponential-backoff
+    initial: 10s
+    max: 5m
+```
+
+## Configuration
+
+| Option | Default | Meaning |
+|---|---|---|
+| `env.restart.strategy` | `fixed-delay` | `none`, `fixed-delay`, `exponential-backoff` or `failure-rate` |
+| `env.restart.attempts` | `3` | `fixed-delay`: the restarts in all |
+| `env.restart.delay` | `10s` | `fixed-delay` and `failure-rate`: the wait before each restart |
+| `env.restart.initial` | `1s` | `exponential-backoff`: the wait before the first restart |
+| `env.restart.max` | `5min` | `exponential-backoff`: the longest wait |
+| `env.restart.multiplier` | `2` | `exponential-backoff`: how much longer each wait is than the one before |
+| `env.restart.reset-after` | `1h` | `exponential-backoff`: after this long without a failure the wait starts over |
+| `env.restart.max-failures` | `3` | `failure-rate`: the failures allowed within the window |
+| `env.restart.interval` | `5min` | `failure-rate`: the window |
+
+The [job DSL reference](../reference/job-dsl#env) lists the values each option accepts. A
+`restart.*` option the chosen strategy does not use is reported as a warning when the job is
+planned.
+
+## Examples
+
+At most five failures in ten minutes, a minute apart:
+
+```yaml
+env:
+  restart:
+    strategy: failure-rate
+    max-failures: 5
+    interval: 10m
+    delay: 1m
+```
+
+Fail at the first error, for a job that someone watches and reruns by hand:
+
+```yaml
+env:
+  restart:
+    strategy: none
+```
+
+## Behavior
+
+- The first failure of a run is the one that counts; the tasks that are still running are
+  cancelled, and the errors they report while they stop are not classified again.
+- Fatal and data errors fail the run at once and do not use up any restarts.
+- `fixed-delay` attempts never come back during a run; `failure-rate` forgets failures that left
+  its window; `exponential-backoff` never runs out.
+
+## Observability
+
+The job master logs every decision: the error, its kind, and whether the strategy allows a restart
+and after how long, or allows no more.
+
+## Troubleshooting
+
+| Problem | Cause and solution |
+|---|---|
+| A connection error fails the run although restarts are left | The plugin reported it as `PF-SRC-0001` or `PF-SINK-0001` without marking it transient. The plugin's `ErrorClassifier` should map that exception |
+| `has no effect with restart.strategy` warning | An option of another strategy is set; remove it or change the strategy |
+| [`PF-CONF-0002`](../reference/errors#pf-conf-0002) `restart.max` | `restart.max` is shorter than `restart.initial` |
+
+## Limitations
+
+- Runs are not restarted yet: the job master decides and logs whether the strategy allows a
+  restart, then fails the run with the error. Restarting the failed tasks from the last completed
+  [checkpoint](./checkpoint) follows in a later release.
+- Run-level retries (`env.retry`) and rolling back what a failed run wrote are not available yet.
+
+## Version history
+
+Since 0.1.0 (M2).

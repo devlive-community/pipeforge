@@ -152,7 +152,8 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 1. 获取本次运行的 Slot：在集群上由[调度器](./cluster)在 Worker 上预留；在单个进程中由本地的 TaskExecutor 运行所有 Task。
 2. 启动分片分配器，为每个子任务把一个 Task 部署到它的 Slot 中。
 3. 跟踪 Task 上报的状态。第一个失败会取消其他 Task，并成为本次运行的错误；[Worker 失联](./cluster)时运行以
-   `PF-CLUS-0001` 失败，错误位置为在该 Worker 上运行的节点与子任务。
+   `PF-CLUS-0001` 失败，错误位置为在该 Worker 上运行的节点与子任务。JobMaster 对失败分类并询问作业的重启策略
+   （见[失败处理](./failure-handling)）。
 4. 所有 Task 完成后，提交 Sink 准备好的内容，运行成功。
 5. 无论以何种方式结束，都会归还 Slot。在等待 Slot 时被取消的运行会立即结束；之后才到达的 Slot 同样会被归还。
 

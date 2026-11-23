@@ -118,6 +118,57 @@ public final class EnvOptions {
                     .withDescription(
                             "Keep or delete the checkpoints of a cancelled run; a failed run always keeps them");
 
+    public static final Option<org.devlive.pipeforge.core.plan.RestartSettings.Strategy> RESTART_STRATEGY = Options.key(
+                    "restart.strategy")
+            .enumType(org.devlive.pipeforge.core.plan.RestartSettings.Strategy.class)
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.Strategy.FIXED_DELAY)
+            .withDescription("How the run restarts after a failure that may succeed when retried: none,"
+                    + " fixed-delay, exponential-backoff or failure-rate");
+
+    public static final Option<Integer> RESTART_ATTEMPTS = Options.key("restart.attempts")
+            .intType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_ATTEMPTS)
+            .withRange(0, Integer.MAX_VALUE)
+            .withDescription("fixed-delay: the restarts in all");
+
+    public static final Option<java.time.Duration> RESTART_DELAY = Options.key("restart.delay")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_DELAY)
+            .withDescription("fixed-delay and failure-rate: the wait before each restart");
+
+    public static final Option<java.time.Duration> RESTART_INITIAL = Options.key("restart.initial")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_INITIAL)
+            .withDescription("exponential-backoff: the wait before the first restart");
+
+    public static final Option<java.time.Duration> RESTART_MAX = Options.key("restart.max")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_MAX)
+            .withDescription("exponential-backoff: the longest wait");
+
+    public static final Option<Double> RESTART_MULTIPLIER = Options.key("restart.multiplier")
+            .doubleType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_MULTIPLIER)
+            .withRange(1.0, 1000.0)
+            .withDescription("exponential-backoff: how much longer each wait is than the one before");
+
+    public static final Option<java.time.Duration> RESTART_RESET_AFTER = Options.key("restart.reset-after")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_RESET_AFTER)
+            .withDescription("exponential-backoff: after running this long without a failure, the next wait is"
+                    + " restart.initial again");
+
+    public static final Option<Integer> RESTART_MAX_FAILURES = Options.key("restart.max-failures")
+            .intType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_MAX_FAILURES)
+            .withRange(0, Integer.MAX_VALUE)
+            .withDescription("failure-rate: the failures allowed within restart.interval");
+
+    public static final Option<java.time.Duration> RESTART_INTERVAL = Options.key("restart.interval")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_INTERVAL)
+            .withDescription("failure-rate: the window the failures are counted in");
+
     /** Prefixes of node defaults: {@code source.*}, {@code transform.*} and {@code sink.*}. */
     public static final List<String> NODE_DEFAULT_PREFIXES = List.of("source", "transform", "sink");
 
@@ -142,7 +193,16 @@ public final class EnvOptions {
                     CHECKPOINT_MAX_CONCURRENT,
                     CHECKPOINT_TOLERABLE_FAILURES,
                     CHECKPOINT_RETAINED,
-                    CHECKPOINT_EXTERNALIZED)
+                    CHECKPOINT_EXTERNALIZED,
+                    RESTART_STRATEGY,
+                    RESTART_ATTEMPTS,
+                    RESTART_DELAY,
+                    RESTART_INITIAL,
+                    RESTART_MAX,
+                    RESTART_MULTIPLIER,
+                    RESTART_RESET_AFTER,
+                    RESTART_MAX_FAILURES,
+                    RESTART_INTERVAL)
             .nativeNamespaces(NODE_DEFAULT_PREFIXES.toArray(String[]::new))
             .build();
 

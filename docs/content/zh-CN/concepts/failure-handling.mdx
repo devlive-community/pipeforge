@@ -1,0 +1,114 @@
+---
+title: 失败处理
+description: 引擎如何把运行中的错误分为暂时性、数据和致命三类，以及 env.restart 如何决定失败的运行是否重启、何时重启。
+order: 78
+template: feature
+omit:
+  performance: 失败处理只在出错时运行，不影响吞吐。
+---
+
+## 概述
+
+运行中的 Task 失败时，由 JobMaster 决定接下来怎么做。错误的**类型**决定重启是否有用，作业的**重启策略**（`env.restart`）
+决定运行还能不能再重启一次、重启前等待多久。
+
+## 原理
+
+每个错误都带有登记过的[错误码](./errors)，每个错误码都有类型：
+
+| 类型 | 例子 | 运行如何处理 |
+|---|---|---|
+| 暂时性 | 连接断开（`CONN`）、资源不足（`RES`）、Worker 失联（`CLUS`）、插件标记为暂时性的 Source 或 Sink 错误 | 询问重启策略 |
+| 数据 | 类型转换失败、违反约束、坏行过多（`DATA`） | 失败：坏行在 Task 内按[脏数据策略](./dirty-data)处理，带着数据错误到达 Master 的运行重来也会读到同样的行 |
+| 致命 | 配置、计划、插件、认证、元数据和内部错误；没有被分类的 Source 和 Sink 错误 | 失败：重试也不会成功 |
+
+类型来自错误码的登记或它的类别。插件可以为单个错误指定类型；所用的库抛出自己的异常时，插件用 `ErrorClassifier`
+对它们分类（见[第三方库的错误](../development/api-overview#第三方库的错误)），例如 MySQL Sink 把厂商错误 1045 转换为
+`PF-AUTH-0001`（致命），把死锁转换为暂时性的 `PF-SINK-0001`。没有被分类的异常会变成 `PF-SRC-0001`、`PF-SINK-0001`
+或 `PF-PLUG-0007`，它们都是致命错误。
+
+只有暂时性的失败会交给重启策略，也只有它们计入重启次数：
+
+| 策略 | 重启方式 |
+|---|---|
+| `fixed-delay`（默认） | 一共重启 `restart.attempts` 次，每次等待 `restart.delay` |
+| `exponential-backoff` | 不限次数；第一次等待 `restart.initial`，之后每次是上一次的 `restart.multiplier` 倍，最长 `restart.max`。与上一次失败相隔超过 `restart.reset-after` 时重新从 `restart.initial` 开始 |
+| `failure-rate` | 只要最近 `restart.interval` 内（包括这一次）失败不超过 `restart.max-failures` 次，就等待 `restart.delay` 后重启 |
+| `none` | 从不重启 |
+
+## 快速上手
+
+目标端不稳定、允许不限次数重启、每次等待更久的作业：
+
+```yaml
+env:
+  restart:
+    strategy: exponential-backoff
+    initial: 10s
+    max: 5m
+```
+
+## 配置
+
+| 选项 | 默认值 | 含义 |
+|---|---|---|
+| `env.restart.strategy` | `fixed-delay` | `none`、`fixed-delay`、`exponential-backoff` 或 `failure-rate` |
+| `env.restart.attempts` | `3` | `fixed-delay`：一共重启多少次 |
+| `env.restart.delay` | `10s` | `fixed-delay` 和 `failure-rate`：每次重启前等待多久 |
+| `env.restart.initial` | `1s` | `exponential-backoff`：第一次重启前等待多久 |
+| `env.restart.max` | `5min` | `exponential-backoff`：最长等待多久 |
+| `env.restart.multiplier` | `2` | `exponential-backoff`：每次等待是上一次的多少倍 |
+| `env.restart.reset-after` | `1h` | `exponential-backoff`：这么久没有失败后等待时间重新开始 |
+| `env.restart.max-failures` | `3` | `failure-rate`：时间窗口内允许的失败次数 |
+| `env.restart.interval` | `5min` | `failure-rate`：时间窗口 |
+
+[作业 DSL 参考](../reference/job-dsl#env)列出了每个选项的取值。所选策略用不到的 `restart.*` 选项会在计划作业时给出警告。
+
+## 示例
+
+十分钟内最多失败五次，每次间隔一分钟：
+
+```yaml
+env:
+  restart:
+    strategy: failure-rate
+    max-failures: 5
+    interval: 10m
+    delay: 1m
+```
+
+第一次出错就失败，适合有人值守、手动重跑的作业：
+
+```yaml
+env:
+  restart:
+    strategy: none
+```
+
+## 行为与语义
+
+- 计入的是运行的第一个失败；仍在运行的 Task 会被取消，它们停止时报告的错误不再分类。
+- 致命错误和数据错误立即让运行失败，不消耗重启次数。
+- `fixed-delay` 的次数在一次运行中不会恢复；`failure-rate` 会忘掉移出窗口的失败；`exponential-backoff` 不会用尽。
+
+## 可观测性
+
+JobMaster 在日志中记录每一次决定：错误、它的类型，以及策略是否允许重启、等待多久，或者已经不允许再重启。
+
+## 排障
+
+| 问题 | 原因与解决 |
+|---|---|
+| 还有重启次数，连接错误却让运行失败 | 插件把它报告为 `PF-SRC-0001` 或 `PF-SINK-0001`，没有标记为暂时性。应由插件的 `ErrorClassifier` 转换这个异常 |
+| 警告 `has no effect with restart.strategy` | 设置了其他策略的选项；删除它或者更换策略 |
+| [`PF-CONF-0002`](../reference/errors#pf-conf-0002) `restart.max` | `restart.max` 小于 `restart.initial` |
+
+## 限制
+
+- 运行还不会真正重启：JobMaster 判断并记录策略是否允许重启，然后以该错误让运行失败。从最近完成的
+  [checkpoint](./checkpoint) 重启失败的 Task 将在后续版本提供。
+- 运行级自动重试（`env.retry`）和失败后回滚已写入的数据还不可用。
+
+## 版本
+
+自 0.1.0（M2）起提供。

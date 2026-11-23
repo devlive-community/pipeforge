@@ -334,6 +334,50 @@ class PlannerTest {
     }
 
     @Test
+    void readsTheRestartStrategy() {
+        String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
+        assertThat(plan(job(nodes)).restart()).isEqualTo(RestartSettings.DEFAULTS);
+
+        JobPlan backoff =
+                plan(job("env: { restart: { strategy: exponential-backoff, initial: 10s, max: 5m, multiplier: 1.5 } }\n"
+                        + nodes));
+        assertThat(backoff.restart().strategy()).isEqualTo(RestartSettings.Strategy.EXPONENTIAL_BACKOFF);
+        assertThat(backoff.restart().initial()).isEqualTo(java.time.Duration.ofSeconds(10));
+        assertThat(backoff.restart().max()).isEqualTo(java.time.Duration.ofMinutes(5));
+        assertThat(backoff.restart().multiplier()).isEqualTo(1.5);
+        assertThat(backoff.warnings()).isEmpty();
+
+        JobPlan rate = plan(job(
+                "env: { restart: { strategy: failure-rate, max-failures: 5, interval: 10m, attempts: 2 } }\n" + nodes));
+        assertThat(rate.restart().maxFailures()).isEqualTo(5);
+        assertThat(rate.restart().interval()).isEqualTo(java.time.Duration.ofMinutes(10));
+        assertThat(rate.warnings())
+                .containsExactly("env.restart.attempts has no effect with restart.strategy failure-rate");
+
+        assertThat(plan(job("env: { restart: { strategy: none, delay: 1s } }\n" + nodes))
+                        .warnings())
+                .containsExactly("env.restart.delay has no effect with restart.strategy none");
+
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { restart: { strategy: forever } }\n" + nodes))))
+                .contains("restart.strategy");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { restart: { attempts: -1 } }\n" + nodes))))
+                .contains("restart.attempts");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { restart: { multiplier: 0.5 } }\n" + nodes))))
+                .contains("restart.multiplier");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { restart: { initial: 0s } }\n" + nodes))))
+                .contains("restart.initial");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID,
+                        () -> plan(job("env: { restart: { initial: 10m, max: 1m } }\n" + nodes))))
+                .contains("restart.max")
+                .contains("shorter than restart.initial");
+    }
+
+    @Test
     void componentProblemsKeepTheirCodes() {
         assertThat(Errors.thrown(ErrorCode.PLUGIN_NOT_FOUND, () -> plan(LINEAR.replace("type: console", "type: kafka")))
                         .scope()

@@ -55,8 +55,8 @@ final class SourceOperator {
     @SuppressWarnings("unchecked")
     void open(JobContext job, ExpressionCompiler expressions) {
         SourceFactory factory = (SourceFactory) node.component().factory();
-        Source<SourceSplit, ?> source = (Source<SourceSplit, ?>)
-                call.call("create the source", () -> factory.createSource(NodeContext.of(node, job, expressions)));
+        Source<SourceSplit, ?> source = (Source<SourceSplit, ?>) call.call(
+                "create the source", () -> call.created(factory.createSource(NodeContext.of(node, job, expressions))));
         created = source;
         splitSerializer = call.call("get the split serializer", source::splitSerializer);
         reader = call.call("create the reader", () -> source.createReader(context));

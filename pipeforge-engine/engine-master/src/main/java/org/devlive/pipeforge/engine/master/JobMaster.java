@@ -50,6 +50,7 @@ import org.devlive.pipeforge.engine.api.JobMetrics;
 import org.devlive.pipeforge.engine.api.JobResult;
 import org.devlive.pipeforge.engine.api.JobStatus;
 import org.devlive.pipeforge.engine.api.SubmitOptions;
+import org.devlive.pipeforge.engine.master.failure.FailureHandler;
 import org.devlive.pipeforge.engine.master.graph.ExecutionGraph;
 import org.devlive.pipeforge.engine.master.graph.JobGraph;
 import org.devlive.pipeforge.engine.rpc.ChainCodec;
@@ -83,7 +84,9 @@ import org.slf4j.LoggerFactory;
  *   <li>When every task has finished, the committables of the sink are committed (by its
  *       committer, then its global committer) and the job ends with {@code SUCCESS}.
  *   <li>The first failure cancels the other tasks; the job ends with {@code FAILED} and that error.
- *       There is no restart yet.
+ *       The {@link FailureHandler} classifies it and asks the restart strategy ({@code
+ *       env.restart}); restarting from a checkpoint comes with region restarts, so a restart it
+ *       allows is only logged for now.
  *   <li>A worker that is lost fails the run with {@code PF-CLUS-0001}, scoped to the first of its
  *       tasks that was still running.
  *   <li>The slots go back to the placement when the run ends.
@@ -147,6 +150,11 @@ public final class JobMaster {
     private final java.util.ArrayDeque<JobMetrics> history = new java.util.ArrayDeque<>();
 
     private @Nullable PipeForgeException failure;
+    /** Classifies failures and decides on restarts. */
+    private final FailureHandler failureHandler;
+    /** What the handler decided about the failure, or {@code null}. */
+    private FailureHandler.@Nullable Decision decision;
+
     private @Nullable SplitEnumerator<SourceSplit, ?> enumerator;
     /** Runs every call of the enumerator, one at a time, so that a blocked call can time out. */
     private final ExecutorService enumeratorThread;
@@ -161,6 +169,8 @@ public final class JobMaster {
     private volatile int totalSplits = -1;
 
     private @Nullable Source<SourceSplit, ?> source;
+    /** The sink the job master commits with, while it commits. */
+    private @Nullable Object committingSink;
 
     /** The storage and the metastore of checkpoints, or {@code null} on a master without them. */
     private final org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing;
@@ -200,6 +210,7 @@ public final class JobMaster {
         this.checkpointing = checkpointing;
         this.id = id;
         this.plan = plan;
+        this.failureHandler = new FailureHandler(plan.restart(), System::currentTimeMillis);
         this.graph = graph;
         this.execution = ExecutionGraph.of(graph);
         this.sourceVertex = graph.vertices().get(0);
@@ -735,7 +746,29 @@ public final class JobMaster {
     private void fail(@Nullable PipeForgeException error) {
         if (failure == null && error != null && !status.isTerminal()) {
             failure = error;
-            LOG.warn("Job {} ({}) failed: {}", plan.name(), id, error.getMessage());
+            decision = failureHandler.onFailure(error);
+            if (decision instanceof FailureHandler.Restart restart) {
+                LOG.warn(
+                        "Job {} ({}) failed: {}; env.restart allows a restart after {}, but this engine"
+                                + " does not restart runs yet",
+                        plan.name(),
+                        id,
+                        error.getMessage(),
+                        restart.delay());
+            } else if (decision instanceof FailureHandler.Fail fail && fail.exhausted()) {
+                LOG.warn(
+                        "Job {} ({}) failed: {}; env.restart allows no more restarts",
+                        plan.name(),
+                        id,
+                        error.getMessage());
+            } else {
+                LOG.warn(
+                        "Job {} ({}) failed with a {} error, which is not retried: {}",
+                        plan.name(),
+                        id,
+                        error.kind().name().toLowerCase(java.util.Locale.ROOT),
+                        error.getMessage());
+            }
             cancelTasks();
         }
         endIfDone();
@@ -804,6 +837,7 @@ public final class JobMaster {
         SinkFactory factory = (SinkFactory) node.component().factory();
         Sink<Object, Object> sink =
                 (Sink<Object, Object>) callSink(node, "create the sink", () -> factory.createSink(context(node)));
+        committingSink = sink;
         List<Object> values = new ArrayList<>();
         for (SerializedValue value : committables) {
             values.add(callSink(node, "read a committable", () -> value.deserialize(sink.committableSerializer())));
@@ -842,7 +876,24 @@ public final class JobMaster {
         } catch (PipeForgeException e) {
             throw e;
         } catch (Exception e) {
+            PipeForgeException known = classified(node, e, committingSink);
+            if (known != null) {
+                throw withScope(known, scope(node), e);
+            }
             throw commitFailed(node, operation + ": " + reason(e), e);
+        }
+    }
+
+    /** What the plugin's classifiers, the created component first, make of {@code error}. */
+    private static @Nullable PipeForgeException classified(
+            PlannedNode node, Throwable error, @Nullable Object component) {
+        try {
+            return call(
+                    node,
+                    () -> org.devlive.pipeforge.core.plan.ErrorClassifiers.classify(
+                            error, component, node.component().factory()));
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -915,6 +966,10 @@ public final class JobMaster {
         } catch (PipeForgeException e) {
             throw e.scope().node() != null ? e : withScope(e, scope(node));
         } catch (Exception e) {
+            PipeForgeException known = classified(node, e, source);
+            if (known != null) {
+                throw known.scope().node() != null ? known : withScope(known, scope(node), e);
+            }
             throw PipeForgeException.of(ErrorCode.SOURCE_FAILED)
                     .param("node", node.id())
                     .param("reason", operation + ": " + reason(e))
@@ -1027,10 +1082,16 @@ public final class JobMaster {
     }
 
     private static PipeForgeException withScope(PipeForgeException error, ErrorScope scope) {
+        return withScope(error, scope, null);
+    }
+
+    /** {@code error} in {@code scope}; {@code original} is the cause when the error has none. */
+    private static PipeForgeException withScope(
+            PipeForgeException error, ErrorScope scope, @Nullable Throwable original) {
         PipeForgeException.Builder builder = PipeForgeException.of(error.code())
                 .scope(scope)
                 .kind(error.kind())
-                .cause(error.getCause());
+                .cause(error.getCause() != null ? error.getCause() : original);
         error.params().forEach(builder::param);
         return builder.build();
     }
@@ -1119,6 +1180,11 @@ public final class JobMaster {
      * @param workerId where it runs, or {@code local}
      */
     public record TaskView(ExecutionAttemptId attempt, TaskState state, String workerId) {}
+
+    /** What the failure handler decided about the failure, or {@code null}; read it on the job master thread. */
+    FailureHandler.@Nullable Decision decision() {
+        return decision;
+    }
 
     /** The error the run failed with, or {@code null}; read it on the job master thread. */
     @Nullable

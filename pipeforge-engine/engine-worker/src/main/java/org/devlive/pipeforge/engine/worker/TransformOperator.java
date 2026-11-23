@@ -60,7 +60,8 @@ final class TransformOperator implements ChainOutput {
     void open(JobContext job, int subtask, int parallelism, ExpressionCompiler expressions) {
         TransformFactory factory = (TransformFactory) node.component().factory();
         Transform created = call.call(
-                "create the transform", () -> factory.createTransform(NodeContext.of(node, job, expressions)));
+                "create the transform",
+                () -> call.created(factory.createTransform(NodeContext.of(node, job, expressions))));
         transform = created;
         TransformContext context = new TaskTransformContext(
                 job, subtask, parallelism, node.inputTables(), call.classLoader(), expressions);
