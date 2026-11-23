@@ -56,7 +56,8 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 
 `pollNext` returns `NOTHING_AVAILABLE` instead of blocking; the engine backs off and polls again.
 The state of a split records the position already handed to the output, so a restored reader
-continues exactly there.
+continues exactly there: it gets its splits from the checkpoint through `addSplits` before
+`start()`.
 
 Two optional calls feed the split progress that the run pages, the REST API and the run metrics
 show. A reader calls `ReaderContext.splitFinished(splitId)` once it has emitted the last row of a
@@ -80,8 +81,9 @@ The enumerator runs in the job master, not on the workers, under these rules:
   master and other jobs carry on.
 - **Plugin class loader.** Calls run with the class loader of the plugin as the context class
   loader, as reader and writer calls do.
-- **Splits are recorded.** The job master records which reader each split went to; a reader that
-  is restarted gives its splits back through `addSplitsBack`.
+- **Splits are recorded.** The job master records which reader each split went to. When a reader
+  restarts from a checkpoint, the splits it got after that checkpoint go back to the enumerator
+  through `addSplitsBack`; the enumerator hands them out again on later split requests.
 
 ## Transforms and sinks
 
@@ -104,9 +106,11 @@ engine calls, on the task thread:
 
 Both are written with the sink's serializers (`committableSerializer`, `writerStateSerializer`)
 into the checkpoint. Once the checkpoint is recorded as complete, the master commits the
-committables with the `SinkCommitter`, then the `GlobalCommitter`; committables prepared after the
-last checkpoint are committed when the run ends. A committable is never committed before its
-checkpoint completed.
+committables with the `SinkCommitter`, then the `GlobalCommitter`. When the input ends, the writer
+gets `prepareCommit(Long.MAX_VALUE)`, and that committable is committed when the run ends. A
+committable of a checkpoint that failed is committed with the next checkpoint that completes, or
+when the run ends, unless its task restarts. A committable is never committed before a checkpoint
+after it completed.
 
 **Committing must be idempotent.** After a restore the engine commits the committables of the
 restored checkpoint again, since the run may have stopped between recording the checkpoint and

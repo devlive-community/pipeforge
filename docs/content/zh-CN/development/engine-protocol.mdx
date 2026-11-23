@@ -38,6 +38,10 @@ Checkpoint 在三个服务中增加了 RPC，都是对 v1 的兼容增加：
 `RunState` 增加了重启与暂停的状态：`RESTARTING` 8、`PAUSING` 9、`PAUSED` 10、`RETRY_WAIT` 11。Master 遇到不认识的状态时会拒绝，而不是猜测。
 `JobMetrics` 的字段 27 到 30 携带 [checkpoint 指标](../concepts/checkpoint#可观测性)。
 
+在 [Region](../concepts/failure-handling#region-重启) 中重启的 Task 以新的尝试部署，并设置 `restore_state` 和 `restore_checkpoint_id`；
+全新启动的 Task 两者分别为空和 0。Worker 直接使用 inline 状态，从 checkpoint 目录 `<run>/chk-<n>/` 读取文件状态，并按句柄中的大小和
+CRC32C 校验。不符的状态让 Task 以 `PF-CKPT-0002` 失败，无法读取的文件为 `PF-CKPT-0004`；在当前版本中两者都会让运行失败。
+
 Master 按规范第 2.6 节的顺序处理确认：先写 `_metadata`，再在元数据库中把 checkpoint 记为已完成，然后才发送 `NotifyCheckpointComplete`。
 已经带有 `PF-CKPT-0005` 的拒绝会保留原来的原因。
 

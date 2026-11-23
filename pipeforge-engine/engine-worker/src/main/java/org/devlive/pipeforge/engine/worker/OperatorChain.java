@@ -8,7 +8,6 @@ package org.devlive.pipeforge.engine.worker;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.devlive.pipeforge.api.expression.ExpressionCompiler;
 import org.devlive.pipeforge.api.factory.JobContext;
@@ -134,6 +133,32 @@ final class OperatorChain {
         }
     }
 
+    /** Reads the elements of a state this task restores. */
+    @FunctionalInterface
+    interface StateReader {
+        List<byte[]> read(org.devlive.pipeforge.engine.rpc.StateHandle handle);
+    }
+
+    /** A state element with the serializer version that wrote it. */
+    record Element(int version, byte[] bytes) {}
+
+    /**
+     * The elements of the {@code kind} states of {@code node} the task restores, in the order of
+     * the handles; empty for a fresh start.
+     */
+    private static List<Element> restored(
+            TaskDeployment.Restore restore, String node, String kind, StateReader states) {
+        List<Element> elements = new ArrayList<>();
+        for (org.devlive.pipeforge.engine.rpc.StateHandle handle : restore.of(node)) {
+            if (handle.operatorKind().equals(kind)) {
+                for (byte[] bytes : states.read(handle)) {
+                    elements.add(new Element(handle.serializerVersion(), bytes));
+                }
+            }
+        }
+        return elements;
+    }
+
     private static OperatorCall call(PlannedNode node, ErrorScope scope) {
         return new OperatorCall(node, node.component().classLoader(), scope);
     }
@@ -143,8 +168,9 @@ final class OperatorChain {
      * emits into something that is not open, and asks the producers of the input for their data
      * last.
      */
-    void open() {
+    void open(StateReader states) {
         JobContext job = chain.job();
+        TaskDeployment.Restore restore = deployment.restore();
         int subtask = deployment.id().subtask();
         int parallelism = deployment.parallelism();
         if (!chain.hasSink()) {
@@ -157,13 +183,21 @@ final class OperatorChain {
             }
         }
         if (sink != null) {
-            sink.open(job, deployment.run().jobId(), subtask, parallelism, deployment.settings(), expressions);
+            sink.open(
+                    job,
+                    deployment.run().jobId(),
+                    subtask,
+                    parallelism,
+                    deployment.settings(),
+                    expressions,
+                    restore.checkpointId(),
+                    restored(restore, chain.tail().id(), "sink", states));
         }
         for (int i = transforms.size() - 1; i >= 0; i--) {
             transforms.get(i).open(job, subtask, parallelism, expressions);
         }
         if (source != null) {
-            source.open(job, expressions);
+            source.open(job, expressions, restored(restore, chain.head().id(), "source", states));
         } else {
             input = new NetworkInput(network(), deployment, chain.head().inputTables());
         }
@@ -225,6 +259,9 @@ final class OperatorChain {
     }
 
     void notifyCheckpointComplete(long checkpointId) {
+        if (sink != null) {
+            sink.notifyCheckpointComplete(checkpointId);
+        }
         if (source != null) {
             source.notifyCheckpointComplete(checkpointId);
         }
@@ -318,8 +355,8 @@ final class OperatorChain {
         return source == null ? 0 : throttle.waitNanos(System.nanoTime());
     }
 
-    /** Ends the input: returns the sink's committable, or ends the outputs. */
-    Optional<SerializedValue> finish(long checkpointId) {
+    /** Ends the input: returns the sink's committables, or ends the outputs. */
+    List<SerializedValue> finish(long checkpointId) {
         if (sink != null) {
             return sink.finish(checkpointId);
         }
@@ -327,7 +364,7 @@ final class OperatorChain {
         if (current != null) {
             current.finish();
         }
-        return Optional.empty();
+        return List.of();
     }
 
     /** Interrupts blocking reads and writes; called from another thread. */

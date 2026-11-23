@@ -151,9 +151,9 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 
 1. 获取本次运行的 Slot：在集群上由[调度器](./cluster)在 Worker 上预留；在单个进程中由本地的 TaskExecutor 运行所有 Task。
 2. 启动分片分配器，为每个子任务把一个 Task 部署到它的 Slot 中。
-3. 跟踪 Task 上报的状态。第一个失败会取消其他 Task，并成为本次运行的错误；[Worker 失联](./cluster)时运行以
-   `PF-CLUS-0001` 失败，错误位置为在该 Worker 上运行的节点与子任务。JobMaster 对失败分类并询问作业的重启策略
-   （见[失败处理](./failure-handling)）。
+3. 跟踪 Task 上报的状态。失败的 Task 或[失联 Worker](./cluster) 上的 Task（`PF-CLUS-0001`）交给作业的重启策略：
+   策略允许且运行做 checkpoint 时，只重启它们所在的 Region（见[失败处理](./failure-handling)）；
+   否则这个失败会取消其他 Task，并成为本次运行的错误。
 4. 所有 Task 完成后，提交 Sink 准备好的内容，运行成功。
 5. 无论以何种方式结束，都会归还 Slot。在等待 Slot 时被取消的运行会立即结束；之后才到达的 Slot 同样会被归还。
 
@@ -231,7 +231,7 @@ handle.result().get().status();   // CANCELLED
 ## 行为与语义
 
 - **每个 Task 只有一个最终状态。** Task 报告带 committable 的 `FINISHED`、带错误的 `FAILED` 或 `CANCELED`，JobMaster 据此决定作业状态。
-- **以第一个失败为准。** 第一个失败会取消其他 Task，并成为作业的错误。本地模式不重启 Task；Region 重启随分布式引擎的 checkpoint 一起提供。
+- **以第一个失败为准。** 除非它所在的 Region 重启，第一个失败会取消其他 Task，并成为作业的错误。本地模式不做 checkpoint，因此不重启 Task。
 - **取消逐级升级。** 先调用 Reader 的取消钩子并中断写线程；超过 `cancelTimeout` 后中断 Task 线程；超过两倍 `cancelTimeout` 后以
   `PF-RES-0005` 放弃该 Task，作业失败。
 - **插件代码隔离。** 每次调用插件代码时，都把插件的 ClassLoader 设为上下文 ClassLoader，插件抛出的异常会转换为带错误码的错误（见“排障”）。

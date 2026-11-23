@@ -256,6 +256,43 @@ class ExchangeJobTest {
     }
 
     @Test
+    void aHashExchangeRestartsBothSidesTogetherAndCommitsEveryRowOnce(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        JobPlan plan = ClusterJobTest.withRestarts(
+                ClusterJobTest.withCheckpoints(
+                        pipeline(
+                                probe,
+                                "rows: 3000, splits: 8, unbounded: true",
+                                2,
+                                ", commit: transactional, slow-ms: 1, fail-at: 100, fail-subtask: 1, fail-times: 1,"
+                                        + " fail-with: deadlock",
+                                3),
+                        Duration.ofMillis(100),
+                        3,
+                        2),
+                3,
+                Duration.ofMillis(50));
+        JobMaster job = start(
+                plan,
+                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+
+        JobResult result = job.handle().result().get(60, TimeUnit.SECONDS);
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        ClusterJobTest.assertExactlyOnce(probe, 3000);
+        assertThat(job.restarts()).isOne();
+        assertThat(job.tasks())
+                .as("the readers and writers of an exchange form one region")
+                .hasSize(5)
+                .allSatisfy(t -> assertThat(t.attempt().attempt()).isOne());
+        awaitIdle();
+    }
+
+    @Test
     void sendsTheChangesOfAKeyToOneWriterOnEveryRun() throws Exception {
         String first = Probe.create();
         JobPlan plan = pipeline(first, "rows: 2000, splits: 4, unbounded: true", 2, "", 3);

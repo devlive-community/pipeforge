@@ -53,13 +53,24 @@ final class SourceOperator {
     }
 
     @SuppressWarnings("unchecked")
-    void open(JobContext job, ExpressionCompiler expressions) {
+    void open(JobContext job, ExpressionCompiler expressions, List<OperatorChain.Element> restored) {
         SourceFactory factory = (SourceFactory) node.component().factory();
         Source<SourceSplit, ?> source = (Source<SourceSplit, ?>) call.call(
                 "create the source", () -> call.created(factory.createSource(NodeContext.of(node, job, expressions))));
         created = source;
         splitSerializer = call.call("get the split serializer", source::splitSerializer);
-        reader = call.call("create the reader", () -> source.createReader(context));
+        SourceReader<SourceSplit> opened = call.call("create the reader", () -> source.createReader(context));
+        reader = opened;
+        if (!restored.isEmpty()) {
+            // the splits the reader held at the checkpoint, each where it had got to
+            VersionedSerializer<SourceSplit> serializer = splitSerializer;
+            List<SourceSplit> splits = new ArrayList<>(restored.size());
+            for (OperatorChain.Element element : restored) {
+                splits.add(call.call(
+                        "read a restored split", () -> serializer.deserialize(element.version(), element.bytes())));
+            }
+            call.run("add the restored splits", () -> opened.addSplits(splits));
+        }
     }
 
     /**

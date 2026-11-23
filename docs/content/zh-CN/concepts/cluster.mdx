@@ -74,9 +74,11 @@ Worker                                   Master（ResourceManager）
 | 未使用的预留 | 60 秒 | 没有 Task 使用的 Slot 预留多久后由 Worker 释放 |
 | 标签 | 无 | Worker 带有的键值对，例如 `zone=east`、`net=db-zone` |
 
-- 失联的 Worker 会被立即移除：在当前版本中，它上面的 Task 失败，作业随之失败，错误中包含该 Worker 以及没有心跳的时长。
-  在其他 Worker 上重新启动作业会随 checkpoint 与故障恢复一起提供。
-- 失联后又恢复的 Worker 会重新注册并提供空闲的 Slot；它仍在运行的 Task 属于已经失败的作业。
+- 失联的 Worker 会被立即移除，它上面的 Task 失败，错误中包含该 Worker 以及没有心跳的时长。做 [checkpoint](./checkpoint)
+  的运行会在重启策略允许时，从最近完成的 checkpoint 在其他 Worker 上重启这些 Task 所在的 Region（见[失败处理](./failure-handling)）；
+  不做 checkpoint 的运行随之失败。
+- 失联后又恢复的 Worker 会重新注册并提供空闲的 Slot。它仍在运行的 Task 属于 Master 已不再跟踪的尝试；在 Worker 自行停止这类
+  Task 之前，它们可能继续写入。
 - 只有当前的 Master 能控制 Worker：已被替换的 Master 发出的请求会被 Worker 拒绝。
 
 ## 可观测性

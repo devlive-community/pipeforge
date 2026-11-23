@@ -119,6 +119,9 @@ public final class CheckpointCoordinator {
     public interface Committer {
         void commit(long checkpointId, List<SerializedValue> committables);
 
+        /** A checkpoint completed and is now the one restarted tasks restore; after the commit. */
+        default void completed(long checkpointId) {}
+
         Committer NONE = (checkpointId, committables) -> {};
     }
 
@@ -162,6 +165,19 @@ public final class CheckpointCoordinator {
         public static final Stats NONE = new Stats(0, 0, 0, 0, 0);
     }
 
+    /**
+     * The states of the last completed checkpoint, by vertex and subtask, for tasks that restart
+     * from it.
+     */
+    public record Latest(long checkpointId, Map<String, Map<Integer, List<StateHandle>>> states) {
+        public static final Latest NONE = new Latest(0, Map.of());
+
+        /** The states of a task; empty when it had none or there is no checkpoint. */
+        public List<StateHandle> of(String vertex, int subtask) {
+            return states.getOrDefault(vertex, Map.of()).getOrDefault(subtask, List.of());
+        }
+    }
+
     /** A checkpoint that completed. */
     public record Completed(long checkpointId, CheckpointType type, String directory, long size, long completedAtMs) {}
 
@@ -192,6 +208,8 @@ public final class CheckpointCoordinator {
     private final Map<Long, Pending> pending = new TreeMap<>();
     /** The completed checkpoints that are kept, the oldest first; savepoints are not among them. */
     private final Deque<Completed> retained = new ArrayDeque<>();
+
+    private Latest latest = Latest.NONE;
 
     private long lastId;
     private long lastEndMs;
@@ -466,6 +484,13 @@ public final class CheckpointCoordinator {
                 completedAt - checkpoint.triggeredAt,
                 size);
         if (checkpoint.type == CheckpointType.CHECKPOINT) {
+            Map<String, Map<Integer, List<StateHandle>>> states = new java.util.HashMap<>();
+            for (CheckpointAck ack : checkpoint.acks) {
+                states.computeIfAbsent(ack.task().vertexId(), v -> new java.util.HashMap<>())
+                        .put(ack.task().subtask(), List.copyOf(ack.states()));
+            }
+            latest = new Latest(checkpoint.id, states);
+            context.committer().completed(checkpoint.id);
             retained.addLast(completed);
             while (retained.size() > settings.retained()) {
                 discard(retained.removeFirst());
@@ -482,22 +507,32 @@ public final class CheckpointCoordinator {
     private List<SerializedValue> committables(Pending checkpoint) throws IOException {
         List<SerializedValue> committables = new ArrayList<>();
         for (CheckpointAck ack : checkpoint.acks) {
-            for (StateHandle handle : ack.states()) {
-                if (!handle.operatorKind().equals("committer")) {
-                    continue;
-                }
-                byte[] body =
-                        switch (handle.location()) {
-                            case StateHandle.Inline inline -> inline.bytes();
-                            case StateHandle.File file -> CheckpointFiles.readState(
-                                    context.storage().read(checkpoint.directory + file.path()),
-                                    checkpoint.id,
-                                    handle.nodeId(),
-                                    file.path());
-                        };
-                for (byte[] element : CheckpointFiles.readList(body, handle.nodeId(), String.valueOf(checkpoint.id))) {
-                    committables.add(new SerializedValue(handle.serializerVersion(), element));
-                }
+            committables.addAll(committables(checkpoint, ack));
+        }
+        return committables;
+    }
+
+    /**
+     * The committables one task prepared for a checkpoint, read from where the tasks wrote them
+     * (a savepoint's files are copied from there, and removed only after its commit).
+     */
+    private List<SerializedValue> committables(Pending checkpoint, CheckpointAck ack) throws IOException {
+        List<SerializedValue> committables = new ArrayList<>();
+        for (StateHandle handle : ack.states()) {
+            if (!handle.operatorKind().equals("committer")) {
+                continue;
+            }
+            byte[] body =
+                    switch (handle.location()) {
+                        case StateHandle.Inline inline -> inline.bytes();
+                        case StateHandle.File file -> CheckpointFiles.readState(
+                                context.storage().read(staging(checkpoint) + file.path()),
+                                checkpoint.id,
+                                handle.nodeId(),
+                                file.path());
+                    };
+            for (byte[] element : CheckpointFiles.readList(body, handle.nodeId(), String.valueOf(checkpoint.id))) {
+                committables.add(new SerializedValue(handle.serializerVersion(), element));
             }
         }
         return committables;
@@ -756,6 +791,21 @@ public final class CheckpointCoordinator {
     /** The completed checkpoints that are kept, the oldest first. */
     public List<Completed> retained() {
         return List.copyOf(retained);
+    }
+
+    /** The states of the last completed checkpoint, which restarted tasks restore. */
+    public Latest latest() {
+        return latest;
+    }
+
+    /**
+     * Gives up the checkpoints in progress without counting them as failures, as when tasks
+     * restart: those checkpoints can no longer complete.
+     */
+    public void abortAll(String reason) {
+        for (Pending checkpoint : List.copyOf(pending.values())) {
+            end(checkpoint, failed(checkpoint.id, reason), false, true);
+        }
     }
 
     /** The checkpoints in progress. */

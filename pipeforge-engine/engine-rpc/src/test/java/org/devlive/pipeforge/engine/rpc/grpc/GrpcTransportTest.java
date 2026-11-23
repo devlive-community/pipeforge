@@ -330,6 +330,26 @@ class GrpcTransportTest {
     }
 
     @Test
+    void deploysWhatARestartedTaskRestores() {
+        var state = new org.devlive.pipeforge.engine.rpc.StateHandle(
+                "src", "source", 2, new org.devlive.pipeforge.engine.rpc.StateHandle.Inline(new byte[] {1, 2}), 2, 7);
+        var file = new org.devlive.pipeforge.engine.rpc.StateHandle(
+                "out", "sink", 1, new org.devlive.pipeforge.engine.rpc.StateHandle.File("out-0.state"), 900, 9);
+        TaskDeployment.Restore restore =
+                new TaskDeployment.Restore(12, java.util.Map.of("src", List.of(state), "out", List.of(file)));
+        executor(Headers.Epochs.FIRST)
+                .deployTask(deployment().restoring(restore))
+                .join();
+        executor(Headers.Epochs.FIRST).deployTask(deployment()).join();
+
+        assertThat(worker.deployed.get(0).restore()).isEqualTo(restore);
+        assertThat(worker.deployed.get(0).restore().restores()).isTrue();
+        assertThat(worker.deployed.get(1).restore()).isEqualTo(TaskDeployment.Restore.NONE);
+        assertThatThrownBy(() -> new TaskDeployment.Restore(0, java.util.Map.of("src", List.of(state))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void deploysTheInputsAndOutputsOfATask() {
         ExecutionAttemptId sink = new ExecutionAttemptId(TASK.runId(), "out", 1, 0);
         List<TaskDeployment.Input> inputs = List.of(new TaskDeployment.Input(

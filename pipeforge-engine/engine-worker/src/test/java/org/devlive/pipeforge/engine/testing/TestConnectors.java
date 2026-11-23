@@ -147,6 +147,12 @@ public final class TestConnectors {
 
     static final Option<Integer> SLOW_MS = Options.key("slow-ms").intType().defaultValue(0);
     static final Option<String> COMMIT = Options.key("commit").stringType().defaultValue("none");
+    /** The collect sink fails only in this subtask; -1 in every one. */
+    static final Option<Integer> FAIL_SUBTASK =
+            Options.key("fail-subtask").intType().defaultValue(-1);
+    /** The collect sink fails at most this often in all, across attempts. */
+    static final Option<Integer> FAIL_TIMES =
+            Options.key("fail-times").intType().defaultValue(Integer.MAX_VALUE);
     /** Declares the source unbounded, as a stream would be; it still ends after its rows. */
     static final Option<Boolean> UNBOUNDED =
             Options.key("unbounded").booleanType().defaultValue(false);
@@ -725,7 +731,7 @@ public final class TestConnectors {
         public OptionRule optionRule() {
             return OptionRule.builder()
                     .required(PROBE)
-                    .optional(FAIL_AT, FAIL_WITH, SLOW_MS, BLOCK, COMMIT, BAD_IDS, REPORT_IDS)
+                    .optional(FAIL_AT, FAIL_WITH, SLOW_MS, BLOCK, COMMIT, BAD_IDS, REPORT_IDS, FAIL_SUBTASK, FAIL_TIMES)
                     .build();
         }
 
@@ -766,6 +772,9 @@ public final class TestConnectors {
 
         @Override
         public SinkWriter<String, String> createWriter(WriterContext context, List<String> restored) {
+            if (!restored.isEmpty()) {
+                Probe.get(config.get(PROBE)).restoredStates.put(context.subtaskIndex(), List.copyOf(restored));
+            }
             return new CollectWriter(config, context);
         }
 
@@ -773,6 +782,26 @@ public final class TestConnectors {
         public Optional<SinkCommitter<String>> createCommitter() {
             Probe probe = Probe.get(config.get(PROBE));
             return switch (config.get(COMMIT)) {
+                    // a transaction per checkpoint: its rows become visible when it is committed
+                case "transactional" -> Optional.of(new SinkCommitter<>() {
+                    @Override
+                    public List<String> commit(List<String> committables) {
+                        probe.commitAttempts++;
+                        for (String transaction : committables) {
+                            List<Row> rows = probe.staged.remove(transaction);
+                            if (rows != null) {
+                                probe.rows.addAll(rows);
+                                probe.committed.add(transaction);
+                            }
+                        }
+                        return List.of();
+                    }
+
+                    @Override
+                    public void abort(List<String> committables) {
+                        committables.forEach(probe.staged::remove);
+                    }
+                });
                 case "two-phase", "global" -> Optional.of(new SinkCommitter<>() {
                     @Override
                     public List<String> commit(List<String> committables) {
@@ -845,6 +874,9 @@ public final class TestConnectors {
         private final WriterContext context;
         private final Probe probe;
         private final List<Row> buffered = new ArrayList<>();
+        /** Flushed rows of the open transaction, in transactional mode. */
+        private final List<Row> transaction = new ArrayList<>();
+
         private final java.util.concurrent.CountDownLatch cancelled = new java.util.concurrent.CountDownLatch(1);
         private int written;
 
@@ -860,7 +892,9 @@ public final class TestConnectors {
             if (written == 0) {
                 org.slf4j.LoggerFactory.getLogger(CollectWriter.class).info("collect writes its first row");
             }
-            if (written == config.get(FAIL_AT)) {
+            if (written == config.get(FAIL_AT)
+                    && (config.get(FAIL_SUBTASK) < 0 || config.get(FAIL_SUBTASK) == context.subtaskIndex())
+                    && probe.sinkFailures.getAndIncrement() < config.get(FAIL_TIMES)) {
                 throw failure(config, "writing row " + written);
             }
             if (!"none".equals(config.get(BLOCK))) {
@@ -892,6 +926,11 @@ public final class TestConnectors {
                 }
                 return false;
             });
+            if ("transactional".equals(config.get(COMMIT))) {
+                transaction.addAll(buffered);
+                buffered.clear();
+                return;
+            }
             probe.rows.addAll(buffered);
             probe.rowsBySubtask
                     .computeIfAbsent(context.subtaskIndex(), s -> Collections.synchronizedList(new ArrayList<>()))
@@ -900,10 +939,24 @@ public final class TestConnectors {
         }
 
         @Override
+        public List<String> snapshotState(long checkpointId) {
+            return "transactional".equals(config.get(COMMIT))
+                    ? List.of(context.subtaskIndex() + "@" + checkpointId)
+                    : List.of();
+        }
+
+        @Override
         public Optional<String> prepareCommit(long checkpointId) {
             flush();
             if ("none".equals(config.get(COMMIT))) {
                 return Optional.empty();
+            }
+            if ("transactional".equals(config.get(COMMIT))) {
+                String id = context.transactionId(checkpointId);
+                probe.events.add("prepared " + id);
+                probe.staged.put(id, new ArrayList<>(transaction));
+                transaction.clear();
+                return Optional.of(id);
             }
             return Optional.of(context.subtaskIndex() + ":" + written + "@" + checkpointId);
         }

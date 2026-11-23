@@ -95,11 +95,13 @@ Components marked `builtin` come with the worker and need no package.
 | Unused reservation | 60 s | After how long a worker releases a slot that no task used |
 | Labels | none | Key and value pairs a worker carries, such as `zone=east` or `net=db-zone` |
 
-- A lost worker is removed at once: in this version its tasks fail and so does the job, with the
-  worker and the time without a heartbeat in the error. Restarting the job on other workers comes
-  with checkpoints and failover.
-- A worker that comes back after it was lost registers again and offers free slots; tasks that it
-  still runs belong to a job that has already failed.
+- A lost worker is removed at once, and its tasks fail with the worker and the time without a
+  heartbeat in the error. A run that takes [checkpoints](./checkpoint) restarts their regions on
+  other workers from the last completed checkpoint, as its restart strategy allows (see
+  [failure handling](./failure-handling)); without checkpoints the run fails.
+- A worker that comes back after it was lost registers again and offers free slots. Tasks that it
+  still runs belong to attempts the master no longer follows; until workers stop such tasks
+  themselves, they may go on writing.
 - Only the current master controls the workers: requests of a master that was replaced are refused
   by the workers.
 

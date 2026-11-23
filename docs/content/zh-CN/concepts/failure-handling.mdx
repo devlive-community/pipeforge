@@ -1,6 +1,6 @@
 ---
 title: 失败处理
-description: 引擎如何把运行中的错误分为暂时性、数据和致命三类，以及 env.restart 如何决定失败的运行是否重启、何时重启。
+description: 引擎如何把运行中的错误分为暂时性、数据和致命三类，env.restart 如何决定失败的 Task 是否重启、何时重启，以及如何只从最近的 checkpoint 重启它们所在的 Region。
 order: 78
 template: feature
 omit:
@@ -10,7 +10,8 @@ omit:
 ## 概述
 
 运行中的 Task 失败时，由 JobMaster 决定接下来怎么做。错误的**类型**决定重启是否有用，作业的**重启策略**（`env.restart`）
-决定运行还能不能再重启一次、重启前等待多久。
+决定运行还能不能再重启一次、重启前等待多久。重启只涉及失败 Task 所在的 **Region**，它从最近完成的 [checkpoint](./checkpoint)
+重新开始，运行的其余部分继续进行。
 
 ## 原理
 
@@ -35,6 +36,20 @@ omit:
 | `exponential-backoff` | 不限次数；第一次等待 `restart.initial`，之后每次是上一次的 `restart.multiplier` 倍，最长 `restart.max`。与上一次失败相隔超过 `restart.reset-after` 时重新从 `restart.initial` 开始 |
 | `failure-rate` | 只要最近 `restart.interval` 内（包括这一次）失败不超过 `restart.max-failures` 次，就等待 `restart.delay` 后重启 |
 | `none` | 从不重启 |
+
+### Region 重启
+
+Region 是互相交换数据的一组 Task。最常见的批处理作业中，每个子任务从 Source 到 Sink 是一条链，各自成为一个 Region；
+hash 或 rebalance 交换两侧的 Task 合为一个 Region。策略允许重启且运行做 checkpoint 时：
+
+1. JobMaster 取消失败 Region 中的 Task，并放弃进行中的 checkpoint（它们已无法完成）。其他 Region 继续运行。
+2. 这些 Region 的 Reader 在最近完成的 checkpoint 之后拿到的分片交回 Enumerator，由它再次分配。
+3. 等待策略给出的时间、并且 Region 中的 Task 都已停止后，重新部署它们：Worker 失联的使用新的 Slot，每个 Task 带着它在该
+   checkpoint 中的状态。Reader 从 checkpoint 记录的位置继续读取分片；Writer 拿到自己的状态，并 abort 在它之后预提交的内容。
+
+Sink 已提交的内容保持提交：checkpoint 完成时提交它的待提交物，为失败的 checkpoint 预提交的内容与下一个完成的 checkpoint 一起提交。
+因此两阶段提交的 Sink 在重启前后每行恰好写入一次；其他 Sink 会再次写入 checkpoint 之后的行（至少一次）。没有 checkpoint，
+或者第一个 checkpoint 完成之前，Region 从分片的开头重新开始。
 
 ## 快速上手
 
@@ -87,26 +102,30 @@ env:
 
 ## 行为与语义
 
-- 计入的是运行的第一个失败；仍在运行的 Task 会被取消，它们停止时报告的错误不再分类。
+- Task 的每次失败计一次；它所在 Region 的其他 Task 停止时报告的错误不再分类。导致运行失败的错误会取消所有 Task。
+- JobMaster、Enumerator 或提交出错时运行失败：只有 Task 会重启。
+- 不做 checkpoint 的运行不重启 Task：暂时性的失败也会让它失败。
 - 致命错误和数据错误立即让运行失败，不消耗重启次数。
 - `fixed-delay` 的次数在一次运行中不会恢复；`failure-rate` 会忘掉移出窗口的失败；`exponential-backoff` 不会用尽。
 
 ## 可观测性
 
 JobMaster 在日志中记录每一次决定：错误、它的类型，以及策略是否允许重启、等待多久，或者已经不允许再重启。
+重启时还会记录重启的 Task、交回 Enumerator 的分片以及 Task 恢复自哪个 checkpoint。
 
 ## 排障
 
 | 问题 | 原因与解决 |
 |---|---|
 | 还有重启次数，连接错误却让运行失败 | 插件把它报告为 `PF-SRC-0001` 或 `PF-SINK-0001`，没有标记为暂时性。应由插件的 `ErrorClassifier` 转换这个异常 |
+| Worker 失联或连接断开，还有重启次数，运行却失败了 | 运行没有做 checkpoint：在集群上设置 `checkpoint.dir`，并保持 `env.checkpoint.enabled` 开启 |
 | 警告 `has no effect with restart.strategy` | 设置了其他策略的选项；删除它或者更换策略 |
 | [`PF-CONF-0002`](../reference/errors#pf-conf-0002) `restart.max` | `restart.max` 小于 `restart.initial` |
 
 ## 限制
 
-- 运行还不会真正重启：JobMaster 判断并记录策略是否允许重启，然后以该错误让运行失败。从最近完成的
-  [checkpoint](./checkpoint) 重启失败的 Task 将在后续版本提供。
+- 重启后的 Task 计数从零开始，因此运行的行数不包含它之前的尝试读写的行。
+- 已失联但仍在运行 Task 的 Worker（例如网络分区之后）还不会停止这些 Task；在 Worker 重启之前它们可能继续写入。
 - 运行级自动重试（`env.retry`）和失败后回滚已写入的数据还不可用。
 
 ## 版本

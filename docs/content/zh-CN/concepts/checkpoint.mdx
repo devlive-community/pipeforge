@@ -141,7 +141,8 @@ Master 会在日志中记录每个完成或失败的 checkpoint。
 ## 限制
 
 - Transform 没有状态。Sink 按 checkpoint 在 Master 上提交（见 [Sink 状态与提交](../development/api-overview#sink-状态与提交)）。
-- 运行还不能从 checkpoint 重新开始；也还不能从命令行或 Web UI 做 savepoint，Worker 会拒绝以 savepoint 停止运行。
+- 运行内失败的 Task 会从最近完成的 checkpoint 重启（见[失败处理](./failure-handling)）；新的运行还不能从 checkpoint 开始。
+  也还不能从命令行或 Web UI 做 savepoint，Worker 会拒绝以 savepoint 停止运行。
 - 等待 checkpoint 的 barrier 超过 30 秒的 Task 会在日志中给出背压警告；这个时限目前还不能修改。
 - 只有对齐的 checkpoint：Task 要等所有输入都收到 barrier。
 

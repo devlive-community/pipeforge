@@ -39,6 +39,12 @@ public interface Placement {
     /** Gets {@code count} slots for a run; completes when they are reserved. */
     CompletableFuture<List<Slot>> acquire(String jobId, String runId, int count);
 
+    /**
+     * Gets new slots in place of slots whose worker was lost; the slots keep their indexes.
+     * {@link #release} gives them back with the others.
+     */
+    CompletableFuture<List<Slot>> replace(String jobId, String runId, List<Integer> indexes);
+
     /** Gives the slots back once the run has ended. */
     void release();
 
@@ -52,6 +58,13 @@ public interface Placement {
                     slots.add(new Slot(i, "local", "local", "local", executor, null));
                 }
                 return CompletableFuture.completedFuture(slots);
+            }
+
+            @Override
+            public CompletableFuture<List<Slot>> replace(String jobId, String runId, List<Integer> indexes) {
+                return CompletableFuture.completedFuture(indexes.stream()
+                        .map(i -> new Slot(i, "local", "local", "local", executor, null))
+                        .toList());
             }
 
             @Override
@@ -73,6 +86,7 @@ public interface Placement {
             Scheduler.Strategy strategy,
             java.time.Duration timeout) {
         AtomicReference<Scheduler.Allocation> held = new AtomicReference<>();
+        List<Scheduler.Allocation> replacements = new java.util.concurrent.CopyOnWriteArrayList<>();
         return new Placement() {
             @Override
             public CompletableFuture<List<Slot>> acquire(String jobId, String runId, int count) {
@@ -95,11 +109,37 @@ public interface Placement {
             }
 
             @Override
+            public CompletableFuture<List<Slot>> replace(String jobId, String runId, List<Integer> indexes) {
+                return scheduler
+                        .allocate(jobId, runId, new Scheduler.Requirements(indexes.size(), labels, strategy, timeout))
+                        .thenApply(allocation -> {
+                            replacements.add(allocation);
+                            List<Slot> slots = new ArrayList<>();
+                            for (int i = 0; i < allocation.slots().size(); i++) {
+                                Scheduler.Assignment assignment =
+                                        allocation.slots().get(i);
+                                slots.add(new Slot(
+                                        indexes.get(i),
+                                        assignment.worker().workerId(),
+                                        assignment.worker().rpcAddress(),
+                                        assignment.worker().dataAddress(),
+                                        workers.gateway(assignment.worker()),
+                                        assignment.allocationId()));
+                            }
+                            return slots;
+                        });
+            }
+
+            @Override
             public void release() {
                 Scheduler.Allocation allocation = held.getAndSet(null);
                 if (allocation != null) {
                     scheduler.release(allocation);
                 }
+                for (Scheduler.Allocation replacement : replacements) {
+                    scheduler.release(replacement);
+                }
+                replacements.clear();
             }
         };
     }

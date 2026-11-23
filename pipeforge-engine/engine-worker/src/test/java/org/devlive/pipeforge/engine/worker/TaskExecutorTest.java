@@ -371,6 +371,55 @@ class TaskExecutorTest {
         }
     }
 
+    /** The committables in the committer state of the next acknowledgement. */
+    private static List<String> committables(ScriptedMaster master) throws InterruptedException {
+        var ack = master.acks.poll(10, TimeUnit.SECONDS);
+        assertThat(ack).isNotNull();
+        var committer = ack.states().stream()
+                .filter(s -> s.operatorKind().equals("committer"))
+                .findFirst()
+                .orElseThrow();
+        byte[] body = ((org.devlive.pipeforge.engine.rpc.StateHandle.Inline) committer.location()).bytes();
+        return org.devlive.pipeforge.engine.rpc.CheckpointFiles.readList(body, "out", "-").stream()
+                .map(c -> new String(c, java.nio.charset.StandardCharsets.UTF_8))
+                .toList();
+    }
+
+    private static void trigger(ScriptedMaster master, long checkpointId) throws Exception {
+        master.executor
+                .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
+                        master.id(),
+                        checkpointId,
+                        org.devlive.pipeforge.engine.rpc.CheckpointType.CHECKPOINT,
+                        0,
+                        false))
+                .get();
+    }
+
+    @Test
+    void theSinkKeepsWhatItPreparedUntilACheckpointAfterItCompletes() throws Exception {
+        String probe = Probe.create();
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor
+                    .deployTask(ScriptedMaster.deployment(
+                            TestConnectors.job(probe, "endless: true", "", "commit: two-phase", 1),
+                            ScriptedMaster.settings()))
+                    .get();
+            awaitFinishedSplits(master, 2);
+            trigger(master, 1);
+            assertThat(committables(master)).containsExactly("0:10@1");
+            // checkpoint 1 failed elsewhere: what was prepared for it stays until a later one completes
+            master.executor.abortCheckpoint(master.id(), 1, "a task declined").get();
+            trigger(master, 2);
+            assertThat(committables(master)).containsExactly("0:10@1", "0:10@2");
+            master.executor.notifyCheckpointComplete(master.id(), 2).get();
+            trigger(master, 3);
+            assertThat(committables(master)).containsExactly("0:10@3");
+            master.executor.cancelTask(master.id()).get();
+            assertThat(master.awaitEnd().state()).isEqualTo(TaskState.CANCELED);
+        }
+    }
+
     @Test
     void theTaskReadsOnWhileItsStateIsWritten(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
             throws Exception {
@@ -461,6 +510,81 @@ class TaskExecutorTest {
         assertThat(end.committables()).singleElement().satisfies(value -> assertThat(
                         new String(value.bytes(), java.nio.charset.StandardCharsets.UTF_8))
                 .isEqualTo("0:10@" + Task.FINAL_CHECKPOINT_ID));
+    }
+
+    /** A state of {@code node}, as a checkpoint holds it: the elements as a list, inline. */
+    static org.devlive.pipeforge.engine.rpc.StateHandle inline(
+            String node, String kind, int version, byte[]... elements) {
+        byte[] body = org.devlive.pipeforge.engine.rpc.CheckpointFiles.writeList(List.of(elements));
+        java.util.zip.CRC32C crc = new java.util.zip.CRC32C();
+        crc.update(body);
+        return new org.devlive.pipeforge.engine.rpc.StateHandle(
+                node, kind, version, new org.devlive.pipeforge.engine.rpc.StateHandle.Inline(body), body.length, (int)
+                        crc.getValue());
+    }
+
+    @Test
+    void aRestoredTaskContinuesTheReadersSplitsAndGivesTheWriterItsState(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        var split = TestConnectors.split("r", 20, 25);
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        // the writer's state is a file of checkpoint 7, the reader's travels inline
+        byte[] writerBody = org.devlive.pipeforge.engine.rpc.CheckpointFiles.writeList(
+                List.of("kept".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String file = org.devlive.pipeforge.engine.rpc.CheckpointFiles.stateFile("out", 0);
+        storage.write(
+                org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint("run-1", 7) + file,
+                org.devlive.pipeforge.engine.rpc.CheckpointFiles.writeState(7, "out", writerBody));
+        java.util.zip.CRC32C crc = new java.util.zip.CRC32C();
+        crc.update(writerBody);
+        var writerState = new org.devlive.pipeforge.engine.rpc.StateHandle(
+                "out", "sink", 1, new org.devlive.pipeforge.engine.rpc.StateHandle.File(file), writerBody.length, (int)
+                        crc.getValue());
+        TaskDeployment deployment = ScriptedMaster.deployment(
+                        TestConnectors.job(probe, "", null, "", 1), ScriptedMaster.settings())
+                .restoring(new TaskDeployment.Restore(
+                        7,
+                        java.util.Map.of(
+                                "src",
+                                List.of(inline("src", "source", split.version(), split.bytes())),
+                                "out",
+                                List.of(writerState, inline("out", "committer", 1)))));
+
+        try (ScriptedMaster master =
+                ScriptedMaster.tenRowsWith(TaskExecutor.Options.of(new MemoryLimits(64L * 1024 * 1024, Long.MAX_VALUE))
+                        .withCheckpointStorage(storage))) {
+            master.executor.deployTask(deployment).get();
+            TaskStateUpdate end = master.awaitEnd();
+            assertThat(end.state()).as(String.valueOf(end.error())).isEqualTo(TaskState.FINISHED);
+        }
+        assertThat(ids(Probe.get(probe)))
+                .as("the restored split, then the splits the master assigns")
+                .containsExactly(0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 20L, 21L, 22L, 23L, 24L);
+        assertThat(Probe.get(probe).restoredStates).containsEntry(0, List.of("kept"));
+    }
+
+    @Test
+    void aStateThatDoesNotMatchItsChecksumFailsTheTask() throws Exception {
+        String probe = Probe.create();
+        var good = inline("src", "source", 1, TestConnectors.split("r", 20, 25).bytes());
+        var damaged = new org.devlive.pipeforge.engine.rpc.StateHandle(
+                good.nodeId(),
+                good.operatorKind(),
+                good.serializerVersion(),
+                good.location(),
+                good.size(),
+                good.crc32c() + 1);
+        TaskDeployment deployment = ScriptedMaster.deployment(
+                        TestConnectors.job(probe, "", null, "", 1), ScriptedMaster.settings())
+                .restoring(new TaskDeployment.Restore(3, java.util.Map.of("src", List.of(damaged))));
+        try (ScriptedMaster master = ScriptedMaster.tenRows()) {
+            master.executor.deployTask(deployment).get();
+            TaskStateUpdate end = master.awaitEnd();
+            assertThat(end.state()).isEqualTo(TaskState.FAILED);
+            assertThat(end.error().code()).isEqualTo(ErrorCode.STATE_CORRUPTED);
+            assertThat(end.error().getMessage()).contains("checkpoint 3");
+        }
     }
 
     @Test

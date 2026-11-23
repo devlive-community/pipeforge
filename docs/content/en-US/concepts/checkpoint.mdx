@@ -170,8 +170,10 @@ task's part. The master logs every checkpoint that completes or fails.
 
 - Transforms keep no state. Sinks commit per checkpoint on the master (see
   [sink state and commits](../development/api-overview#sink-state-and-commits)).
-- Runs do not restart from a checkpoint yet; savepoints cannot be taken from the command line or the
-  Web UI yet, and a worker declines to stop a run with a savepoint.
+- Within a run, failed tasks restart from the last completed checkpoint (see
+  [failure handling](./failure-handling)); a new run cannot start from a checkpoint yet. Savepoints
+  cannot be taken from the command line or the Web UI yet, and a worker declines to stop a run with
+  a savepoint.
 - A task that waited longer than 30 seconds for the barriers of a checkpoint logs a warning about
   backpressure; the limit cannot be changed yet.
 - Only aligned checkpoints: a task waits for the barrier on all its inputs.

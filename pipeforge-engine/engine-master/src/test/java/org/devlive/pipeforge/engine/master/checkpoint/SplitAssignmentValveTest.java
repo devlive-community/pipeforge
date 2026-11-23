@@ -250,4 +250,22 @@ class SplitAssignmentValveTest {
         valve.openAll(4);
         assertThat(valve.isClosed(0)).as("still closed for checkpoint 5").isTrue();
     }
+
+    @Test
+    void aRestartingReaderLosesWhatWasHeldForItAndOpens() {
+        List<String> sent = new java.util.ArrayList<>();
+        SplitAssignmentValve valve = new SplitAssignmentValve((reader, event) -> {
+            sent.add(reader + " " + event.getClass().getSimpleName());
+            return CompletableFuture.completedFuture(null);
+        });
+        valve.close(1, List.of(0, 1));
+        valve.send(0, new OperatorEvent.AddSplits("src", List.of()));
+        valve.send(1, new OperatorEvent.AddSplits("src", List.of()));
+        valve.drop(0);
+        assertThat(valve.held(0)).isZero();
+        assertThat(valve.isClosed(0)).isFalse();
+        valve.send(0, new OperatorEvent.NoMoreSplits("src"));
+        valve.openAll(1);
+        assertThat(sent).containsExactly("0 NoMoreSplits", "1 AddSplits");
+    }
 }

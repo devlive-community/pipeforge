@@ -414,6 +414,32 @@ class CheckpointCoordinatorTest {
     }
 
     @Test
+    void theStatesOfTheLastCompletedCheckpointAreKeptForRestartsAndAbortsDoNotCount() {
+        CheckpointCoordinator coordinator = coordinator(settings(0, 3));
+        assertThat(coordinator.latest()).isEqualTo(CheckpointCoordinator.Latest.NONE);
+        assertThat(coordinator.latest().of("src", 0)).isEmpty();
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+        ackAll(coordinator, 1);
+
+        CheckpointCoordinator.Latest latest = coordinator.latest();
+        assertThat(latest.checkpointId()).isEqualTo(1);
+        assertThat(latest.of(SRC1.vertexId(), SRC1.subtask()))
+                .isEqualTo(ack(SRC1, 1).states());
+        assertThat(latest.of(SINK.vertexId(), SINK.subtask()))
+                .isEqualTo(ack(SINK, 1).states());
+
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+        coordinator.abortAll("tasks of the run restart");
+        assertThat(coordinator.inProgress()).isEmpty();
+        assertThat(runFailures)
+                .as("no failure is tolerated, yet aborts do not count")
+                .isEmpty();
+        assertThat(coordinator.stats().failures()).isZero();
+        assertThat(store.get(RUN, 2).status()).isEqualTo(CheckpointStore.Status.FAILED);
+        assertThat(coordinator.latest().checkpointId()).isEqualTo(1);
+    }
+
+    @Test
     void moreFailuresInARowThanTheJobToleratesFailTheRun() {
         CheckpointCoordinator coordinator = coordinator(settings(2, 3));
         for (long id = 1; id <= 2; id++) {

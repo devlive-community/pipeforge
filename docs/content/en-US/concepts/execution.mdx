@@ -197,10 +197,10 @@ Every run has a **job master** that drives it from start to end:
 1. It gets the slots of the run: on a cluster the [scheduler](./cluster) reserves them on the
    workers; in one process the local task executor runs every task.
 2. It starts the split enumerator and deploys one task per subtask into its slot.
-3. It follows the states the tasks report. The first failure cancels the other tasks and becomes
-   the error of the run; a [lost worker](./cluster) fails the run with `PF-CLUS-0001`, scoped to
-   the node and subtask that ran there. The job master classifies the failure and asks the job's
-   restart strategy (see [failure handling](./failure-handling)).
+3. It follows the states the tasks report. A failed task, or the tasks of a [lost worker](./cluster)
+   (`PF-CLUS-0001`), go to the job's restart strategy: when it allows and the run takes
+   checkpoints, only their regions restart (see [failure handling](./failure-handling)).
+   Otherwise the failure cancels the other tasks and becomes the error of the run.
 4. When every task has finished, it commits what the sinks prepared and the run succeeds.
 5. Whatever the end, it gives the slots back. A run cancelled while it waits for slots ends at once;
    slots that arrive later go back too.
@@ -285,8 +285,8 @@ committed. A worker that loses its [master](./cluster) cancels all its tasks in 
 
 - **One final state per task.** A task reports `FINISHED` with its committable, `FAILED` with its
   error, or `CANCELED`; the job master decides the job's status from them.
-- **The first failure wins.** It cancels the other tasks and becomes the job's error. Local mode does
-  not restart tasks; region restarts come with checkpoints in the distributed engine.
+- **The first failure wins.** Unless its region restarts, it cancels the other tasks and becomes the
+  job's error. Local mode takes no checkpoints, so it does not restart tasks.
 - **Cancellation escalates.** The reader's cancel hook and the write thread's interrupt come first;
   after `cancelTimeout` the task thread is interrupted; after twice `cancelTimeout` the task is given
   up with `PF-RES-0005` and the job fails.

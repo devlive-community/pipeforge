@@ -89,6 +89,56 @@ final class StateUploader implements AutoCloseable {
         return handles;
     }
 
+    /**
+     * The elements of a state a restarted task restores: from the handle when it is inline, else
+     * from its file in checkpoint {@code checkpointId} of the run, checked against the handle's
+     * size and CRC32C.
+     */
+    List<byte[]> read(String runId, long checkpointId, StateHandle handle) {
+        String checkpoint = String.valueOf(checkpointId);
+        byte[] body;
+        String name;
+        switch (handle.location()) {
+            case StateHandle.Inline inline -> {
+                body = inline.bytes();
+                name = handle.nodeId() + " (" + handle.operatorKind() + ")";
+            }
+            case StateHandle.File file -> {
+                name = file.path();
+                CheckpointStorage source = storage;
+                if (source == null) {
+                    throw PipeForgeException.of(ErrorCode.STORAGE_UNAVAILABLE)
+                            .param("location", "checkpoint.dir")
+                            .param("reason", "this worker has no checkpoint storage to read " + name + " from")
+                            .build();
+                }
+                byte[] whole;
+                try {
+                    whole = source.read(CheckpointPaths.checkpoint(runId, checkpointId) + file.path());
+                } catch (IOException | RuntimeException e) {
+                    throw PipeForgeException.of(ErrorCode.STORAGE_UNAVAILABLE)
+                            .param("location", source.location())
+                            .param(
+                                    "reason",
+                                    "reading " + name + " of checkpoint " + checkpointId + ": " + e.getMessage())
+                            .cause(e)
+                            .build();
+                }
+                body = CheckpointFiles.readState(whole, checkpointId, handle.nodeId(), name);
+            }
+        }
+        CRC32C crc = new CRC32C();
+        crc.update(body);
+        if (body.length != handle.size() || (int) crc.getValue() != handle.crc32c()) {
+            throw PipeForgeException.of(ErrorCode.STATE_CORRUPTED)
+                    .param("file", name)
+                    .param("checkpoint", checkpoint)
+                    .param("reason", "its size or checksum differs from what the checkpoint recorded")
+                    .build();
+        }
+        return CheckpointFiles.readList(body, name, checkpoint);
+    }
+
     private static StateHandle handle(Pending state, StateHandle.Location location) {
         CRC32C crc = new CRC32C();
         crc.update(state.body());

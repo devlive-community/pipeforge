@@ -7,7 +7,6 @@
 package org.devlive.pipeforge.engine.worker;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,10 +46,11 @@ import org.slf4j.LoggerFactory;
 final class Task implements Runnable {
 
     /**
-     * The checkpoint id passed to {@code prepareCommit} when the input ends. A run without
-     * checkpoints commits once, as checkpoint 1.
+     * The checkpoint id passed to {@code prepareCommit} when the input ends: above every checkpoint,
+     * so that its transaction never shares an id with one, and a writer restored from a checkpoint
+     * takes a final transaction that was never committed as one to abort.
      */
-    static final long FINAL_CHECKPOINT_ID = 1;
+    static final long FINAL_CHECKPOINT_ID = Long.MAX_VALUE;
 
     private static final Logger LOG = LoggerFactory.getLogger(Task.class);
     private static final long MIN_IDLE_NANOS = TimeUnit.MILLISECONDS.toNanos(1);
@@ -131,6 +131,15 @@ final class Task implements Runnable {
     }
 
     // ------------------------------------------------------------------ checkpoints
+
+    /** The elements of a state this task restores, read from the checkpoint it restores from. */
+    private List<byte[]> restoredState(org.devlive.pipeforge.engine.rpc.StateHandle handle) {
+        StateUploader states = uploader;
+        if (states == null) {
+            throw new IllegalStateException("Task " + deployment.id() + " has no state reader");
+        }
+        return states.read(deployment.id().runId(), deployment.restore().checkpointId(), handle);
+    }
 
     /**
      * Starts a checkpoint at this source task, on the task thread between two reads. A task that
@@ -290,22 +299,21 @@ final class Task implements Runnable {
             if (cancelled) {
                 throw new CancelledException();
             }
-            operators.open();
+            operators.open(this::restoredState);
             operators.onAligned(this::checkpoint);
             runningSince = System.nanoTime();
             transition(TaskState.RUNNING);
             LOG.info("Task {} is running", deployment.id());
             operators.startSource();
             process(operators);
-            Optional<SerializedValue> committable = operators.finish(FINAL_CHECKPOINT_ID);
+            List<SerializedValue> committables = operators.finish(FINAL_CHECKPOINT_ID);
             OperatorChain closing = operators;
             operators = null;
             closing.close();
             stopThreads(started);
             memory.release();
             LOG.info("Task {} finished", deployment.id());
-            report(TaskStateUpdate.finished(
-                    deployment.id(), committable.map(List::of).orElse(List.of())));
+            report(TaskStateUpdate.finished(deployment.id(), committables));
         } catch (Throwable error) {
             if (operators != null) {
                 closeQuietly(operators);

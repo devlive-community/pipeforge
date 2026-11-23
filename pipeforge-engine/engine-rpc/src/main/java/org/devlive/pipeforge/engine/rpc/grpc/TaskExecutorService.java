@@ -109,7 +109,11 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
                 ProtoMapping.fromProto(request.getSettings()),
                 decoded.run(),
                 request.getAllocationId().isEmpty() ? null : request.getAllocationId(),
-                ProtoMapping.fromProtoInputs(request.getInputsList()));
+                ProtoMapping.fromProtoInputs(request.getInputsList()),
+                request.getRestoreCheckpointId() == 0
+                        ? TaskDeployment.Restore.NONE
+                        : new TaskDeployment.Restore(
+                                request.getRestoreCheckpointId(), ProtoMapping.fromProto(request.getRestoreState())));
     }
 
     @Override

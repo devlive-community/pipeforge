@@ -45,6 +45,13 @@ numbers 9 and 10, reserved for them from the start), `SubmitJobRequest` where a 
 `JobMetrics` carries the [checkpoint metrics](../concepts/checkpoint#observability) in fields 27 to
 30.
 
+A task that restarts in its [region](../concepts/failure-handling#region-restarts) is deployed as a
+new attempt with `restore_state` and `restore_checkpoint_id` set; a fresh task leaves them empty and
+0. The worker takes inline states as they are and reads file states from the checkpoint's directory,
+`<run>/chk-<n>/`, checking each against the size and CRC32C in its handle. A state that does not
+match fails the task with `PF-CKPT-0002`, a file it cannot read with `PF-CKPT-0004`; in this version
+both fail the run.
+
 The master answers acknowledgements in the order of section 2.6 of the specification: it writes
 `_metadata`, records the checkpoint as completed in the metastore, and only then sends
 `NotifyCheckpointComplete`. A decline that already carries `PF-CKPT-0005` keeps its reason.

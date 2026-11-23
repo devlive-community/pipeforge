@@ -102,7 +102,7 @@ class LocalEngineTest {
 
         assertThat(result.status()).isEqualTo(JobStatus.SUCCESS);
         Probe seen = Probe.get(probe);
-        assertThat(seen.committed).hasSize(2).allSatisfy(c -> assertThat(c).endsWith("@1"));
+        assertThat(seen.committed).hasSize(2).allSatisfy(c -> assertThat(c).endsWith("@" + Long.MAX_VALUE));
         assertThat(seen.globallyCommitted).singleElement().satisfies(g -> assertThat(g)
                 .contains("+"));
     }

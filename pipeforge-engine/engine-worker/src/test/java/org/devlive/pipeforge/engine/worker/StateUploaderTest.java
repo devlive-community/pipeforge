@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.worker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -84,6 +85,23 @@ class StateUploaderTest {
         try (StateUploader uploader = new StateUploader(storage, 16, "w")) {
             PipeForgeException error = failure(uploader.upload(TASK, 6, List.of(state(17))));
             assertThat(error.getMessage()).contains("writing orders-2.state to", "the bucket is gone");
+        }
+    }
+
+    @Test
+    void aStateFileCannotBeReadWithoutStorage() {
+        StateHandle handle = new StateHandle("orders", "source", 3, new StateHandle.File("orders-2.state"), 4, 0);
+        try (StateUploader uploader = new StateUploader(null, 16, "w")) {
+            assertThatThrownBy(() -> uploader.read("run-1", 4, handle))
+                    .isInstanceOfSatisfying(PipeForgeException.class, e -> {
+                        assertThat(e.code()).isEqualTo(ErrorCode.STORAGE_UNAVAILABLE);
+                        assertThat(e.getMessage()).contains("orders-2.state");
+                    });
+        }
+        try (StateUploader uploader = new StateUploader(new BlockingStorage(dir), 16, "w")) {
+            assertThatThrownBy(() -> uploader.read("run-1", 4, handle))
+                    .isInstanceOfSatisfying(PipeForgeException.class, e -> assertThat(e.code())
+                            .isEqualTo(ErrorCode.STORAGE_UNAVAILABLE));
         }
     }
 }

@@ -91,7 +91,9 @@ final class SinkOperator implements ChainOutput {
             int subtask,
             int parallelism,
             TaskSettings settings,
-            ExpressionCompiler expressions) {
+            ExpressionCompiler expressions,
+            long restoredCheckpointId,
+            List<OperatorChain.Element> restored) {
         this.subtask = subtask;
         SinkFactory factory = (SinkFactory) node.component().factory();
         Sink<Object, Object> created = (Sink<Object, Object>) call.call(
@@ -106,9 +108,18 @@ final class SinkOperator implements ChainOutput {
                 this::reportBadRow,
                 jobId,
                 node.id(),
-                0);
-        SinkWriter<Object, Object> opened =
-                call.call("create the writer", () -> created.createWriter(context, List.of()));
+                restoredCheckpointId);
+        List<Object> states = new ArrayList<>(restored.size());
+        if (!restored.isEmpty()) {
+            VersionedSerializer<Object> serializer =
+                    call.call("get the writer state serializer", created::writerStateSerializer);
+            for (OperatorChain.Element element : restored) {
+                states.add(call.call(
+                        "read a restored writer state",
+                        () -> serializer.deserialize(element.version(), element.bytes())));
+            }
+        }
+        SinkWriter<Object, Object> opened = call.call("create the writer", () -> created.createWriter(context, states));
         writer = opened;
         if (settings.asyncWriteBuffer()) {
             buffer = new AsyncWriteBuffer(
@@ -143,6 +154,15 @@ final class SinkOperator implements ChainOutput {
         accept(event);
     }
 
+    /**
+     * The committables this writer prepared, by checkpoint, until a checkpoint at or after theirs
+     * completed: one that failed is committed with a later one, so each barrier's committer state
+     * holds all of them (committing is idempotent). Touched on the task thread only.
+     */
+    private final java.util.TreeMap<Long, byte[]> uncommitted = new java.util.TreeMap<>();
+
+    private int committableVersion;
+
     /** The states taken at the last barrier, until the chain collects them. */
     private List<StateUploader.Pending> taken = List.of();
 
@@ -173,16 +193,22 @@ final class SinkOperator implements ChainOutput {
         for (Object value : state == null ? List.of() : state) {
             written.add(call.call("write the writer state", () -> states.serialize(value)));
         }
-        List<byte[]> prepared = new ArrayList<>();
         if (committable != null && committable.isPresent()) {
             Object value = committable.get();
-            prepared.add(call.call("write the committable", () -> committables.serialize(value)));
+            uncommitted.put(id, call.call("write the committable", () -> committables.serialize(value)));
+            committableVersion = committables.version();
         }
+        List<byte[]> prepared = new ArrayList<>(uncommitted.values());
         taken = List.of(
                 new StateUploader.Pending(
                         node.id(), "sink", subtask, states.version(), CheckpointFiles.writeList(written)),
                 new StateUploader.Pending(
                         node.id(), "committer", subtask, committables.version(), CheckpointFiles.writeList(prepared)));
+    }
+
+    /** Checkpoint {@code checkpointId} completed: what was prepared up to it is committed. */
+    void notifyCheckpointComplete(long checkpointId) {
+        uncommitted.headMap(checkpointId, true).clear();
     }
 
     /** The states of the last barrier; empty until one reached the sink. */
@@ -241,22 +267,25 @@ final class SinkOperator implements ChainOutput {
      * Ends the input: waits until everything is written, then lets the writer prepare its commit
      * for {@code checkpointId}.
      *
-     * @return the committable, written with the sink's serializer, if the sink commits in two phases
+     * @return the committables of checkpoints not known to be complete, then the final one, written
+     *     with the sink's serializer; empty when the sink does not commit in two phases
      */
-    Optional<SerializedValue> finish(long checkpointId) {
+    List<SerializedValue> finish(long checkpointId) {
         AsyncWriteBuffer async = buffer;
         if (async != null) {
             async.finish();
         }
         SinkWriter<Object, Object> current = opened();
         Optional<Object> committable = call.call("prepare the commit", () -> current.prepareCommit(checkpointId));
-        if (committable == null || committable.isEmpty()) {
-            return Optional.empty();
+        List<SerializedValue> all = new ArrayList<>();
+        uncommitted.values().forEach(bytes -> all.add(new SerializedValue(committableVersion, bytes)));
+        uncommitted.clear();
+        if (committable != null && committable.isPresent()) {
+            Sink<Object, Object> owner = sink;
+            Object value = committable.get();
+            all.add(call.call("write the committable", () -> SerializedValue.of(owner.committableSerializer(), value)));
         }
-        Sink<Object, Object> owner = sink;
-        Object value = committable.get();
-        return Optional.of(
-                call.call("write the committable", () -> SerializedValue.of(owner.committableSerializer(), value)));
+        return all;
     }
 
     /** Interrupts the write thread; called from another thread when the task is cancelled. */

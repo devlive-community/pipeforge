@@ -53,15 +53,31 @@ class ClusterJobTest {
         final TaskExecutor executor;
         final InProcessRpc.Endpoint<TaskExecutorGateway> endpoint;
         final AtomicInteger deployed = new AtomicInteger();
+        /** A dead worker's process is gone: nothing it does reaches the master any more. */
+        volatile boolean dead;
+
         String id = "";
 
         Worker(String address, JobMasterGateway master) {
             this.address = address;
             this.slots = new SlotTable(address, 2);
+            JobMasterGateway reports = (JobMasterGateway) java.lang.reflect.Proxy.newProxyInstance(
+                    JobMasterGateway.class.getClassLoader(),
+                    new Class<?>[] {JobMasterGateway.class},
+                    (p, method, args) -> {
+                        if (dead && method.getReturnType() == CompletableFuture.class) {
+                            return CompletableFuture.completedFuture(null);
+                        }
+                        try {
+                            return method.invoke(master, args);
+                        } catch (java.lang.reflect.InvocationTargetException e) {
+                            throw e.getCause();
+                        }
+                    });
             // rows up to 4KB, so that a test can send larger ones cheaply
             this.executor = new TaskExecutor(
                     address,
-                    master,
+                    reports,
                     slots,
                     null,
                     null,
@@ -306,10 +322,11 @@ class ClusterJobTest {
         assertThat(first.status()).isEqualTo(JobStatus.FAILED);
         assertThat(first.error().kind()).isEqualTo(org.devlive.pipeforge.common.error.ErrorKind.TRANSIENT);
         assertThat(deadlocked.decision())
-                .as("the default strategy allows a restart after ten seconds")
+                .as("a run without checkpoints cannot restart its tasks")
                 .isInstanceOfSatisfying(
-                        org.devlive.pipeforge.engine.master.failure.FailureHandler.Restart.class,
-                        restart -> assertThat(restart.delay()).isEqualTo(Duration.ofSeconds(10)));
+                        org.devlive.pipeforge.engine.master.failure.FailureHandler.Fail.class,
+                        fail -> assertThat(fail.exhausted()).isFalse());
+        assertThat(deadlocked.restarts()).isZero();
         awaitSlotsBack();
 
         String fatalProbe = Probe.create();
@@ -524,6 +541,181 @@ class ClusterJobTest {
                         tolerable,
                         retained,
                         org.devlive.pipeforge.core.plan.CheckpointSettings.Externalized.RETAIN_ON_CANCELLATION));
+    }
+
+    /** {@code plan} restarting {@code attempts} times, {@code delay} apart. */
+    static JobPlan withRestarts(JobPlan plan, int attempts, Duration delay) {
+        return new JobPlan(
+                plan.name(),
+                plan.description(),
+                plan.engine(),
+                plan.mode(),
+                plan.modeDerived(),
+                plan.delivery(),
+                plan.parallelism(),
+                plan.timeZone(),
+                plan.variables(),
+                plan.nodes(),
+                plan.warnings(),
+                plan.dirty(),
+                plan.limit(),
+                plan.checkpoint(),
+                new org.devlive.pipeforge.core.plan.RestartSettings(
+                        org.devlive.pipeforge.core.plan.RestartSettings.Strategy.FIXED_DELAY,
+                        attempts,
+                        delay,
+                        Duration.ofSeconds(1),
+                        Duration.ofMinutes(5),
+                        2,
+                        Duration.ofHours(1),
+                        3,
+                        Duration.ofMinutes(5)));
+    }
+
+    /** The ids the sink committed, each as often as it was committed. */
+    static List<Long> committedIds(String probe) {
+        synchronized (Probe.get(probe).rows) {
+            return Probe.get(probe).rows.stream()
+                    .map(r -> (Long) r.get(0))
+                    .sorted()
+                    .toList();
+        }
+    }
+
+    /** Every id below {@code rows} was committed exactly once; the message lists what was not. */
+    static void assertExactlyOnce(String probe, int rows) {
+        Map<Long, Long> counts = new java.util.TreeMap<>();
+        committedIds(probe).forEach(id -> counts.merge(id, 1L, Long::sum));
+        List<Long> missing =
+                ids(rows).stream().filter(id -> !counts.containsKey(id)).toList();
+        Map<Long, Long> twice = new java.util.TreeMap<>(counts);
+        twice.values().removeIf(c -> c == 1);
+        assertThat(missing.size() + twice.size())
+                .as(
+                        "missing %d %s, more than once %d %s, events %s",
+                        missing.size(),
+                        ranges(missing),
+                        twice.size(),
+                        ranges(List.copyOf(twice.keySet())),
+                        Probe.get(probe).events)
+                .isZero();
+    }
+
+    private static String ranges(List<Long> ids) {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < ids.size(); ) {
+            int j = i;
+            while (j + 1 < ids.size() && ids.get(j + 1) == ids.get(j) + 1) {
+                j++;
+            }
+            text.append(ids.get(i)).append(i == j ? "" : "-" + ids.get(j)).append(' ');
+            i = j + 1;
+        }
+        return text.toString();
+    }
+
+    static List<Long> ids(int rows) {
+        return java.util.stream.LongStream.range(0, rows).boxed().toList();
+    }
+
+    JobMaster startWithCheckpoints(JobPlan plan, java.nio.file.Path dir) {
+        return start(
+                withRestarts(withCheckpoints(plan, Duration.ofMillis(100), 3, 2), 3, Duration.ofMillis(50)),
+                Duration.ofSeconds(5),
+                // a short write queue, so that barriers do not wait behind most of the input
+                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+    }
+
+    @Test
+    void onlyTheRegionOfAFailedTaskRestartsAndEveryRowIsCommittedOnce(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        JobMaster job = startWithCheckpoints(
+                TestConnectors.job(
+                        probe,
+                        "rows: 3000, splits: 12",
+                        null,
+                        "commit: transactional, slow-ms: 1, fail-at: 100, fail-subtask: 1, fail-times: 1,"
+                                + " fail-with: deadlock",
+                        3),
+                dir);
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        assertThat(job.restarts()).isOne();
+        assertThat(workers.values().stream().mapToInt(w -> w.deployed.get()).sum())
+                .as("three tasks, and the one of the failed region again")
+                .isEqualTo(4);
+        awaitSlotsBack();
+    }
+
+    @Test
+    void theTasksOfALostWorkerRestartElsewhereFromTheLastCheckpoint(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        JobMaster job = startWithCheckpoints(
+                TestConnectors.job(probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", 3), dir);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (job.checkpointStats().lastCompletedId() < 2) {
+            assertThat(System.nanoTime())
+                    .as(
+                            "two checkpoints completed: %s %s %s",
+                            job.handle().status(), job.checkpointStats(), job.tasks())
+                    .isLessThan(deadline);
+            Thread.sleep(10);
+        }
+
+        // worker-2 stops: its tasks are gone, and it sends no more heartbeats
+        Worker silent = workers.values().stream()
+                .filter(w -> w.address.startsWith("worker-2"))
+                .findFirst()
+                .orElseThrow();
+        silent.dead = true;
+        silent.executor.close();
+        now.addAndGet(ResourceManager.Settings.DEFAULTS.heartbeatTimeout().toNanos());
+        workers.values().stream().filter(w -> w != silent).forEach(w -> manager.heartbeat(w.id, List.of(), List.of()));
+        assertThat(manager.expire())
+                .extracting(ResourceManager.WorkerLost::workerId)
+                .containsExactly(silent.id);
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        assertThat(job.restarts()).isOne();
+        assertThat(Probe.get(probe).restoredStates)
+                .as("the restarted writer got its state from the checkpoint")
+                .hasSize(1);
+        assertThat(job.tasks()).as("no task runs on the lost worker any more").noneMatch(t -> t.workerId()
+                .equals(silent.id));
+    }
+
+    @Test
+    void aRegionThatKeepsFailingFailsTheRunOnceTheRestartsAreUsedUp(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        JobMaster job = startWithCheckpoints(
+                TestConnectors.job(
+                        probe,
+                        "rows: 3000, splits: 12",
+                        null,
+                        "commit: transactional, fail-at: 10, fail-with: deadlock",
+                        3),
+                dir);
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(result.error().code()).isEqualTo(ErrorCode.SINK_FAILED);
+        assertThat(job.restarts()).isEqualTo(3);
+        assertThat(job.decision())
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.engine.master.failure.FailureHandler.Fail.class,
+                        fail -> assertThat(fail.exhausted()).isTrue());
+        awaitSlotsBack();
     }
 
     @Test

@@ -88,6 +88,15 @@ public final class SplitAssignmentValve {
         }
     }
 
+    /**
+     * A reader restarts: the events held for it are dropped, as the splits in them go back to the
+     * enumerator, and its valve opens.
+     */
+    public void drop(int reader) {
+        closed.remove(reader);
+        held.remove(reader);
+    }
+
     /** The events held for a reader, for tests and views. */
     int held(int reader) {
         List<OperatorEvent> events = held.get(reader);

@@ -83,12 +83,14 @@ import org.slf4j.LoggerFactory;
  *       network.
  *   <li>When every task has finished, the committables of the sink are committed (by its
  *       committer, then its global committer) and the job ends with {@code SUCCESS}.
- *   <li>The first failure cancels the other tasks; the job ends with {@code FAILED} and that error.
- *       The {@link FailureHandler} classifies it and asks the restart strategy ({@code
- *       env.restart}); restarting from a checkpoint comes with region restarts, so a restart it
- *       allows is only logged for now.
- *   <li>A worker that is lost fails the run with {@code PF-CLUS-0001}, scoped to the first of its
- *       tasks that was still running.
+ *   <li>A failed task, or the tasks of a lost worker ({@code PF-CLUS-0001}), go to the {@link
+ *       FailureHandler}. When it allows a restart and the run takes checkpoints, only their
+ *       regions restart (design 04 section 10.3): their tasks are cancelled, the splits their
+ *       readers got since the last completed checkpoint go back to the enumerator, and after the
+ *       strategy's wait they are deployed again, on new slots where their worker was lost, with
+ *       the states of that checkpoint. The other regions run on.
+ *   <li>Any other failure, or one that may not restart, cancels the other tasks; the job ends with
+ *       {@code FAILED} and that error.
  *   <li>The slots go back to the placement when the run ends.
  * </ul>
  */
@@ -138,7 +140,23 @@ public final class JobMaster {
      */
     private final Map<Integer, List<ReaderMessage>> early = new LinkedHashMap<>();
 
-    private final List<SerializedValue> committables = new ArrayList<>();
+    /** The final committables of the sink tasks that finished, by task. */
+    private final Map<ExecutionGraph.Task, List<SerializedValue>> committables = new LinkedHashMap<>();
+    /** The attempt of every task that was restarted; 0 for the others. */
+    private final Map<ExecutionGraph.Task, Integer> attempts = new HashMap<>();
+    /** The regions waiting to be deployed again. */
+    private final List<RegionRestart> restarts = new ArrayList<>();
+    /** Workers that were lost; slots there are replaced before their tasks are deployed again. */
+    private final Set<String> lostWorkers = new java.util.HashSet<>();
+    /**
+     * The splits of every reader in the order they were assigned, since the enumerator's snapshot of
+     * the last completed checkpoint: a restarted reader restores what it held at that checkpoint, so
+     * these go back to the enumerator.
+     */
+    private final Map<Integer, List<SourceSplit>> assignedSince = new HashMap<>();
+    /** For checkpoints in progress: how many splits of every reader were assigned before the enumerator's snapshot. */
+    private final Map<Long, Map<Integer, Integer>> marks = new HashMap<>();
+
     private final Runnable onEnded;
     private volatile JobStatus status = JobStatus.CREATED;
     private volatile java.util.function.Consumer<JobStatus> statusListener = s -> {};
@@ -288,8 +306,8 @@ public final class JobMaster {
     }
 
     /**
-     * A worker was lost: the tasks that still ran there are gone, and the run fails with {@code
-     * error}, scoped to the first of them.
+     * A worker was lost: the tasks that still ran there are gone. Their regions restart, or the run
+     * fails with {@code error}, scoped to the first of them.
      */
     public void workerLost(String workerId, PipeForgeException error) {
         post(() -> {
@@ -309,10 +327,10 @@ public final class JobMaster {
                             .withSubtask(gone.get(0).subtask()))
                     .kind(error.kind());
             error.params().forEach(scoped::param);
-            fail(scoped.build());
+            lostWorkers.add(workerId);
             gone.forEach(task -> states.put(task, TaskState.FAILED));
             refreshTasks();
-            endIfDone();
+            tasksFailed(gone, scoped.build());
         });
     }
 
@@ -416,6 +434,11 @@ public final class JobMaster {
                         LOG.info("Job {} ({}) commits checkpoint {}", plan.name(), id, checkpointId);
                         JobMaster.this.commit(values);
                     }
+
+                    @Override
+                    public void completed(long checkpointId) {
+                        checkpointed(checkpointId);
+                    }
                 },
                 new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Valve() {
                     @Override
@@ -474,6 +497,7 @@ public final class JobMaster {
         SerializedValue state = onEnumerator(
                 "snapshot the enumerator for checkpoint " + checkpointId,
                 () -> SerializedValue.of(owner.enumeratorStateSerializer(), current.snapshotState(checkpointId)));
+        marked(checkpointId);
         return Map.of(node.id(), state);
     }
 
@@ -484,6 +508,7 @@ public final class JobMaster {
             }
             LOG.info("Cancelling job {} ({})", plan.name(), id);
             status(JobStatus.CANCELLING);
+            restarts.clear();
             cancelTasks();
             endIfDone();
         });
@@ -593,6 +618,16 @@ public final class JobMaster {
         if (previous == null || previous.isTerminal() || !update.id().equals(attempt(task))) {
             return;
         }
+        RegionRestart restarting = restartOf(task);
+        if (restarting != null) {
+            // a task of a region that restarts: only its end matters
+            if (update.state().isTerminal()) {
+                states.put(task, update.state());
+                refreshTasks();
+                deployIfReady(restarting);
+            }
+            return;
+        }
         boolean reader = task.vertex().equals(sourceVertex.id());
         int subtask = task.subtask();
         states.put(task, update.state());
@@ -615,12 +650,12 @@ public final class JobMaster {
                 }
             }
             case FINISHED -> {
-                committables.addAll(update.committables());
+                committables.put(task, List.copyOf(update.committables()));
                 if (!update.committables().isEmpty()) {
                     aggregator.twoPhase();
                 }
             }
-            case FAILED -> fail(update.error());
+            case FAILED -> tasksFailed(List.of(task), update.error());
             case CANCELED, DEPLOYING -> {
                 // nothing to do until every task has ended
             }
@@ -745,33 +780,285 @@ public final class JobMaster {
     /** Records the first failure and cancels the tasks that are still running. */
     private void fail(@Nullable PipeForgeException error) {
         if (failure == null && error != null && !status.isTerminal()) {
-            failure = error;
-            decision = failureHandler.onFailure(error);
-            if (decision instanceof FailureHandler.Restart restart) {
-                LOG.warn(
-                        "Job {} ({}) failed: {}; env.restart allows a restart after {}, but this engine"
-                                + " does not restart runs yet",
-                        plan.name(),
-                        id,
-                        error.getMessage(),
-                        restart.delay());
-            } else if (decision instanceof FailureHandler.Fail fail && fail.exhausted()) {
-                LOG.warn(
-                        "Job {} ({}) failed: {}; env.restart allows no more restarts",
-                        plan.name(),
-                        id,
-                        error.getMessage());
-            } else {
-                LOG.warn(
-                        "Job {} ({}) failed with a {} error, which is not retried: {}",
-                        plan.name(),
-                        id,
-                        error.kind().name().toLowerCase(java.util.Locale.ROOT),
-                        error.getMessage());
-            }
-            cancelTasks();
+            // the job master, the enumerator or a commit failed: only tasks restart
+            failRun(error, new FailureHandler.Fail(error, false));
         }
         endIfDone();
+    }
+
+    /** Fails the run with {@code error}: the tasks that still run are cancelled, restarts are given up. */
+    private void failRun(PipeForgeException error, FailureHandler.Decision decided) {
+        failure = error;
+        decision = decided;
+        if (decided instanceof FailureHandler.Fail fail && fail.exhausted()) {
+            LOG.warn(
+                    "Job {} ({}) failed: {}; env.restart allows no more restarts", plan.name(), id, error.getMessage());
+        } else if (decided instanceof FailureHandler.Fail) {
+            LOG.warn(
+                    "Job {} ({}) failed with a {} error, which is not retried: {}",
+                    plan.name(),
+                    id,
+                    error.kind().name().toLowerCase(java.util.Locale.ROOT),
+                    error.getMessage());
+        }
+        restarts.clear();
+        cancelTasks();
+    }
+
+    /**
+     * Tasks failed with {@code error}: their regions restart when the strategy allows and the run
+     * takes checkpoints; otherwise the run fails.
+     */
+    private void tasksFailed(List<ExecutionGraph.Task> failed, PipeForgeException error) {
+        if (failure != null || status.isTerminal() || status == JobStatus.CANCELLING) {
+            // a task that fails while the run stops still fails the run, as before
+            fail(error);
+            return;
+        }
+        if (checkpoints == null) {
+            // without checkpoints a run cannot restart its tasks: it fails as a whole
+            if (error.kind() == org.devlive.pipeforge.common.error.ErrorKind.TRANSIENT) {
+                LOG.warn(
+                        "Job {} ({}) takes no checkpoints, so its tasks cannot restart after: {}",
+                        plan.name(),
+                        id,
+                        error.getMessage());
+            }
+            failRun(error, new FailureHandler.Fail(error, false));
+            endIfDone();
+            return;
+        }
+        FailureHandler.Decision decided = failureHandler.onFailure(error);
+        if (decided instanceof FailureHandler.Restart restart) {
+            decision = decided;
+            restartRegions(failed, error, restart.delay());
+            return;
+        }
+        failRun(error, decided);
+        endIfDone();
+    }
+
+    // ------------------------------------------------------------------ region restarts
+
+    /** Regions that restart together: deployed again once all their tasks ended and the wait is over. */
+    private static final class RegionRestart {
+        final List<ExecutionGraph.Task> tasks;
+        boolean waited;
+
+        RegionRestart(List<ExecutionGraph.Task> tasks) {
+            this.tasks = tasks;
+        }
+    }
+
+    /**
+     * Restarts the regions of {@code failed}: cancels their tasks, gives the checkpoints in
+     * progress up, returns the splits their readers got since the last completed checkpoint, and
+     * deploys them again after {@code delay}.
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // the timer posts to the job master thread
+    private void restartRegions(List<ExecutionGraph.Task> failed, PipeForgeException error, Duration delay) {
+        Set<ExecutionGraph.Task> tasks = new LinkedHashSet<>();
+        for (ExecutionGraph.Task task : failed) {
+            tasks.addAll(execution.regionOf(task));
+        }
+        RegionRestart restart = new RegionRestart(List.copyOf(tasks));
+        restarts.add(restart);
+        LOG.warn(
+                "Job {} ({}): {} failed: {}; restarting {} task(s) of its region(s) in {}",
+                plan.name(),
+                id,
+                failed,
+                error.getMessage(),
+                tasks.size(),
+                delay);
+        var coordinator = checkpoints;
+        for (ExecutionGraph.Task task : tasks) {
+            committables.remove(task);
+            if (task.vertex().equals(sourceVertex.id())) {
+                int reader = task.subtask();
+                readers.remove(reader);
+                early.remove(reader);
+                quotas.remove(reader);
+                splitEvents.drop(reader);
+            }
+        }
+        if (coordinator != null) {
+            coordinator.abortAll("tasks of the run restart");
+        }
+        marks.clear();
+        for (ExecutionGraph.Task task : tasks) {
+            if (task.vertex().equals(sourceVertex.id())) {
+                giveSplitsBack(task.subtask());
+            }
+        }
+        cancelRegion(tasks);
+        refreshTasks();
+        thread.schedule(
+                () -> run(() -> {
+                    restart.waited = true;
+                    deployIfReady(restart);
+                }),
+                delay.toMillis(),
+                TimeUnit.MILLISECONDS);
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored") // each task reports its end itself
+    private void cancelRegion(Set<ExecutionGraph.Task> tasks) {
+        for (ExecutionGraph.Task task : tasks) {
+            if (!states.get(task).isTerminal()) {
+                gateway(task).cancelTask(attempt(task));
+            }
+        }
+    }
+
+    /** The splits reader {@code reader} got since the last completed checkpoint go back to the enumerator. */
+    private void giveSplitsBack(int reader) {
+        List<SourceSplit> splits = assignedSince.remove(reader);
+        if (splits == null || splits.isEmpty()) {
+            return;
+        }
+        Set<String> ids = new java.util.HashSet<>();
+        splits.forEach(split -> ids.add(split.splitId()));
+        Set<String> owned = owners.get(reader);
+        if (owned != null) {
+            owned.removeAll(ids);
+        }
+        finishedSplits.removeAll(ids);
+        LOG.info(
+                "Job {} ({}): {} split(s) of reader {} go back to the enumerator", plan.name(), id, ids.size(), reader);
+        callEnumerator("give the splits of reader " + reader + " back", e -> addBack(e, splits, reader));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void addBack(SplitEnumerator enumerator, List<SourceSplit> splits, int reader) {
+        enumerator.addSplitsBack(splits, reader);
+    }
+
+    /** Deploys the tasks of a restart once they all ended and the wait is over. */
+    @SuppressWarnings("FutureReturnValueIgnored") // the callback posts to the job master thread
+    private void deployIfReady(RegionRestart restart) {
+        if (!restarts.contains(restart)
+                || !restart.waited
+                || !restart.tasks.stream().allMatch(t -> states.get(t).isTerminal())) {
+            return;
+        }
+        restarts.remove(restart);
+        List<Integer> lost = restart.tasks.stream()
+                .map(ExecutionGraph.Task::slot)
+                .distinct()
+                .filter(slot -> lostWorkers.contains(slots.get(slot).workerId()))
+                .sorted()
+                .toList();
+        if (lost.isEmpty()) {
+            redeploy(restart);
+            return;
+        }
+        restarts.add(restart);
+        restart.waited = false;
+        placement
+                .replace(id.value(), id.value(), lost)
+                .whenComplete((replaced, error) -> post(() -> {
+                    if (!restarts.remove(restart)) {
+                        return;
+                    }
+                    if (error != null) {
+                        fail(PipeForgeException.wrap(
+                                error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                                        ? error.getCause()
+                                        : error));
+                        return;
+                    }
+                    List<Placement.Slot> updated = new ArrayList<>(slots);
+                    replaced.forEach(slot -> updated.set(slot.index(), slot));
+                    slots = List.copyOf(updated);
+                    redeploy(restart);
+                }));
+    }
+
+    /** Deploys the tasks of a restart as new attempts, from the last completed checkpoint. */
+    @SuppressWarnings("FutureReturnValueIgnored") // deployment failures post back
+    private void redeploy(RegionRestart restart) {
+        if (status.isTerminal() || status == JobStatus.CANCELLING || failure != null) {
+            endIfDone();
+            return;
+        }
+        var coordinator = checkpoints;
+        var latest = coordinator == null
+                ? org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Latest.NONE
+                : coordinator.latest();
+        for (ExecutionGraph.Task task : restart.tasks) {
+            attempts.merge(task, 1, Integer::sum);
+            states.put(task, TaskState.DEPLOYING);
+        }
+        for (ExecutionGraph.Task task : restart.tasks) {
+            Placement.Slot slot = slots.get(task.slot());
+            JobGraph.Vertex vertex = graph.vertex(task.vertex()).orElseThrow();
+            TaskDeployment deployment = new TaskDeployment(
+                            attempt(task),
+                            deployed.get(task.vertex()),
+                            vertex.parallelism(),
+                            settings,
+                            run,
+                            slot.allocationId(),
+                            inputs(task))
+                    .restoring(restore(task, latest));
+            slot.gateway().deployTask(deployment).whenComplete((ignored, error) -> {
+                if (error != null) {
+                    post(() -> fail(PipeForgeException.wrap(error)));
+                }
+            });
+        }
+        refreshTasks();
+        LOG.info(
+                "Job {} ({}) deployed {} task(s) again from checkpoint {}",
+                plan.name(),
+                id,
+                restart.tasks.size(),
+                latest.checkpointId());
+    }
+
+    /** What a restarted task restores: its states in the last completed checkpoint, by node. */
+    private static TaskDeployment.Restore restore(
+            ExecutionGraph.Task task,
+            org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Latest latest) {
+        if (latest.checkpointId() == 0) {
+            return TaskDeployment.Restore.NONE;
+        }
+        Map<String, List<org.devlive.pipeforge.engine.rpc.StateHandle>> byNode = new LinkedHashMap<>();
+        for (var handle : latest.of(task.vertex(), task.subtask())) {
+            byNode.computeIfAbsent(handle.nodeId(), n -> new ArrayList<>()).add(handle);
+        }
+        return new TaskDeployment.Restore(latest.checkpointId(), byNode);
+    }
+
+    /** The enumerator's snapshot of checkpoint {@code checkpointId} was taken: remembers what was assigned before it. */
+    private void marked(long checkpointId) {
+        Map<Integer, Integer> sizes = new HashMap<>();
+        assignedSince.forEach((reader, splits) -> sizes.put(reader, splits.size()));
+        marks.put(checkpointId, sizes);
+    }
+
+    /** Checkpoint {@code checkpointId} completed: splits assigned before its snapshot are in its states. */
+    private void checkpointed(long checkpointId) {
+        Map<Integer, Integer> sizes = marks.remove(checkpointId);
+        if (sizes == null) {
+            return;
+        }
+        sizes.forEach((reader, size) -> {
+            List<SourceSplit> splits = assignedSince.get(reader);
+            if (splits != null) {
+                splits.subList(0, Math.min(size, splits.size())).clear();
+            }
+        });
+        marks.keySet().removeIf(other -> other < checkpointId);
+        for (Map<Integer, Integer> later : marks.values()) {
+            sizes.forEach((reader, size) -> later.computeIfPresent(reader, (r, n) -> Math.max(0, n - size)));
+        }
+    }
+
+    /** The restarts decided so far, for tests and views. */
+    int restarts() {
+        return failureHandler.restarts();
     }
 
     @SuppressWarnings("FutureReturnValueIgnored") // each task reports its end itself
@@ -783,8 +1070,20 @@ public final class JobMaster {
         });
     }
 
+    /** The restart a task waits in, or {@code null}. */
+    private @Nullable RegionRestart restartOf(ExecutionGraph.Task task) {
+        for (RegionRestart restart : restarts) {
+            if (restart.tasks.contains(task)) {
+                return restart;
+            }
+        }
+        return null;
+    }
+
     private void endIfDone() {
-        if (status.isTerminal() || !states.values().stream().allMatch(TaskState::isTerminal)) {
+        if (status.isTerminal()
+                || !restarts.isEmpty()
+                || !states.values().stream().allMatch(TaskState::isTerminal)) {
             return;
         }
         if (failure == null && status != JobStatus.CANCELLING) {
@@ -821,7 +1120,9 @@ public final class JobMaster {
 
     /** Commits what the sinks prepared after the last checkpoint, at the end of the run. */
     private void commit() {
-        commit(committables);
+        List<SerializedValue> all = new ArrayList<>();
+        committables.values().forEach(all::addAll);
+        commit(all);
     }
 
     /**
@@ -1010,8 +1311,10 @@ public final class JobMaster {
             }
             List<SerializedValue> values = new ArrayList<>(splits.size());
             Set<String> owned = owners.computeIfAbsent(reader, r -> ConcurrentHashMap.newKeySet());
+            List<SourceSplit> since = assignedSince.computeIfAbsent(reader, r -> new ArrayList<>());
             for (SourceSplit split : splits) {
                 owned.add(split.splitId());
+                since.add(split);
                 values.add(callSource(
                         "write split " + split.splitId(), () -> SerializedValue.of(owner.splitSerializer(), split)));
             }
@@ -1226,7 +1529,7 @@ public final class JobMaster {
     }
 
     private ExecutionAttemptId attempt(ExecutionGraph.Task task) {
-        return new ExecutionAttemptId(id.value(), task.vertex(), task.subtask(), 0);
+        return new ExecutionAttemptId(id.value(), task.vertex(), task.subtask(), attempts.getOrDefault(task, 0));
     }
 
     private ExecutionGraph.Task readerTask(int subtask) {

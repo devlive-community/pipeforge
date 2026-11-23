@@ -29,6 +29,14 @@ public final class Probe {
 
     public final List<Object> schemaChanges = Collections.synchronizedList(new ArrayList<>());
     public final List<String> committed = Collections.synchronizedList(new ArrayList<>());
+    /** Rows of the transactional collect sink by transaction, until they are committed into {@link #rows}. */
+    public final Map<String, List<Row>> staged = new ConcurrentHashMap<>();
+    /** The failures the collect sink threw, across attempts. */
+    public final java.util.concurrent.atomic.AtomicInteger sinkFailures =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** The writer states the collect sink restored, by subtask. */
+    public final Map<Integer, List<String>> restoredStates = new ConcurrentHashMap<>();
+
     public final List<String> globallyCommitted = Collections.synchronizedList(new ArrayList<>());
     public final Set<String> readerThreads = ConcurrentHashMap.newKeySet();
     public final Set<String> writerThreads = ConcurrentHashMap.newKeySet();

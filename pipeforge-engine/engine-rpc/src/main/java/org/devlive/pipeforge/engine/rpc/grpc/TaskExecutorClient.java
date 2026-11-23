@@ -94,7 +94,10 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                     .setParallelism(deployment.parallelism())
                     .setSettings(ProtoMapping.toProto(deployment.settings()))
                     .addAllInputs(ProtoMapping.toProtoInputs(deployment.inputs()))
-                    .addAllOutputs(ProtoMapping.outputs(deployment.chain().outputs()));
+                    .addAllOutputs(ProtoMapping.outputs(deployment.chain().outputs()))
+                    .setRestoreCheckpointId(deployment.restore().checkpointId())
+                    .setRestoreState(
+                            ProtoMapping.toProtoRestore(deployment.restore().states()));
             for (PlannedNode node : deployment.chain().nodes()) {
                 for (var ref : plugins.apply(node.plugin())) {
                     if (!request.getPluginsList().contains(ref)) {

@@ -21,6 +21,7 @@ import java.util.Objects;
  * @param allocationId the slot reservation the task runs in, or {@code null} where slots are not
  *     reserved (local runs)
  * @param inputs where the first node reads from when the chain has no source, one per input edge
+ * @param restore the states the task starts from, {@link Restore#NONE} for a fresh start
  */
 public record TaskDeployment(
         ExecutionAttemptId id,
@@ -29,7 +30,38 @@ public record TaskDeployment(
         TaskSettings settings,
         RunContext run,
         @org.jspecify.annotations.Nullable String allocationId,
-        List<Input> inputs) {
+        List<Input> inputs,
+        Restore restore) {
+
+    /**
+     * Where a restarted task starts: the states of its nodes in a completed checkpoint of the run.
+     *
+     * @param checkpointId the checkpoint, 0 for none
+     * @param states the states of every node by node id; a node that is not listed starts empty
+     */
+    public record Restore(long checkpointId, java.util.Map<String, List<StateHandle>> states) {
+        /** A fresh start. */
+        public static final Restore NONE = new Restore(0, java.util.Map.of());
+
+        public Restore {
+            if (checkpointId < 0 || (checkpointId == 0 && !states.isEmpty())) {
+                throw new IllegalArgumentException("States need the checkpoint they come from");
+            }
+            java.util.Map<String, List<StateHandle>> copy = new java.util.LinkedHashMap<>();
+            states.forEach((node, handles) -> copy.put(node, List.copyOf(handles)));
+            states = java.util.Collections.unmodifiableMap(copy);
+        }
+
+        /** Whether the task restores from a checkpoint. */
+        public boolean restores() {
+            return checkpointId > 0;
+        }
+
+        /** The states of {@code node}, empty when it has none. */
+        public List<StateHandle> of(String node) {
+            return states.getOrDefault(node, List.of());
+        }
+    }
 
     /**
      * An input edge: one channel per upstream subpartition this task reads.
@@ -66,6 +98,7 @@ public record TaskDeployment(
         Objects.requireNonNull(chain, "chain");
         Objects.requireNonNull(settings, "settings");
         Objects.requireNonNull(run, "run");
+        Objects.requireNonNull(restore, "restore");
         inputs = List.copyOf(inputs);
         if (id.subtask() >= parallelism) {
             throw new IllegalArgumentException("Subtask " + id.subtask() + " is outside parallelism " + parallelism);
@@ -81,6 +114,23 @@ public record TaskDeployment(
     /** When the run started: what {@code RUN_START_TIME()} returns in expressions. */
     public Instant runStartTime() {
         return run.runStart();
+    }
+
+    /** A deployment that starts fresh. */
+    public TaskDeployment(
+            ExecutionAttemptId id,
+            ChainDescriptor chain,
+            int parallelism,
+            TaskSettings settings,
+            RunContext run,
+            @org.jspecify.annotations.Nullable String allocationId,
+            List<Input> inputs) {
+        this(id, chain, parallelism, settings, run, allocationId, inputs, Restore.NONE);
+    }
+
+    /** The same deployment, starting from {@code from}. */
+    public TaskDeployment restoring(Restore from) {
+        return new TaskDeployment(id, chain, parallelism, settings, run, allocationId, inputs, from);
     }
 
     /** A deployment of a chain that starts with a source. */

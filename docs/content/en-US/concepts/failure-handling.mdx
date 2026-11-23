@@ -1,6 +1,6 @@
 ---
 title: Failure handling
-description: How the engine sorts the errors of a run into transient, data and fatal ones, and how env.restart decides whether and when a failed run restarts.
+description: How the engine sorts the errors of a run into transient, data and fatal ones, how env.restart decides whether and when failed tasks restart, and how only their region restarts from the last checkpoint.
 order: 78
 template: feature
 omit:
@@ -11,7 +11,9 @@ omit:
 
 When a task of a run fails, the job master decides what happens next. The **kind** of the error
 decides whether a restart could help, and the job's **restart strategy** (`env.restart`) decides
-whether the run may restart once more and how long it waits first.
+whether the run may restart once more and how long it waits first. A restart touches only the
+**region** of the failed task, which starts again from the last completed
+[checkpoint](./checkpoint); the rest of the run goes on.
 
 ## How it works
 
@@ -38,6 +40,27 @@ Only transient failures go to the restart strategy, and only they count against 
 | `exponential-backoff` | without a limit; the first wait is `restart.initial`, each later one `restart.multiplier` times longer up to `restart.max`. A failure more than `restart.reset-after` after the one before starts again at `restart.initial` |
 | `failure-rate` | after `restart.delay`, as long as no more than `restart.max-failures` failures happened within the last `restart.interval`, this one included |
 | `none` | never |
+
+### Region restarts
+
+A region is a set of tasks that exchange rows. In the most common batch job, a chain from source to
+sink per subtask, every subtask is a region of its own; tasks on both sides of a hash or rebalance
+exchange form one region. When the strategy allows a restart and the run takes checkpoints:
+
+1. The job master cancels the tasks of the failed regions and gives up the checkpoints in
+   progress, which can no longer complete. The other regions keep running.
+2. The splits their readers got after the last completed checkpoint go back to the enumerator,
+   which hands them out again.
+3. After the strategy's wait, once every task of the regions has stopped, it deploys them again:
+   on new slots where their worker was lost, each with its state from that checkpoint. Readers
+   continue their splits where the checkpoint left them; writers get their state, and abort what
+   they prepared after it.
+
+What sinks committed stays committed: a checkpoint's committables are committed when it completes,
+and what a sink prepared for a checkpoint that failed is committed with the next one. A sink that
+commits in two phases therefore writes every row exactly once across restarts; other sinks write the
+rows after the checkpoint again (at least once). Without checkpoints, or before the first one
+completed, the regions start from the beginning of their splits.
 
 ## Quick start
 
@@ -92,8 +115,10 @@ env:
 
 ## Behavior
 
-- The first failure of a run is the one that counts; the tasks that are still running are
-  cancelled, and the errors they report while they stop are not classified again.
+- Each failure of a task counts once; the errors the other tasks of its region report while they
+  stop are not classified again. A failure that fails the run cancels every task.
+- Failures of the job master, the enumerator or a commit fail the run: only tasks restart.
+- A run without checkpoints does not restart tasks: a transient failure fails it.
 - Fatal and data errors fail the run at once and do not use up any restarts.
 - `fixed-delay` attempts never come back during a run; `failure-rate` forgets failures that left
   its window; `exponential-backoff` never runs out.
@@ -101,21 +126,24 @@ env:
 ## Observability
 
 The job master logs every decision: the error, its kind, and whether the strategy allows a restart
-and after how long, or allows no more.
+and after how long, or allows no more. A restart logs the tasks it restarts, the splits that go
+back to the enumerator and the checkpoint the tasks restore.
 
 ## Troubleshooting
 
 | Problem | Cause and solution |
 |---|---|
 | A connection error fails the run although restarts are left | The plugin reported it as `PF-SRC-0001` or `PF-SINK-0001` without marking it transient. The plugin's `ErrorClassifier` should map that exception |
+| A worker was lost or a connection broke, restarts are left, and the run failed anyway | The run takes no checkpoints: set `checkpoint.dir` on the cluster and keep `env.checkpoint.enabled` |
 | `has no effect with restart.strategy` warning | An option of another strategy is set; remove it or change the strategy |
 | [`PF-CONF-0002`](../reference/errors#pf-conf-0002) `restart.max` | `restart.max` is shorter than `restart.initial` |
 
 ## Limitations
 
-- Runs are not restarted yet: the job master decides and logs whether the strategy allows a
-  restart, then fails the run with the error. Restarting the failed tasks from the last completed
-  [checkpoint](./checkpoint) follows in a later release.
+- The counters of a restarted task start again from zero, so the run's row counts leave out what
+  its earlier attempt read and wrote.
+- A worker that was lost but still runs its tasks (for example after a network partition) does not
+  stop them yet; they may go on writing until the worker is restarted.
 - Run-level retries (`env.retry`) and rolling back what a failed run wrote are not available yet.
 
 ## Version history

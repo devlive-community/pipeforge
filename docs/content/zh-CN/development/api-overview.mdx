@@ -52,7 +52,7 @@ public interface SourceReader<SplitT extends SourceSplit> extends AutoCloseable 
 ```
 
 没有数据时 `pollNext` 返回 `NOTHING_AVAILABLE` 而不是阻塞，由引擎负责退避后再次读取。分片状态记录已经交给下游的位置，
-因此恢复后的 Reader 能从这里精确继续。
+因此恢复后的 Reader 能从这里精确继续：它在 `start()` 之前通过 `addSplits` 拿到 checkpoint 中的分片。
 
 有两个可选调用用于分片进度（运行页面、REST API 和运行指标中显示）。Reader 在发出某个分片的最后一行后调用
 `ReaderContext.splitFinished(splitId)`，该分片立即计为已读完；不调用时，Reader 的分片要等它的 Task 结束才计为已读完。
@@ -71,7 +71,8 @@ Enumerator 在 JobMaster 中运行，而不是在 Worker 上，并遵守以下�
   外部系统较慢时，分步列举分片，而不是一次列举全部。
 - **失败只影响本作业**。Enumerator 抛出的异常让作业以该节点的错误失败；Master 和其他作业照常运行。
 - **插件的类加载器**。与 Reader、Writer 的调用一样，调用时以插件的类加载器作为上下文类加载器。
-- **分片归属有记录**。JobMaster 记录每个分片分给了哪个 Reader；Reader 重启时，它的分片通过 `addSplitsBack` 交回。
+- **分片归属有记录**。JobMaster 记录每个分片分给了哪个 Reader。Reader 从 checkpoint 重启时，它在该 checkpoint 之后拿到的分片通过
+  `addSplitsBack` 交回 Enumerator，由 Enumerator 在之后的分片请求中再次分配。
 
 ## Transform 与 Sink
 
@@ -89,8 +90,9 @@ checkpoint 的 barrier 到达 Sink 时，它之前的每一行都已交给 Write
 2. `snapshotState(checkpointId)`：Writer 在恢复后继续工作所需的内容，例如事务 ID 前缀或正在写的文件。flush 之后缓冲必须为空。
 
 两者都用 Sink 的序列化器（`committableSerializer`、`writerStateSerializer`）写入 checkpoint。checkpoint 被记为已完成后，
-Master 先用 `SinkCommitter`、再用 `GlobalCommitter` 提交这些待提交物；最后一个 checkpoint 之后产生的待提交物在运行结束时提交。
-待提交物永远不会在它所属的 checkpoint 完成之前被提交。
+Master 先用 `SinkCommitter`、再用 `GlobalCommitter` 提交这些待提交物。输入结束时 Writer 收到 `prepareCommit(Long.MAX_VALUE)`，
+它返回的待提交物在运行结束时提交。失败的 checkpoint 的待提交物与下一个完成的 checkpoint 一起提交，或在运行结束时提交，
+除非它的 Task 重启了。待提交物永远不会在它之后的某个 checkpoint 完成之前被提交。
 
 **提交必须幂等。** 恢复后引擎会再次提交恢复点 checkpoint 的待提交物，因为运行可能停在记录 checkpoint 与提交之间；
 对已经提交过的内容再次提交必须成功。
