@@ -50,10 +50,11 @@ without its query string, so a password written in the URL does not appear in it
 | Table | Holds |
 |---|---|
 | `job_run` | One row per run: the job and its YAML, the status, who submitted it, when it was submitted, started and ended, the error, and the run analysis once it ended |
-| `job_run_attempt` | The attempts of a run, with the master that ran each |
+| `job_run_attempt` | The attempts of a run, with the master that ran each, the checkpoint or savepoint it started from and its last completed checkpoint |
 | `job_run_transition` | Every change of a run's status, in order, with the reason |
 | `job_run_metrics` | Metrics sampled while a run is running, and its final metrics: the main counters as columns and the full metrics as JSON |
 | `worker` | The workers of the cluster: address, slots, labels, version, state and last heartbeat |
+| `checkpoint` | The checkpoints and savepoints of runs: number, type, status, why it was taken, when it was taken and completed, size, its directory in the [checkpoint storage](./checkpoint-storage), the error of a failed one and each task's part. The master writes it; it stays empty until runs take checkpoints |
 | `pipeforge_schema_history` | The migrations applied (Flyway) |
 
 Times are stored in UTC.
@@ -73,8 +74,8 @@ build checks every script against the list of released checksums.
 
 Migrations come in two steps, so that an upgrade can be rolled back:
 
-- **Expand** scripts only add: tables, nullable columns and indexes. The new server applies them when
-  it starts. The previous version ignores what it does not know and keeps working on the expanded
+- **Expand** scripts only add: tables, nullable columns (or columns with a default) and indexes;
+  the build refuses any other statement in them. The new server applies them when it starts. The previous version ignores what it does not know and keeps working on the expanded
   schema, so going back to it needs nothing but deploying it again.
 - **Contract** scripts drop, rename or change what the previous version needs. They run only once
   the upgrade is confirmed, after which the previous version can no longer run on the metastore.

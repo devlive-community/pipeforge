@@ -46,7 +46,7 @@ class MetastoreMigrationsTest {
 
     private static final Map<MetastoreVendor, JdbcDatabaseContainer<?>> SERVERS = new ConcurrentHashMap<>();
     private static final Set<String> TABLES =
-            Set.of("job_run", "job_run_attempt", "job_run_transition", "job_run_metrics", "worker");
+            Set.of("job_run", "job_run_attempt", "job_run_transition", "job_run_metrics", "worker", "checkpoint");
     private static int databases;
 
     @AfterAll
@@ -199,6 +199,55 @@ class MetastoreMigrationsTest {
                     .extracting(org.devlive.pipeforge.server.run.Runs.Run::id)
                     .containsExactly("r1");
             assertThat(repository.latestMetrics("r2")).contains("{}");
+
+            // checkpoints, and an attempt written as the previous version writes it
+            jdbc.sql("INSERT INTO job_run_attempt (run_id, attempt, status, started_at) VALUES ('r1', 1, 'RUNNING', ?)")
+                    .param(now)
+                    .update();
+            jdbc.sql("UPDATE job_run_attempt SET restore_path = ?, restore_checkpoint_id = 4, last_checkpoint_id = 7"
+                            + " WHERE run_id = 'r1'")
+                    .param("s3://checkpoints/pipeforge/job-1/savepoints/upgrade-1/")
+                    .update();
+            for (long id = 5; id <= 7; id++) {
+                jdbc.sql("INSERT INTO checkpoint (run_id, checkpoint_id, job_name, attempt, type, status,"
+                                + " trigger_reason, name, triggered_at, completed_at, size_bytes, path, error_code,"
+                                + " error_message, tasks_json) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                        .params(
+                                "r1",
+                                id,
+                                "订单 😀",
+                                id == 6 ? "SAVEPOINT" : "CHECKPOINT",
+                                id == 7 ? "FAILED" : "COMPLETED",
+                                id == 6 ? "SAVEPOINT" : "PERIODIC",
+                                id == 6 ? "before-upgrade" : null,
+                                now,
+                                id == 7 ? null : now,
+                                id == 7 ? null : 1L << 33,
+                                "job-1/chk-" + id + "/",
+                                id == 7 ? "PF-CKPT-0001" : null,
+                                id == 7 ? "x".repeat(70_000) : null,
+                                "[{\"task\":\"src-0\",\"acknowledged\":true}]")
+                        .update();
+            }
+            assertThat(jdbc.sql("SELECT checkpoint_id FROM checkpoint WHERE job_name = ? AND status = 'COMPLETED'"
+                                    + " ORDER BY checkpoint_id DESC")
+                            .param("订单 😀")
+                            .query(Long.class)
+                            .list())
+                    .as("the latest completed checkpoint of a job first")
+                    .containsExactly(6L, 5L);
+            assertThat(jdbc.sql("SELECT size_bytes FROM checkpoint WHERE checkpoint_id = 5")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(1L << 33);
+            assertThat(jdbc.sql("SELECT LENGTH(error_message) FROM checkpoint WHERE checkpoint_id = 7")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(70_000L);
+            assertThat(jdbc.sql("SELECT last_checkpoint_id FROM job_run_attempt WHERE run_id = 'r1'")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(7L);
         }
     }
 

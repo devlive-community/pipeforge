@@ -77,6 +77,69 @@ class MetastoreScriptsTest {
                 .isEmpty();
     }
 
+    /** What an expand script may do: create tables and indexes, add columns the previous version can leave empty. */
+    static final List<java.util.regex.Pattern> EXPAND = List.of(
+            java.util.regex.Pattern.compile("CREATE TABLE \\w+ \\(.*\\)( ENGINE=.*)?", java.util.regex.Pattern.DOTALL),
+            java.util.regex.Pattern.compile("CREATE (UNIQUE )?INDEX \\w+ ON \\w+ \\([\\w, ]+\\)"),
+            java.util.regex.Pattern.compile(
+                    "ALTER TABLE \\w+ ADD COLUMN \\w+ [A-Z]+(\\(\\d+\\))?( DEFAULT \\S+( NOT NULL)?)?"));
+
+    /** The statements of a script, without comments and with single spaces. */
+    static List<String> statements(String script) {
+        StringBuilder text = new StringBuilder();
+        for (String line : script.split("\n", -1)) {
+            text.append(line.replaceFirst("--.*", "")).append(' ');
+        }
+        List<String> statements = new java.util.ArrayList<>();
+        for (String statement : text.toString().split(";", -1)) {
+            String normalized =
+                    statement.strip().replaceAll("\\s+", " ").replace("( ", "(").replace(" )", ")");
+            if (!normalized.isEmpty()) {
+                statements.add(normalized);
+            }
+        }
+        return statements;
+    }
+
+    static boolean isExpansion(String statement) {
+        return EXPAND.stream().anyMatch(p -> p.matcher(statement).matches());
+    }
+
+    @Test
+    void expandScriptsOnlyAdd() throws Exception {
+        for (String script : scripts().keySet()) {
+            if (!script.contains("/expand/")) {
+                continue;
+            }
+            for (String statement : statements(Files.readString(RESOURCES.resolve(script)))) {
+                assertThat(isExpansion(statement))
+                        .as(
+                                "%s: '%s' is not an expansion; drops, renames, type changes and NOT NULL columns"
+                                        + " without a default belong in a contract script",
+                                script, statement)
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
+    void recognizesWhatIsNotAnExpansion() {
+        assertThat(statements(
+                        "CREATE TABLE t (\n  a INT NOT NULL, -- why\n  PRIMARY KEY (a)\n);\nCREATE INDEX i ON t (a);"))
+                .allMatch(MetastoreScriptsTest::isExpansion)
+                .hasSize(2);
+        assertThat(isExpansion("ALTER TABLE t ADD COLUMN c VARCHAR(10)")).isTrue();
+        assertThat(isExpansion("ALTER TABLE t ADD COLUMN c INT DEFAULT 0 NOT NULL"))
+                .isTrue();
+        assertThat(isExpansion("ALTER TABLE t ADD COLUMN c INT NOT NULL")).isFalse();
+        assertThat(isExpansion("ALTER TABLE t DROP COLUMN c")).isFalse();
+        assertThat(isExpansion("ALTER TABLE t RENAME COLUMN c TO d")).isFalse();
+        assertThat(isExpansion("ALTER TABLE t ALTER COLUMN c TYPE BIGINT")).isFalse();
+        assertThat(isExpansion("ALTER TABLE t MODIFY c BIGINT")).isFalse();
+        assertThat(isExpansion("DROP TABLE t")).isFalse();
+        assertThat(isExpansion("UPDATE t SET c = 1")).isFalse();
+    }
+
     @Test
     void everyDatabaseHasTheSameMigrations() throws Exception {
         for (String step : List.of("expand", "contract")) {
