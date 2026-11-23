@@ -38,6 +38,10 @@ import org.slf4j.LoggerFactory;
  * not know the worker asks it to register again. When no heartbeat is answered for the timeout the
  * master gave, the worker considers itself cut off, cancels all its tasks — only the current master
  * may control them — and keeps trying to register.
+ *
+ * <p>The timeout runs from when the last answered heartbeat (or the registration) was <em>sent</em>:
+ * the master received it no earlier, so the worker fences its tasks no later than the master counts
+ * it as lost and restarts them elsewhere.
  */
 public final class MasterConnection implements AutoCloseable {
 
@@ -103,8 +107,14 @@ public final class MasterConnection implements AutoCloseable {
     private @Nullable String workerId;
     private Duration heartbeatInterval = Duration.ofSeconds(5);
     private Duration heartbeatTimeout = Duration.ofSeconds(30);
+    /** When the last heartbeat or registration the master answered was sent. */
     private long lastAnswer;
+
     private long lastSent;
+    /** When the heartbeats not answered yet were sent, the oldest first; answers come in order. */
+    private final java.util.ArrayDeque<Long> unanswered = new java.util.ArrayDeque<>();
+
+    private long registerSent;
     private boolean registering;
     private @Nullable StreamObserver<WorkerHeartbeat> heartbeats;
     private @Nullable ScheduledFuture<?> ticks;
@@ -195,6 +205,7 @@ public final class MasterConnection implements AutoCloseable {
             return;
         }
         registering = true;
+        registerSent = nanoTime.getAsLong();
         var request = RegisterWorkerRequest.newBuilder()
                 .setHeader(header())
                 .setEngineVersion(engineVersion())
@@ -225,7 +236,8 @@ public final class MasterConnection implements AutoCloseable {
         heartbeatInterval = Duration.ofMillis(response.getHeartbeatIntervalMs());
         heartbeatTimeout = Duration.ofMillis(response.getHeartbeatTimeoutMs());
         state = State.CONNECTED;
-        lastAnswer = nanoTime.getAsLong();
+        lastAnswer = registerSent;
+        unanswered.clear();
         schedule();
         LOG.info(
                 "{} with the master as worker {} with {} slot(s)",
@@ -233,7 +245,7 @@ public final class MasterConnection implements AutoCloseable {
                 workerId,
                 config.slots());
         offerSlots();
-        heartbeat(lastAnswer);
+        heartbeat(nanoTime.getAsLong());
     }
 
     @SuppressWarnings("FutureReturnValueIgnored") // a lost offer is repeated by every heartbeat
@@ -271,6 +283,7 @@ public final class MasterConnection implements AutoCloseable {
         }
         heartbeats.onNext(beat.build());
         lastSent = now;
+        unanswered.addLast(now);
     }
 
     private java.util.List<SlotStatus> slotStates() {
@@ -287,7 +300,10 @@ public final class MasterConnection implements AutoCloseable {
     }
 
     private synchronized void answered(HeartbeatAck ack) {
-        lastAnswer = nanoTime.getAsLong();
+        Long sent = unanswered.pollFirst();
+        if (sent != null) {
+            lastAnswer = Math.max(lastAnswer, sent);
+        }
         if (ack.getReregister() && state == State.CONNECTED) {
             LOG.info("The master does not know worker {}; registering again", workerId);
             state = State.REGISTERING;
@@ -296,6 +312,8 @@ public final class MasterConnection implements AutoCloseable {
 
     private synchronized void streamEnded() {
         heartbeats = null;
+        // beats sent on the ended stream are never answered
+        unanswered.clear();
     }
 
     private void lose(long now) {
@@ -307,6 +325,7 @@ public final class MasterConnection implements AutoCloseable {
             heartbeats.onCompleted();
             heartbeats = null;
         }
+        unanswered.clear();
         tasks.cancelAll();
     }
 

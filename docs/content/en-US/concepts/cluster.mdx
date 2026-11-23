@@ -53,10 +53,13 @@ worker                                   master (resource manager)
   task uses within 60 seconds is released by the worker. A job that finds too few free slots waits
   and is tried again as slots become free; after `scheduler.slot-request-timeout` (5 minutes) it
   fails with [`PF-RES-0001`](../reference/errors#pf-res-0001).
-- **Losing the master.** A worker that gets no answer to its heartbeats for the timeout the master
-  gave considers itself cut off: it cancels all its tasks, because only the current master may
-  control them, and keeps trying to register — every second by default. When the master answers
-  again, the worker registers with its previous ID and offers its slots.
+- **Losing the master (fencing).** A worker that gets no answer to its heartbeats for the timeout
+  the master gave considers itself cut off: it cancels all its tasks, because only the current
+  master may control them, and keeps trying to register — every second by default. The timeout
+  runs from when the last answered heartbeat was *sent*, which the master received no earlier, so a
+  worker cut off by a network partition starts stopping its tasks no later than the master counts
+  it as lost. When the master answers again, the worker registers with its previous ID and offers
+  its slots; the cancelled tasks do not come back.
 - **Losing a worker.** A worker that sends no heartbeat for 30 seconds is removed from the cluster.
   The job masters whose tasks ran there learn about it with
   [`PF-CLUS-0001`](../reference/errors#pf-clus-0001) and fail those tasks.
@@ -99,9 +102,14 @@ Components marked `builtin` come with the worker and need no package.
   heartbeat in the error. A run that takes [checkpoints](./checkpoint) restarts their regions on
   other workers from the last completed checkpoint, as its restart strategy allows (see
   [failure handling](./failure-handling)); without checkpoints the run fails.
-- A worker that comes back after it was lost registers again and offers free slots. Tasks that it
-  still runs belong to attempts the master no longer follows; until workers stop such tasks
-  themselves, they may go on writing.
+- The job master deploys the tasks of a lost worker again only after twice the cancel timeout (60
+  seconds by default) or the restart strategy's wait, whichever is longer: by then the worker has
+  stopped them, or given up on one that ignores the cancel. A worker that comes back registers again
+  and offers free slots.
+- A task that its worker stops without the master asking — because the worker shuts down, or
+  fenced itself while the master still counted on it — fails with
+  [`PF-CLUS-0017`](../reference/errors#pf-clus-0017), and its region restarts like any other
+  transient failure.
 - Only the current master controls the workers: requests of a master that was replaced are refused
   by the workers.
 
@@ -127,6 +135,7 @@ Components marked `builtin` come with the worker and need no package.
 | Error | Cause and fix |
 |---|---|
 | `PF-CLUS-0001` `WORKER_LOST` | The worker stopped, paused for a long time or lost the network. Read the end of the worker log; check its memory and garbage collection. |
+| `PF-CLUS-0017` `TASK_STOPPED_BY_WORKER` | The worker shut down, or lost the master and fenced its tasks. Its log says which; the region restarts when the run takes checkpoints. |
 | `PF-RES-0001` `SLOTS_INSUFFICIENT` | Fewer free slots than the job needs, on workers with its labels. Add workers or slots, lower the parallelism, relax the labels or wait for other jobs. |
 | `PF-RES-0007` `SLOT_TAKEN` | Two jobs reserved the same slot at once; the scheduler takes another one by itself. |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | The worker has another cluster token than the master. |

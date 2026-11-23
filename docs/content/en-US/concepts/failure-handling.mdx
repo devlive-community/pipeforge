@@ -51,8 +51,9 @@ exchange form one region. When the strategy allows a restart and the run takes c
    progress, which can no longer complete. The other regions keep running.
 2. The splits their readers got after the last completed checkpoint go back to the enumerator,
    which hands them out again.
-3. After the strategy's wait, once every task of the regions has stopped, it deploys them again:
-   on new slots where their worker was lost, each with its state from that checkpoint. Readers
+3. After the strategy's wait (for tasks of a lost worker, at least twice the cancel timeout, so that
+   the worker has [fenced](./cluster) them), once every task of the regions has stopped, it deploys
+   them again: on new slots where their worker was lost, each with its state from that checkpoint. Readers
    continue their splits where the checkpoint left them; writers get their state, and abort what
    they prepared after it.
 
@@ -142,8 +143,8 @@ back to the enumerator and the checkpoint the tasks restore.
 
 - The counters of a restarted task start again from zero, so the run's row counts leave out what
   its earlier attempt read and wrote.
-- A worker that was lost but still runs its tasks (for example after a network partition) does not
-  stop them yet; they may go on writing until the worker is restarted.
+- A task that ignores its cancel for longer than twice the cancel timeout is given up, but its
+  thread may still run while the region's new attempt writes.
 - Run-level retries (`env.retry`) and rolling back what a failed run wrote are not available yet.
 
 ## Version history

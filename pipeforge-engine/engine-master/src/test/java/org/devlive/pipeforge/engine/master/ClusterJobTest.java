@@ -86,9 +86,13 @@ class ClusterJobTest {
             this.endpoint = InProcessRpc.serve(address, executor);
         }
 
+        /** When a task was last deployed here, by {@link System#nanoTime()}. */
+        volatile long lastDeployNanos;
+
         @Override
         public CompletableFuture<Void> deployTask(TaskDeployment deployment) {
             deployed.incrementAndGet();
+            lastDeployNanos = System.nanoTime();
             return endpoint.gateway().deployTask(deployment);
         }
 
@@ -618,12 +622,18 @@ class ClusterJobTest {
         return java.util.stream.LongStream.range(0, rows).boxed().toList();
     }
 
+    /** How long the tasks of the runs of these tests take to stop at most: half the fence wait. */
+    static final Duration CANCEL_TIMEOUT = Duration.ofMillis(400);
+
     JobMaster startWithCheckpoints(JobPlan plan, java.nio.file.Path dir) {
         return start(
                 withRestarts(withCheckpoints(plan, Duration.ofMillis(100), 3, 2), 3, Duration.ofMillis(50)),
                 Duration.ofSeconds(5),
                 // a short write queue, so that barriers do not wait behind most of the input
-                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                SubmitOptions.defaults()
+                        .withWriteBatchSize(10)
+                        .withWriteQueueCapacity(20)
+                        .withCancelTimeout(CANCEL_TIMEOUT),
                 new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
                         new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
                         new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
@@ -679,6 +689,7 @@ class ClusterJobTest {
         silent.executor.close();
         now.addAndGet(ResourceManager.Settings.DEFAULTS.heartbeatTimeout().toNanos());
         workers.values().stream().filter(w -> w != silent).forEach(w -> manager.heartbeat(w.id, List.of(), List.of()));
+        long lost = System.nanoTime();
         assertThat(manager.expire())
                 .extracting(ResourceManager.WorkerLost::workerId)
                 .containsExactly(silent.id);
@@ -692,6 +703,35 @@ class ClusterJobTest {
                 .hasSize(1);
         assertThat(job.tasks()).as("no task runs on the lost worker any more").noneMatch(t -> t.workerId()
                 .equals(silent.id));
+        assertThat(workers.values().stream()
+                                .mapToLong(w -> w.lastDeployNanos)
+                                .max()
+                                .orElseThrow()
+                        - lost)
+                .as("its tasks were deployed again only once the worker had surely stopped them")
+                .isGreaterThanOrEqualTo(CANCEL_TIMEOUT.multipliedBy(2).toNanos());
+    }
+
+    @Test
+    void aTaskItsWorkerStoppedRestartsItsRegionInsteadOfEndingQuietly(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        JobMaster job = startWithCheckpoints(
+                TestConnectors.job(probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", 3), dir);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (job.checkpointStats().lastCompletedId() < 1) {
+            assertThat(System.nanoTime()).as("a checkpoint completed").isLessThan(deadline);
+            Thread.sleep(10);
+        }
+        // the worker cancels a task on its own, as when it shuts down
+        JobMaster.TaskView victim = job.tasks().get(1);
+        workers.get(victim.workerId()).executor.cancelTask(victim.attempt()).get();
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        assertThat(job.restarts()).isOne();
+        awaitSlotsBack();
     }
 
     @Test

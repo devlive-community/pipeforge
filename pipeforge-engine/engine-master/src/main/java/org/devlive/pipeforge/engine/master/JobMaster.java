@@ -330,7 +330,9 @@ public final class JobMaster {
             lostWorkers.add(workerId);
             gone.forEach(task -> states.put(task, TaskState.FAILED));
             refreshTasks();
-            tasksFailed(gone, scoped.build());
+            // the worker may still run them, cut off from the master: it stops them by itself, and
+            // gives up on one that does not stop within twice the cancel timeout
+            tasksFailed(gone, scoped.build(), settings.cancelTimeout().multipliedBy(2));
         });
     }
 
@@ -656,7 +658,23 @@ public final class JobMaster {
                 }
             }
             case FAILED -> tasksFailed(List.of(task), update.error());
-            case CANCELED, DEPLOYING -> {
+            case CANCELED -> {
+                if (status != JobStatus.CANCELLING && failure == null) {
+                    // the master cancels tasks only to fail or cancel the run, or to restart them: its
+                    // worker stopped this one, and what it had to do is not done
+                    tasksFailed(
+                            List.of(task),
+                            PipeForgeException.of(ErrorCode.TASK_STOPPED_BY_WORKER)
+                                    .param("worker", slots.get(task.slot()).workerId())
+                                    .param("task", update.id().toString())
+                                    .scope(ErrorScope.node(task.vertex())
+                                            .withJob(plan.name())
+                                            .withRun(id.value())
+                                            .withSubtask(task.subtask()))
+                                    .build());
+                }
+            }
+            case DEPLOYING -> {
                 // nothing to do until every task has ended
             }
         }
@@ -810,6 +828,14 @@ public final class JobMaster {
      * takes checkpoints; otherwise the run fails.
      */
     private void tasksFailed(List<ExecutionGraph.Task> failed, PipeForgeException error) {
+        tasksFailed(failed, error, Duration.ZERO);
+    }
+
+    /**
+     * @param fence the least time before the tasks are deployed again, for tasks that may still be
+     *     running on a worker that was lost
+     */
+    private void tasksFailed(List<ExecutionGraph.Task> failed, PipeForgeException error, Duration fence) {
         if (failure != null || status.isTerminal() || status == JobStatus.CANCELLING) {
             // a task that fails while the run stops still fails the run, as before
             fail(error);
@@ -831,7 +857,7 @@ public final class JobMaster {
         FailureHandler.Decision decided = failureHandler.onFailure(error);
         if (decided instanceof FailureHandler.Restart restart) {
             decision = decided;
-            restartRegions(failed, error, restart.delay());
+            restartRegions(failed, error, restart.delay().compareTo(fence) >= 0 ? restart.delay() : fence);
             return;
         }
         failRun(error, decided);

@@ -149,3 +149,12 @@
   hint:
     en-US: "The master restarted, or another master took its place, while the run was going on; the run did not finish. Submit the job again."
     zh-CN: "运行期间 Master 重启了，或者被另一个 Master 取代，运行没有完成。请重新提交作业。"
+
+- code: PF-CLUS-0017
+  name: TASK_STOPPED_BY_WORKER
+  message:
+    en-US: "Worker {worker} stopped task {task} without the master asking"
+    zh-CN: "Worker {worker} 在 Master 没有要求的情况下停止了 Task {task}"
+  hint:
+    en-US: "The worker shut down, or lost the master for longer than its heartbeat timeout and stopped its tasks. The task's region restarts when the run takes checkpoints and env.restart allows; check the worker's log for why it stopped."
+    zh-CN: "Worker 关闭了，或者与 Master 失联超过心跳超时而停止了自己的 Task。运行做 checkpoint 且 env.restart 允许时，该 Task 所在的 Region 会重启；请在 Worker 的日志中查看它停止的原因。"

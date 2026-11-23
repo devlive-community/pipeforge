@@ -44,7 +44,8 @@ hash 或 rebalance 交换两侧的 Task 合为一个 Region。策略允许重启
 
 1. JobMaster 取消失败 Region 中的 Task，并放弃进行中的 checkpoint（它们已无法完成）。其他 Region 继续运行。
 2. 这些 Region 的 Reader 在最近完成的 checkpoint 之后拿到的分片交回 Enumerator，由它再次分配。
-3. 等待策略给出的时间、并且 Region 中的 Task 都已停止后，重新部署它们：Worker 失联的使用新的 Slot，每个 Task 带着它在该
+3. 等待策略给出的时间（失联 Worker 上的 Task 至少等待两倍的取消超时，确保 Worker 已经 [fencing](./cluster)），并且 Region 中的
+   Task 都已停止后，重新部署它们：Worker 失联的使用新的 Slot，每个 Task 带着它在该
    checkpoint 中的状态。Reader 从 checkpoint 记录的位置继续读取分片；Writer 拿到自己的状态，并 abort 在它之后预提交的内容。
 
 Sink 已提交的内容保持提交：checkpoint 完成时提交它的待提交物，为失败的 checkpoint 预提交的内容与下一个完成的 checkpoint 一起提交。
@@ -125,7 +126,7 @@ JobMaster 在日志中记录每一次决定：错误、它的类型，以及策�
 ## 限制
 
 - 重启后的 Task 计数从零开始，因此运行的行数不包含它之前的尝试读写的行。
-- 已失联但仍在运行 Task 的 Worker（例如网络分区之后）还不会停止这些 Task；在 Worker 重启之前它们可能继续写入。
+- 超过两倍取消超时仍不响应取消的 Task 会被放弃，但它的线程可能仍在运行，与 Region 的新尝试同时写入。
 - 运行级自动重试（`env.retry`）和失败后回滚已写入的数据还不可用。
 
 ## 版本
