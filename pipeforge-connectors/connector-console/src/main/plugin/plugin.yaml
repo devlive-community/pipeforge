@@ -13,5 +13,3 @@ license: MIT
 description: Prints the rows it receives to the standard output, as tables or JSON lines, with a row limit. For trying pipelines and debugging.
 provides:
   - { type: sink, identifier: console, class: org.devlive.pipeforge.connector.console.ConsoleSinkFactory }
-skipped-testkit-groups:
-  - { group: state-compat, reason: "no states of earlier versions are kept yet" }

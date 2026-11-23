@@ -76,6 +76,14 @@ in which readers take splits. A rerun therefore produces exactly the same data, 
 from its state continues with the row after the last one it emitted. Duplicates or gaps in the target
 come from the rest of the pipeline, never from the fake source.
 
+### Fault recovery
+
+In a [checkpoint](../../concepts/checkpoint), the enumerator keeps the splits it has not handed
+out yet, and each reader the splits it holds, the one it is reading with the row it continues at.
+A run restored from the checkpoint reads every row exactly once in all: no row before the
+checkpoint is read again and none after it is skipped. States written by earlier versions of the
+plugin stay readable; the testkit's `checkpoint` and `state-compat` groups check both.
+
 ## Examples
 
 ### A table with chosen columns

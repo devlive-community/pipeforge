@@ -95,6 +95,11 @@ console Sink 没有数据源：它写到进程的标准输出或标准错误，�
 console Sink 只打印、不投递：行到达即打印，不提交任何内容。失败后作业从最近的 checkpoint 重启，此后的行会再打印一次。
 需要完整且不重复的输出时，请使用真正的 Sink。
 
+### 故障恢复
+
+Writer 在 [checkpoint](../../concepts/checkpoint) 中不保存状态，也不提交任何内容：恢复后的 Writer 从收到的第一行开始打印。
+checkpoint 之前的每一行都只打印一次；之后的行在恢复后会再打印一次。testkit 的 `checkpoint` 和 `state-compat` 用例组会检查各版本的状态都能用于恢复。
+
 ## 示例
 
 ### 供其他工具使用的 JSON 行

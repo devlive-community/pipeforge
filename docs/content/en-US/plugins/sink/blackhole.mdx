@@ -74,6 +74,13 @@ native configuration or configuration files.
 Nothing is kept, so there is nothing to be consistent: rows written again after a restart are
 discarded again. The row counters still show exactly what reached the sink.
 
+### Fault recovery
+
+The writer keeps no state in a [checkpoint](../../concepts/checkpoint): a restored writer discards
+rows as before. The rows after the checkpoint reach the sink again after a restore and are counted
+again in `rowsWritten`. The testkit's `checkpoint` and `state-compat` groups check that a restore
+works with the states of every version.
+
 ## Examples
 
 ### The engine baseline

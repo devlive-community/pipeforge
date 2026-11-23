@@ -103,6 +103,13 @@ The console sink prints, it does not deliver: rows are printed as they arrive an
 committed. After a failure the job restarts from its last checkpoint and the rows since then are
 printed again. Use a real sink when the output must be complete and free of duplicates.
 
+### Fault recovery
+
+The writer keeps no state in a [checkpoint](../../concepts/checkpoint) and commits nothing: a
+restored writer starts printing with the first row it receives. Every row before the checkpoint was
+printed once; the rows after it are printed again after the restore. The testkit's `checkpoint`
+and `state-compat` groups check that a restore works with the states of every version.
+
 ## Examples
 
 ### JSON lines for other tools
