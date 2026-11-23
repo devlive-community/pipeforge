@@ -792,6 +792,7 @@ public final class TestConnectors {
                             if (rows != null) {
                                 probe.rows.addAll(rows);
                                 probe.committed.add(transaction);
+                                probe.events.add("committed " + transaction);
                             }
                         }
                         return List.of();

@@ -118,6 +118,12 @@ public final class EnvOptions {
                     .withDescription(
                             "Keep or delete the checkpoints of a cancelled run; a failed run always keeps them");
 
+    public static final Option<Boolean> CHECKPOINT_ON_FINISH = Options.key("checkpoint.on-finish")
+            .booleanType()
+            .defaultValue(true)
+            .withDescription("Record a last checkpoint, with what the sinks prepared, before a bounded run commits"
+                    + " it and finishes");
+
     public static final Option<org.devlive.pipeforge.core.plan.RestartSettings.Strategy> RESTART_STRATEGY = Options.key(
                     "restart.strategy")
             .enumType(org.devlive.pipeforge.core.plan.RestartSettings.Strategy.class)
@@ -194,6 +200,7 @@ public final class EnvOptions {
                     CHECKPOINT_TOLERABLE_FAILURES,
                     CHECKPOINT_RETAINED,
                     CHECKPOINT_EXTERNALIZED,
+                    CHECKPOINT_ON_FINISH,
                     RESTART_STRATEGY,
                     RESTART_ATTEMPTS,
                     RESTART_DELAY,

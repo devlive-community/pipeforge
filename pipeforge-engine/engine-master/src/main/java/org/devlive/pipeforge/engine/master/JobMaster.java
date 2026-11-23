@@ -1146,6 +1146,15 @@ public final class JobMaster {
 
     /** Commits what the sinks prepared after the last checkpoint, at the end of the run. */
     private void commit() {
+        var coordinator = checkpoints;
+        if (coordinator != null && plan.checkpoint().onFinish()) {
+            // a last checkpoint records what the sinks prepared before it is committed
+            Map<ExecutionAttemptId, List<SerializedValue>> prepared = new LinkedHashMap<>();
+            committables.forEach((task, values) -> prepared.put(attempt(task), values));
+            coordinator.finish(sinkVertex.tail().id(), prepared);
+            checkpointStats = coordinator.stats();
+            return;
+        }
         List<SerializedValue> all = new ArrayList<>();
         committables.values().forEach(all::addAll);
         commit(all);

@@ -76,6 +76,7 @@ sink:
 | `checkpoint.tolerable-failures` | 连续失败多少次之后运行失败 | `3` |
 | `checkpoint.retained` | 保留的已完成 checkpoint 数，1 到 1000 | `3` |
 | `checkpoint.externalized` | `RETAIN_ON_CANCELLATION` 或 `DELETE_ON_CANCELLATION`：被取消的运行的 checkpoint 如何处理 | `RETAIN_ON_CANCELLATION` |
+| `checkpoint.on-finish` | 有界运行提交前，先记录一个包含 Sink 预提交内容的最后 checkpoint | `true` |
 | `restart.strategy` | `none`、`fixed-delay`、`exponential-backoff` 或 `failure-rate`：遇到重试可能成功的失败后，运行如何重启，见[失败处理](../concepts/failure-handling) | `fixed-delay` |
 | `restart.attempts` | `fixed-delay`：一共重启多少次 | `3` |
 | `restart.delay` | `fixed-delay` 和 `failure-rate`：每次重启前等待多久 | `10s` |

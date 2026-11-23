@@ -195,7 +195,8 @@ public final class Planner {
                 env.get(EnvOptions.CHECKPOINT_MAX_CONCURRENT),
                 env.get(EnvOptions.CHECKPOINT_TOLERABLE_FAILURES),
                 env.get(EnvOptions.CHECKPOINT_RETAINED),
-                env.get(EnvOptions.CHECKPOINT_EXTERNALIZED));
+                env.get(EnvOptions.CHECKPOINT_EXTERNALIZED),
+                env.get(EnvOptions.CHECKPOINT_ON_FINISH));
     }
 
     private DirtyPolicy dirty(JobDefinition job, List<String> warnings) {

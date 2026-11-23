@@ -39,6 +39,8 @@ import org.devlive.pipeforge.engine.worker.TaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Job masters running jobs on three workers in one process: slots reserved by the scheduler, tasks
@@ -731,6 +733,81 @@ class ClusterJobTest {
         assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
         assertExactlyOnce(probe, 3000);
         assertThat(job.restarts()).isOne();
+        awaitSlotsBack();
+    }
+
+    /** {@code plan} with or without a last checkpoint before it finishes. */
+    static JobPlan onFinish(JobPlan plan, boolean value) {
+        var c = plan.checkpoint();
+        return new JobPlan(
+                plan.name(),
+                plan.description(),
+                plan.engine(),
+                plan.mode(),
+                plan.modeDerived(),
+                plan.delivery(),
+                plan.parallelism(),
+                plan.timeZone(),
+                plan.variables(),
+                plan.nodes(),
+                plan.warnings(),
+                plan.dirty(),
+                plan.limit(),
+                new org.devlive.pipeforge.core.plan.CheckpointSettings(
+                        c.enabled(),
+                        c.interval(),
+                        c.timeout(),
+                        c.minPause(),
+                        c.maxConcurrent(),
+                        c.tolerableFailures(),
+                        c.retained(),
+                        c.externalized(),
+                        value),
+                plan.restart());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void aBoundedRunRecordsALastCheckpointBeforeItCommitsWhatItPrepared(
+            boolean last, @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(Probe.get(probe).events);
+        // checkpoints too rare to complete: everything is committed at the end
+        JobMaster job = start(
+                onFinish(
+                        withCheckpoints(
+                                TestConnectors.job(probe, "rows: 600, splits: 6", null, "commit: transactional", 3),
+                                Duration.ofHours(1),
+                                3,
+                                2),
+                        last),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                        store,
+                        Runnable::run));
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 600);
+        assertThat(Probe.get(probe).committed)
+                .as("the final transaction of every sink task")
+                .hasSize(3)
+                .allSatisfy(t -> assertThat(t).endsWith("-" + Long.MAX_VALUE));
+        List<String> events = List.copyOf(Probe.get(probe).events).stream()
+                .filter(e -> e.matches("(begin|complete|delete|committed) .*"))
+                .map(e -> e.startsWith("committed") ? "committed" : e)
+                .distinct()
+                .toList();
+        if (last) {
+            assertThat(events)
+                    .as("recorded first, then committed; a run that succeeded keeps no checkpoint")
+                    .containsExactly("begin 1 FINISH", "complete 1", "committed", "delete 1");
+            assertThat(result.metrics().lastCompletedCheckpointId()).isEqualTo(1);
+        } else {
+            assertThat(events).containsExactly("committed");
+        }
         awaitSlotsBack();
     }
 

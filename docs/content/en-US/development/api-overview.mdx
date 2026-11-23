@@ -107,7 +107,8 @@ engine calls, on the task thread:
 Both are written with the sink's serializers (`committableSerializer`, `writerStateSerializer`)
 into the checkpoint. Once the checkpoint is recorded as complete, the master commits the
 committables with the `SinkCommitter`, then the `GlobalCommitter`. When the input ends, the writer
-gets `prepareCommit(Long.MAX_VALUE)`, and that committable is committed when the run ends. A
+gets `prepareCommit(Long.MAX_VALUE)`, and that committable is committed when the run ends, after a
+last checkpoint that holds it was recorded (`env.checkpoint.on-finish`). A
 committable of a checkpoint that failed is committed with the next checkpoint that completes, or
 when the run ends, unless its task restarts. A committable is never committed before a checkpoint
 after it completed.

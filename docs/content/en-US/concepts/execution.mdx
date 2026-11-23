@@ -201,7 +201,8 @@ Every run has a **job master** that drives it from start to end:
    (`PF-CLUS-0001`), go to the job's restart strategy: when it allows and the run takes
    checkpoints, only their regions restart (see [failure handling](./failure-handling)).
    Otherwise the failure cancels the other tasks and becomes the error of the run.
-4. When every task has finished, it commits what the sinks prepared and the run succeeds.
+4. When every task has finished, it commits what the sinks prepared and the run succeeds. A run
+   that takes checkpoints first records a [last checkpoint](./checkpoint#behavior) that holds it.
 5. Whatever the end, it gives the slots back. A run cancelled while it waits for slots ends at once;
    slots that arrive later go back too.
 

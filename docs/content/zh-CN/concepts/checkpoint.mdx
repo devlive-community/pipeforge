@@ -71,6 +71,7 @@ env:
 | `env.checkpoint.tolerable-failures` | `3` | 连续失败多少次之后运行失败 |
 | `env.checkpoint.retained` | `3` | 保留的已完成 checkpoint 数，更早的会被删除 |
 | `env.checkpoint.externalized` | `RETAIN_ON_CANCELLATION` | 运行被取消后保留（`RETAIN_ON_CANCELLATION`）还是删除（`DELETE_ON_CANCELLATION`）它的 checkpoint |
+| `env.checkpoint.on-finish` | `true` | 有界运行结束前，先记录一个包含 Sink 预提交内容的最后 checkpoint，再提交这些内容 |
 
 集群一侧是 `checkpoint.dir` 和 `checkpoint.s3.*`（见 [Checkpoint 存储](../operations/checkpoint-storage)）以及 `master.metastore.*`
 （见[元数据库](../operations/metastore#master)）；[配置参考](../reference/configuration)列出了全部配置项。
@@ -107,7 +108,10 @@ env:
 - 同一个运行中 checkpoint 编号只增不减，重启之后也不会重复。
 - 只有运行的所有 Task 都在运行时才会开始 checkpoint。
 - savepoint 由用户手动触发，不会被自动删除；它不计入 `retained`，也不计入作业允许的失败次数。
-- 运行结束时，进行中的 checkpoint 被放弃。**成功**的运行删除自己的 checkpoint，**失败**的运行保留它们以便继续，
+- 有界运行的所有 Task 都结束后，Master 记录**最后一个 checkpoint**（`env.checkpoint.on-finish`）：它包含 Sink 在输入结束时预提交、
+  尚未提交的内容，写入 `_metadata` 并记为已完成之后，才提交其中的内容。进行中的 checkpoint 被放弃，之后也不再做新的。
+  `on-finish: false` 时 Master 不先记录，直接提交 Sink 预提交的内容。
+- 运行结束时，进行中的 checkpoint 被放弃。**成功**的运行删除自己的 checkpoint（包括最后一个），**失败**的运行保留它们以便继续，
   **被取消**的运行按 `env.checkpoint.externalized` 处理。
 
 ## 可观测性

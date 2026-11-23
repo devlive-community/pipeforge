@@ -334,6 +334,16 @@ class PlannerTest {
     }
 
     @Test
+    void aBoundedRunTakesALastCheckpointUnlessTheJobSaysOtherwise() {
+        String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
+        assertThat(plan(job(nodes)).checkpoint().onFinish()).isTrue();
+        assertThat(plan(job("env: { checkpoint: { on-finish: false } }\n" + nodes))
+                        .checkpoint()
+                        .onFinish())
+                .isFalse();
+    }
+
+    @Test
     void readsTheRestartStrategy() {
         String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
         assertThat(plan(job(nodes)).restart()).isEqualTo(RestartSettings.DEFAULTS);

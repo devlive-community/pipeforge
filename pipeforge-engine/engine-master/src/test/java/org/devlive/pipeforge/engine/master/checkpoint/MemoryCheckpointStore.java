@@ -19,6 +19,18 @@ import org.devlive.pipeforge.common.error.PipeForgeException;
 public final class MemoryCheckpointStore implements CheckpointStore {
 
     public final Map<String, Checkpoint> rows = new ConcurrentHashMap<>();
+    /** What happened to the records, in order: {@code begin <id> <reason>}, {@code complete <id>}, ... */
+    public final List<String> events;
+
+    public MemoryCheckpointStore() {
+        this(java.util.Collections.synchronizedList(new java.util.ArrayList<>()));
+    }
+
+    /** A store that writes what happens into {@code events}, to see it in order with other events. */
+    public MemoryCheckpointStore(List<String> events) {
+        this.events = events;
+    }
+
     final Map<String, Long> lastOfAttempt = new ConcurrentHashMap<>();
     volatile boolean down;
 
@@ -53,6 +65,7 @@ public final class MemoryCheckpointStore implements CheckpointStore {
     public void begin(Checkpoint checkpoint) {
         check();
         rows.put(key(checkpoint.runId(), checkpoint.checkpointId()), checkpoint);
+        events.add("begin " + checkpoint.checkpointId() + " " + checkpoint.reason());
     }
 
     @Override
@@ -79,6 +92,7 @@ public final class MemoryCheckpointStore implements CheckpointStore {
                         null,
                         tasksJson));
         lastOfAttempt.put(runId + "#" + attempt, checkpointId);
+        events.add("complete " + checkpointId);
     }
 
     @Override
@@ -109,6 +123,7 @@ public final class MemoryCheckpointStore implements CheckpointStore {
     public void delete(String runId, long checkpointId) {
         check();
         rows.remove(key(runId, checkpointId));
+        events.add("delete " + checkpointId);
     }
 
     @Override

@@ -7,6 +7,7 @@
 package org.devlive.pipeforge.engine.master.checkpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -668,6 +669,62 @@ class CheckpointCoordinatorTest {
         assertThat(store.get(RUN, 2).errorCode()).isEqualTo("PF-CKPT-0006");
         assertThat(store.get(RUN, 2).errorMessage()).contains("writing it to");
         assertThat(workers.of("complete")).isEmpty();
+    }
+
+    static SerializedValue text(String value) {
+        return new SerializedValue(1, value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void aFinishedRunRecordsALastCheckpointBeforeItCommits() throws Exception {
+        CheckpointCoordinator coordinator = coordinator(settings(3, 3));
+        coordinator.start();
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+        ackAll(coordinator, 1);
+        coordinator.trigger(CheckpointType.CHECKPOINT, "MANUAL", null);
+
+        long id = coordinator.finish(
+                "sink",
+                java.util.Map.of(
+                        SINK,
+                        List.of(text("txn-2"), text("txn-final")),
+                        new ExecutionAttemptId(RUN, "sink", 1, 0),
+                        List.of()));
+        assertThat(id).as("after the checkpoint it gave up").isEqualTo(3);
+        assertThat(store.get(RUN, 2).status()).isEqualTo(CheckpointStore.Status.FAILED);
+        CheckpointStore.Checkpoint last = store.get(RUN, 3);
+        assertThat(last.status()).isEqualTo(CheckpointStore.Status.COMPLETED);
+        assertThat(last.reason()).isEqualTo("FINISH");
+        assertThat(committed).containsExactly("3:txn-2", "3:txn-final");
+        CheckpointMetadata metadata =
+                CheckpointFiles.readMetadata(storage.read("run-1/chk-3/" + CheckpointStorages.METADATA), "3");
+        assertThat(metadata.getOperatorsList())
+                .extracting(OperatorState::getOperatorKind, OperatorState::getNodeId, o -> o.getSubtasksCount())
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("committer", "sink", 1));
+        assertThat(coordinator.stats().lastCompletedId()).isEqualTo(3);
+        assertThat(workers.of("complete")).as("the tasks ended; nobody is told").hasSize(3);
+        timer.advance(60_000);
+        assertThat(workers.of("trigger")).as("no more checkpoints").hasSize(4);
+
+        coordinator.stop(JobStatus.SUCCESS);
+        assertThat(storage.list("run-1/"))
+                .as("a run that succeeded keeps no checkpoint")
+                .isEmpty();
+    }
+
+    @Test
+    void aLastCheckpointThatCannotBeWrittenCommitsNothing() throws Exception {
+        storage = new FileSystemCheckpointStorage(dir.resolve("file-instead-of-dir"));
+        java.nio.file.Files.writeString(dir.resolve("file-instead-of-dir"), "x");
+        CheckpointCoordinator coordinator = coordinator(settings(3, 3));
+
+        assertThatThrownBy(() -> coordinator.finish("sink", java.util.Map.of(SINK, List.of(text("txn-final")))))
+                .isInstanceOfSatisfying(PipeForgeException.class, e -> {
+                    assertThat(e.code()).isEqualTo(ErrorCode.CHECKPOINT_FAILED);
+                    assertThat(e.getMessage()).contains("the last checkpoint");
+                });
+        assertThat(committed).isEmpty();
+        assertThat(store.get(RUN, 1).status()).isEqualTo(CheckpointStore.Status.FAILED);
     }
 
     @Test

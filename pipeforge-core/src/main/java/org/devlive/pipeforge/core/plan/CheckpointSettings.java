@@ -20,6 +20,8 @@ import org.devlive.pipeforge.core.job.JobMode;
  * @param tolerableFailures the checkpoints that may fail in a row before the run fails
  * @param retained the completed checkpoints kept; older ones are deleted
  * @param externalized what happens to the checkpoints of a run that is cancelled
+ * @param onFinish whether a bounded run records a last checkpoint, with what its sinks prepared,
+ *     before it commits that
  */
 public record CheckpointSettings(
         boolean enabled,
@@ -29,12 +31,26 @@ public record CheckpointSettings(
         int maxConcurrent,
         int tolerableFailures,
         int retained,
-        Externalized externalized) {
+        Externalized externalized,
+        boolean onFinish) {
 
     /** What happens to the checkpoints of a cancelled run; a failed run always keeps them. */
     public enum Externalized {
         RETAIN_ON_CANCELLATION,
         DELETE_ON_CANCELLATION
+    }
+
+    /** Settings with a last checkpoint before a bounded run finishes. */
+    public CheckpointSettings(
+            boolean enabled,
+            Duration interval,
+            Duration timeout,
+            Duration minPause,
+            int maxConcurrent,
+            int tolerableFailures,
+            int retained,
+            Externalized externalized) {
+        this(enabled, interval, timeout, minPause, maxConcurrent, tolerableFailures, retained, externalized, true);
     }
 
     public CheckpointSettings {

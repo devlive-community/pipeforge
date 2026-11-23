@@ -91,6 +91,7 @@ env:
 | `env.checkpoint.tolerable-failures` | `3` | The checkpoints that may fail in a row before the run fails |
 | `env.checkpoint.retained` | `3` | The completed checkpoints kept; older ones are deleted |
 | `env.checkpoint.externalized` | `RETAIN_ON_CANCELLATION` | Keep (`RETAIN_ON_CANCELLATION`) or delete (`DELETE_ON_CANCELLATION`) the checkpoints of a cancelled run |
+| `env.checkpoint.on-finish` | `true` | Record a last checkpoint, with what the sinks prepared, before a bounded run commits it and finishes |
 
 The cluster side is `checkpoint.dir` with `checkpoint.s3.*` (see
 [checkpoint storage](../operations/checkpoint-storage)) and `master.metastore.*` (see
@@ -130,9 +131,14 @@ env:
 - Checkpoints start only while every task of the run runs.
 - Savepoints are taken by hand and are never deleted automatically; they do not count toward
   `retained` or the failures a job tolerates.
+- When every task of a bounded run has finished, the master records a **last checkpoint**
+  (`env.checkpoint.on-finish`): it holds what the sinks prepared at the end of their input and had
+  not committed yet, is written with its `_metadata` and recorded as completed, and only then is
+  its content committed. The checkpoints in progress are given up, and no others are taken. With
+  `on-finish: false` the master commits what the sinks prepared without recording it first.
 - When a run ends, checkpoints in progress are given up. A run that **succeeded** deletes its
-  checkpoints, a **failed** run keeps them to go on from, and a **cancelled** run follows
-  `env.checkpoint.externalized`.
+  checkpoints, the last one included, a **failed** run keeps them to go on from, and a
+  **cancelled** run follows `env.checkpoint.externalized`.
 
 ## Observability
 

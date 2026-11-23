@@ -403,23 +403,7 @@ public final class CheckpointCoordinator {
         long size;
         String tasksJson = tasksJson(checkpoint.acks);
         try {
-            CheckpointMetadata.Builder metadata = CheckpointMetadata.newBuilder()
-                    .setJobId(run.runId())
-                    .setRunId(run.runId())
-                    .setCheckpointId(checkpoint.id)
-                    .setType(ProtoMapping.toProto(checkpoint.type))
-                    .setTriggerTimestamp(checkpoint.triggeredAt)
-                    .setCompleteTimestamp(completedAt)
-                    .setEngineVersion(run.engineVersion())
-                    .setDslVersion("1")
-                    .putAllVariables(run.variables())
-                    .setAttempt(run.attempt())
-                    .setJobName(run.jobName());
-            size = operators(checkpoint, metadata);
-            copyStaged(checkpoint);
-            byte[] bytes = CheckpointFiles.writeMetadata(metadata.build());
-            size += bytes.length;
-            context.storage().complete(checkpoint.directory, bytes);
+            size = write(checkpoint, completedAt);
         } catch (IOException | RuntimeException e) {
             end(
                     checkpoint,
@@ -501,6 +485,127 @@ public final class CheckpointCoordinator {
         }
         checkpoint.result.complete(completed);
         resume();
+    }
+
+    // ---------------------------------------------------------------------------------- finish
+
+    /**
+     * Every task of a bounded run finished: records a last checkpoint that holds what the sinks
+     * prepared and did not commit yet, then commits it (design 06 section 8). The checkpoints in
+     * progress are given up and no more are taken. The tasks are not told: they ended.
+     *
+     * @param sink the node whose committables these are
+     * @param committables what each sink task reported when it finished
+     * @return the id of the checkpoint
+     * @throws PipeForgeException if it could not be written or recorded; nothing was committed then
+     */
+    public long finish(String sink, Map<ExecutionAttemptId, List<SerializedValue>> committables) {
+        cancelTick.run();
+        abortAll("the run finished");
+        long id = ++lastId;
+        long now = context.clock().getAsLong();
+        String directory = CheckpointPaths.checkpoint(run.runId(), id);
+        Pending checkpoint = new Pending(id, CheckpointType.CHECKPOINT, directory, now, new LinkedHashSet<>());
+        committables.forEach((task, values) -> {
+            if (!values.isEmpty()) {
+                List<byte[]> elements = new ArrayList<>();
+                values.forEach(value -> elements.add(value.bytes()));
+                byte[] body = CheckpointFiles.writeList(elements);
+                checkpoint.acks.add(new CheckpointAck(
+                        task,
+                        id,
+                        List.of(new StateHandle(
+                                sink,
+                                "committer",
+                                values.get(0).version(),
+                                new StateHandle.Inline(body),
+                                body.length,
+                                crc(body))),
+                        org.devlive.pipeforge.engine.rpc.CheckpointTaskMetrics.NONE));
+            }
+        });
+        context.store()
+                .begin(new CheckpointStore.Checkpoint(
+                        run.runId(),
+                        id,
+                        run.jobName(),
+                        run.attempt(),
+                        CheckpointType.CHECKPOINT,
+                        CheckpointStore.Status.IN_PROGRESS,
+                        "FINISH",
+                        null,
+                        Instant.ofEpochMilli(now),
+                        null,
+                        null,
+                        directory,
+                        null,
+                        null,
+                        null));
+        long size;
+        try {
+            size = write(checkpoint, now);
+            context.store()
+                    .complete(
+                            run.runId(),
+                            id,
+                            run.attempt(),
+                            Instant.ofEpochMilli(now),
+                            size,
+                            tasksJson(checkpoint.acks));
+        } catch (IOException | RuntimeException e) {
+            PipeForgeException error = failed(id, "writing or recording the last checkpoint: " + e.getMessage());
+            try {
+                context.store()
+                        .fail(
+                                run.runId(),
+                                id,
+                                Instant.ofEpochMilli(now),
+                                error.code().id(),
+                                error.getMessage());
+            } catch (PipeForgeException ignored) {
+                // the record stays in progress; the orphan scan removes its files
+            }
+            deleteFiles(directory);
+            throw error;
+        }
+        long completedAt = context.clock().getAsLong();
+        stats = new Stats(id, completedAt - now, size, 0, completedAt);
+        retained.addLast(new Completed(id, CheckpointType.CHECKPOINT, directory, size, completedAt));
+        LOG.info(
+                "Run {}: last checkpoint {} recorded with what {} sink task(s) prepared",
+                run.runId(),
+                id,
+                checkpoint.acks.size());
+        try {
+            List<SerializedValue> all = committables(checkpoint);
+            if (!all.isEmpty()) {
+                context.committer().commit(id, all);
+            }
+        } catch (IOException e) {
+            throw failed(id, "reading its committables: " + e.getMessage());
+        }
+        return id;
+    }
+
+    /** Writes the {@code _metadata} of a checkpoint and marks it complete; returns its size. */
+    private long write(Pending checkpoint, long completedAt) throws IOException {
+        CheckpointMetadata.Builder metadata = CheckpointMetadata.newBuilder()
+                .setJobId(run.runId())
+                .setRunId(run.runId())
+                .setCheckpointId(checkpoint.id)
+                .setType(ProtoMapping.toProto(checkpoint.type))
+                .setTriggerTimestamp(checkpoint.triggeredAt)
+                .setCompleteTimestamp(completedAt)
+                .setEngineVersion(run.engineVersion())
+                .setDslVersion("1")
+                .putAllVariables(run.variables())
+                .setAttempt(run.attempt())
+                .setJobName(run.jobName());
+        long size = operators(checkpoint, metadata);
+        copyStaged(checkpoint);
+        byte[] bytes = CheckpointFiles.writeMetadata(metadata.build());
+        context.storage().complete(checkpoint.directory, bytes);
+        return size + bytes.length;
     }
 
     /** The committables the sinks prepared for a checkpoint, from its acknowledgements. */

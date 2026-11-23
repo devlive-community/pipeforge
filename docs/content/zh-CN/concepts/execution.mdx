@@ -154,7 +154,7 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 3. 跟踪 Task 上报的状态。失败的 Task 或[失联 Worker](./cluster) 上的 Task（`PF-CLUS-0001`）交给作业的重启策略：
    策略允许且运行做 checkpoint 时，只重启它们所在的 Region（见[失败处理](./failure-handling)）；
    否则这个失败会取消其他 Task，并成为本次运行的错误。
-4. 所有 Task 完成后，提交 Sink 准备好的内容，运行成功。
+4. 所有 Task 完成后，提交 Sink 准备好的内容，运行成功。做 checkpoint 的运行会先记录包含这些内容的[最后一个 checkpoint](./checkpoint#行为与语义)。
 5. 无论以何种方式结束，都会归还 Slot。在等待 Slot 时被取消的运行会立即结束；之后才到达的 Slot 同样会被归还。
 
 ## 快速上手

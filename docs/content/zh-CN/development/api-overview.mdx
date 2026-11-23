@@ -91,7 +91,7 @@ checkpoint 的 barrier 到达 Sink 时，它之前的每一行都已交给 Write
 
 两者都用 Sink 的序列化器（`committableSerializer`、`writerStateSerializer`）写入 checkpoint。checkpoint 被记为已完成后，
 Master 先用 `SinkCommitter`、再用 `GlobalCommitter` 提交这些待提交物。输入结束时 Writer 收到 `prepareCommit(Long.MAX_VALUE)`，
-它返回的待提交物在运行结束时提交。失败的 checkpoint 的待提交物与下一个完成的 checkpoint 一起提交，或在运行结束时提交，
+它返回的待提交物在运行结束时、记录了包含它的最后一个 checkpoint 之后提交（`env.checkpoint.on-finish`）。失败的 checkpoint 的待提交物与下一个完成的 checkpoint 一起提交，或在运行结束时提交，
 除非它的 Task 重启了。待提交物永远不会在它之后的某个 checkpoint 完成之前被提交。
 
 **提交必须幂等。** 恢复后引擎会再次提交恢复点 checkpoint 的待提交物，因为运行可能停在记录 checkpoint 与提交之间；
