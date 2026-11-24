@@ -135,17 +135,21 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 | `SUCCESS` | 所有 Source 都已结束，所有 Sink 都已写完并提交 |
 | `FAILED` | 某个 Task、枚举器或提交失败；结果中带有错误 |
 | `CANCELLED` | 按请求停止 |
+| `PAUSING` | 正在做用于暂停的 savepoint；Source 不再读取 |
+| `PAUSED` | 以 savepoint 停止，不占用 Slot；新的尝试从该 savepoint 继续 |
 
 在集群上，Master 的 Dispatcher 接收 Server 提交的运行，并按以下状态跟踪它们（当前版本的子集）：
 
 | 从 | 到 |
 |---|---|
 | `QUEUE`（等待 Slot） | `RUNNING`、`CANCELLING`、`FAILED` |
-| `RUNNING` | `SUCCESS`、`FAILED`、`CANCELLING` |
+| `RUNNING` | `SUCCESS`、`FAILED`、`CANCELLING`、`PAUSING` |
 | `CANCELLING` | `CANCELLED`、`FAILED`、`TIMEOUT`（运行超过超时时间而被取消） |
+| `PAUSING` | `PAUSED`、`RUNNING`（savepoint 失败）、`FAILED`、`CANCELLING` |
+| `PAUSED` | `QUEUE`（继续）、`CANCELLED` |
 
 每次状态转换都会被校验，并记录时间和原因；不在表中的转换会被拒绝。提交 Master 已知的运行 ID 时返回这个已有的运行，
-因此重试提交永远不会启动第二次运行。Master 用 Server 选定的插件版本重新规划作业定义；Master 没有该版本时，提交以
+因此重试提交永远不会启动第二次运行；只有带着恢复点再次提交的已暂停运行会继续，以新的尝试从该点开始（见 [savepoint](./checkpoint#savepoint)）。Master 用 Server 选定的插件版本重新规划作业定义；Master 没有该版本时，提交以
 [`PF-PLUG-0009`](../reference/errors#pf-plug-0009) 失败；未知的运行 ID 为 [`PF-CONF-0010`](../reference/errors#pf-conf-0010)。
 
 每次运行都有一个 **JobMaster** 负责从开始到结束：

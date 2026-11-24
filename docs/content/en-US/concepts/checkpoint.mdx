@@ -79,6 +79,13 @@ as committed already. The job must be the one that took it, unless another job i
 that point until the run completes a checkpoint of its own, and its checkpoints are numbered after
 it.
 
+A run **pauses** with a savepoint (`StopWithSavepoint`): its sources read no more after the
+barrier, and once the savepoint completed and its sinks committed, the tasks are cancelled and the
+run is `PAUSED`, holding no slots. Submitting the run again with the savepoint as its restore point
+resumes it: a new attempt that goes on where it paused, so the target ends as if the run had not
+paused. When the savepoint fails, the sources read on and the run keeps running; a paused run can
+also be cancelled.
+
 ## Quick start
 
 Give the cluster a checkpoint storage and the master its metastore, in `conf/pipeforge.yaml` and
@@ -198,8 +205,8 @@ task's part. The master logs every checkpoint that completes or fails.
 - Transforms keep no state. Sinks commit per checkpoint on the master (see
   [sink state and commits](../development/api-overview#sink-state-and-commits)).
 - Savepoints are taken, and runs started from them, only through the master's protocol yet: the
-  command line, the REST API and the Web UI follow. A worker declines to stop a run with a
-  savepoint, and a node with state cannot change its parallelism when a run starts from a point.
+  command line, the REST API and the Web UI follow; so do pausing and resuming. A node with state
+  cannot change its parallelism when a run starts from a point.
 - A task that waited longer than 30 seconds for the barriers of a checkpoint logs a warning about
   backpressure; the limit cannot be changed yet.
 - Only aligned checkpoints: a task waits for the barrier on all its inputs.

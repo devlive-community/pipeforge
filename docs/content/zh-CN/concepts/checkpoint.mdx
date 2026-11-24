@@ -54,6 +54,10 @@ Enumerator 和每个 Task 的状态，并先把 Sink 为该点准备的内容重
 产生，除非允许其他作业（`allow_other_job`）；有状态的节点必须仍然存在，除非允许丢弃这些状态（`allow_non_restored_state`）；有状态的节点
 不能改变并行度。在运行完成自己的第一个 checkpoint 之前，重启的 Task 都从这个点恢复；运行的 checkpoint 编号接在它之后。
 
+运行可以用 savepoint **暂停**（`StopWithSavepoint`）：Source 在 barrier 之后不再读取，savepoint 完成且 Sink 提交之后，Task 被取消，运行进入
+`PAUSED`，不再占用 Slot。以该 savepoint 作为恢复点再次提交这个运行即可**继续**：新的尝试从暂停处接着运行，目标端的结果与没有暂停时一致。
+savepoint 失败时 Source 继续读取，运行照常进行；已暂停的运行也可以直接取消。
+
 ## 快速上手
 
 在 `conf/pipeforge.yaml` 和 `conf/master.yaml` 中为集群配置 checkpoint 存储，并为 Master 配置元数据库：
@@ -159,8 +163,8 @@ Master 会在日志中记录每个完成或失败的 checkpoint。
 ## 限制
 
 - Transform 没有状态。Sink 按 checkpoint 在 Master 上提交（见 [Sink 状态与提交](../development/api-overview#sink-状态与提交)）。
-- savepoint 的触发以及从 savepoint 开始运行目前只能通过 Master 的协议进行，命令行、REST 接口和 Web UI 随后提供。Worker 会拒绝以 savepoint
-  停止运行；从某个点开始运行时，有状态的节点不能改变并行度。
+- savepoint 的触发、从 savepoint 开始运行以及暂停与继续目前只能通过 Master 的协议进行，命令行、REST 接口和 Web UI 随后提供。从某个点开始运行时，
+  有状态的节点不能改变并行度。
 - 等待 checkpoint 的 barrier 超过 30 秒的 Task 会在日志中给出背压警告；这个时限目前还不能修改。
 - 只有对齐的 checkpoint：Task 要等所有输入都收到 barrier。
 

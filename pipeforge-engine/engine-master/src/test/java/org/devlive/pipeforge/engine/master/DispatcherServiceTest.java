@@ -213,6 +213,10 @@ class DispatcherServiceTest {
                     assertThat(error.code()).isEqualTo(ErrorCode.CHECKPOINT_FAILED);
                     assertThat(error.getMessage()).contains("takes no checkpoints");
                 });
+        assertThatThrownBy(
+                        () -> stub.stopWithSavepoint(savepoint.setRunId("run-1").build()))
+                .satisfies(e -> assertThat(RpcErrors.fromStatus(e, "master").getMessage())
+                        .contains("cannot pause"));
         stub.cancelJob(request("run-1"));
         runs.awaitEnd("run-1");
 

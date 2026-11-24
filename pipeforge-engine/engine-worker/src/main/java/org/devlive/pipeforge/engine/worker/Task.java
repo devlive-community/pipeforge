@@ -160,10 +160,6 @@ final class Task implements Runnable {
                             : "the task reads no source; it takes part when the barrier reaches it");
             return;
         }
-        if (trigger.stop()) {
-            decline(trigger.checkpointId(), "this worker cannot stop a run with a savepoint");
-            return;
-        }
         var barrier = new org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier(
                 trigger.checkpointId(),
                 trigger.timestampMs(),
@@ -171,8 +167,18 @@ final class Task implements Runnable {
                         ? org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier.Type.SAVEPOINT
                         : org.devlive.pipeforge.engine.network.NetworkEvent.CheckpointBarrier.Type.CHECKPOINT,
                 false);
-        mailbox.put(() -> checkpoint(barrier, 0));
+        mailbox.put(() -> {
+            checkpoint(barrier, 0);
+            if (trigger.stop()) {
+                // a savepoint that pauses the run: no row after its barrier
+                stoppedFor = trigger.checkpointId();
+                LOG.info("Task {} stops reading for savepoint {}", deployment.id(), trigger.checkpointId());
+            }
+        });
     }
+
+    /** The savepoint the source stopped reading for, 0 while it reads; read on the task thread. */
+    private long stoppedFor;
 
     void notifyCheckpointComplete(long checkpointId) {
         mailbox.put(() -> {
@@ -185,6 +191,11 @@ final class Task implements Runnable {
 
     void abortCheckpoint(long checkpointId) {
         mailbox.put(() -> {
+            if (stoppedFor == checkpointId) {
+                // the run does not pause: read on
+                stoppedFor = 0;
+                LOG.info("Task {} reads on: savepoint {} failed", deployment.id(), checkpointId);
+            }
             OperatorChain operators = chain;
             if (operators != null) {
                 operators.abortCheckpoint(checkpointId);
@@ -352,6 +363,11 @@ final class Task implements Runnable {
                 long start = System.nanoTime();
                 mailbox.waitAndDrain(quota);
                 throttleNanos.addAndGet(System.nanoTime() - start);
+                continue;
+            }
+            if (stoppedFor != 0) {
+                // stopped for a savepoint: only mail until the run is cancelled or reads on
+                mailbox.waitAndDrain(MAX_IDLE_NANOS);
                 continue;
             }
             PollStatus status = operators.pollNext();

@@ -22,8 +22,10 @@ class RunStatesTest {
     /** The transitions of the job DSL and control plane design, section 3.2, that this version has. */
     static final Map<State, Set<State>> EXPECTED = Map.of(
             State.QUEUE, EnumSet.of(State.RUNNING, State.CANCELLING, State.FAILED),
-            State.RUNNING, EnumSet.of(State.SUCCESS, State.FAILED, State.CANCELLING),
-            State.CANCELLING, EnumSet.of(State.CANCELLED, State.FAILED, State.TIMEOUT));
+            State.RUNNING, EnumSet.of(State.SUCCESS, State.FAILED, State.CANCELLING, State.PAUSING),
+            State.CANCELLING, EnumSet.of(State.CANCELLED, State.FAILED, State.TIMEOUT),
+            State.PAUSING, EnumSet.of(State.PAUSED, State.RUNNING, State.FAILED, State.CANCELLING),
+            State.PAUSED, EnumSet.of(State.QUEUE, State.CANCELLED));
 
     @Test
     void allowsExactlyTheTransitionsOfTheDesign() {

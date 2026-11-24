@@ -916,6 +916,101 @@ class ClusterJobTest {
     }
 
     @Test
+    void aPausedRunHoldsNoSlotsAndGoesOnAsIfItHadNotPaused(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        JobPlan plan = withCheckpoints(
+                TestConnectors.job(probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", 3),
+                Duration.ofHours(1),
+                3,
+                2);
+        SubmitOptions options = SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20);
+        JobMaster first = start(
+                plan,
+                Duration.ofSeconds(5),
+                options,
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+        while (first.handle().status() != JobStatus.RUNNING
+                || first.tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            Thread.sleep(5);
+        }
+        Thread.sleep(200);
+
+        var savepoint = first.pause("pause").get(20, TimeUnit.SECONDS);
+        JobResult paused = end(first.handle());
+        assertThat(paused.status()).isEqualTo(JobStatus.PAUSED);
+        assertThat(first.pausedWith()).isEqualTo(savepoint);
+        assertThat(Probe.get(probe).rows.size())
+                .as("what came before the savepoint is committed")
+                .isBetween(1, 2999);
+        assertThat(Probe.get(probe).events).anyMatch(e -> e.startsWith("prepared"));
+        awaitSlotsBack();
+
+        JobMaster second = start(
+                plan,
+                Duration.ofSeconds(5),
+                options,
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run),
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false));
+        JobResult result = end(second.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        awaitSlotsBack();
+    }
+
+    @Test
+    void aPauseWhoseSavepointFailsLetsTheRunReadOn(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        Worker refusing = workers.values().iterator().next();
+        // one worker refuses to stop: the savepoint fails
+        refusing.barriers = trigger -> master.gateway()
+                .declineCheckpoint(
+                        trigger.task(),
+                        trigger.checkpointId(),
+                        org.devlive.pipeforge.common.error.PipeForgeException.of(ErrorCode.CHECKPOINT_DECLINED)
+                                .param("checkpoint", trigger.checkpointId())
+                                .param("task", trigger.task().toString())
+                                .param("reason", "not now")
+                                .build());
+        JobMaster job = start(
+                withCheckpoints(
+                        TestConnectors.job(
+                                probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", 3),
+                        Duration.ofHours(1),
+                        3,
+                        2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        storage,
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+        while (job.handle().status() != JobStatus.RUNNING
+                || job.tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            Thread.sleep(5);
+        }
+
+        assertThat(job.pause(null))
+                .failsWithin(Duration.ofSeconds(20))
+                .withThrowableThat()
+                .havingRootCause()
+                .withMessageContaining("not now");
+        refusing.barriers = null;
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        assertThat(Probe.get(probe).events)
+                .as("the readers that stopped read on")
+                .noneMatch(e -> e.contains("paused"));
+        awaitSlotsBack();
+    }
+
+    @Test
     void aRestorePointOfAnotherJobOrParallelismIsRefused(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
             throws Exception {
         String probe = Probe.create();

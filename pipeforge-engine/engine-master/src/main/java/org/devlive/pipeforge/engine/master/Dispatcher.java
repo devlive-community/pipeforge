@@ -138,9 +138,11 @@ public final class Dispatcher implements AutoCloseable {
     }
 
     private final class Run {
-        final Submission submission;
-        final JobPlan plan;
-        final JobMaster master;
+        /** The submission, the plan and the job master of the current attempt: a resumed run has a new one. */
+        volatile Submission submission;
+
+        volatile JobPlan plan;
+        volatile JobMaster master;
         final RunStates states;
 
         @Nullable
@@ -218,7 +220,7 @@ public final class Dispatcher implements AutoCloseable {
     public RunStatus submit(Submission submission) {
         synchronized (this) {
             Run existing = runs.get(submission.runId());
-            if (existing != null) {
+            if (existing != null && !(existing.states.state() == State.PAUSED && submission.restore() != null)) {
                 return existing.status();
             }
         }
@@ -226,7 +228,9 @@ public final class Dispatcher implements AutoCloseable {
         Run run;
         synchronized (this) {
             Run existing = runs.get(submission.runId());
-            if (existing != null) {
+            boolean resuming =
+                    existing != null && existing.states.state() == State.PAUSED && submission.restore() != null;
+            if (existing != null && !resuming) {
                 close(planned.components());
                 return existing.status();
             }
@@ -240,13 +244,34 @@ public final class Dispatcher implements AutoCloseable {
                     () -> jobs.remove(submission.runId()),
                     checkpoints,
                     submission.restore());
-            run = new Run(submission, plan, master);
-            runs.put(submission.runId(), run);
+            if (resuming) {
+                // a paused run goes on, in a new attempt from its savepoint
+                run = existing;
+                run.submission = submission;
+                run.plan = plan;
+                run.master = master;
+                run.error = null;
+                run.result = null;
+                run.states.move(
+                        State.QUEUE,
+                        clock.instant(),
+                        "resumed from "
+                                + java.util.Objects.requireNonNull(submission.restore())
+                                        .path());
+            } else {
+                run = new Run(submission, plan, master);
+                runs.put(submission.runId(), run);
+            }
             trim();
         }
         Run started = run;
-        started.master.onStatus(status -> moved(started, status));
-        started.master.handle().result().whenComplete((result, error) -> ended(started, result, planned));
+        JobMaster attempt = started.master;
+        attempt.onStatus(status -> {
+            if (started.master == attempt) {
+                moved(started, status);
+            }
+        });
+        attempt.handle().result().whenComplete((result, error) -> ended(started, result, planned));
         if (submission.timeout() != null) {
             started.timer =
                     timers.schedule(() -> timeout(started), submission.timeout().toMillis(), TimeUnit.MILLISECONDS);
@@ -262,6 +287,18 @@ public final class Dispatcher implements AutoCloseable {
      *
      * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
      */
+    /**
+     * Pauses a run with a savepoint; it is resumed by submitting it again with the savepoint as its
+     * restore point.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
+     */
+    public java.util.concurrent.CompletableFuture<
+                    org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+            pause(String runId, @Nullable String name) {
+        return find(runId).master.pause(name);
+    }
+
     /**
      * Takes a savepoint of a run.
      *
@@ -300,6 +337,11 @@ public final class Dispatcher implements AutoCloseable {
      */
     public RunStatus cancel(String runId, String reason) {
         Run run = find(runId);
+        if (run.states.state() == State.PAUSED) {
+            // nothing runs: the run ends here, its savepoint stays
+            run.states.move(State.CANCELLED, clock.instant(), reason);
+            return run.status();
+        }
         if (!run.states.state().isTerminal()) {
             LOG.info("Cancelling run {}: {}", runId, reason);
             run.master.cancel();
@@ -402,10 +444,16 @@ public final class Dispatcher implements AutoCloseable {
                     case SUCCESS -> State.SUCCESS;
                     case FAILED -> State.FAILED;
                     case CANCELLED -> run.timedOut ? State.TIMEOUT : State.CANCELLED;
+                    case PAUSING -> State.PAUSING;
+                    case PAUSED -> State.PAUSED;
                 };
         String reason =
                 switch (next) {
-                    case RUNNING -> "tasks deployed";
+                    case RUNNING -> run.states.state() == State.PAUSING ? "the savepoint failed" : "tasks deployed";
+                    case PAUSING -> "pause requested";
+                    case PAUSED -> "paused with "
+                            + java.util.Objects.requireNonNull(run.master.pausedWith())
+                                    .directory();
                     case CANCELLING -> run.timedOut ? "timeout of " + run.submission.timeout() : "cancel requested";
                     default -> status.name().toLowerCase(java.util.Locale.ROOT);
                 };

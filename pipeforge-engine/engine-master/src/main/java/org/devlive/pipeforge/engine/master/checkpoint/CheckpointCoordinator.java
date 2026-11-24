@@ -282,6 +282,17 @@ public final class CheckpointCoordinator {
      * @return completes when the checkpoint completes, or fails with why it failed
      */
     public CompletableFuture<Completed> trigger(CheckpointType type, String reason, @Nullable String name) {
+        return trigger(type, reason, name, false);
+    }
+
+    /**
+     * Takes a checkpoint now.
+     *
+     * @param stop whether the sources read no more after it: a savepoint that pauses the run; they
+     *     read on when it fails
+     */
+    public CompletableFuture<Completed> trigger(
+            CheckpointType type, String reason, @Nullable String name, boolean stop) {
         if (stopped || !context.tasks().running()) {
             return CompletableFuture.failedFuture(failed(lastId + 1, "the run is not running"));
         }
@@ -329,18 +340,18 @@ public final class CheckpointCoordinator {
         context.valve().close(id).whenComplete((ignored, error) -> context.post()
                 .execute(() -> {
                     if (pending.get(id) == checkpoint) {
-                        triggerSources(checkpoint, type, now);
+                        triggerSources(checkpoint, type, now, stop);
                     }
                 }));
         return checkpoint.result;
     }
 
-    private void triggerSources(Pending checkpoint, CheckpointType type, long now) {
+    private void triggerSources(Pending checkpoint, CheckpointType type, long now, boolean stop) {
         long id = checkpoint.id;
         for (ExecutionAttemptId source : context.tasks().sources()) {
             context.tasks()
                     .gateway(source)
-                    .triggerCheckpoint(new CheckpointTrigger(source, id, type, now, false))
+                    .triggerCheckpoint(new CheckpointTrigger(source, id, type, now, stop))
                     .whenComplete((ignored, error) -> {
                         if (error != null) {
                             context.post().execute(() -> decline(source, id, PipeForgeException.wrap(error)));

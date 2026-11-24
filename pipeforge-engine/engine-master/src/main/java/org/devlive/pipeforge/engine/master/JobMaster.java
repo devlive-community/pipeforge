@@ -193,6 +193,15 @@ public final class JobMaster {
     /** Where the run starts from, or {@code null} for the beginning. */
     private final org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restoreFrom;
 
+    /** The answer to a pause, completed once the run is paused; {@code null} without a pause. */
+    private java.util.concurrent.@Nullable CompletableFuture<
+                    org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+            pausing;
+
+    /** The savepoint the run paused with, once it completed; {@code null} otherwise. */
+    private volatile org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.@Nullable Completed
+            pausedWith;
+
     /** The restore point the run started from, once read; {@code null} without one. */
     private org.devlive.pipeforge.engine.master.checkpoint.@Nullable RestorePoint restored;
 
@@ -703,7 +712,7 @@ public final class JobMaster {
             }
             case FAILED -> tasksFailed(List.of(task), update.error());
             case CANCELED -> {
-                if (status != JobStatus.CANCELLING && failure == null) {
+                if (status != JobStatus.CANCELLING && failure == null && pausedWith == null) {
                     // the master cancels tasks only to fail or cancel the run, or to restart them: its
                     // worker stopped this one, and what it had to do is not done
                     tasksFailed(
@@ -880,7 +889,7 @@ public final class JobMaster {
      *     running on a worker that was lost
      */
     private void tasksFailed(List<ExecutionGraph.Task> failed, PipeForgeException error, Duration fence) {
-        if (failure != null || status.isTerminal() || status == JobStatus.CANCELLING) {
+        if (failure != null || status.isTerminal() || status == JobStatus.CANCELLING || status == JobStatus.PAUSING) {
             // a task that fails while the run stops still fails the run, as before
             fail(error);
             return;
@@ -1195,6 +1204,90 @@ public final class JobMaster {
         return result;
     }
 
+    /**
+     * Pauses the run: its sources read no more after a savepoint; once the savepoint completed and
+     * its sinks committed, the tasks are cancelled, the slots given back and the run ends {@code
+     * PAUSED}. A new attempt of the run goes on from the savepoint. When the savepoint fails, the
+     * sources read on and the run keeps running.
+     *
+     * @param name the savepoint's name, or {@code null} for {@code savepoint}
+     * @return completes with the savepoint once the run is paused, or fails with why it did not pause
+     */
+    public java.util.concurrent.CompletableFuture<
+                    org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+            pause(@Nullable String name) {
+        var result = new java.util.concurrent.CompletableFuture<
+                org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>();
+        boolean posted = tryPost(() -> {
+            var coordinator = checkpoints;
+            if (coordinator == null || status != JobStatus.RUNNING) {
+                result.completeExceptionally(PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                        .param("checkpoint", 0)
+                        .param(
+                                "reason",
+                                coordinator == null
+                                        ? "the run takes no checkpoints, so it cannot pause"
+                                        : "the run is " + status.name().toLowerCase(java.util.Locale.ROOT)
+                                                + ", not running")
+                        .build());
+                return;
+            }
+            String named = name == null || name.isBlank() ? null : name;
+            if (named != null && !named.matches("[A-Za-z0-9_.\\-]+")) {
+                result.completeExceptionally(PipeForgeException.of(ErrorCode.REQUEST_INVALID)
+                        .param(
+                                "reason",
+                                "a savepoint name has only letters, digits, '_', '-' and '.', not '" + named + "'")
+                        .build());
+                return;
+            }
+            LOG.info("Job {} ({}) pauses", plan.name(), id);
+            status(JobStatus.PAUSING);
+            coordinator
+                    .trigger(org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT, "PAUSE", named, true)
+                    .whenComplete((completed, error) -> post(() -> {
+                        if (error != null) {
+                            if (status == JobStatus.PAUSING) {
+                                LOG.warn("Job {} ({}) did not pause: {}", plan.name(), id, error.getMessage());
+                                status(JobStatus.RUNNING);
+                            }
+                            result.completeExceptionally(error);
+                            return;
+                        }
+                        if (status != JobStatus.PAUSING) {
+                            // cancelled or failed meanwhile: the savepoint is kept, the run does not pause
+                            result.completeExceptionally(PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                                    .param("checkpoint", completed.checkpointId())
+                                    .param(
+                                            "reason",
+                                            "the run was " + status.name().toLowerCase(java.util.Locale.ROOT)
+                                                    + " while it paused")
+                                    .build());
+                            return;
+                        }
+                        pausedWith = completed;
+                        pausing = result;
+                        LOG.info("Job {} ({}) paused with {}", plan.name(), id, completed.directory());
+                        restarts.clear();
+                        cancelTasks();
+                        // answered once the tasks stopped and the run is paused
+                        endIfDone();
+                    }));
+        });
+        if (!posted) {
+            result.completeExceptionally(PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                    .param("checkpoint", 0)
+                    .param("reason", "the run has ended")
+                    .build());
+        }
+        return result;
+    }
+
+    /** The savepoint the run paused with, or {@code null} when it did not pause. */
+    public org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.@Nullable Completed pausedWith() {
+        return pausedWith;
+    }
+
     /** The enumerator's snapshot of checkpoint {@code checkpointId} was taken: remembers what was assigned before it. */
     private void marked(long checkpointId) {
         Map<Integer, Integer> sizes = new HashMap<>();
@@ -1250,7 +1343,7 @@ public final class JobMaster {
                 || !states.values().stream().allMatch(TaskState::isTerminal)) {
             return;
         }
-        if (failure == null && status != JobStatus.CANCELLING) {
+        if (failure == null && status != JobStatus.CANCELLING && pausedWith == null) {
             try {
                 commit();
             } catch (PipeForgeException e) {
@@ -1260,7 +1353,9 @@ public final class JobMaster {
         closeEnumerator();
         JobStatus end = failure != null
                 ? JobStatus.FAILED
-                : status == JobStatus.CANCELLING ? JobStatus.CANCELLED : JobStatus.SUCCESS;
+                : pausedWith != null
+                        ? JobStatus.PAUSED
+                        : status == JobStatus.CANCELLING ? JobStatus.CANCELLED : JobStatus.SUCCESS;
         countSplits();
         if (checkpoints != null) {
             checkpoints.stop(end);
@@ -1273,6 +1368,25 @@ public final class JobMaster {
         published = last;
         status(end);
         LOG.info("Job {} ({}) ended: {}", plan.name(), id, end);
+        var answer = pausing;
+        if (answer != null) {
+            if (end == JobStatus.PAUSED) {
+                answer.complete(java.util.Objects.requireNonNull(pausedWith));
+            } else {
+                answer.completeExceptionally(
+                        failure != null
+                                ? failure
+                                : PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                                        .param(
+                                                "checkpoint",
+                                                java.util.Objects.requireNonNull(pausedWith)
+                                                        .checkpointId())
+                                        .param(
+                                                "reason",
+                                                "the run ended " + end.name().toLowerCase(java.util.Locale.ROOT))
+                                        .build());
+            }
+        }
         placement.release();
         handle.result.complete(new JobResult(id, end, failure, last));
         thread.shutdown();

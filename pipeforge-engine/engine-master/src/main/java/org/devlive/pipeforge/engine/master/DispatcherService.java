@@ -136,19 +136,27 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
     }
 
     @Override
-    public void triggerSavepoint(
+    public void stopWithSavepoint(
             org.devlive.pipeforge.engine.rpc.proto.SavepointRequest request,
             StreamObserver<org.devlive.pipeforge.engine.rpc.proto.SavepointResponse> observer) {
         java.util.concurrent.CompletableFuture<
                         org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
-                taking;
+                pausing;
         try {
             Headers.checkVersion(request.getHeader());
-            taking = dispatcher.triggerSavepoint(
-                    request.getRunId(), request.getName().isEmpty() ? null : request.getName());
+            pausing = dispatcher.pause(request.getRunId(), request.getName().isEmpty() ? null : request.getName());
         } catch (RuntimeException e) {
-            taking = java.util.concurrent.CompletableFuture.failedFuture(e);
+            pausing = java.util.concurrent.CompletableFuture.failedFuture(e);
         }
+        respond(observer, pausing);
+    }
+
+    /** Answers with a savepoint once it completed, or with why it did not. */
+    private static void respond(
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.SavepointResponse> observer,
+            java.util.concurrent.CompletableFuture<
+                            org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+                    taking) {
         taking.whenComplete((completed, error) -> {
             if (error != null) {
                 observer.onError(RpcErrors.toStatus(
@@ -163,6 +171,23 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 observer.onCompleted();
             }
         });
+    }
+
+    @Override
+    public void triggerSavepoint(
+            org.devlive.pipeforge.engine.rpc.proto.SavepointRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.SavepointResponse> observer) {
+        java.util.concurrent.CompletableFuture<
+                        org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+                taking;
+        try {
+            Headers.checkVersion(request.getHeader());
+            taking = dispatcher.triggerSavepoint(
+                    request.getRunId(), request.getName().isEmpty() ? null : request.getName());
+        } catch (RuntimeException e) {
+            taking = java.util.concurrent.CompletableFuture.failedFuture(e);
+        }
+        respond(observer, taking);
     }
 
     @Override
@@ -370,6 +395,8 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
             case FAILED -> RunState.RUN_STATE_FAILED;
             case CANCELLED -> RunState.RUN_STATE_CANCELLED;
             case TIMEOUT -> RunState.RUN_STATE_TIMEOUT;
+            case PAUSING -> RunState.RUN_STATE_PAUSING;
+            case PAUSED -> RunState.RUN_STATE_PAUSED;
         };
     }
 
@@ -382,10 +409,10 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
             case RUN_STATE_FAILED -> State.FAILED;
             case RUN_STATE_CANCELLED -> State.CANCELLED;
             case RUN_STATE_TIMEOUT -> State.TIMEOUT;
-                // states of restarts and pauses; this master does not restart or pause runs
+            case RUN_STATE_PAUSING -> State.PAUSING;
+            case RUN_STATE_PAUSED -> State.PAUSED;
+                // states of run retries; this master does not retry runs
             case RUN_STATE_RESTARTING,
-                    RUN_STATE_PAUSING,
-                    RUN_STATE_PAUSED,
                     RUN_STATE_RETRY_WAIT,
                     RUN_STATE_UNSPECIFIED,
                     UNRECOGNIZED -> throw new IllegalArgumentException("Unknown run state " + state);

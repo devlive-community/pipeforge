@@ -317,11 +317,14 @@ class TaskExecutorTest {
                     .triggerCheckpoint(new org.devlive.pipeforge.engine.rpc.CheckpointTrigger(
                             master.id(), 3, org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT, 0, true))
                     .get();
-            var declined = master.declines.poll(10, TimeUnit.SECONDS);
-            assertThat(declined).isNotNull();
-            assertThat(declined.code()).isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.CHECKPOINT_DECLINED);
-            assertThat(declined.params()).containsEntry("checkpoint", 3L);
-            assertThat(declined.getMessage()).contains("cannot stop a run with a savepoint");
+            var stopping = master.acks.poll(10, TimeUnit.SECONDS);
+            assertThat(stopping)
+                    .as("a savepoint that pauses the run is taken too")
+                    .isNotNull();
+            assertThat(stopping.checkpointId()).isEqualTo(3);
+            // it fails elsewhere: the source reads on
+            assertThat(master.executor.abortCheckpoint(master.id(), 3, "declined"))
+                    .succeedsWithin(Duration.ofSeconds(5));
 
             assertThat(master.executor.notifyCheckpointComplete(master.id(), 2)).succeedsWithin(Duration.ofSeconds(5));
             assertThat(master.executor.abortCheckpoint(master.id(), 4, "x")).succeedsWithin(Duration.ofSeconds(5));

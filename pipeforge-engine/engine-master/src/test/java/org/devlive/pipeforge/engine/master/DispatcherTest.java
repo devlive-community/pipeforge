@@ -66,6 +66,10 @@ class DispatcherTest {
     Dispatcher dispatcher = dispatcher(100);
 
     Dispatcher dispatcher(int retained) {
+        return dispatcher(retained, SubmitOptions.defaults());
+    }
+
+    Dispatcher dispatcher(int retained, SubmitOptions options) {
         return new Dispatcher(
                 submission -> {
                     planned.incrementAndGet();
@@ -80,7 +84,7 @@ class DispatcherTest {
                 },
                 plan -> Placement.local(worker.gateway()),
                 jobs,
-                SubmitOptions.defaults(),
+                options,
                 timers,
                 Clock.systemUTC(),
                 retained);
@@ -303,5 +307,93 @@ class DispatcherTest {
                         .state())
                 .as("a run that ended stays as it is")
                 .isEqualTo(State.SUCCESS);
+    }
+
+    @Test
+    void aPausedRunIsResumedBySubmittingItAgainFromItsSavepoint(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        dispatcher.close();
+        // a short write queue, so that the savepoint does not wait behind most of the input
+        dispatcher = dispatcher(
+                        100, SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20))
+                .withCheckpoints(new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+        String probe = Probe.create();
+        definitions.put(
+                "slow",
+                () -> TestConnectors.job(probe, "rows: 2000, splits: 4", null, "commit: transactional, slow-ms: 1", 1));
+        dispatcher.submit(submission("run-1", "slow", null));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (dispatcher.status("run-1").state() != State.RUNNING
+                || dispatcher.status("run-1").tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            assertThat(System.nanoTime()).as("the run runs").isLessThan(deadline);
+            Thread.sleep(5);
+        }
+        Thread.sleep(100);
+
+        var savepoint = dispatcher.pause("run-1", "nightly").get(20, TimeUnit.SECONDS);
+        while (dispatcher.status("run-1").state() != State.PAUSED) {
+            assertThat(System.nanoTime()).as("the run pauses").isLessThan(deadline + TimeUnit.SECONDS.toNanos(10));
+            Thread.sleep(5);
+        }
+        assertThat(dispatcher.submit(submission("run-1", "slow", null)).state())
+                .as("submitting it again without a restore point leaves it paused")
+                .isEqualTo(State.PAUSED);
+
+        dispatcher.submit(new Dispatcher.Submission(
+                "job-1",
+                "run-1",
+                "slow",
+                Map.of(),
+                null,
+                Map.of(),
+                null,
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false)));
+        awaitEnd("run-1");
+        var status = dispatcher.status("run-1");
+        assertThat(status.state()).isEqualTo(State.SUCCESS);
+        assertThat(status.transitions())
+                .extracting(RunStates.Transition::to)
+                .containsExactly(
+                        State.QUEUE,
+                        State.RUNNING,
+                        State.PAUSING,
+                        State.PAUSED,
+                        State.QUEUE,
+                        State.RUNNING,
+                        State.SUCCESS);
+        assertThat(status.transitions().get(4).reason()).startsWith("resumed from run-1/savepoints/nightly-");
+        List<Long> ids = Probe.get(probe).rows.stream()
+                .map(r -> (Long) r.get(0))
+                .sorted()
+                .toList();
+        assertThat(ids).hasSize(2000).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void aPausedRunThatIsCancelledEndsWithoutRunning(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        dispatcher.close();
+        dispatcher = dispatcher(100)
+                .withCheckpoints(new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+        String probe = Probe.create();
+        definitions.put("endless", () -> TestConnectors.job(probe, "endless: true", null, "", 1));
+        dispatcher.submit(submission("run-2", "endless", null));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (dispatcher.status("run-2").tasks().stream().noneMatch(t -> t.state() == TaskState.RUNNING)) {
+            assertThat(System.nanoTime()).as("the run runs").isLessThan(deadline);
+            Thread.sleep(5);
+        }
+        dispatcher.pause("run-2", null).get(20, TimeUnit.SECONDS);
+        while (dispatcher.status("run-2").state() != State.PAUSED) {
+            Thread.sleep(5);
+        }
+        assertThat(dispatcher.cancel("run-2", "not needed").state()).isEqualTo(State.CANCELLED);
     }
 }

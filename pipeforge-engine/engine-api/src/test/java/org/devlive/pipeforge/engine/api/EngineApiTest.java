@@ -30,9 +30,9 @@ class EngineApiTest {
     }
 
     @Test
-    void onlySuccessFailedAndCancelledAreTerminal() {
+    void theJobMasterIsDoneWithSuccessFailedCancelledAndPausedJobs() {
         assertThat(List.of(JobStatus.values()).stream().filter(JobStatus::isTerminal))
-                .containsExactly(JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.CANCELLED);
+                .containsExactly(JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.PAUSED);
     }
 
     @Test

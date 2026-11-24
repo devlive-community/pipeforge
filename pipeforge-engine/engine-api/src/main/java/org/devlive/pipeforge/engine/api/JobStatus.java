@@ -23,10 +23,14 @@ public enum JobStatus {
     /** A task or the job master failed; the result carries the error. */
     FAILED,
     /** Stopped on request. */
-    CANCELLED;
+    CANCELLED,
+    /** Taking the savepoint it pauses with; its sources read no more. */
+    PAUSING,
+    /** Stopped with a savepoint, its slots given back; a new attempt goes on from the savepoint. */
+    PAUSED;
 
-    /** Whether the job has ended. */
+    /** Whether the job master is done with the run; a paused run may go on in a new attempt. */
     public boolean isTerminal() {
-        return this == SUCCESS || this == FAILED || this == CANCELLED;
+        return this == SUCCESS || this == FAILED || this == CANCELLED || this == PAUSED;
     }
 }

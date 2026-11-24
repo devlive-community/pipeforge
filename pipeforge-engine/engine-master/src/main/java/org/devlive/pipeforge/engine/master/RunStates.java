@@ -16,7 +16,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The states of a run and the transitions between them (job DSL and control plane design, section
- * 3.2), as far as this version needs them: no pausing, restarts or retries yet. Every transition is
+ * 3.2), as far as this version needs them: no restarts or retries of runs yet. Every transition is
  * checked and recorded with its time and reason; an illegal one is a defect and refused.
  */
 public final class RunStates {
@@ -31,7 +31,11 @@ public final class RunStates {
         FAILED,
         CANCELLED,
         /** Cancelled because it ran longer than its timeout. */
-        TIMEOUT;
+        TIMEOUT,
+        /** Taking the savepoint it pauses with. */
+        PAUSING,
+        /** Stopped with a savepoint, holding no slots; it goes on when it is resumed. */
+        PAUSED;
 
         public boolean isTerminal() {
             return this == SUCCESS || this == FAILED || this == CANCELLED || this == TIMEOUT;
@@ -43,8 +47,11 @@ public final class RunStates {
 
     private static final Map<State, Set<State>> ALLOWED = Map.of(
             State.QUEUE, EnumSet.of(State.RUNNING, State.CANCELLING, State.FAILED),
-            State.RUNNING, EnumSet.of(State.SUCCESS, State.FAILED, State.CANCELLING),
+            State.RUNNING, EnumSet.of(State.SUCCESS, State.FAILED, State.CANCELLING, State.PAUSING),
             State.CANCELLING, EnumSet.of(State.CANCELLED, State.FAILED, State.TIMEOUT),
+            // a savepoint that fails leaves the run running
+            State.PAUSING, EnumSet.of(State.PAUSED, State.RUNNING, State.FAILED, State.CANCELLING),
+            State.PAUSED, EnumSet.of(State.QUEUE, State.CANCELLED),
             State.SUCCESS, EnumSet.noneOf(State.class),
             State.FAILED, EnumSet.noneOf(State.class),
             State.CANCELLED, EnumSet.noneOf(State.class),
