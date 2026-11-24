@@ -35,6 +35,7 @@ import org.jspecify.annotations.Nullable;
  * @param warnings problems that do not stop the job, in a stable order
  * @param checkpoint how the job takes checkpoints ({@code env.checkpoint.*})
  * @param restart how the job restarts after a failure ({@code env.restart.*})
+ * @param retry how a failed run starts a new attempt ({@code env.retry.*})
  */
 public record JobPlan(
         String name,
@@ -51,7 +52,44 @@ public record JobPlan(
         org.devlive.pipeforge.core.dirty.DirtyPolicy dirty,
         RateLimit limit,
         CheckpointSettings checkpoint,
-        RestartSettings restart) {
+        RestartSettings restart,
+        RetrySettings retry) {
+
+    /** A plan whose failed runs are not retried. */
+    public JobPlan(
+            String name,
+            @Nullable String description,
+            EngineKind engine,
+            JobMode mode,
+            boolean modeDerived,
+            Delivery delivery,
+            int parallelism,
+            ZoneId timeZone,
+            Map<String, String> variables,
+            List<PlannedNode> nodes,
+            List<String> warnings,
+            org.devlive.pipeforge.core.dirty.DirtyPolicy dirty,
+            RateLimit limit,
+            CheckpointSettings checkpoint,
+            RestartSettings restart) {
+        this(
+                name,
+                description,
+                engine,
+                mode,
+                modeDerived,
+                delivery,
+                parallelism,
+                timeZone,
+                variables,
+                nodes,
+                warnings,
+                dirty,
+                limit,
+                checkpoint,
+                restart,
+                RetrySettings.NONE);
+    }
 
     /** A plan with the default restart settings. */
     public JobPlan(
@@ -182,6 +220,7 @@ public record JobPlan(
         java.util.Objects.requireNonNull(limit, "limit");
         java.util.Objects.requireNonNull(checkpoint, "checkpoint");
         java.util.Objects.requireNonNull(restart, "restart");
+        java.util.Objects.requireNonNull(retry, "retry");
         variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
         nodes = List.copyOf(nodes);
         warnings = List.copyOf(warnings);

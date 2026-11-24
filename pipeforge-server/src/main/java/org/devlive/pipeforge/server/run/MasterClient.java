@@ -19,6 +19,8 @@ public interface MasterClient extends AutoCloseable {
      * A run to start.
      *
      * @param plugins plugin ID to the version the server planned with
+     * @param attempt the attempt of the run, counted from 1
+     * @param restorePath the checkpoint the attempt starts from; {@code null} from the beginning
      */
     record Submission(
             String jobId,
@@ -26,7 +28,21 @@ public interface MasterClient extends AutoCloseable {
             String definition,
             Map<String, String> variables,
             Instant scheduledTime,
-            Map<String, String> plugins) {}
+            Map<String, String> plugins,
+            int attempt,
+            @org.jspecify.annotations.Nullable String restorePath) {
+
+        /** The first attempt of a run, from the beginning. */
+        Submission(
+                String jobId,
+                String runId,
+                String definition,
+                Map<String, String> variables,
+                Instant scheduledTime,
+                Map<String, String> plugins) {
+            this(jobId, runId, definition, variables, scheduledTime, plugins, 1, null);
+        }
+    }
 
     /**
      * Where a run is on the master.
@@ -38,9 +54,18 @@ public interface MasterClient extends AutoCloseable {
             RunState state,
             @Nullable Instant started,
             Runs.@Nullable RunError error,
-            java.util.List<RunMetrics.Task> tasks) {
+            java.util.List<RunMetrics.Task> tasks,
+            int attempt) {
         public Status(RunState state, @Nullable Instant started, Runs.@Nullable RunError error) {
-            this(state, started, error, java.util.List.of());
+            this(state, started, error, java.util.List.of(), 1);
+        }
+
+        public Status(
+                RunState state,
+                @Nullable Instant started,
+                Runs.@Nullable RunError error,
+                java.util.List<RunMetrics.Task> tasks) {
+            this(state, started, error, tasks, 1);
         }
     }
 

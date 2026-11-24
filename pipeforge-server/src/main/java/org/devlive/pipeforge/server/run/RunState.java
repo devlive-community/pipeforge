@@ -17,7 +17,9 @@ public enum RunState {
     CANCELLING,
     CANCELLED,
     /** The run took longer than its timeout. */
-    TIMEOUT;
+    TIMEOUT,
+    /** An attempt failed; the next starts after the retry backoff ({@code env.retry}). */
+    RETRY_WAIT;
 
     public boolean isTerminal() {
         return this == SUCCESS || this == FAILED || this == CANCELLED || this == TIMEOUT;

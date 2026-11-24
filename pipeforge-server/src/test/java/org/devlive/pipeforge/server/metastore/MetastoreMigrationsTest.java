@@ -424,4 +424,208 @@ class MetastoreMigrationsTest {
         }
         return versions;
     }
+
+    /** A master that fails the first attempt of every run with a lost connection, and finishes the next. */
+    static final class FlakyMaster implements org.devlive.pipeforge.server.run.MasterClient {
+        final List<Submission> submitted = new java.util.concurrent.CopyOnWriteArrayList<>();
+        final Map<String, Integer> attempts = new ConcurrentHashMap<>();
+
+        @Override
+        public String address() {
+            return "master:1";
+        }
+
+        @Override
+        public void submit(Submission submission) {
+            submitted.add(submission);
+            attempts.put(submission.runId(), submission.attempt());
+        }
+
+        @Override
+        public void cancel(String runId, String reason) {}
+
+        @Override
+        public java.util.Optional<Status> status(String runId) {
+            int attempt = attempts.getOrDefault(runId, 1);
+            return java.util.Optional.of(
+                    attempt == 1
+                            ? new Status(
+                                    org.devlive.pipeforge.server.run.RunState.FAILED,
+                                    java.time.Instant.EPOCH,
+                                    new org.devlive.pipeforge.server.run.Runs.RunError("PF-CONN-0003", "lost"),
+                                    List.of(),
+                                    1)
+                            : new Status(
+                                    org.devlive.pipeforge.server.run.RunState.SUCCESS,
+                                    java.time.Instant.EPOCH,
+                                    null,
+                                    List.of(),
+                                    attempt));
+        }
+
+        @Override
+        public java.util.Optional<org.devlive.pipeforge.server.run.RunMetrics> metrics(String runId) {
+            int attempt = attempts.getOrDefault(runId, 1);
+            return java.util.Optional.of(new org.devlive.pipeforge.server.run.RunMetrics(
+                    java.time.Instant.EPOCH.plusSeconds(attempt),
+                    100,
+                    attempt * 10L,
+                    attempt * 10L,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    List.of(),
+                    List.of()));
+        }
+
+        @Override
+        public org.devlive.pipeforge.server.run.ClusterView cluster() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public java.util.Optional<String> analysis(String runId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public java.util.Optional<List<org.devlive.pipeforge.server.run.RunMetrics.Split>> splits(String runId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public org.devlive.pipeforge.server.run.RunMetrics.LogChunk readLog(
+                String runId, org.devlive.pipeforge.server.run.RunMetrics.Task task, LogQuery query) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void close() {}
+    }
+
+    @ParameterizedTest
+    @EnumSource(MetastoreVendor.class)
+    void aFailedAttemptWaitsAndIsRetriedFromTheLastCheckpoint(MetastoreVendor vendor) throws Exception {
+        ServerProperties.Metastore settings = fresh(vendor);
+        try (HikariDataSource dataSource = MetastoreDataSources.create(settings)) {
+            new MetastoreMigrations(dataSource, vendor, settings.safeUrl()).migrate();
+            var repository = new org.devlive.pipeforge.server.run.RunRepository(
+                    dataSource,
+                    new org.springframework.transaction.support.TransactionTemplate(
+                            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource)));
+            var json = tools.jackson.databind.json.JsonMapper.builder().build();
+            java.time.Instant submitted = java.time.Instant.parse("2026-11-23T08:00:00Z");
+            var submission = new org.devlive.pipeforge.server.run.RunRetries.Resubmission(
+                    Map.of("day", "2026-11-23"),
+                    submitted.toEpochMilli(),
+                    Map.of("fake", "0.1.0"),
+                    "exactly-once",
+                    new org.devlive.pipeforge.server.run.RunRetries.Retry(
+                            2, 60_000, 600_000, 2, List.of("CONN"), "auto", null));
+            repository.insert("r1", "订单 😀", "yaml", null, submitted, json.writeValueAsString(submission));
+            repository.transition(
+                    "r1",
+                    org.devlive.pipeforge.server.run.RunState.QUEUE,
+                    org.devlive.pipeforge.server.run.RunState.RUNNING,
+                    submitted,
+                    submitted,
+                    null,
+                    "running");
+            var jdbc = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
+            jdbc.sql("INSERT INTO checkpoint (run_id, checkpoint_id, job_name, attempt, type, status, trigger_reason,"
+                            + " triggered_at, completed_at, size_bytes, path) VALUES ('r1', 3, 'job', 1, 'CHECKPOINT',"
+                            + " 'COMPLETED', 'PERIODIC', ?, ?, 10, 'r1/chk-3/')")
+                    .params(
+                            java.time.LocalDateTime.of(2026, 11, 23, 8, 0),
+                            java.time.LocalDateTime.of(2026, 11, 23, 8, 0))
+                    .update();
+
+            FlakyMaster master = new FlakyMaster();
+            var now = new java.util.concurrent.atomic.AtomicReference<>(submitted.plusSeconds(30));
+            java.time.Clock clock = new java.time.Clock() {
+                @Override
+                public java.time.ZoneId getZone() {
+                    return java.time.ZoneOffset.UTC;
+                }
+
+                @Override
+                public java.time.Clock withZone(java.time.ZoneId zone) {
+                    return this;
+                }
+
+                @Override
+                public java.time.Instant instant() {
+                    return now.get();
+                }
+            };
+            var tracker = new org.devlive.pipeforge.server.run.RunTracker(
+                    repository,
+                    master,
+                    clock,
+                    new ServerProperties(
+                            new ServerProperties.Plugin(
+                                    List.of(), Path.of("cache"), new ServerProperties.Dev(false, null)),
+                            new ServerProperties.Job("UTC", Map.of()),
+                            settings,
+                            new ServerProperties.Master(
+                                    null,
+                                    "",
+                                    new ServerProperties.Tls(false, null, "", null, ""),
+                                    java.time.Duration.ofMillis(50),
+                                    java.time.Duration.ofMillis(50))),
+                    json);
+
+            tracker.poll();
+            var waiting = repository.find("r1").orElseThrow();
+            assertThat(waiting.status()).isEqualTo(org.devlive.pipeforge.server.run.RunState.RETRY_WAIT);
+            assertThat(waiting.retryAt()).isEqualTo(submitted.plusSeconds(90));
+            assertThat(waiting.error().code()).isEqualTo("PF-CONN-0003");
+            tracker.poll();
+            assertThat(master.submitted).as("not before the backoff").isEmpty();
+
+            now.set(submitted.plusSeconds(91));
+            tracker.poll();
+            assertThat(master.submitted).singleElement().satisfies(next -> {
+                assertThat(next.attempt()).isEqualTo(2);
+                assertThat(next.restorePath()).isEqualTo("r1/chk-3/");
+                assertThat(next.variables()).containsEntry("day", "2026-11-23");
+                assertThat(next.plugins()).containsEntry("fake", "0.1.0");
+                assertThat(next.scheduledTime()).isEqualTo(submitted);
+            });
+            tracker.poll();
+            var done = repository.detail("r1");
+            assertThat(done.run().status()).isEqualTo(org.devlive.pipeforge.server.run.RunState.SUCCESS);
+            assertThat(done.run().attempt()).isEqualTo(2);
+            assertThat(done.run().error()).isNull();
+            assertThat(done.run().rowsWritten())
+                    .as("counted across the attempts")
+                    .isEqualTo(30L);
+            assertThat(done.attempts())
+                    .extracting(a -> a.attempt(), a -> a.status(), a -> a.restorePath())
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    1, org.devlive.pipeforge.server.run.RunState.FAILED, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    2, org.devlive.pipeforge.server.run.RunState.SUCCESS, "r1/chk-3/"));
+            assertThat(done.transitions())
+                    .extracting(t -> t.attempt() + ":" + t.to())
+                    .containsExactly("1:QUEUE", "1:RUNNING", "1:RETRY_WAIT", "2:QUEUE", "2:SUCCESS");
+        }
+    }
 }

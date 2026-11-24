@@ -193,7 +193,9 @@ states (the subset of this version):
 Every transition is checked and recorded with its time and reason; a transition that is not in
 the table is refused. Submitting a run ID that the master knows already returns that run, so a
 retried submission never starts a second run; only a paused run submitted again with a restore
-point goes on, in a new attempt from that point (see [savepoints](./checkpoint#savepoints)). The master plans the definition again with the
+point goes on, in a new attempt from that point (see [savepoints](./checkpoint#savepoints)), and a
+run that ended starts again when the server submits a later attempt of it (see
+[retrying runs](./failure-handling#retrying-runs)). The master plans the definition again with the
 plugin versions the server chose; a version it does not have fails the submission with
 [`PF-PLUG-0009`](../reference/errors#pf-plug-0009), and an unknown run ID is
 [`PF-CONF-0010`](../reference/errors#pf-conf-0010).

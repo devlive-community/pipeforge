@@ -57,7 +57,21 @@ public final class Dispatcher implements AutoCloseable {
             @Nullable Instant scheduledTime,
             Map<String, String> plugins,
             @Nullable Duration timeout,
-            org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restore) {
+            org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restore,
+            int attempt) {
+
+        /** The first attempt of a run that starts from {@code restore}. */
+        public Submission(
+                String jobId,
+                String runId,
+                String definition,
+                Map<String, String> variables,
+                @Nullable Instant scheduledTime,
+                Map<String, String> plugins,
+                @Nullable Duration timeout,
+                org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restore) {
+            this(jobId, runId, definition, variables, scheduledTime, plugins, timeout, restore, 1);
+        }
 
         /** A submission that starts from the beginning. */
         public Submission(
@@ -68,7 +82,7 @@ public final class Dispatcher implements AutoCloseable {
                 @Nullable Instant scheduledTime,
                 Map<String, String> plugins,
                 @Nullable Duration timeout) {
-            this(jobId, runId, definition, variables, scheduledTime, plugins, timeout, null);
+            this(jobId, runId, definition, variables, scheduledTime, plugins, timeout, null, 1);
         }
 
         public Submission {
@@ -113,7 +127,22 @@ public final class Dispatcher implements AutoCloseable {
             @Nullable PipeForgeException error,
             List<JobMaster.TaskView> tasks,
             long lastCheckpointId,
-            long lastCheckpointMs) {
+            long lastCheckpointMs,
+            int attempt) {
+
+        /** The first attempt of a run. */
+        public RunStatus(
+                String runId,
+                String jobId,
+                String jobName,
+                State state,
+                List<RunStates.Transition> transitions,
+                @Nullable PipeForgeException error,
+                List<JobMaster.TaskView> tasks,
+                long lastCheckpointId,
+                long lastCheckpointMs) {
+            this(runId, jobId, jobName, state, transitions, error, tasks, lastCheckpointId, lastCheckpointMs, 1);
+        }
 
         /** A run without checkpoints. */
         public RunStatus(
@@ -170,7 +199,8 @@ public final class Dispatcher implements AutoCloseable {
                     error,
                     master.tasks(),
                     master.checkpointStats().lastCompletedId(),
-                    master.checkpointStats().lastCompletedAtMs());
+                    master.checkpointStats().lastCompletedAtMs(),
+                    submission.attempt());
         }
     }
 
@@ -220,7 +250,7 @@ public final class Dispatcher implements AutoCloseable {
     public RunStatus submit(Submission submission) {
         synchronized (this) {
             Run existing = runs.get(submission.runId());
-            if (existing != null && !(existing.states.state() == State.PAUSED && submission.restore() != null)) {
+            if (existing != null && !resumes(existing, submission) && !retries(existing, submission)) {
                 return existing.status();
             }
         }
@@ -228,9 +258,8 @@ public final class Dispatcher implements AutoCloseable {
         Run run;
         synchronized (this) {
             Run existing = runs.get(submission.runId());
-            boolean resuming =
-                    existing != null && existing.states.state() == State.PAUSED && submission.restore() != null;
-            if (existing != null && !resuming) {
+            boolean resuming = existing != null && resumes(existing, submission);
+            if (existing != null && !resuming && !retries(existing, submission)) {
                 close(planned.components());
                 return existing.status();
             }
@@ -287,6 +316,16 @@ public final class Dispatcher implements AutoCloseable {
      *
      * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
      */
+    /** Whether {@code submission} resumes the paused run {@code existing}. */
+    private static boolean resumes(Run existing, Submission submission) {
+        return existing.states.state() == State.PAUSED && submission.restore() != null;
+    }
+
+    /** Whether {@code submission} is a later attempt of the run {@code existing}, which ended. */
+    private static boolean retries(Run existing, Submission submission) {
+        return existing.states.state().isTerminal() && submission.attempt() > existing.submission.attempt();
+    }
+
     /**
      * Pauses a run with a savepoint; it is resumed by submitting it again with the savepoint as its
      * restore point.

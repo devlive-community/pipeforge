@@ -175,6 +175,44 @@ public final class EnvOptions {
             .defaultValue(org.devlive.pipeforge.core.plan.RestartSettings.DEFAULT_INTERVAL)
             .withDescription("failure-rate: the window the failures are counted in");
 
+    public static final Option<Integer> RETRY_ATTEMPTS = Options.key("retry.attempts")
+            .intType()
+            .defaultValue(0)
+            .withRange(0, 100)
+            .withDescription("How often a failed run starts a new attempt; 0 for never");
+
+    public static final Option<java.time.Duration> RETRY_BACKOFF_INITIAL = Options.key("retry.backoff.initial")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RetrySettings.DEFAULT_INITIAL)
+            .withDescription("The wait before the first retry");
+
+    public static final Option<java.time.Duration> RETRY_BACKOFF_MAX = Options.key("retry.backoff.max")
+            .durationType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RetrySettings.DEFAULT_MAX)
+            .withDescription("The longest wait before a retry");
+
+    public static final Option<Double> RETRY_BACKOFF_MULTIPLIER = Options.key("retry.backoff.multiplier")
+            .doubleType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RetrySettings.DEFAULT_MULTIPLIER)
+            .withRange(1.0, 1000.0)
+            .withDescription("How much longer each wait is than the one before");
+
+    public static final Option<List<String>> RETRY_ON = Options.key("retry.on")
+            .listType()
+            .defaultValue(org.devlive.pipeforge.core.plan.RetrySettings.DEFAULT_ON)
+            .withDescription("The error categories, error codes or TRANSIENT whose failures are retried");
+
+    public static final Option<org.devlive.pipeforge.core.plan.RetrySettings.Resume> RETRY_RESUME = Options.key(
+                    "retry.resume")
+            .enumType(org.devlive.pipeforge.core.plan.RetrySettings.Resume.class)
+            .defaultValue(org.devlive.pipeforge.core.plan.RetrySettings.Resume.AUTO)
+            .withDescription("Where a new attempt starts: auto, checkpoint or restart");
+
+    public static final Option<java.time.Duration> RETRY_WITHIN = Options.key("retry.within")
+            .durationType()
+            .noDefault()
+            .withDescription("How long after its submission a run may still be retried; no limit when not set");
+
     /** Prefixes of node defaults: {@code source.*}, {@code transform.*} and {@code sink.*}. */
     public static final List<String> NODE_DEFAULT_PREFIXES = List.of("source", "transform", "sink");
 
@@ -209,7 +247,14 @@ public final class EnvOptions {
                     RESTART_MULTIPLIER,
                     RESTART_RESET_AFTER,
                     RESTART_MAX_FAILURES,
-                    RESTART_INTERVAL)
+                    RESTART_INTERVAL,
+                    RETRY_ATTEMPTS,
+                    RETRY_BACKOFF_INITIAL,
+                    RETRY_BACKOFF_MAX,
+                    RETRY_BACKOFF_MULTIPLIER,
+                    RETRY_ON,
+                    RETRY_RESUME,
+                    RETRY_WITHIN)
             .nativeNamespaces(NODE_DEFAULT_PREFIXES.toArray(String[]::new))
             .build();
 

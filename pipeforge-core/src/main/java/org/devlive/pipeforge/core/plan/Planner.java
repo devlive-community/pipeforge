@@ -141,7 +141,20 @@ public final class Planner {
                         job.env().getOptional(EnvOptions.LIMIT_ROWS).orElse(0L),
                         job.env().getOptional(EnvOptions.LIMIT_BYTES).orElse(0L)),
                 checkpoint(job, mode),
-                restart(job, warnings));
+                restart(job, warnings),
+                retry(job));
+    }
+
+    private static RetrySettings retry(JobDefinition job) {
+        var env = job.env();
+        return new RetrySettings(
+                env.get(EnvOptions.RETRY_ATTEMPTS),
+                env.get(EnvOptions.RETRY_BACKOFF_INITIAL),
+                env.get(EnvOptions.RETRY_BACKOFF_MAX),
+                env.get(EnvOptions.RETRY_BACKOFF_MULTIPLIER),
+                env.get(EnvOptions.RETRY_ON),
+                env.get(EnvOptions.RETRY_RESUME),
+                env.getOptional(EnvOptions.RETRY_WITHIN).orElse(null));
     }
 
     /** The restart settings; options the strategy does not use are reported as warnings. */

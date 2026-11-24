@@ -30,7 +30,7 @@ if (!ended.run().status().equals("SUCCESS")) {
 }
 ```
 
-`awaitRun` 不断查询运行，直到它结束（`PipeForgeClient.ENDED`）；超时没有结束时抛出 `TimeoutException`，运行本身继续进行。
+`awaitRun` 不断查询运行，直到它结束（`PipeForgeClient.ENDED`）；超时没有结束时抛出 `TimeoutException`，运行本身继续进行。`RETRY_WAIT` 中的运行尚未结束：`awaitRun` 会一直等到重试结束。
 也可以传入其他条件，例如等到运行开始。
 
 ## 调用

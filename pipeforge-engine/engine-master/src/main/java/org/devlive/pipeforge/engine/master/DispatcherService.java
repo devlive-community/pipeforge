@@ -130,7 +130,8 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                                     request.getRestore().getPath(),
                                     request.getRestore().getAllowNonRestoredState(),
                                     request.getRestore().getAllowOtherJob())
-                            : null));
+                            : null,
+                    Math.max(1, request.getAttempt())));
             return SubmitJobResponse.newBuilder().setRunId(status.runId()).build();
         });
     }
@@ -322,7 +323,7 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                 .setJobName(run.jobName())
                 .setState(toProto(run.state()))
                 .setStartMs(run.started().toEpochMilli())
-                .setAttempt(1)
+                .setAttempt(run.attempt())
                 .setLastCheckpointId(run.lastCheckpointId())
                 .setLastCheckpointMs(run.lastCheckpointMs());
         if (run.ended() != null) {

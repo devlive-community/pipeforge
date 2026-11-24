@@ -64,7 +64,8 @@ public class RunService {
             try {
                 java.util.Optional<RunMetrics> live = master.metrics(id);
                 if (live.isPresent()) {
-                    return live.get();
+                    // the counters of the attempts before are added
+                    return run.attempt() > 1 ? live.get().after(runs.countsBefore(id, run.attempt())) : live.get();
                 }
             } catch (PipeForgeException e) {
                 LOG.debug("No live metrics of run {}: {}", id, e.getMessage());
@@ -136,7 +137,13 @@ public class RunService {
             }
         }
         String id = UUID.randomUUID().toString();
-        Runs.Run run = runs.insert(id, plan.name(), definition, null, now);
+        Runs.Run run = runs.insert(
+                id,
+                plan.name(),
+                definition,
+                null,
+                now,
+                json.writeValueAsString(RunRetries.Resubmission.of(plan, values, scheduled, plugins)));
         try {
             master.submit(new MasterClient.Submission(plan.name(), id, definition, values, scheduled, plugins));
         } catch (PipeForgeException e) {

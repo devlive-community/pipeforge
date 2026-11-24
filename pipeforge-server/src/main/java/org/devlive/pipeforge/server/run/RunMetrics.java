@@ -139,6 +139,46 @@ public record RunMetrics(
     public record Sample(
             Instant at, long elapsedMs, long rowsRead, long rowsWritten, long rowsDirty, long rowsFailed) {}
 
+    /**
+     * These metrics of one attempt, with the counters of the attempts before added: the time spent
+     * and the rows read, written, skipped as bad and failed.
+     */
+    public RunMetrics after(@Nullable Sample before) {
+        if (before == null) {
+            return this;
+        }
+        return new RunMetrics(
+                at,
+                elapsedMs + before.elapsedMs(),
+                rowsRead + before.rowsRead(),
+                rowsWritten + before.rowsWritten(),
+                rowsFiltered,
+                rowsExpanded,
+                rowsDirty + before.rowsDirty(),
+                rowsFailed + before.rowsFailed(),
+                rowsInFlight,
+                readRowsPerSecond,
+                writeRowsPerSecond,
+                readerWaitMs,
+                writerWaitMs,
+                backpressuredMs,
+                throttleWaitMs,
+                exchangedBytes,
+                memoryBytes,
+                queueDepth,
+                queueCapacity,
+                tasksRunning,
+                parallelism,
+                splitsTotal,
+                splitsFinished,
+                nodes,
+                dirtySamples,
+                lastCompletedCheckpointId,
+                lastCheckpointDurationMs,
+                lastCheckpointSize,
+                checkpointFailures);
+    }
+
     /** No metrics: a run that ended before any were taken. */
     public static RunMetrics none(Instant at) {
         return new RunMetrics(

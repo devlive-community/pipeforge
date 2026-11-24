@@ -87,6 +87,13 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 | `restart.reset-after` | `exponential-backoff`: after running this long without a failure, the next wait is `restart.initial` again | `1h` |
 | `restart.max-failures` | `failure-rate`: the failures allowed within `restart.interval` | `3` |
 | `restart.interval` | `failure-rate`: the window the failures are counted in | `5min` |
+| `retry.attempts` | How often a failed run starts a new attempt, 0 to 100; see [retrying runs](../concepts/failure-handling#retrying-runs) | `0` |
+| `retry.backoff.initial` | The wait before the first retry | `1min` |
+| `retry.backoff.max` | The longest wait before a retry | `30min` |
+| `retry.backoff.multiplier` | How much longer each wait is than the one before, 1 to 1000 | `2` |
+| `retry.on` | Error categories (`CONN`), error codes (`PF-CONN-0002`) or `TRANSIENT` whose failures are retried | `[CONN, RES, CLUS, TRANSIENT]` |
+| `retry.resume` | `auto`, `checkpoint` or `restart`: where a new attempt starts | `auto` |
+| `retry.within` | How long after its submission a run may still be retried | no limit |
 | `timezone` | An IANA time zone such as `Asia/Shanghai` | `UTC` |
 | `variables` | A mapping of names to values, see [variables](./variables#job-variables) | none |
 | `source.*`, `transform.*`, `sink.*` | Defaults for the options of every node of that kind | none |
@@ -100,6 +107,9 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 - `restart.initial` and `restart.interval` must be longer than zero, the other `restart.*` waits
   cannot be negative, and `restart.max` cannot be shorter than `restart.initial` (`PF-CONF-0002`).
   A `restart.*` option the chosen strategy does not use is reported as a warning.
+- `retry.backoff.max` cannot be shorter than `retry.backoff.initial`, `retry.within` must be longer
+  than zero, and every entry of `retry.on` must be an error category, an error code or `TRANSIENT`
+  (`PF-CONF-0002`).
 
 ## Nodes
 

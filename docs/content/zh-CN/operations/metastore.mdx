@@ -61,10 +61,10 @@ Master 不执行迁移：它在启动时检查元数据库中是否有 `checkpoi
 
 | 表 | 内容 |
 |---|---|
-| `job_run` | 每次运行一行：作业及其 YAML、状态、提交人、提交、开始和结束时间、错误，以及结束后的运行分析 |
+| `job_run` | 每次运行一行：作业及其 YAML、状态、提交人、提交、开始和结束时间、错误、结束后的运行分析、当前尝试、下次重试的时间，以及重新提交所需的内容 |
 | `job_run_attempt` | 运行的各次尝试，以及执行每次尝试的 Master、它从哪个 checkpoint 或 savepoint 启动、最近完成的 checkpoint |
 | `job_run_transition` | 运行状态的每一次变化，按顺序记录，并附带原因 |
-| `job_run_metrics` | 运行期间采样的指标以及最终指标：主要计数作为列，完整指标为 JSON |
+| `job_run_metrics` | 运行期间采样的指标以及最终指标：主要计数（跨尝试累计）作为列，该次尝试的完整指标为 JSON |
 | `worker` | 集群中的 Worker：地址、Slot 数、标签、版本、状态和最近一次心跳 |
 | `checkpoint` | 运行的 checkpoint 和 savepoint：编号、类型、状态、触发原因、触发与完成时间、大小、在 [Checkpoint 存储](./checkpoint-storage)中的目录、失败时的错误以及每个 Task 的部分。由 Master 写入；运行开始做 checkpoint 之前它是空的 |
 | `pipeforge_schema_history` | 已执行的迁移（Flyway） |

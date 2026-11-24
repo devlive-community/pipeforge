@@ -63,6 +63,27 @@ commits in two phases therefore writes every row exactly once across restarts; o
 rows after the checkpoint again (at least once). Without checkpoints, or before the first one
 completed, the regions start from the beginning of their splits.
 
+### Retrying runs
+
+When a run fails as a whole — its restarts are used up, its failure was not one of tasks, or it
+takes no checkpoints — the server may start a **new attempt** of it (`env.retry`), under the same
+run ID, with the same variables, scheduled time and plugin versions. A failure is retried when its
+error is one of `retry.on` (error categories such as `CONN`, error codes, or `TRANSIENT` for every
+error whose kind is transient), the run has retries left (`retry.attempts`, 0 by default) and it
+was submitted no longer than `retry.within` ago. The run then waits in **`RETRY_WAIT`** for the
+backoff — `retry.backoff.initial`, then `multiplier` times longer each time, at most
+`retry.backoff.max` — and is queued again.
+
+| `retry.resume` | Where the new attempt starts |
+|---|---|
+| `auto` (default) | For a job delivered exactly once — every sink commits in two phases or writes idempotently — from the run's last completed checkpoint, or from the start without one: neither writes a row twice. A job delivered at least once is not retried, since both could; set `checkpoint` or `restart`, or retry it by hand |
+| `checkpoint` | From the last completed checkpoint, or from the start without one |
+| `restart` | From the start |
+
+Every attempt is recorded with its state, times, error and the checkpoint it started from, and every
+change of state names its attempt. The run's counters — rows read, written, skipped as bad, failed,
+and its elapsed time — add up over its attempts; each sample keeps the metrics of its attempt.
+
 ## Quick start
 
 A job against a flaky target that may restart any number of times, waiting longer each time:
@@ -145,7 +166,9 @@ back to the enumerator and the checkpoint the tasks restore.
   its earlier attempt read and wrote.
 - A task that ignores its cancel for longer than twice the cancel timeout is given up, but its
   thread may still run while the region's new attempt writes.
-- Run-level retries (`env.retry`) and rolling back what a failed run wrote are not available yet.
+- Rolling back what a failed run wrote, and retrying runs by hand, are not available yet.
+- Whether `TRANSIENT` matches is decided by the error code's registered kind, not by a kind a plugin
+  set for one error.
 
 ## Version history
 

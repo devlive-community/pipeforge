@@ -124,8 +124,13 @@ about the runs that have not ended and records each change of state with its tim
 
 ```text
 QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
-          └──── CANCELLING → CANCELLED
+          ├──── CANCELLING → CANCELLED
+          └──── RETRY_WAIT → QUEUE (the next attempt)
 ```
+
+A run whose job sets `env.retry` waits in `RETRY_WAIT` after a failure that may be retried and is
+submitted again as its next attempt (see [retrying runs](../concepts/failure-handling#retrying-runs));
+`GET /api/v1/runs/{id}` lists its attempts.
 
 `GET /api/v1/runs` lists runs newest first, filtered by state and job and paged with the `next`
 token, each with the rows read and written as of its last metrics sample; `GET /api/v1/runs/{id}` shows a run with its definition and its changes of state;

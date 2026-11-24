@@ -86,6 +86,13 @@ sink:
 | `restart.reset-after` | `exponential-backoff`：连续运行这么久没有失败后，下一次等待重新从 `restart.initial` 开始 | `1h` |
 | `restart.max-failures` | `failure-rate`：`restart.interval` 内允许的失败次数 | `3` |
 | `restart.interval` | `failure-rate`：统计失败次数的时间窗口 | `5min` |
+| `retry.attempts` | 失败的运行最多再开始几次尝试，0 到 100，见[运行重试](../concepts/failure-handling#运行重试) | `0` |
+| `retry.backoff.initial` | 第一次重试前等待多久 | `1min` |
+| `retry.backoff.max` | 重试前最长等待多久 | `30min` |
+| `retry.backoff.multiplier` | 每次等待是上一次的多少倍，1 到 1000 | `2` |
+| `retry.on` | 哪些错误类别（`CONN`）、错误码（`PF-CONN-0002`）或 `TRANSIENT` 的失败会被重试 | `[CONN, RES, CLUS, TRANSIENT]` |
+| `retry.resume` | `auto`、`checkpoint` 或 `restart`：新的尝试从哪里开始 | `auto` |
+| `retry.within` | 运行提交后多长时间内仍可重试 | 不限制 |
 | `timezone` | IANA 时区，例如 `Asia/Shanghai` | `UTC` |
 | `variables` | 名称到取值的映射，见[变量](./variables#作业变量) | 无 |
 | `source.*`、`transform.*`、`sink.*` | 同类所有节点的选项默认值 | 无 |
@@ -96,6 +103,8 @@ sink:
 - `checkpoint.interval` 和 `checkpoint.timeout` 必须大于零，`checkpoint.min-pause` 不能为负数（`PF-CONF-0002`）。
 - `restart.initial` 和 `restart.interval` 必须大于零，其他 `restart.*` 等待时间不能为负数，`restart.max` 不能小于
   `restart.initial`（`PF-CONF-0002`）。所选策略用不到的 `restart.*` 选项会给出警告。
+- `retry.backoff.max` 不能小于 `retry.backoff.initial`，`retry.within` 必须大于零，`retry.on` 的每一项都必须是错误类别、错误码或
+  `TRANSIENT`（`PF-CONF-0002`）。
 
 ## 节点
 

@@ -209,7 +209,8 @@
       "FAILED": "Failed",
       "CANCELLING": "Cancelling",
       "CANCELLED": "Cancelled",
-      "TIMEOUT": "Timed out"
+      "TIMEOUT": "Timed out",
+      "RETRY_WAIT": "Waiting to retry"
     },
     "columns": {
       "job": "Job",

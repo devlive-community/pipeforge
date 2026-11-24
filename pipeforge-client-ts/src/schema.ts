@@ -417,6 +417,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Attempt: {
+            /** Format: int32 */
+            attempt?: number;
+            /** Format: date-time */
+            endedAt?: string;
+            error?: components["schemas"]["RunError"];
+            restorePath?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** @enum {string} */
+            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
+        };
         CancelRequest: {
             reason?: string;
         };
@@ -697,11 +709,15 @@ export interface components {
             truncated?: boolean;
         };
         Run: {
+            /** Format: int32 */
+            attempt?: number;
             /** Format: date-time */
             endedAt?: string;
             error?: components["schemas"]["RunError"];
             id?: string;
             job?: string;
+            /** Format: date-time */
+            retryAt?: string;
             /** Format: int64 */
             rowsRead?: number;
             /** Format: int64 */
@@ -709,7 +725,7 @@ export interface components {
             /** Format: date-time */
             startedAt?: string;
             /** @enum {string} */
-            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT";
+            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
             /** Format: date-time */
             submittedAt?: string;
             submittedBy?: string;
@@ -717,6 +733,7 @@ export interface components {
             updatedAt?: string;
         };
         RunDetail: {
+            attempts?: components["schemas"]["Attempt"][];
             definition?: string;
             run?: components["schemas"]["Run"];
             transitions?: components["schemas"]["Transition"][];
@@ -843,10 +860,10 @@ export interface components {
             /** Format: int32 */
             attempt?: number;
             /** @enum {string} */
-            from?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT";
+            from?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
             reason?: string;
             /** @enum {string} */
-            to?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT";
+            to?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
         };
         UnavailablePlugin: {
             location?: string;
@@ -1408,7 +1425,7 @@ export interface operations {
                 /** @description The token of a page, from next */
                 page?: string | null;
                 /** @description States to list; every state when none */
-                status?: ("QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT")[] | null;
+                status?: ("QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT")[] | null;
             };
             header?: never;
             path?: never;

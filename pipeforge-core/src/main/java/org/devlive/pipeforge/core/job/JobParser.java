@@ -172,6 +172,34 @@ public final class JobParser {
         positive(config, EnvOptions.RESTART_MAX, true);
         positive(config, EnvOptions.RESTART_RESET_AFTER, true);
         positive(config, EnvOptions.RESTART_INTERVAL, false);
+        positive(config, EnvOptions.RETRY_BACKOFF_INITIAL, true);
+        positive(config, EnvOptions.RETRY_WITHIN, false);
+        if (config.get(EnvOptions.RETRY_BACKOFF_MAX).compareTo(config.get(EnvOptions.RETRY_BACKOFF_INITIAL)) < 0) {
+            throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                            org.devlive.pipeforge.common.error.ErrorCode.OPTION_INVALID)
+                    .param("option", EnvOptions.RETRY_BACKOFF_MAX.key())
+                    .param("node", "env")
+                    .param("value", config.get(EnvOptions.RETRY_BACKOFF_MAX).toString())
+                    .param("reason", "it cannot be shorter than retry.backoff.initial")
+                    .build();
+        }
+        for (String on : config.get(EnvOptions.RETRY_ON)) {
+            boolean category = java.util.Arrays.stream(org.devlive.pipeforge.common.error.ErrorCategory.values())
+                    .anyMatch(c -> c.name().equals(on));
+            if (!category
+                    && !on.equals("TRANSIENT")
+                    && !org.devlive.pipeforge.common.error.ErrorCode.FORMAT
+                            .matcher(on)
+                            .matches()) {
+                throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                                org.devlive.pipeforge.common.error.ErrorCode.OPTION_INVALID)
+                        .param("option", EnvOptions.RETRY_ON.key())
+                        .param("node", "env")
+                        .param("value", on)
+                        .param("reason", "it is neither an error category such as CONN, an error code nor TRANSIENT")
+                        .build();
+            }
+        }
         if (config.get(EnvOptions.RESTART_MAX).compareTo(config.get(EnvOptions.RESTART_INITIAL)) < 0) {
             throw org.devlive.pipeforge.common.error.PipeForgeException.of(
                             org.devlive.pipeforge.common.error.ErrorCode.OPTION_INVALID)

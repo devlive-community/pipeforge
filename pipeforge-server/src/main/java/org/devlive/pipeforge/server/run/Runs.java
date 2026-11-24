@@ -26,6 +26,8 @@ public final class Runs {
      * @param rowsRead rows the sources read, as of the last sample of the run's metrics; {@code
      *     null} before the first sample
      * @param rowsWritten rows the sinks wrote, as of the same sample
+     * @param attempt the run's current attempt, counted from 1
+     * @param retryAt when a run in {@code RETRY_WAIT} starts its next attempt; {@code null} otherwise
      */
     public record Run(
             String id,
@@ -38,7 +40,9 @@ public final class Runs {
             Instant updatedAt,
             @Nullable RunError error,
             @Nullable Long rowsRead,
-            @Nullable Long rowsWritten) {}
+            @Nullable Long rowsWritten,
+            int attempt,
+            @Nullable Instant retryAt) {}
 
     /** An error of a run: its code and its message in English; the code's page tells more. */
     public record RunError(String code, String message) {}
@@ -51,8 +55,21 @@ public final class Runs {
      */
     public record Transition(int attempt, @Nullable RunState from, RunState to, Instant at, @Nullable String reason) {}
 
-    /** A run with its job definition and every change of its state, oldest first. */
-    public record RunDetail(Run run, String definition, List<Transition> transitions) {}
+    /** A run with its job definition, every change of its state and every attempt, oldest first. */
+    public record RunDetail(Run run, String definition, List<Transition> transitions, List<Attempt> attempts) {}
+
+    /**
+     * One attempt of a run.
+     *
+     * @param restorePath the checkpoint it started from; {@code null} when it started from the beginning
+     */
+    public record Attempt(
+            int attempt,
+            RunState status,
+            Instant startedAt,
+            @Nullable Instant endedAt,
+            @Nullable RunError error,
+            @Nullable String restorePath) {}
 
     /**
      * A page of runs, newest first.

@@ -209,7 +209,8 @@
       "FAILED": "失败",
       "CANCELLING": "取消中",
       "CANCELLED": "已取消",
-      "TIMEOUT": "超时"
+      "TIMEOUT": "超时",
+      "RETRY_WAIT": "等待重试"
     },
     "columns": {
       "job": "作业",

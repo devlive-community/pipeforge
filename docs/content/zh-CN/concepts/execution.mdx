@@ -149,7 +149,8 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 | `PAUSED` | `QUEUE`（继续）、`CANCELLED` |
 
 每次状态转换都会被校验，并记录时间和原因；不在表中的转换会被拒绝。提交 Master 已知的运行 ID 时返回这个已有的运行，
-因此重试提交永远不会启动第二次运行；只有带着恢复点再次提交的已暂停运行会继续，以新的尝试从该点开始（见 [savepoint](./checkpoint#savepoint)）。Master 用 Server 选定的插件版本重新规划作业定义；Master 没有该版本时，提交以
+因此重试提交永远不会启动第二次运行；只有带着恢复点再次提交的已暂停运行会继续，以新的尝试从该点开始（见 [savepoint](./checkpoint#savepoint)），
+已经结束的运行在 Server 提交它的下一次尝试时重新开始（见[运行重试](./failure-handling#运行重试)）。Master 用 Server 选定的插件版本重新规划作业定义；Master 没有该版本时，提交以
 [`PF-PLUG-0009`](../reference/errors#pf-plug-0009) 失败；未知的运行 ID 为 [`PF-CONF-0010`](../reference/errors#pf-conf-0010)。
 
 每次运行都有一个 **JobMaster** 负责从开始到结束：

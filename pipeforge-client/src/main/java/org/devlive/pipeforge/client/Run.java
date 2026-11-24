@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
  *
  * @param id the run ID
  * @param job the name of the job
- * @param status QUEUE, RUNNING, CANCELLING, SUCCESS, FAILED, CANCELLED or TIMEOUT
+ * @param status QUEUE, RUNNING, CANCELLING, RETRY_WAIT, SUCCESS, FAILED, CANCELLED or TIMEOUT
  * @param submittedBy who submitted it, when known
  * @param submittedAt when it was submitted
  * @param startedAt when it started

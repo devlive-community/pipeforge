@@ -30,7 +30,7 @@ import { formatCount, formatDuration, formatTime, runDuration } from "./format";
 /** The filter groups of the page and the states each one lists. */
 export const GROUPS: Record<string, RunState[]> = {
   all: [],
-  active: ["QUEUE", "RUNNING", "CANCELLING"],
+  active: ["QUEUE", "RUNNING", "CANCELLING", "RETRY_WAIT"],
   succeeded: ["SUCCESS"],
   failed: ["FAILED", "TIMEOUT"],
   cancelled: ["CANCELLED"],
@@ -44,6 +44,7 @@ const TONES: Record<RunState, BadgeTone> = {
   FAILED: "danger",
   TIMEOUT: "danger",
   CANCELLED: "neutral",
+  RETRY_WAIT: "warning",
 };
 
 /** The state of a run as a badge with its tone. */

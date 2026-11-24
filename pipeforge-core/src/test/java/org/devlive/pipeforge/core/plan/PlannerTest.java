@@ -344,6 +344,36 @@ class PlannerTest {
     }
 
     @Test
+    void readsTheRetriesOfRuns() {
+        String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
+        assertThat(plan(job(nodes)).retry()).isEqualTo(RetrySettings.NONE);
+
+        RetrySettings retry = plan(job("env: { retry: { attempts: 3, backoff: { initial: 10s, max: 1m, multiplier: 3 },"
+                        + " on: [CONN, PF-SINK-0001, TRANSIENT], resume: checkpoint, within: 6h } }\n"
+                        + nodes))
+                .retry();
+        assertThat(retry.attempts()).isEqualTo(3);
+        assertThat(retry.on()).containsExactly("CONN", "PF-SINK-0001", "TRANSIENT");
+        assertThat(retry.resume()).isEqualTo(RetrySettings.Resume.CHECKPOINT);
+        assertThat(retry.within()).isEqualTo(java.time.Duration.ofHours(6));
+        assertThat(retry.backoff(1)).isEqualTo(java.time.Duration.ofSeconds(10));
+        assertThat(retry.backoff(2)).isEqualTo(java.time.Duration.ofSeconds(30));
+        assertThat(retry.backoff(3)).as("at most the maximum").isEqualTo(java.time.Duration.ofMinutes(1));
+
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { retry: { on: [NETWORK] } }\n" + nodes))))
+                .contains("retry.on")
+                .contains("NETWORK");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID,
+                        () -> plan(job("env: { retry: { backoff: { initial: 5m, max: 1m } } }\n" + nodes))))
+                .contains("retry.backoff.max");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { retry: { resume: sometimes } }\n" + nodes))))
+                .contains("retry.resume");
+    }
+
+    @Test
     void readsTheRestartStrategy() {
         String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
         assertThat(plan(job(nodes)).restart()).isEqualTo(RestartSettings.DEFAULTS);

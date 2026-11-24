@@ -691,7 +691,7 @@
             "type" : [ "array", "null" ],
             "items" : {
               "type" : "string",
-              "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+              "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
             }
           }
         }, {
@@ -1487,6 +1487,33 @@
   },
   "components" : {
     "schemas" : {
+      "Attempt" : {
+        "type" : "object",
+        "properties" : {
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "endedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "error" : {
+            "$ref" : "#/components/schemas/RunError"
+          },
+          "restorePath" : {
+            "type" : "string"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
+          }
+        }
+      },
       "CancelRequest" : {
         "type" : "object",
         "properties" : {
@@ -2304,6 +2331,10 @@
       "Run" : {
         "type" : "object",
         "properties" : {
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "endedAt" : {
             "type" : "string",
             "format" : "date-time"
@@ -2316,6 +2347,10 @@
           },
           "job" : {
             "type" : "string"
+          },
+          "retryAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
           "rowsRead" : {
             "type" : "integer",
@@ -2331,7 +2366,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
           },
           "submittedAt" : {
             "type" : "string",
@@ -2349,6 +2384,12 @@
       "RunDetail" : {
         "type" : "object",
         "properties" : {
+          "attempts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Attempt"
+            }
+          },
           "definition" : {
             "type" : "string"
           },
@@ -2655,14 +2696,14 @@
           },
           "from" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
           },
           "reason" : {
             "type" : "string"
           },
           "to" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
           }
         }
       },

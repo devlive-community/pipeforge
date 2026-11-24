@@ -65,7 +65,12 @@ public final class GrpcMasterClient implements MasterClient {
                 .setDefinition(submission.definition())
                 .setDefinitionFormat("yaml")
                 .putAllVariables(submission.variables())
-                .setScheduledTimeMs(submission.scheduledTime().toEpochMilli());
+                .setScheduledTimeMs(submission.scheduledTime().toEpochMilli())
+                .setAttempt(submission.attempt());
+        if (submission.restorePath() != null) {
+            request.setRestore(org.devlive.pipeforge.engine.rpc.proto.RestoreSettings.newBuilder()
+                    .setPath(submission.restorePath()));
+        }
         submission
                 .plugins()
                 .forEach((id, version) ->
@@ -126,7 +131,8 @@ public final class GrpcMasterClient implements MasterClient {
                 RunState.fromProto(status.getState()),
                 status.getStartMs() == 0 ? null : Instant.ofEpochMilli(status.getStartMs()),
                 error,
-                tasks));
+                tasks,
+                Math.max(1, status.getAttempt())));
     }
 
     /** The answer of a call, or empty when the master does not know the run. */
