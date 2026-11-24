@@ -162,6 +162,78 @@ public class RunService {
         return run;
     }
 
+    /** Where a retry by hand starts. */
+    public enum RetryFrom {
+        /** From the run's last completed checkpoint; refused without one. */
+        CHECKPOINT,
+        /** From the beginning. */
+        SCRATCH
+    }
+
+    /**
+     * Starts the next attempt of a run that failed, timed out or was cancelled, whatever {@code
+     * env.retry} allows (design 34 section 3.2).
+     *
+     * @param from where it starts; {@code null} for the last completed checkpoint when the run has
+     *     one, else the beginning
+     * @throws PipeForgeException {@code PF-CONF-0010} for an unknown run, {@code PF-CONF-0007} for a
+     *     run that cannot be retried, or why the master did not take the attempt (the run is then
+     *     recorded as failed)
+     */
+    public Runs.Run retry(String id, @Nullable RetryFrom from) {
+        Runs.Run run = run(id);
+        if (!run.status().isTerminal() || run.status() == RunState.SUCCESS) {
+            throw invalid("run " + id + " is " + run.status() + "; only a run that failed, timed out or was cancelled"
+                    + " can be retried");
+        }
+        RunRetries.Resubmission submission = runs.submission(id)
+                .map(text -> json.readValue(text, RunRetries.Resubmission.class))
+                .orElseThrow(() -> invalid("run " + id + " was submitted by an earlier version and cannot be"
+                        + " submitted again; submit its job instead"));
+        java.util.Optional<String> checkpoint = runs.lastCheckpoint(id);
+        if (from == RetryFrom.CHECKPOINT && checkpoint.isEmpty()) {
+            throw invalid("run " + id + " has no completed checkpoint to go on from; retry it from scratch");
+        }
+        String restore = from == RetryFrom.SCRATCH ? null : checkpoint.orElse(null);
+        int attempt = run.attempt() + 1;
+        String reason =
+                "retried by hand: attempt " + attempt + (restore == null ? " from the start" : " from " + restore);
+        if (!runs.startAttempt(id, run.status(), attempt, restore, clock.instant(), reason)) {
+            // another server retried it meanwhile
+            return run(id);
+        }
+        try {
+            master.submit(new MasterClient.Submission(
+                    run.job(),
+                    id,
+                    runs.detail(id).definition(),
+                    submission.variables(),
+                    Instant.ofEpochMilli(submission.scheduledMs()),
+                    submission.plugins(),
+                    attempt,
+                    restore));
+        } catch (PipeForgeException e) {
+            LOG.warn("The master did not take attempt {} of run {}: {}", attempt, id, e.getMessage());
+            runs.transition(
+                    id,
+                    RunState.QUEUE,
+                    RunState.FAILED,
+                    clock.instant(),
+                    null,
+                    new Runs.RunError(e.code().id(), e.getMessage()),
+                    e.code().id());
+            throw e;
+        }
+        LOG.info("Run {} of job {}: {}", id, run.job(), reason);
+        return run(id);
+    }
+
+    private static PipeForgeException invalid(String reason) {
+        return PipeForgeException.of(org.devlive.pipeforge.common.error.ErrorCode.REQUEST_INVALID)
+                .param("reason", reason)
+                .build();
+    }
+
     /**
      * Asks the master to cancel a run that has not ended; an ended run is returned as it is.
      *

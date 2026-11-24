@@ -20,6 +20,7 @@ enum Endpoint {
     LIST_RUNS("GET", "/api/v1/runs", List.of("status", "job", "limit", "page"), RunPage.class, false),
     GET_RUN("GET", "/api/v1/runs/{id}", List.of(), RunDetail.class, false),
     CANCEL_RUN("POST", "/api/v1/runs/{id}/cancel", List.of(), Run.class, false),
+    RETRY_RUN("POST", "/api/v1/runs/{id}/retry", List.of(), Run.class, false),
     GET_RUN_METRICS("GET", "/api/v1/runs/{id}/metrics", List.of(), RunMetrics.class, false),
     GET_RUN_METRICS_HISTORY(
             "GET", "/api/v1/runs/{id}/metrics/history", List.of("since", "limit"), MetricSample.class, true),

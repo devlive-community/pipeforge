@@ -182,10 +182,22 @@ public class RunRepository {
      * @return whether this call started it
      */
     public boolean startAttempt(String id, int attempt, @Nullable String restorePath, Instant now, String reason) {
+        return startAttempt(id, RunState.RETRY_WAIT, attempt, restorePath, now, reason);
+    }
+
+    /**
+     * Starts attempt {@code attempt} of a run that is in {@code from}, a retry waiting or a run that
+     * ended: back to {@code QUEUE}.
+     *
+     * @param restorePath the checkpoint it starts from; {@code null} from the beginning
+     * @return whether this call started it
+     */
+    public boolean startAttempt(
+            String id, RunState from, int attempt, @Nullable String restorePath, Instant now, String reason) {
         Boolean started = transactions.execute(tx -> {
             int rows = jdbc.sql("UPDATE job_run SET status = ?, attempt = ?, retry_at = NULL, updated_at = ?,"
-                            + " error_code = NULL, error_message = NULL WHERE id = ? AND status = ?")
-                    .params(RunState.QUEUE.name(), attempt, utc(now), id, RunState.RETRY_WAIT.name())
+                            + " ended_at = NULL, error_code = NULL, error_message = NULL WHERE id = ? AND status = ?")
+                    .params(RunState.QUEUE.name(), attempt, utc(now), id, from.name())
                     .update();
             if (rows == 0) {
                 return false;
@@ -194,7 +206,7 @@ public class RunRepository {
                             + " VALUES (?, ?, ?, ?, ?)")
                     .params(id, attempt, RunState.QUEUE.name(), utc(now), restorePath)
                     .update();
-            insertTransition(id, attempt, RunState.RETRY_WAIT, RunState.QUEUE, now, reason);
+            insertTransition(id, attempt, from, RunState.QUEUE, now, reason);
             return true;
         });
         return Boolean.TRUE.equals(started);

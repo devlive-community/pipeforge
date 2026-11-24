@@ -80,6 +80,12 @@ backoff — `retry.backoff.initial`, then `multiplier` times longer each time, a
 | `checkpoint` | From the last completed checkpoint, or from the start without one |
 | `restart` | From the start |
 
+A run that failed, timed out or was cancelled can also be **retried by hand**, whatever `env.retry`
+says: `POST /api/v1/runs/{id}/retry` starts its next attempt with `{"from": "CHECKPOINT"}` from its
+last completed checkpoint (refused with `PF-CONF-0007` without one), with `{"from": "SCRATCH"}` from
+the start, and without a body from the checkpoint when there is one. A running or succeeded run
+cannot be retried.
+
 Every attempt is recorded with its state, times, error and the checkpoint it started from, and every
 change of state names its attempt. The run's counters — rows read, written, skipped as bad, failed,
 and its elapsed time — add up over its attempts; each sample keeps the metrics of its attempt.
@@ -166,7 +172,7 @@ back to the enumerator and the checkpoint the tasks restore.
   its earlier attempt read and wrote.
 - A task that ignores its cancel for longer than twice the cancel timeout is given up, but its
   thread may still run while the region's new attempt writes.
-- Rolling back what a failed run wrote, and retrying runs by hand, are not available yet.
+- Rolling back what a failed run wrote is not available yet.
 - Whether `TRANSIENT` matches is decided by the error code's registered kind, not by a kind a plugin
   set for one error.
 

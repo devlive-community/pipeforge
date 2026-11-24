@@ -62,6 +62,12 @@ public class RunController {
     /** Why a run is cancelled; recorded with the change of its state. */
     public record CancelRequest(@Nullable String reason) {}
 
+    /**
+     * Where a retried run starts: {@code CHECKPOINT} (its last completed checkpoint) or {@code
+     * SCRATCH} (the beginning); the checkpoint when it has one, else the beginning, when not given.
+     */
+    public record RetryRequest(org.devlive.pipeforge.server.run.RunService.@Nullable RetryFrom from) {}
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(
@@ -143,6 +149,28 @@ public class RunController {
                             }))
     public Runs.Run cancel(@PathVariable String id, @RequestBody(required = false) @Nullable CancelRequest request) {
         return service.cancel(id, request == null ? null : request.reason());
+    }
+
+    @PostMapping("/{id}/retry")
+    @Operation(
+            operationId = "retryRun",
+            summary = "Retry a run",
+            description = "Starts the next attempt of a run that failed, timed out or was cancelled, whatever"
+                    + " env.retry allows: from its last completed checkpoint or from the beginning, with the same"
+                    + " variables and plugin versions. The run moves back to QUEUE; its attempts are listed by"
+                    + " GET /api/v1/runs/{id}.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "重试运行"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "为失败、超时或被取消的运行开始下一次尝试，不受 env.retry 限制：从最近完成的 checkpoint"
+                                                + " 或从头开始，变量和插件版本不变。运行回到 QUEUE；GET /api/v1/runs/{id} 列出它的各次尝试。")
+                            }))
+    public Runs.Run retry(@PathVariable String id, @RequestBody(required = false) @Nullable RetryRequest request) {
+        return service.retry(id, request == null ? null : request.from());
     }
 
     @GetMapping("/{id}/metrics")

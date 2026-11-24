@@ -353,6 +353,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a run
+         * @description Starts the next attempt of a run that failed, timed out or was cancelled, whatever env.retry allows: from its last completed checkpoint or from the beginning, with the same variables and plugin versions. The run moves back to QUEUE; its attempts are listed by GET /api/v1/runs/{id}.
+         */
+        post: operations["retryRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{id}/splits": {
         parameters: {
             query?: never;
@@ -707,6 +727,10 @@ export interface components {
             rows?: unknown[][];
             table?: string;
             truncated?: boolean;
+        };
+        RetryRequest: {
+            /** @enum {string} */
+            from?: "CHECKPOINT" | "SCRATCH";
         };
         Run: {
             /** Format: int32 */
@@ -1809,6 +1833,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Sample"][];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    retryRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RetryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
                 };
             };
             /** @description The request is invalid (PF-CONF-0007) */

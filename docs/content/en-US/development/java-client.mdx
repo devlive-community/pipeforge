@@ -34,6 +34,8 @@ if (!ended.run().status().equals("SUCCESS")) {
 `awaitRun` asks for the run until it ended (`PipeForgeClient.ENDED`) and throws `TimeoutException`
 when it did not end in time; the run goes on. Another condition can be passed, for example to wait
 until the run runs. A run in `RETRY_WAIT` has not ended: `awaitRun` waits through its retries.
+`retryRun(id, "CHECKPOINT")` or `retryRun(id, "SCRATCH")` retries a run that failed, timed out or
+was cancelled by hand; `null` goes on from its last checkpoint when it has one.
 
 ## Calls
 

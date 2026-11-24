@@ -111,7 +111,7 @@ QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
 ```
 
 作业设置了 `env.retry` 时，运行在可以重试的失败之后于 `RETRY_WAIT` 中等待，随后作为下一次尝试重新提交（见[运行重试](../concepts/failure-handling#运行重试)）；
-`GET /api/v1/runs/{id}` 列出它的各次尝试。
+`GET /api/v1/runs/{id}` 列出它的各次尝试。`POST /api/v1/runs/{id}/retry` 把失败、超时或被取消的运行作为下一次尝试手动重试。
 
 `GET /api/v1/runs` 按提交时间从新到旧列出运行，可以按状态和作业筛选，用 `next` 令牌翻页，每个运行带有截至最近一次指标采样的读取和写入行数；`GET /api/v1/runs/{id}` 显示运行及其定义和状态变化；
 `POST /api/v1/runs/{id}/cancel` 请 Master 取消运行。无法连接 Master 时，运行保持原来的状态；Master 已经不知道的运行（因为 Master 重启）

@@ -197,6 +197,43 @@ class RunApiTest {
     }
 
     @Test
+    void aCancelledRunIsRetriedByHandAsItsNextAttempt() throws Exception {
+        String id = submit(job("retried", "unbounded: true, rows-per-second: 100"));
+        await(id, "RUNNING");
+        mvc.perform(post("/api/v1/runs/" + id + "/retry"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PF-CONF-0007"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("is RUNNING")));
+        mvc.perform(post("/api/v1/runs/" + id + "/cancel")).andExpect(status().isOk());
+        await(id, "CANCELLED");
+
+        mvc.perform(post("/api/v1/runs/" + id + "/retry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\": \"CHECKPOINT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no completed checkpoint")));
+        mvc.perform(post("/api/v1/runs/" + id + "/retry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\": \"SCRATCH\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("QUEUE"))
+                .andExpect(jsonPath("$.attempt").value(2));
+        String detail = await(id, "RUNNING");
+        assertThat((List<Integer>) JsonPath.read(detail, "$.attempts[*].attempt"))
+                .containsExactly(1, 2);
+        assertThat((List<String>) JsonPath.read(detail, "$.attempts[*].status"))
+                .containsExactly("CANCELLED", "RUNNING");
+        assertThat((List<String>) JsonPath.read(detail, "$.transitions[*].reason"))
+                .contains("retried by hand: attempt 2 from the start");
+        assertThat((String) JsonPath.read(detail, "$.run.endedAt")).isNull();
+
+        mvc.perform(post("/api/v1/runs/" + id + "/cancel")).andExpect(status().isOk());
+        await(id, "CANCELLED");
+        mvc.perform(post("/api/v1/runs/nope/retry")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void aRunThatFailsKeepsItsError() throws Exception {
         String id = submit(job("down", "rows: 50", "down"));
         String detail = await(id, "FAILED");

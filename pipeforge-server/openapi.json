@@ -1300,6 +1300,77 @@
         }
       }
     },
+    "/api/v1/runs/{id}/retry" : {
+      "post" : {
+        "description" : "Starts the next attempt of a run that failed, timed out or was cancelled, whatever env.retry allows: from its last completed checkpoint or from the beginning, with the same variables and plugin versions. The run moves back to QUEUE; its attempts are listed by GET /api/v1/runs/{id}.",
+        "operationId" : "retryRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetryRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Run"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Retry a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "为失败、超时或被取消的运行开始下一次尝试，不受 env.retry 限制：从最近完成的 checkpoint 或从头开始，变量和插件版本不变。运行回到 QUEUE；GET /api/v1/runs/{id} 列出它的各次尝试。",
+          "summary" : "重试运行"
+        }
+      }
+    },
     "/api/v1/runs/{id}/splits" : {
       "get" : {
         "description" : "Every split the source assigned, with its reader and whether the reader finished; empty once the master no longer has the run.",
@@ -2325,6 +2396,15 @@
           },
           "truncated" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "RetryRequest" : {
+        "type" : "object",
+        "properties" : {
+          "from" : {
+            "type" : "string",
+            "enum" : [ "CHECKPOINT", "SCRATCH" ]
           }
         }
       },

@@ -141,6 +141,8 @@ export function createClient(options: ClientOptions = {}) {
       unwrap(raw.GET("/api/v1/runs/{id}/logs", { params: { path: { id }, query } })),
     cancelRun: (id: string, reason?: string) =>
       unwrap(raw.POST("/api/v1/runs/{id}/cancel", { params: { path: { id } }, body: reason ? { reason } : {} })),
+    retryRun: (id: string, from?: "CHECKPOINT" | "SCRATCH") =>
+      unwrap(raw.POST("/api/v1/runs/{id}/retry", { params: { path: { id } }, body: from ? { from } : {} })),
   };
 }
 

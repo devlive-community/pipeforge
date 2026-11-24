@@ -251,6 +251,7 @@ class PipeForgeClientTest {
     @Test
     void cancelsWithAReasonAndChecksAndExplainsJobs() {
         routes.put("POST /api/v1/runs/r/cancel", r -> new Answer(200, RUN.replace("RUNNING", "CANCELLING")));
+        routes.put("POST /api/v1/runs/r/retry", r -> new Answer(200, RUN.replace("RUNNING", "QUEUE")));
         routes.put(
                 "POST /api/v1/jobs/validate",
                 r -> new Answer(
@@ -261,6 +262,7 @@ class PipeForgeClientTest {
                 """));
         routes.put("POST /api/v1/explain", r -> new Answer(200, "{\"plan\": {\"nodes\": []}, \"text\": \"Job x\"}"));
         assertThat(client.cancelRun("r", "by hand").status()).isEqualTo("CANCELLING");
+        assertThat(client.retryRun("r", "SCRATCH").status()).isEqualTo("QUEUE");
         ValidationResult validation = client.validate("job", Map.of());
         assertThat(validation.valid()).isFalse();
         assertThat(validation.errors()).singleElement().satisfies(e -> assertThat(e.scope())

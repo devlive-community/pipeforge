@@ -155,6 +155,20 @@ public final class PipeForgeClient {
         return call(Endpoint.CANCEL_RUN, Map.of("id", id), Map.of(), body);
     }
 
+    /**
+     * Starts the next attempt of a run that failed, timed out or was cancelled.
+     *
+     * @param from {@code CHECKPOINT} (its last completed checkpoint) or {@code SCRATCH} (the
+     *     beginning); {@code null} for the checkpoint when the run has one, else the beginning
+     */
+    public Run retryRun(String id, @Nullable String from) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (from != null) {
+            body.put("from", from);
+        }
+        return call(Endpoint.RETRY_RUN, Map.of("id", id), Map.of(), body);
+    }
+
     public RunMetrics metrics(String id) {
         return call(Endpoint.GET_RUN_METRICS, Map.of("id", id), Map.of(), null);
     }

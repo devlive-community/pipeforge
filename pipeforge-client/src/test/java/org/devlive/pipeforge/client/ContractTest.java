@@ -105,6 +105,7 @@ class ContractTest {
         Map<Endpoint, Set<String>> bodies = Map.of(
                 Endpoint.SUBMIT_RUN, Set.of("definition", "variables", "scheduledTime"),
                 Endpoint.CANCEL_RUN, Set.of("reason"),
+                Endpoint.RETRY_RUN, Set.of("from"),
                 Endpoint.VALIDATE_JOB, Set.of("definition", "variables", "scheduledTime"),
                 Endpoint.EXPLAIN_JOB, Set.of("definition", "variables", "scheduledTime"));
         bodies.forEach((endpoint, fields) -> {
