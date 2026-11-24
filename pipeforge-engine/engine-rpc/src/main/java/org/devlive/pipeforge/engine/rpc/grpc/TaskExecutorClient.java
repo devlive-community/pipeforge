@@ -97,7 +97,11 @@ public final class TaskExecutorClient implements TaskExecutorGateway {
                     .addAllOutputs(ProtoMapping.outputs(deployment.chain().outputs()))
                     .setRestoreCheckpointId(deployment.restore().checkpointId())
                     .setRestoreState(
-                            ProtoMapping.toProtoRestore(deployment.restore().states()));
+                            ProtoMapping.toProtoRestore(deployment.restore().states()))
+                    .setRestoreDirectory(
+                            deployment.restore().directory() == null
+                                    ? ""
+                                    : deployment.restore().directory());
             for (PlannedNode node : deployment.chain().nodes()) {
                 for (var ref : plugins.apply(node.plugin())) {
                     if (!request.getPluginsList().contains(ref)) {

@@ -31,7 +31,7 @@ Checkpoint 在三个服务中增加了 RPC，都是对 v1 的兼容增加：
 | `TriggerCheckpoint` | `TaskExecutorService` | 在 Source Task 上开始 checkpoint *n*；其他 Task 在 barrier 到达时开始；`stop` 表示快照后结束输入（stop-with-savepoint） |
 | `NotifyCheckpointComplete`、`AbortCheckpoint` | `TaskExecutorService` | 通知 Task checkpoint *n* 已经完成（Sink 随之提交），或者已经放弃 |
 | `AcknowledgeCheckpoint`、`DeclineCheckpoint` | `JobMasterService` | Task 在 checkpoint *n* 中的部分：每个有状态的节点一个 `StateHandle`（内联字节或 checkpoint 中的文件）及耗时，或者让它无法参与的错误 |
-| `TriggerSavepoint`、`StopWithSavepoint`、`ListCheckpoints` | `DispatcherService` | 为运行做 savepoint（可以同时停止运行），以及列出 Master 保留的 checkpoint |
+| `TriggerSavepoint`、`StopWithSavepoint`、`ListCheckpoints` | `DispatcherService` | 为运行做 savepoint（可以同时停止运行），以及列出 Master 保留的 checkpoint；`TriggerSavepoint` 在 savepoint 完成后返回它的编号和目录 |
 
 `TaskDeployment` 携带 Task 要恢复的状态（`restore_state`、`restore_checkpoint_id`；编号 9 和 10 从一开始就为它们保留），
 `SubmitJobRequest` 携带运行从哪里开始（`restore`）以及第几次尝试，`JobStatus` 携带尝试次数和最近完成的 checkpoint，
@@ -39,8 +39,9 @@ Checkpoint 在三个服务中增加了 RPC，都是对 v1 的兼容增加：
 `JobMetrics` 的字段 27 到 30 携带 [checkpoint 指标](../concepts/checkpoint#可观测性)。
 
 在 [Region](../concepts/failure-handling#region-重启) 中重启的 Task 以新的尝试部署，并设置 `restore_state` 和 `restore_checkpoint_id`；
-全新启动的 Task 两者分别为空和 0。Worker 直接使用 inline 状态，从 checkpoint 目录 `<run>/chk-<n>/` 读取文件状态，并按句柄中的大小和
-CRC32C 校验。不符的状态让 Task 以 `PF-CKPT-0002` 失败，无法读取的文件为 `PF-CKPT-0004`；在当前版本中两者都会让运行失败。
+全新启动的 Task 两者分别为空和 0。从 savepoint 或 checkpoint 开始的运行（`SubmitJobRequest.restore`）的 Task 也一样，它们的状态在另一个目录中：
+由 `restore_directory`（字段 15，兼容增加）给出，相对 checkpoint 存储的根目录。Worker 直接使用 inline 状态，从该目录（没有时为本运行的
+`<run>/chk-<n>/`）读取文件状态，并按句柄中的大小和 CRC32C 校验。不符的状态让 Task 以 `PF-CKPT-0002` 失败，无法读取的文件为 `PF-CKPT-0004`；在当前版本中两者都会让运行失败。
 
 Master 按规范第 2.6 节的顺序处理确认：先写 `_metadata`，再在元数据库中把 checkpoint 记为已完成，然后才发送 `NotifyCheckpointComplete`。
 已经带有 `PF-CKPT-0005` 的拒绝会保留原来的原因。

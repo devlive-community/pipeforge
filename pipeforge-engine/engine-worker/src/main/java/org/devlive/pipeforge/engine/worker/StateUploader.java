@@ -91,10 +91,10 @@ final class StateUploader implements AutoCloseable {
 
     /**
      * The elements of a state a restarted task restores: from the handle when it is inline, else
-     * from its file in checkpoint {@code checkpointId} of the run, checked against the handle's
-     * size and CRC32C.
+     * from its file in {@code directory} of checkpoint {@code checkpointId}, checked against the
+     * handle's size and CRC32C.
      */
-    List<byte[]> read(String runId, long checkpointId, StateHandle handle) {
+    List<byte[]> read(String directory, long checkpointId, StateHandle handle) {
         String checkpoint = String.valueOf(checkpointId);
         byte[] body;
         String name;
@@ -114,7 +114,7 @@ final class StateUploader implements AutoCloseable {
                 }
                 byte[] whole;
                 try {
-                    whole = source.read(CheckpointPaths.checkpoint(runId, checkpointId) + file.path());
+                    whole = source.read(directory + file.path());
                 } catch (IOException | RuntimeException e) {
                     throw PipeForgeException.of(ErrorCode.STORAGE_UNAVAILABLE)
                             .param("location", source.location())

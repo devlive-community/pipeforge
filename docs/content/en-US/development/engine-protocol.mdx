@@ -35,7 +35,7 @@ Checkpoints add RPCs to three services, all compatible additions to v1:
 | `TriggerCheckpoint` | `TaskExecutorService` | starts checkpoint *n* at a source task; the other tasks start it when its barrier reaches them; `stop` ends the input after the snapshot (stop-with-savepoint) |
 | `NotifyCheckpointComplete`, `AbortCheckpoint` | `TaskExecutorService` | tells a task that checkpoint *n* is complete, so that sinks commit, or that it was given up |
 | `AcknowledgeCheckpoint`, `DeclineCheckpoint` | `JobMasterService` | a task's part of checkpoint *n*: a `StateHandle` per stateful node (inline bytes or a file of the checkpoint) with its timings, or the error that kept it from taking part |
-| `TriggerSavepoint`, `StopWithSavepoint`, `ListCheckpoints` | `DispatcherService` | savepoints of a run, with or without stopping it, and the checkpoints the master keeps |
+| `TriggerSavepoint`, `StopWithSavepoint`, `ListCheckpoints` | `DispatcherService` | savepoints of a run, with or without stopping it, and the checkpoints the master keeps; `TriggerSavepoint` answers with the savepoint's number and directory once it completed |
 
 `TaskDeployment` carries the states a task restores (`restore_state`, `restore_checkpoint_id`;
 numbers 9 and 10, reserved for them from the start), `SubmitJobRequest` where a run starts from
@@ -47,8 +47,11 @@ numbers 9 and 10, reserved for them from the start), `SubmitJobRequest` where a 
 
 A task that restarts in its [region](../concepts/failure-handling#region-restarts) is deployed as a
 new attempt with `restore_state` and `restore_checkpoint_id` set; a fresh task leaves them empty and
-0. The worker takes inline states as they are and reads file states from the checkpoint's directory,
-`<run>/chk-<n>/`, checking each against the size and CRC32C in its handle. A state that does not
+0. So is a task of a run that starts from a savepoint or checkpoint (`SubmitJobRequest.restore`),
+whose states are in another directory: `restore_directory` (field 15, a compatible addition) names
+it, relative to the root of the checkpoint storage. The worker takes inline states as they are and
+reads file states from that directory, or without it from the run's own `<run>/chk-<n>/`, checking
+each against the size and CRC32C in its handle. A state that does not
 match fails the task with `PF-CKPT-0002`, a file it cannot read with `PF-CKPT-0004`; in this version
 both fail the run.
 

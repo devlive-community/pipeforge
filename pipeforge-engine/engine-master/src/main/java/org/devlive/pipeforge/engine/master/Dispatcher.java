@@ -56,7 +56,20 @@ public final class Dispatcher implements AutoCloseable {
             Map<String, String> variables,
             @Nullable Instant scheduledTime,
             Map<String, String> plugins,
-            @Nullable Duration timeout) {
+            @Nullable Duration timeout,
+            org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restore) {
+
+        /** A submission that starts from the beginning. */
+        public Submission(
+                String jobId,
+                String runId,
+                String definition,
+                Map<String, String> variables,
+                @Nullable Instant scheduledTime,
+                Map<String, String> plugins,
+                @Nullable Duration timeout) {
+            this(jobId, runId, definition, variables, scheduledTime, plugins, timeout, null);
+        }
 
         public Submission {
             Objects.requireNonNull(jobId, "jobId");
@@ -225,7 +238,8 @@ public final class Dispatcher implements AutoCloseable {
                     planned.options() != null ? planned.options() : options,
                     placements.forRun(plan),
                     () -> jobs.remove(submission.runId()),
-                    checkpoints);
+                    checkpoints,
+                    submission.restore());
             run = new Run(submission, plan, master);
             runs.put(submission.runId(), run);
             trim();
@@ -248,6 +262,27 @@ public final class Dispatcher implements AutoCloseable {
      *
      * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
      */
+    /**
+     * Takes a savepoint of a run.
+     *
+     * @throws PipeForgeException {@link ErrorCode#RUN_NOT_FOUND} for an unknown run
+     */
+    public java.util.concurrent.CompletableFuture<
+                    org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+            triggerSavepoint(String runId, @Nullable String name) {
+        JobMaster master;
+        synchronized (this) {
+            Run run = runs.get(runId);
+            if (run == null) {
+                throw PipeForgeException.of(ErrorCode.RUN_NOT_FOUND)
+                        .param("run", runId)
+                        .build();
+            }
+            master = run.master;
+        }
+        return master.triggerSavepoint(name);
+    }
+
     public synchronized org.devlive.pipeforge.engine.api.JobHandle handle(String runId) {
         Run run = runs.get(runId);
         if (run == null) {

@@ -92,14 +92,14 @@ class StateUploaderTest {
     void aStateFileCannotBeReadWithoutStorage() {
         StateHandle handle = new StateHandle("orders", "source", 3, new StateHandle.File("orders-2.state"), 4, 0);
         try (StateUploader uploader = new StateUploader(null, 16, "w")) {
-            assertThatThrownBy(() -> uploader.read("run-1", 4, handle))
+            assertThatThrownBy(() -> uploader.read("run-1/chk-4/", 4, handle))
                     .isInstanceOfSatisfying(PipeForgeException.class, e -> {
                         assertThat(e.code()).isEqualTo(ErrorCode.STORAGE_UNAVAILABLE);
                         assertThat(e.getMessage()).contains("orders-2.state");
                     });
         }
         try (StateUploader uploader = new StateUploader(new BlockingStorage(dir), 16, "w")) {
-            assertThatThrownBy(() -> uploader.read("run-1", 4, handle))
+            assertThatThrownBy(() -> uploader.read("run-1/chk-4/", 4, handle))
                     .isInstanceOfSatisfying(PipeForgeException.class, e -> assertThat(e.code())
                             .isEqualTo(ErrorCode.STORAGE_UNAVAILABLE));
         }

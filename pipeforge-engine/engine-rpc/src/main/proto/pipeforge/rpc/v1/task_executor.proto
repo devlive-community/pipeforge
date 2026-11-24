@@ -101,6 +101,7 @@ message TaskDeployment {
   int32 parallelism = 12;
   TaskSettings settings = 13;
   string job_master_address = 14;
+  string restore_directory = 15;      // 兼容增加：恢复点的目录（相对存储根目录）；为空时为本运行的 chk-<restore_checkpoint_id>/
 }
 
 message CancelTaskRequest {

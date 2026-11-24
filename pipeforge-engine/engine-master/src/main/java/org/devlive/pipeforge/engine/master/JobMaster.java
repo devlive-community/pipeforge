@@ -190,6 +190,12 @@ public final class JobMaster {
     /** The sink the job master commits with, while it commits. */
     private @Nullable Object committingSink;
 
+    /** Where the run starts from, or {@code null} for the beginning. */
+    private final org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restoreFrom;
+
+    /** The restore point the run started from, once read; {@code null} without one. */
+    private org.devlive.pipeforge.engine.master.checkpoint.@Nullable RestorePoint restored;
+
     /** The storage and the metastore of checkpoints, or {@code null} on a master without them. */
     private final org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing;
 
@@ -225,6 +231,23 @@ public final class JobMaster {
             Placement placement,
             Runnable onEnded,
             org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing) {
+        this(id, plan, graph, options, placement, onEnded, checkpointing, null);
+    }
+
+    /**
+     * @param restoreFrom the checkpoint or savepoint the run starts from, or {@code null} to start
+     *     from the beginning
+     */
+    public JobMaster(
+            JobId id,
+            JobPlan plan,
+            JobGraph graph,
+            SubmitOptions options,
+            Placement placement,
+            Runnable onEnded,
+            org.devlive.pipeforge.engine.master.checkpoint.@Nullable Checkpoints checkpointing,
+            org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@Nullable Settings restoreFrom) {
+        this.restoreFrom = restoreFrom;
         this.checkpointing = checkpointing;
         this.id = id;
         this.plan = plan;
@@ -476,10 +499,15 @@ public final class JobMaster {
                     new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Run(
                             id.value(), plan.name(), 1, plan.variables(), DispatcherService.engineVersion(), nodes),
                     context,
-                    0);
+                    restored == null ? 0 : restored.checkpointId());
         } catch (PipeForgeException e) {
             fail(e);
             return;
+        }
+        var point = restored;
+        if (point != null) {
+            checkpoints.restoredFrom(new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Latest(
+                    point.checkpointId(), byVertex(point), point.directory()));
         }
         checkpoints.start();
     }
@@ -523,12 +551,23 @@ public final class JobMaster {
     private void deploy() {
         PlannedNode node = sourceVertex.head();
         try {
+            restored = readRestorePoint();
             SourceFactory factory = (SourceFactory) node.component().factory();
             Source<SourceSplit, ?> created = (Source<SourceSplit, ?>)
                     onEnumerator("create the source", () -> factory.createSource(context(node)));
             source = created;
-            SplitEnumerator<SourceSplit, ?> opened =
-                    onEnumerator("create the enumerator", () -> created.createEnumerator(new LocalEnumeratorContext()));
+            SerializedValue enumeratorState = restored == null ? null : restored.enumerator(node.id());
+            SplitEnumerator<SourceSplit, ?> opened = enumeratorState == null
+                    ? onEnumerator(
+                            "create the enumerator", () -> created.createEnumerator(new LocalEnumeratorContext()))
+                    : onEnumerator("restore the enumerator", () -> ((Source) created)
+                            .restoreEnumerator(
+                                    new LocalEnumeratorContext(),
+                                    enumeratorState.deserialize(created.enumeratorStateSerializer())));
+            if (restored != null && !restored.committables().isEmpty()) {
+                // the run may have stopped between recording the point and committing it
+                commit(restored.committables());
+            }
             enumerator = opened;
             onEnumerator("start the enumerator", () -> {
                 opened.start();
@@ -543,17 +582,22 @@ public final class JobMaster {
             states.put(task, TaskState.DEPLOYING);
         }
         // consumers may ask for an output before its producer runs; the worker waits for it
+        var startFrom = restored == null
+                ? org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Latest.NONE
+                : new org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Latest(
+                        restored.checkpointId(), byVertex(restored), restored.directory());
         for (ExecutionGraph.Task task : execution.tasks()) {
             Placement.Slot slot = slots.get(task.slot());
             JobGraph.Vertex vertex = graph.vertex(task.vertex()).orElseThrow();
             TaskDeployment deployment = new TaskDeployment(
-                    attempt(task),
-                    deployed.get(task.vertex()),
-                    vertex.parallelism(),
-                    settings,
-                    run,
-                    slot.allocationId(),
-                    inputs(task));
+                            attempt(task),
+                            deployed.get(task.vertex()),
+                            vertex.parallelism(),
+                            settings,
+                            run,
+                            slot.allocationId(),
+                            inputs(task))
+                    .restoring(restore(task, startFrom));
             slot.gateway().deployTask(deployment).whenComplete((ignored, error) -> {
                 if (error != null) {
                     post(() -> fail(PipeForgeException.wrap(error)));
@@ -1054,7 +1098,101 @@ public final class JobMaster {
         for (var handle : latest.of(task.vertex(), task.subtask())) {
             byNode.computeIfAbsent(handle.nodeId(), n -> new ArrayList<>()).add(handle);
         }
-        return new TaskDeployment.Restore(latest.checkpointId(), byNode);
+        return new TaskDeployment.Restore(latest.checkpointId(), byNode, latest.directory());
+    }
+
+    /** Reads and checks the restore point the run starts from; {@code null} without one. */
+    private org.devlive.pipeforge.engine.master.checkpoint.@Nullable RestorePoint readRestorePoint() {
+        var settings = restoreFrom;
+        if (settings == null) {
+            return null;
+        }
+        var services = checkpointing;
+        if (services == null) {
+            throw PipeForgeException.of(ErrorCode.STORAGE_UNAVAILABLE)
+                    .param("location", "checkpoint.dir")
+                    .param("reason", "the master has no checkpoint storage to read " + settings.path() + " from")
+                    .build();
+        }
+        var point =
+                org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.read(services.storage(), settings.path());
+        Map<String, Integer> nodes = new LinkedHashMap<>();
+        for (JobGraph.Vertex vertex : graph.vertices()) {
+            vertex.nodes().forEach(n -> nodes.put(n.id(), vertex.parallelism()));
+        }
+        point.check(plan.name(), nodes, settings.allowNonRestoredState(), settings.allowOtherJob());
+        LOG.info(
+                "Job {} ({}) starts from {} (checkpoint {})", plan.name(), id, point.directory(), point.checkpointId());
+        return point;
+    }
+
+    /** The states of a restore point by vertex and subtask, as tasks restore them. */
+    private Map<String, Map<Integer, List<org.devlive.pipeforge.engine.rpc.StateHandle>>> byVertex(
+            org.devlive.pipeforge.engine.master.checkpoint.RestorePoint point) {
+        Map<String, Map<Integer, List<org.devlive.pipeforge.engine.rpc.StateHandle>>> states = new HashMap<>();
+        for (JobGraph.Vertex vertex : graph.vertices()) {
+            List<String> ids = vertex.nodes().stream().map(PlannedNode::id).toList();
+            for (int subtask = 0; subtask < vertex.parallelism(); subtask++) {
+                List<org.devlive.pipeforge.engine.rpc.StateHandle> handles = new ArrayList<>();
+                point.of(ids, subtask).values().forEach(handles::addAll);
+                if (!handles.isEmpty()) {
+                    states.computeIfAbsent(vertex.id(), v -> new HashMap<>()).put(subtask, handles);
+                }
+            }
+        }
+        return states;
+    }
+
+    /**
+     * Takes a savepoint: a checkpoint kept until it is deleted by hand, in {@code
+     * savepoints/<name>-<time>/} of the run.
+     *
+     * @param name its name, or {@code null} for {@code savepoint}
+     * @return completes with the savepoint, or fails with why it could not be taken
+     */
+    public java.util.concurrent.CompletableFuture<
+                    org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+            triggerSavepoint(@Nullable String name) {
+        var result = new java.util.concurrent.CompletableFuture<
+                org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>();
+        boolean posted = tryPost(() -> {
+            var coordinator = checkpoints;
+            if (coordinator == null) {
+                result.completeExceptionally(PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                        .param("checkpoint", 0)
+                        .param(
+                                "reason",
+                                "the run takes no checkpoints: the cluster has no checkpoint.dir, or the job"
+                                        + " turned them off")
+                        .build());
+                return;
+            }
+            String named = name == null || name.isBlank() ? null : name;
+            if (named != null && !named.matches("[A-Za-z0-9_.\\-]+")) {
+                result.completeExceptionally(PipeForgeException.of(ErrorCode.REQUEST_INVALID)
+                        .param(
+                                "reason",
+                                "a savepoint name has only letters, digits, '_', '-' and '.', not '" + named + "'")
+                        .build());
+                return;
+            }
+            coordinator
+                    .trigger(org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT, "SAVEPOINT", named)
+                    .whenComplete((completed, error) -> {
+                        if (error != null) {
+                            result.completeExceptionally(error);
+                        } else {
+                            result.complete(completed);
+                        }
+                    });
+        });
+        if (!posted) {
+            result.completeExceptionally(PipeForgeException.of(ErrorCode.CHECKPOINT_FAILED)
+                    .param("checkpoint", 0)
+                    .param("reason", "the run has ended")
+                    .build());
+        }
+        return result;
     }
 
     /** The enumerator's snapshot of checkpoint {@code checkpointId} was taken: remembers what was assigned before it. */

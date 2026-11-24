@@ -43,6 +43,17 @@ Source Task 在两次读取之间、在自己的线程上取 Reader 的状态（
 取状态只是复制一份；写入 checkpoint 存储在 Worker 的其他线程上进行，Task 同时继续读取，状态写完后 Task 才确认。不超过 16 KB 的状态随确认一起发送，
 最终保存在 `_metadata` 中。
 
+### savepoint
+
+**savepoint** 是按需触发、一直保留到手动删除的 checkpoint。它写在 checkpoint 存储的 `<run>/savepoints/<名称>-<时间>/` 下；名称只能包含
+字母、数字、`_`、`-` 和 `.`，不指定时为 `savepoint`。做 savepoint 不会让运行停下，Sink 也像普通 checkpoint 一样提交为它准备的内容。
+在当前版本中，savepoint 通过 Master 的 `TriggerSavepoint` 调用触发（见[引擎协议](../development/engine-protocol)）；命令行和 REST 接口随后提供。
+
+**运行可以从 savepoint 或已完成的 checkpoint 开始**，只需给出它的目录（运行的 `restore.path`）。Master 读取它的 `_metadata`，恢复 Source 的
+Enumerator 和每个 Task 的状态，并先把 Sink 为该点准备的内容重新提交一次（Committer 会把已经提交过的内容当作已提交）。它必须由同一个作业
+产生，除非允许其他作业（`allow_other_job`）；有状态的节点必须仍然存在，除非允许丢弃这些状态（`allow_non_restored_state`）；有状态的节点
+不能改变并行度。在运行完成自己的第一个 checkpoint 之前，重启的 Task 都从这个点恢复；运行的 checkpoint 编号接在它之后。
+
 ## 快速上手
 
 在 `conf/pipeforge.yaml` 和 `conf/master.yaml` 中为集群配置 checkpoint 存储，并为 Master 配置元数据库：
@@ -142,12 +153,14 @@ Master 会在日志中记录每个完成或失败的 checkpoint。
 | [`PF-CKPT-0006`](../reference/errors#pf-ckpt-0006) | Master 无法写入 checkpoint，或无法在元数据库中记录它 |
 | [`PF-CKPT-0007`](../reference/errors#pf-ckpt-0007) | 连续失败的 checkpoint 超过作业允许的次数；运行以最后一次的原因失败 |
 | [`PF-CONF-0011`](../reference/errors#pf-conf-0011) `master.metastore.url` | 设置了 `checkpoint.dir`，但没有配置 Master 的元数据库 |
+| [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002) | 运行要从中开始的目录不是已完成的 checkpoint 或 savepoint，或者其中的文件已损坏 |
+| [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003) | 运行不能从这个点开始：它由其他作业产生、有状态的节点已不存在，或者节点改变了并行度 |
 
 ## 限制
 
 - Transform 没有状态。Sink 按 checkpoint 在 Master 上提交（见 [Sink 状态与提交](../development/api-overview#sink-状态与提交)）。
-- 运行内失败的 Task 会从最近完成的 checkpoint 重启（见[失败处理](./failure-handling)）；新的运行还不能从 checkpoint 开始。
-  也还不能从命令行或 Web UI 做 savepoint，Worker 会拒绝以 savepoint 停止运行。
+- savepoint 的触发以及从 savepoint 开始运行目前只能通过 Master 的协议进行，命令行、REST 接口和 Web UI 随后提供。Worker 会拒绝以 savepoint
+  停止运行；从某个点开始运行时，有状态的节点不能改变并行度。
 - 等待 checkpoint 的 barrier 超过 30 秒的 Task 会在日志中给出背压警告；这个时限目前还不能修改。
 - 只有对齐的 checkpoint：Task 要等所有输入都收到 barrier。
 

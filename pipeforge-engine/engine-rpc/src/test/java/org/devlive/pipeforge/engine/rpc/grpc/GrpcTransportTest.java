@@ -345,6 +345,13 @@ class GrpcTransportTest {
         assertThat(worker.deployed.get(0).restore()).isEqualTo(restore);
         assertThat(worker.deployed.get(0).restore().restores()).isTrue();
         assertThat(worker.deployed.get(1).restore()).isEqualTo(TaskDeployment.Restore.NONE);
+
+        TaskDeployment.Restore elsewhere = new TaskDeployment.Restore(
+                7, java.util.Map.of("src", List.of(state)), "job-1/savepoints/before-upgrade-1/");
+        executor(Headers.Epochs.FIRST)
+                .deployTask(deployment().restoring(elsewhere))
+                .join();
+        assertThat(worker.deployed.get(2).restore()).isEqualTo(elsewhere);
         assertThatThrownBy(() -> new TaskDeployment.Restore(0, java.util.Map.of("src", List.of(state))))
                 .isInstanceOf(IllegalArgumentException.class);
     }

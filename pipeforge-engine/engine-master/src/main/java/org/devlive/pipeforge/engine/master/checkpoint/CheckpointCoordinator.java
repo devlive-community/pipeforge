@@ -169,8 +169,14 @@ public final class CheckpointCoordinator {
      * The states of the last completed checkpoint, by vertex and subtask, for tasks that restart
      * from it.
      */
-    public record Latest(long checkpointId, Map<String, Map<Integer, List<StateHandle>>> states) {
+    public record Latest(
+            long checkpointId, Map<String, Map<Integer, List<StateHandle>>> states, @Nullable String directory) {
         public static final Latest NONE = new Latest(0, Map.of());
+
+        /** The states of the run's own checkpoint {@code checkpointId}. */
+        public Latest(long checkpointId, Map<String, Map<Integer, List<StateHandle>>> states) {
+            this(checkpointId, states, null);
+        }
 
         /** The states of a task; empty when it had none or there is no checkpoint. */
         public List<StateHandle> of(String vertex, int subtask) {
@@ -901,6 +907,14 @@ public final class CheckpointCoordinator {
     /** The states of the last completed checkpoint, which restarted tasks restore. */
     public Latest latest() {
         return latest;
+    }
+
+    /**
+     * The run started from a checkpoint or savepoint: until one of its own completes, restarted
+     * tasks restore that.
+     */
+    public void restoredFrom(Latest point) {
+        latest = point;
     }
 
     /**

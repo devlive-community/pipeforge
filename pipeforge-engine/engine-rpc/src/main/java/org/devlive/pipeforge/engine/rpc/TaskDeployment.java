@@ -38,10 +38,20 @@ public record TaskDeployment(
      *
      * @param checkpointId the checkpoint, 0 for none
      * @param states the states of every node by node id; a node that is not listed starts empty
+     * @param directory where the state files are, relative to the root of the checkpoint storage;
+     *     {@code null} for the run's own checkpoint {@code checkpointId}
      */
-    public record Restore(long checkpointId, java.util.Map<String, List<StateHandle>> states) {
+    public record Restore(
+            long checkpointId,
+            java.util.Map<String, List<StateHandle>> states,
+            @org.jspecify.annotations.Nullable String directory) {
         /** A fresh start. */
         public static final Restore NONE = new Restore(0, java.util.Map.of());
+
+        /** States of the run's own checkpoint {@code checkpointId}. */
+        public Restore(long checkpointId, java.util.Map<String, List<StateHandle>> states) {
+            this(checkpointId, states, null);
+        }
 
         public Restore {
             if (checkpointId < 0 || (checkpointId == 0 && !states.isEmpty())) {

@@ -381,6 +381,7 @@ field pipeforge.rpc.v1.TaskDeployment 11 encrypted_secrets bytes
 field pipeforge.rpc.v1.TaskDeployment 12 parallelism int32
 field pipeforge.rpc.v1.TaskDeployment 13 settings pipeforge.rpc.v1.TaskSettings
 field pipeforge.rpc.v1.TaskDeployment 14 job_master_address string
+field pipeforge.rpc.v1.TaskDeployment 15 restore_directory string
 field pipeforge.rpc.v1.TaskDeployment 2 id pipeforge.rpc.v1.ExecutionAttemptId
 field pipeforge.rpc.v1.TaskDeployment 3 allocation_id string
 field pipeforge.rpc.v1.TaskDeployment 4 chain_descriptor bytes

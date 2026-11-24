@@ -61,6 +61,24 @@ Taking a state only copies it; writing it to the checkpoint storage happens on t
 worker while the task reads on, and the task acknowledges once its states are written. States up to
 16 KB travel in the acknowledgement and end up inside `_metadata`.
 
+### Savepoints
+
+A **savepoint** is a checkpoint taken on request and kept until it is deleted by hand. It is
+written to `<run>/savepoints/<name>-<time>/` of the checkpoint storage; the name has letters,
+digits, `_`, `-` and `.`, and is `savepoint` when none is given. Taking it does not stop the run,
+and its sinks commit what they prepared for it as for any checkpoint. In this version a savepoint
+is taken through the master's `TriggerSavepoint` call (see
+[engine protocol](../development/engine-protocol)); the command line and the REST API follow.
+
+A **run can start from a savepoint or a completed checkpoint**, given its directory (`restore.path`
+of the run). The master reads its `_metadata`, restores the source's enumerator and every task with
+its states, and first commits again what the sinks prepared for that point, which committers take
+as committed already. The job must be the one that took it, unless another job is allowed
+(`allow_other_job`); every node with state must still exist, unless states may be left out
+(`allow_non_restored_state`); and nodes with state keep their parallelism. Restarted tasks restore
+that point until the run completes a checkpoint of its own, and its checkpoints are numbered after
+it.
+
 ## Quick start
 
 Give the cluster a checkpoint storage and the master its metastore, in `conf/pipeforge.yaml` and
@@ -172,15 +190,16 @@ task's part. The master logs every checkpoint that completes or fails.
 | [`PF-CKPT-0006`](../reference/errors#pf-ckpt-0006) | The master could not write the checkpoint or record it in the metastore |
 | [`PF-CKPT-0007`](../reference/errors#pf-ckpt-0007) | More checkpoints failed in a row than the job tolerates; the run failed with the last cause |
 | [`PF-CONF-0011`](../reference/errors#pf-conf-0011) `master.metastore.url` | `checkpoint.dir` is set without the master's metastore |
+| [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002) | The directory a run starts from is not a completed checkpoint or savepoint, or a file of it is damaged |
+| [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003) | A run cannot start from that point: another job took it, a node with state is gone, or a node changed its parallelism |
 
 ## Limitations
 
 - Transforms keep no state. Sinks commit per checkpoint on the master (see
   [sink state and commits](../development/api-overview#sink-state-and-commits)).
-- Within a run, failed tasks restart from the last completed checkpoint (see
-  [failure handling](./failure-handling)); a new run cannot start from a checkpoint yet. Savepoints
-  cannot be taken from the command line or the Web UI yet, and a worker declines to stop a run with
-  a savepoint.
+- Savepoints are taken, and runs started from them, only through the master's protocol yet: the
+  command line, the REST API and the Web UI follow. A worker declines to stop a run with a
+  savepoint, and a node with state cannot change its parallelism when a run starts from a point.
 - A task that waited longer than 30 seconds for the barriers of a checkpoint logs a warning about
   backpressure; the limit cannot be changed yet.
 - Only aligned checkpoints: a task waits for the barrier on all its inputs.

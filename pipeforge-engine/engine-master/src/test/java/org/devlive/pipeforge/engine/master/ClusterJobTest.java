@@ -32,6 +32,7 @@ import org.devlive.pipeforge.engine.rpc.OperatorEvent;
 import org.devlive.pipeforge.engine.rpc.SlotRequest;
 import org.devlive.pipeforge.engine.rpc.TaskDeployment;
 import org.devlive.pipeforge.engine.rpc.TaskExecutorGateway;
+import org.devlive.pipeforge.engine.rpc.TaskState;
 import org.devlive.pipeforge.engine.testing.Probe;
 import org.devlive.pipeforge.engine.testing.TestConnectors;
 import org.devlive.pipeforge.engine.worker.SlotTable;
@@ -213,6 +214,16 @@ class ClusterJobTest {
             Duration slotTimeout,
             SubmitOptions options,
             org.devlive.pipeforge.engine.master.checkpoint.@org.jspecify.annotations.Nullable Checkpoints checkpoints) {
+        return start(plan, slotTimeout, options, checkpoints, null);
+    }
+
+    JobMaster start(
+            JobPlan plan,
+            Duration slotTimeout,
+            SubmitOptions options,
+            org.devlive.pipeforge.engine.master.checkpoint.@org.jspecify.annotations.Nullable Checkpoints checkpoints,
+            org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.@org.jspecify.annotations.Nullable Settings
+                    restoreFrom) {
         JobId id = JobId.random();
         JobMaster job = new JobMaster(
                 id,
@@ -226,7 +237,8 @@ class ClusterJobTest {
                         Scheduler.Strategy.SPREAD,
                         slotTimeout),
                 () -> jobs.remove(id.value()),
-                checkpoints);
+                checkpoints,
+                restoreFrom);
         jobs.add(job);
         job.start();
         return job;
@@ -808,6 +820,142 @@ class ClusterJobTest {
         } else {
             assertThat(events).containsExactly("committed");
         }
+        awaitSlotsBack();
+    }
+
+    @Test
+    void aSavepointDoesNotDisturbTheRunAndOutlivesIt(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        JobMaster job = start(
+                withCheckpoints(
+                        TestConnectors.job(
+                                probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", 3),
+                        Duration.ofHours(1),
+                        3,
+                        2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        storage,
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+        while (job.handle().status() != JobStatus.RUNNING
+                || job.tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            Thread.sleep(5);
+        }
+
+        var savepoint = job.triggerSavepoint("before-upgrade").get(20, TimeUnit.SECONDS);
+        assertThat(savepoint.type()).isEqualTo(org.devlive.pipeforge.engine.rpc.CheckpointType.SAVEPOINT);
+        assertThat(savepoint.directory()).startsWith(job.runId() + "/savepoints/before-upgrade-");
+        assertThat(job.triggerSavepoint("no/slashes"))
+                .failsWithin(Duration.ofSeconds(5))
+                .withThrowableThat()
+                .havingRootCause()
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.common.error.PipeForgeException.class,
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.REQUEST_INVALID));
+
+        JobResult result = end(job.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        assertThat(storage.isComplete(savepoint.directory()))
+                .as("a run that succeeded deletes its checkpoints, not its savepoints")
+                .isTrue();
+        awaitSlotsBack();
+    }
+
+    @Test
+    void aRunStartedFromASavepointGoesOnWhereItWasTaken(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        // only the savepoint commits: no checkpoints in between
+        JobPlan plan = withCheckpoints(
+                TestConnectors.job(probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", 3),
+                Duration.ofHours(1),
+                3,
+                2);
+        SubmitOptions options = SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20);
+        JobMaster first = start(
+                plan,
+                Duration.ofSeconds(5),
+                options,
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+        while (first.handle().status() != JobStatus.RUNNING
+                || first.tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            Thread.sleep(5);
+        }
+        Thread.sleep(200);
+        var savepoint = first.triggerSavepoint("moved").get(20, TimeUnit.SECONDS);
+        first.cancel();
+        assertThat(end(first.handle()).status()).isEqualTo(JobStatus.CANCELLED);
+        int committedBefore = Probe.get(probe).rows.size();
+        assertThat(committedBefore)
+                .as("the savepoint committed what came before it")
+                .isBetween(1, 2999);
+        awaitSlotsBack();
+
+        JobMaster second = start(
+                plan,
+                Duration.ofSeconds(5),
+                options,
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run),
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false));
+        JobResult result = end(second.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        assertThat(Probe.get(probe).events).anyMatch(e -> e.startsWith("enumerator restored with "));
+        assertThat(Probe.get(probe).restoredStates)
+                .as("every writer got its state")
+                .hasSize(3);
+        awaitSlotsBack();
+    }
+
+    @Test
+    void aRestorePointOfAnotherJobOrParallelismIsRefused(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        String probe = Probe.create();
+        var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
+        var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
+        JobMaster first = start(
+                withCheckpoints(TestConnectors.job(probe, "endless: true", null, "", 3), Duration.ofHours(1), 3, 2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run));
+        while (first.handle().status() != JobStatus.RUNNING
+                || first.tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            Thread.sleep(5);
+        }
+        var savepoint = first.triggerSavepoint(null).get(20, TimeUnit.SECONDS);
+        first.cancel();
+        end(first.handle());
+        awaitSlotsBack();
+
+        JobMaster narrower = start(
+                withCheckpoints(TestConnectors.job(probe, "endless: true", null, "", 2), Duration.ofHours(1), 3, 2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run),
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false));
+        JobResult refused = end(narrower.handle());
+        assertThat(refused.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(refused.error().code()).isEqualTo(ErrorCode.STATE_INCOMPATIBLE);
+        assertThat(refused.error().getMessage()).contains("parallelism 3 and has 2");
+
+        JobMaster missing = start(
+                withCheckpoints(TestConnectors.job(probe, "endless: true", null, "", 3), Duration.ofHours(1), 3, 2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run),
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        "nowhere/chk-9", false, false));
+        JobResult notThere = end(missing.handle());
+        assertThat(notThere.error().code()).isEqualTo(ErrorCode.STATE_CORRUPTED);
         awaitSlotsBack();
     }
 

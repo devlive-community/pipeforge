@@ -193,6 +193,45 @@ class DispatcherServiceTest {
     }
 
     @Test
+    void savepointsAndRestorePointsTravelOverTheProtocol() throws Exception {
+        var savepoint = org.devlive.pipeforge.engine.rpc.proto.SavepointRequest.newBuilder()
+                .setHeader(header())
+                .setName("before-upgrade");
+        assertThatThrownBy(
+                        () -> stub.triggerSavepoint(savepoint.setRunId("nope").build()))
+                .satisfies(e ->
+                        assertThat(RpcErrors.fromStatus(e, "master").code()).isEqualTo(ErrorCode.RUN_NOT_FOUND));
+
+        // this master has no checkpoint storage: a running run takes no savepoint
+        String blocked = runs.blocking();
+        stub.submitJob(submit("run-1", "block"));
+        assertThat(Probe.get(blocked).blocking.await(10, TimeUnit.SECONDS)).isTrue();
+        assertThatThrownBy(
+                        () -> stub.triggerSavepoint(savepoint.setRunId("run-1").build()))
+                .satisfies(e -> {
+                    var error = RpcErrors.fromStatus(e, "master");
+                    assertThat(error.code()).isEqualTo(ErrorCode.CHECKPOINT_FAILED);
+                    assertThat(error.getMessage()).contains("takes no checkpoints");
+                });
+        stub.cancelJob(request("run-1"));
+        runs.awaitEnd("run-1");
+
+        // nor can it start a run from a savepoint
+        String probe = Probe.create();
+        runs.definitions.put("ok", () -> TestConnectors.job(probe, "", "", "", 1));
+        stub.submitJob(submit("run-2", "ok").toBuilder()
+                .setRestore(org.devlive.pipeforge.engine.rpc.proto.RestoreSettings.newBuilder()
+                        .setPath("job-1/savepoints/before-upgrade-1/"))
+                .build());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (stub.getJobStatus(request("run-2")).getState() != RunState.RUN_STATE_FAILED) {
+            assertThat(System.nanoTime()).as("the run fails").isLessThan(deadline);
+            Thread.sleep(10);
+        }
+        assertThat(stub.getJobStatus(request("run-2")).getError().getCode()).isEqualTo("PF-CKPT-0004");
+    }
+
+    @Test
     void mapsEveryRunState() {
         for (State state : State.values()) {
             assertThat(DispatcherService.fromProto(DispatcherService.toProto(state)))

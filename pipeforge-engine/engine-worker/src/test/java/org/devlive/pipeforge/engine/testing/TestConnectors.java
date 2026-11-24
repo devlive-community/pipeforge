@@ -399,7 +399,9 @@ public final class TestConnectors {
         @Override
         public SplitEnumerator<NumberSplit, String> restoreEnumerator(
                 EnumeratorContext<NumberSplit> context, String state) {
-            return new NumbersEnumerator(config, context);
+            NumbersEnumerator restored = new NumbersEnumerator(config, context);
+            restored.restored = state;
+            return restored;
         }
 
         @Override
@@ -424,6 +426,9 @@ public final class TestConnectors {
         private final Deque<NumberSplit> pending = new ArrayDeque<>();
         private final Probe probe;
         private int made = -1;
+        /** The splits it had not handed out, as {@link #snapshotState} wrote them; {@code null} when new. */
+        @Nullable
+        String restored;
 
         NumbersEnumerator(ReadonlyConfig config, EnumeratorContext<NumberSplit> context) {
             this.config = config;
@@ -445,6 +450,17 @@ public final class TestConnectors {
                     Thread.currentThread().interrupt();
                     return;
                 }
+            }
+            String state = restored;
+            if (state != null) {
+                for (String split : state.split(";", -1)) {
+                    if (!split.isEmpty()) {
+                        String[] parts = split.split(",", -1);
+                        pending.add(new NumberSplit(parts[0], Long.parseLong(parts[1]), Long.parseLong(parts[2])));
+                    }
+                }
+                probe.events.add("enumerator restored with " + pending.size() + " split(s)");
+                return;
             }
             int rows = config.get(ROWS);
             int splits = config.get(SPLITS);
@@ -489,7 +505,16 @@ public final class TestConnectors {
 
         @Override
         public String snapshotState(long checkpointId) {
-            return "";
+            StringBuilder state = new StringBuilder();
+            for (NumberSplit split : pending) {
+                state.append(split.splitId())
+                        .append(',')
+                        .append(split.from())
+                        .append(',')
+                        .append(split.to())
+                        .append(';');
+            }
+            return state.toString();
         }
 
         @Override

@@ -138,7 +138,12 @@ final class Task implements Runnable {
         if (states == null) {
             throw new IllegalStateException("Task " + deployment.id() + " has no state reader");
         }
-        return states.read(deployment.id().runId(), deployment.restore().checkpointId(), handle);
+        TaskDeployment.Restore restore = deployment.restore();
+        String directory = restore.directory() != null
+                ? restore.directory()
+                : org.devlive.pipeforge.engine.api.checkpoint.CheckpointPaths.checkpoint(
+                        deployment.id().runId(), restore.checkpointId());
+        return states.read(directory, restore.checkpointId(), handle);
     }
 
     /**

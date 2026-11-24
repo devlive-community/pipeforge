@@ -124,8 +124,44 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                     request.getVariablesMap(),
                     request.getScheduledTimeMs() == 0 ? null : Instant.ofEpochMilli(request.getScheduledTimeMs()),
                     plugins,
-                    request.getTimeoutMs() == 0 ? null : Duration.ofMillis(request.getTimeoutMs())));
+                    request.getTimeoutMs() == 0 ? null : Duration.ofMillis(request.getTimeoutMs()),
+                    request.hasRestore() && !request.getRestore().getPath().isEmpty()
+                            ? new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                                    request.getRestore().getPath(),
+                                    request.getRestore().getAllowNonRestoredState(),
+                                    request.getRestore().getAllowOtherJob())
+                            : null));
             return SubmitJobResponse.newBuilder().setRunId(status.runId()).build();
+        });
+    }
+
+    @Override
+    public void triggerSavepoint(
+            org.devlive.pipeforge.engine.rpc.proto.SavepointRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.SavepointResponse> observer) {
+        java.util.concurrent.CompletableFuture<
+                        org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed>
+                taking;
+        try {
+            Headers.checkVersion(request.getHeader());
+            taking = dispatcher.triggerSavepoint(
+                    request.getRunId(), request.getName().isEmpty() ? null : request.getName());
+        } catch (RuntimeException e) {
+            taking = java.util.concurrent.CompletableFuture.failedFuture(e);
+        }
+        taking.whenComplete((completed, error) -> {
+            if (error != null) {
+                observer.onError(RpcErrors.toStatus(
+                        error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                                ? error.getCause()
+                                : error));
+            } else {
+                observer.onNext(org.devlive.pipeforge.engine.rpc.proto.SavepointResponse.newBuilder()
+                        .setCheckpointId(completed.checkpointId())
+                        .setPath(completed.directory())
+                        .build());
+                observer.onCompleted();
+            }
         });
     }
 

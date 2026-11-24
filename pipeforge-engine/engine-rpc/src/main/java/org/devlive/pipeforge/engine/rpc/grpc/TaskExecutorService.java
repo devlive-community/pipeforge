@@ -113,7 +113,9 @@ public final class TaskExecutorService extends TaskExecutorServiceGrpc.TaskExecu
                 request.getRestoreCheckpointId() == 0
                         ? TaskDeployment.Restore.NONE
                         : new TaskDeployment.Restore(
-                                request.getRestoreCheckpointId(), ProtoMapping.fromProto(request.getRestoreState())));
+                                request.getRestoreCheckpointId(),
+                                ProtoMapping.fromProto(request.getRestoreState()),
+                                request.getRestoreDirectory().isEmpty() ? null : request.getRestoreDirectory()));
     }
 
     @Override
