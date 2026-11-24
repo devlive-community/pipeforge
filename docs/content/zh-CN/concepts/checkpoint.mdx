@@ -51,12 +51,16 @@ Source Task 在两次读取之间、在自己的线程上取 Reader 的状态（
 
 **运行可以从 savepoint 或已完成的 checkpoint 开始**，只需给出它的目录（运行的 `restore.path`）。Master 读取它的 `_metadata`，恢复 Source 的
 Enumerator 和每个 Task 的状态，并先把 Sink 为该点准备的内容重新提交一次（Committer 会把已经提交过的内容当作已提交）。它必须由同一个作业
-产生，除非允许其他作业（`allow_other_job`）；有状态的节点必须仍然存在，除非允许丢弃这些状态（`allow_non_restored_state`）；有状态的节点
-不能改变并行度。在运行完成自己的第一个 checkpoint 之前，重启的 Task 都从这个点恢复；运行的 checkpoint 编号接在它之后。
+产生，除非允许其他作业（`allow_other_job`）；有状态的节点必须仍然存在，除非允许丢弃这些状态（`allow_non_restored_state`）。状态按节点 ID
+与作业的节点对应，因此有状态的节点请保持 ID 不变；恢复点中没有的节点从无状态开始。在运行完成自己的第一个 checkpoint 之前，重启的 Task 都从这个点恢复；运行的 checkpoint 编号接在它之后。
 
 运行可以用 savepoint **暂停**（`StopWithSavepoint`）：Source 在 barrier 之后不再读取，savepoint 完成且 Sink 提交之后，Task 被取消，运行进入
 `PAUSED`，不再占用 Slot。以该 savepoint 作为恢复点再次提交这个运行即可**继续**：新的尝试从暂停处接着运行，目标端的结果与没有暂停时一致。
 savepoint 失败时 Source 继续读取，运行照常进行；已暂停的运行也可以直接取消。
+
+从某个点开始的运行**可以改变节点的并行度**。Reader 持有的分片（各自读到的位置不变）交还给 Source 的 Enumerator，由它分配给新的 Reader。
+旧子任务的 Writer 状态分给新的子任务：旧子任务 *j* 分给新子任务 *j* 对新并行度取模，因此一个新的 Writer 可能接管多个状态，并提交或 abort
+它们留下的内容。Sink 为恢复点准备的内容仍在运行开始时提交。因此在并行度 2 下暂停的运行可以在 4 下继续，反之亦然，目标端的行相同。
 
 ## 快速上手
 
@@ -158,13 +162,12 @@ Master 会在日志中记录每个完成或失败的 checkpoint。
 | [`PF-CKPT-0007`](../reference/errors#pf-ckpt-0007) | 连续失败的 checkpoint 超过作业允许的次数；运行以最后一次的原因失败 |
 | [`PF-CONF-0011`](../reference/errors#pf-conf-0011) `master.metastore.url` | 设置了 `checkpoint.dir`，但没有配置 Master 的元数据库 |
 | [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002) | 运行要从中开始的目录不是已完成的 checkpoint 或 savepoint，或者其中的文件已损坏 |
-| [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003) | 运行不能从这个点开始：它由其他作业产生、有状态的节点已不存在，或者节点改变了并行度 |
+| [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003) | 运行不能从这个点开始：它由其他作业产生，或者有状态的节点已不存在 |
 
 ## 限制
 
 - Transform 没有状态。Sink 按 checkpoint 在 Master 上提交（见 [Sink 状态与提交](../development/api-overview#sink-状态与提交)）。
-- savepoint 的触发、从 savepoint 开始运行以及暂停与继续目前只能通过 Master 的协议进行，命令行、REST 接口和 Web UI 随后提供。从某个点开始运行时，
-  有状态的节点不能改变并行度。
+- savepoint 的触发、从 savepoint 开始运行以及暂停与继续目前只能通过 Master 的协议进行，命令行、REST 接口和 Web UI 随后提供。
 - 等待 checkpoint 的 barrier 超过 30 秒的 Task 会在日志中给出背压警告；这个时限目前还不能修改。
 - 只有对齐的 checkpoint：Task 要等所有输入都收到 barrier。
 

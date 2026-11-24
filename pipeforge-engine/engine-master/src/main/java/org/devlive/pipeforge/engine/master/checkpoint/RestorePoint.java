@@ -155,12 +155,75 @@ public record RestorePoint(
                 }
                 continue;
             }
-            Integer had = parallelism.get(node);
-            if (had != null && had != (int) wanted) {
-                throw incompatible("node '" + node + "' had parallelism " + had + " and has " + wanted
-                        + "; a run cannot change the parallelism of a node with state yet");
+        }
+    }
+
+    /** Whether {@code node} had another parallelism than {@code now}: its states are spread anew. */
+    public boolean rescaled(String node, int now) {
+        Integer had = parallelism.get(node);
+        return had != null && had != now;
+    }
+
+    /** The parallelism {@code node} had, or 0 when it had no state. */
+    public int parallelismOf(String node) {
+        return parallelism.getOrDefault(node, 0);
+    }
+
+    /** Every handle of {@code kind} of {@code node}, of every subtask, in the order of the subtasks. */
+    public List<StateHandle> all(String node, String kind) {
+        List<StateHandle> handles = new ArrayList<>();
+        new java.util.TreeMap<>(states.getOrDefault(node, Map.of())).values().forEach(list -> list.stream()
+                .filter(h -> h.operatorKind().equals(kind))
+                .forEach(handles::add));
+        return handles;
+    }
+
+    /** The handles of {@code node} the old subtasks {@code j} with {@code j % parallelism == subtask} had. */
+    public List<StateHandle> spread(String node, int subtask, int parallelism) {
+        List<StateHandle> handles = new ArrayList<>();
+        new java.util.TreeMap<>(states.getOrDefault(node, Map.of())).forEach((old, list) -> {
+            if (old % parallelism == subtask) {
+                handles.addAll(list);
+            }
+        });
+        return handles;
+    }
+
+    /**
+     * The elements of a state of this point, read from storage when it is a file and checked
+     * against its size and CRC32C.
+     *
+     * @throws PipeForgeException {@code PF-CKPT-0002} when it is damaged, {@code PF-CKPT-0004} when
+     *     it cannot be read
+     */
+    public List<byte[]> elements(CheckpointStorage storage, StateHandle handle) {
+        byte[] body;
+        String name;
+        switch (handle.location()) {
+            case StateHandle.Inline inline -> {
+                body = inline.bytes();
+                name = handle.nodeId() + " (" + handle.operatorKind() + ")";
+            }
+            case StateHandle.File file -> {
+                name = file.path();
+                try {
+                    body = CheckpointFiles.readState(
+                            storage.read(directory + file.path()), checkpointId, handle.nodeId(), name);
+                } catch (IOException e) {
+                    throw unavailable(storage, directory, e);
+                }
             }
         }
+        java.util.zip.CRC32C crc = new java.util.zip.CRC32C();
+        crc.update(body);
+        if (body.length != handle.size() || (int) crc.getValue() != handle.crc32c()) {
+            throw PipeForgeException.of(ErrorCode.STATE_CORRUPTED)
+                    .param("file", name)
+                    .param("checkpoint", directory)
+                    .param("reason", "its size or checksum differs from what the checkpoint recorded")
+                    .build();
+        }
+        return CheckpointFiles.readList(body, name, directory);
     }
 
     private PipeForgeException incompatible(String reason) {

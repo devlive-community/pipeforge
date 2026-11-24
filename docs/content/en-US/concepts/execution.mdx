@@ -204,7 +204,7 @@ Every run has a **job master** that drives it from start to end:
    workers; in one process the local task executor runs every task.
 2. It starts the split enumerator and deploys one task per subtask into its slot. A run that starts
    from a [savepoint or checkpoint](./checkpoint#savepoints) restores the enumerator and every task
-   from it.
+   from it, also at another parallelism.
 3. It follows the states the tasks report. A failed task, or the tasks of a [lost worker](./cluster)
    (`PF-CLUS-0001`), go to the job's restart strategy: when it allows and the run takes
    checkpoints, only their regions restart (see [failure handling](./failure-handling)).

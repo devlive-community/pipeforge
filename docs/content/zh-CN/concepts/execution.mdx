@@ -155,7 +155,7 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 每次运行都有一个 **JobMaster** 负责从开始到结束：
 
 1. 获取本次运行的 Slot：在集群上由[调度器](./cluster)在 Worker 上预留；在单个进程中由本地的 TaskExecutor 运行所有 Task。
-2. 启动分片分配器，为每个子任务把一个 Task 部署到它的 Slot 中。从 [savepoint 或 checkpoint](./checkpoint#savepoint) 开始的运行会从中恢复分片分配器和每个 Task。
+2. 启动分片分配器，为每个子任务把一个 Task 部署到它的 Slot 中。从 [savepoint 或 checkpoint](./checkpoint#savepoint) 开始的运行会从中恢复分片分配器和每个 Task，并行度不同时也可以。
 3. 跟踪 Task 上报的状态。失败的 Task 或[失联 Worker](./cluster) 上的 Task（`PF-CLUS-0001`）交给作业的重启策略：
    策略允许且运行做 checkpoint 时，只重启它们所在的 Region（见[失败处理](./failure-handling)）；
    否则这个失败会取消其他 Task，并成为本次运行的错误。

@@ -1010,9 +1010,119 @@ class ClusterJobTest {
         awaitSlotsBack();
     }
 
-    @Test
-    void aRestorePointOfAnotherJobOrParallelismIsRefused(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+    /** Takes a savepoint of a transactional run at {@code parallelism}, after some rows, and cancels the run. */
+    org.devlive.pipeforge.engine.master.checkpoint.CheckpointCoordinator.Completed savepointAt(
+            String probe, int parallelism, org.devlive.pipeforge.engine.master.checkpoint.Checkpoints checkpoints)
             throws Exception {
+        JobMaster first = start(
+                withCheckpoints(
+                        TestConnectors.job(
+                                probe,
+                                "rows: 3000, splits: 12",
+                                null,
+                                "commit: transactional, slow-ms: 1",
+                                parallelism),
+                        Duration.ofHours(1),
+                        3,
+                        2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                checkpoints);
+        while (first.handle().status() != JobStatus.RUNNING
+                || first.tasks().stream().anyMatch(t -> t.state() != TaskState.RUNNING)) {
+            Thread.sleep(5);
+        }
+        Thread.sleep(200);
+        var savepoint = first.pause(null).get(20, TimeUnit.SECONDS);
+        assertThat(end(first.handle()).status()).isEqualTo(JobStatus.PAUSED);
+        awaitSlotsBack();
+        return savepoint;
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"2, 4", "4, 2", "3, 1"})
+    void aRunGoesOnWithAnotherParallelismAndEveryRowOnce(
+            int before, int after, @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        var checkpoints = new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                Runnable::run);
+        var savepoint = savepointAt(probe, before, checkpoints);
+        int writers = Probe.get(probe).events.stream()
+                .filter(e -> e.startsWith("prepared "))
+                .map(e -> e.substring(0, e.lastIndexOf('-')))
+                .collect(java.util.stream.Collectors.toSet())
+                .size();
+        assertThat(writers).as("every writer prepared the savepoint").isEqualTo(before);
+
+        JobMaster second = start(
+                withCheckpoints(
+                        TestConnectors.job(
+                                probe, "rows: 3000, splits: 12", null, "commit: transactional, slow-ms: 1", after),
+                        Duration.ofHours(1),
+                        3,
+                        2),
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20),
+                checkpoints,
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false));
+        JobResult result = end(second.handle());
+        assertThat(result.status()).as(String.valueOf(result.error())).isEqualTo(JobStatus.SUCCESS);
+        assertExactlyOnce(probe, 3000);
+        Map<Integer, List<String>> restored = Probe.get(probe).restoredStates;
+        assertThat(restored.values().stream().mapToInt(List::size).sum())
+                .as("every old writer's state went to a new writer")
+                .isEqualTo(before);
+        assertThat(restored.keySet()).allMatch(subtask -> subtask < after);
+        awaitSlotsBack();
+    }
+
+    @Test
+    void aNodeWithStateThatIsGoneIsRefusedUnlessItsStateMayBeLeftOut(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        String probe = Probe.create();
+        var checkpoints = new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                Runnable::run);
+        var savepoint = savepointAt(probe, 3, checkpoints);
+        // the sink is now another node: the state of "out" has no node to go to
+        JobPlan renamed = withCheckpoints(
+                TestConnectors.plan("version: 1\nname: test-job\nenv:\n  parallelism: 3\n"
+                        + "source:\n  - { id: src, type: numbers, probe: " + probe + ", rows: 3000, splits: 12 }\n"
+                        + "sink:\n  - { id: target, type: collect, probe: " + probe + " }\n"),
+                Duration.ofHours(1),
+                3,
+                2);
+
+        JobMaster refused = start(
+                renamed,
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                checkpoints,
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false));
+        JobResult result = end(refused.handle());
+        assertThat(result.status()).isEqualTo(JobStatus.FAILED);
+        assertThat(result.error().code()).isEqualTo(ErrorCode.STATE_INCOMPATIBLE);
+        assertThat(result.error().getMessage()).contains("node 'out'");
+        awaitSlotsBack();
+
+        JobMaster allowed = start(
+                renamed,
+                Duration.ofSeconds(5),
+                SubmitOptions.defaults(),
+                checkpoints,
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), true, false));
+        assertThat(end(allowed.handle()).status()).isEqualTo(JobStatus.SUCCESS);
+        awaitSlotsBack();
+    }
+
+    @Test
+    void aRestorePointOfAnotherJobIsRefused(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
         String probe = Probe.create();
         var storage = new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir);
         var store = new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore();
@@ -1030,17 +1140,24 @@ class ClusterJobTest {
         end(first.handle());
         awaitSlotsBack();
 
-        JobMaster narrower = start(
-                withCheckpoints(TestConnectors.job(probe, "endless: true", null, "", 2), Duration.ofHours(1), 3, 2),
+        JobPlan other = withCheckpoints(
+                TestConnectors.plan("version: 1\nname: other-job\nenv:\n  parallelism: 3\n"
+                        + "source:\n  - { id: src, type: numbers, probe: " + probe + ", endless: true }\n"
+                        + "sink:\n  - { id: out, type: collect, probe: " + probe + " }\n"),
+                Duration.ofHours(1),
+                3,
+                2);
+        JobMaster foreign = start(
+                other,
                 Duration.ofSeconds(5),
                 SubmitOptions.defaults(),
                 new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(storage, store, Runnable::run),
                 new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
                         savepoint.directory(), false, false));
-        JobResult refused = end(narrower.handle());
+        JobResult refused = end(foreign.handle());
         assertThat(refused.status()).isEqualTo(JobStatus.FAILED);
         assertThat(refused.error().code()).isEqualTo(ErrorCode.STATE_INCOMPATIBLE);
-        assertThat(refused.error().getMessage()).contains("parallelism 3 and has 2");
+        assertThat(refused.error().getMessage()).contains("taken by job 'test-job', not 'other-job'");
 
         JobMaster missing = start(
                 withCheckpoints(TestConnectors.job(probe, "endless: true", null, "", 3), Duration.ofHours(1), 3, 2),

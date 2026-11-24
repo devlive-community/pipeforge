@@ -583,6 +583,27 @@ public final class JobMaster {
                 totalSplits = opened.totalSplits().orElse(-1);
                 return null;
             });
+            if (restored != null && restored.rescaled(node.id(), sourceVertex.parallelism())) {
+                // the readers' splits, each where it had got to, are handed out to the new readers
+                List<SourceSplit> splits = new ArrayList<>();
+                for (var handle : restored.all(node.id(), "source")) {
+                    for (byte[] element : restored.elements(
+                            java.util.Objects.requireNonNull(checkpointing).storage(), handle)) {
+                        splits.add(onEnumerator("read a restored split", () -> created.splitSerializer()
+                                .deserialize(handle.serializerVersion(), element)));
+                    }
+                }
+                LOG.info(
+                        "Job {} ({}) restores {} split(s) of {} reader(s) on {}",
+                        plan.name(),
+                        id,
+                        splits.size(),
+                        restored.parallelismOf(node.id()),
+                        sourceVertex.parallelism());
+                if (!splits.isEmpty()) {
+                    callEnumerator("give the restored splits back", e -> addBack(e, splits, 0));
+                }
+            }
         } catch (PipeForgeException e) {
             fail(e);
             return;
@@ -1139,11 +1160,19 @@ public final class JobMaster {
     private Map<String, Map<Integer, List<org.devlive.pipeforge.engine.rpc.StateHandle>>> byVertex(
             org.devlive.pipeforge.engine.master.checkpoint.RestorePoint point) {
         Map<String, Map<Integer, List<org.devlive.pipeforge.engine.rpc.StateHandle>>> states = new HashMap<>();
+        String source = sourceVertex.head().id();
         for (JobGraph.Vertex vertex : graph.vertices()) {
-            List<String> ids = vertex.nodes().stream().map(PlannedNode::id).toList();
             for (int subtask = 0; subtask < vertex.parallelism(); subtask++) {
                 List<org.devlive.pipeforge.engine.rpc.StateHandle> handles = new ArrayList<>();
-                point.of(ids, subtask).values().forEach(handles::addAll);
+                for (PlannedNode node : vertex.nodes()) {
+                    if (!point.rescaled(node.id(), vertex.parallelism())) {
+                        point.of(List.of(node.id()), subtask).values().forEach(handles::addAll);
+                    } else if (!node.id().equals(source)) {
+                        // the states of the old subtasks are spread over the new ones
+                        handles.addAll(point.spread(node.id(), subtask, vertex.parallelism()));
+                    }
+                    // the splits of a source with another parallelism go back to the enumerator
+                }
                 if (!handles.isEmpty()) {
                     states.computeIfAbsent(vertex.id(), v -> new HashMap<>()).put(subtask, handles);
                 }

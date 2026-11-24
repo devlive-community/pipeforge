@@ -75,7 +75,8 @@ of the run). The master reads its `_metadata`, restores the source's enumerator 
 its states, and first commits again what the sinks prepared for that point, which committers take
 as committed already. The job must be the one that took it, unless another job is allowed
 (`allow_other_job`); every node with state must still exist, unless states may be left out
-(`allow_non_restored_state`); and nodes with state keep their parallelism. Restarted tasks restore
+(`allow_non_restored_state`). States are matched to the job's nodes by their IDs, so keep the IDs
+of nodes with state stable; a node the point does not know starts without state. Restarted tasks restore
 that point until the run completes a checkpoint of its own, and its checkpoints are numbered after
 it.
 
@@ -85,6 +86,14 @@ run is `PAUSED`, holding no slots. Submitting the run again with the savepoint a
 resumes it: a new attempt that goes on where it paused, so the target ends as if the run had not
 paused. When the savepoint fails, the sources read on and the run keeps running; a paused run can
 also be cancelled.
+
+A run that starts from a point **may change the parallelism** of its nodes. The splits the
+readers held, each where it had got to, go back to the source's enumerator, which hands them out
+to the new readers. The writer states of the old subtasks are spread over the new ones, old subtask
+*j* to new subtask *j* mod the new parallelism, so a new writer may take over several and commit
+or abort what they left open. What the sinks prepared for the point is committed when the run
+starts, as always. So a run paused at parallelism 2 can go on at 4, or one at 4 at 2, with the same
+rows in the target.
 
 ## Quick start
 
@@ -198,15 +207,14 @@ task's part. The master logs every checkpoint that completes or fails.
 | [`PF-CKPT-0007`](../reference/errors#pf-ckpt-0007) | More checkpoints failed in a row than the job tolerates; the run failed with the last cause |
 | [`PF-CONF-0011`](../reference/errors#pf-conf-0011) `master.metastore.url` | `checkpoint.dir` is set without the master's metastore |
 | [`PF-CKPT-0002`](../reference/errors#pf-ckpt-0002) | The directory a run starts from is not a completed checkpoint or savepoint, or a file of it is damaged |
-| [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003) | A run cannot start from that point: another job took it, a node with state is gone, or a node changed its parallelism |
+| [`PF-CKPT-0003`](../reference/errors#pf-ckpt-0003) | A run cannot start from that point: another job took it, or a node with state is gone |
 
 ## Limitations
 
 - Transforms keep no state. Sinks commit per checkpoint on the master (see
   [sink state and commits](../development/api-overview#sink-state-and-commits)).
 - Savepoints are taken, and runs started from them, only through the master's protocol yet: the
-  command line, the REST API and the Web UI follow; so do pausing and resuming. A node with state
-  cannot change its parallelism when a run starts from a point.
+  command line, the REST API and the Web UI follow; so do pausing and resuming.
 - A task that waited longer than 30 seconds for the barriers of a checkpoint logs a warning about
   backpressure; the limit cannot be changed yet.
 - Only aligned checkpoints: a task waits for the barrier on all its inputs.
