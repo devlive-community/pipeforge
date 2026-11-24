@@ -93,6 +93,9 @@ sink:
 | `retry.on` | 哪些错误类别（`CONN`）、错误码（`PF-CONN-0002`）或 `TRANSIENT` 的失败会被重试 | `[CONN, RES, CLUS, TRANSIENT]` |
 | `retry.resume` | `auto`、`checkpoint` 或 `restart`：新的尝试从哪里开始 | `auto` |
 | `retry.within` | 运行提交后多长时间内仍可重试 | 不限制 |
+| `timeout.run` | 运行最多运行多久：从 `RUNNING` 起计算，不含等待 Slot 和暂停的时间，自动重试时累计计算，见[超时](../concepts/failure-handling#超时) | 不限制 |
+| `timeout.queue` | 运行等待 Slot 的最长时间，超时后以 `PF-RES-0001` 失败 | 集群的 `scheduler.slot-request-timeout`（5 分钟） |
+| `timeout.action` | `timeout.run` 到时的处理：`cancel`，或者 `savepoint`（先做 savepoint 再停止） | `cancel` |
 | `timezone` | IANA 时区，例如 `Asia/Shanghai` | `UTC` |
 | `variables` | 名称到取值的映射，见[变量](./variables#作业变量) | 无 |
 | `source.*`、`transform.*`、`sink.*` | 同类所有节点的选项默认值 | 无 |
@@ -105,6 +108,8 @@ sink:
   `restart.initial`（`PF-CONF-0002`）。所选策略用不到的 `restart.*` 选项会给出警告。
 - `retry.backoff.max` 不能小于 `retry.backoff.initial`，`retry.within` 必须大于零，`retry.on` 的每一项都必须是错误类别、错误码或
   `TRANSIENT`（`PF-CONF-0002`）。
+- `timeout.run` 和 `timeout.queue` 必须大于零（`PF-CONF-0002`）。不做 checkpoint 或没有设置 `timeout.run` 时，
+  `timeout.action: savepoint` 会给出警告。
 
 ## 节点
 

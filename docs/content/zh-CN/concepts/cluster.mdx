@@ -39,7 +39,7 @@ Worker                                   Master（ResourceManager）
 - **调度**。作业需要的 Slot 数等于它的最大并行度（见[执行](./execution)）。调度器在带有作业所需标签的 Worker 的空闲 Slot 中
   一次性预留全部 Slot：默认的 `spread` 轮流在每个 Worker 上取一个 Slot，让作业的实例分布在尽可能多的 Worker 上；`pack`
   先占满一个 Worker 再用下一个，以减少网络传输。每个 Worker 为作业预留自己的 Slot；60 秒内没有 Task 使用的预留由 Worker 释放。
-  空闲 Slot 不足的作业会排队，Slot 空出时重新尝试；超过 `scheduler.slot-request-timeout`（5 分钟）后以
+  空闲 Slot 不足的作业会排队，Slot 空出时重新尝试；超过 `scheduler.slot-request-timeout`（5 分钟，作业可以用 `env.timeout.queue` 覆盖）后以
   [`PF-RES-0001`](../reference/errors#pf-res-0001) 失败。
 - **与 Master 失联（fencing）**。在 Master 给出的超时时间内心跳都没有得到应答的 Worker，会认为自己已与 Master 断开：它取消自己的所有 Task
   （只有当前的 Master 可以控制它们），并不断尝试重新注册，默认每秒一次。超时从最近一次得到应答的心跳*发出*时算起，Master 收到它不会更早，

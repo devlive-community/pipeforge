@@ -131,7 +131,7 @@ Reader 等待配额的时间计入 `throttleWaitMs`，运行分析把受限流�
 |---|---|
 | `CREATED` | 已接受，正在等待 Slot，随后部署 Task |
 | `RUNNING` | Task 正在运行 |
-| `CANCELLING` | 收到取消请求，Task 正在停止 |
+| `CANCELLING` | `CANCELLED`、`FAILED`、`TIMEOUT`（运行超过 `env.timeout.run` 而被取消或以 savepoint 停止，见[超时](./failure-handling#超时)） |
 | `SUCCESS` | 所有 Source 都已结束，所有 Sink 都已写完并提交 |
 | `FAILED` | 某个 Task、枚举器或提交失败；结果中带有错误 |
 | `CANCELLED` | 按请求停止 |

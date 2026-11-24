@@ -154,7 +154,12 @@ public class RunTracker implements SmartLifecycle {
             return false;
         }
         RunRetries.Decision decision = RunRetries.decide(
-                run, error.code(), kept.get(), runs.lastCheckpoint(run.id()).isPresent(), clock.instant());
+                run,
+                error.code(),
+                kept.get(),
+                runs.lastCheckpoint(run.id()).isPresent(),
+                clock.instant(),
+                runs.runningMs(run.id()));
         if (!decision.retry()) {
             LOG.info("Run {} of job {} failed: {}", run.id(), run.job(), decision.reason());
             return false;
@@ -198,7 +203,8 @@ public class RunTracker implements SmartLifecycle {
                         java.time.Instant.ofEpochMilli(submission.scheduledMs()),
                         submission.plugins(),
                         attempt,
-                        restore));
+                        restore,
+                        submission.timeLeft(runs.runningMs(run.id()))));
                 LOG.info("Run {} of job {}: {}", run.id(), run.job(), reason);
             } catch (PipeForgeException e) {
                 LOG.warn("The master did not take attempt {} of run {}: {}", attempt, run.id(), e.getMessage());

@@ -396,4 +396,144 @@ class DispatcherTest {
         }
         assertThat(dispatcher.cancel("run-2", "not needed").state()).isEqualTo(State.CANCELLED);
     }
+
+    Dispatcher withCheckpoints(java.nio.file.Path dir) {
+        dispatcher.close();
+        // a short write queue, so that a savepoint does not wait behind most of the input
+        return dispatcher(100, SubmitOptions.defaults().withWriteBatchSize(10).withWriteQueueCapacity(20))
+                .withCheckpoints(new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                        new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(dir),
+                        new org.devlive.pipeforge.engine.master.checkpoint.MemoryCheckpointStore(),
+                        Runnable::run));
+    }
+
+    static long between(Dispatcher.RunStatus status, int from, int to) {
+        return Duration.between(
+                        status.transitions().get(from).at(),
+                        status.transitions().get(to).at())
+                .toMillis();
+    }
+
+    @Test
+    void aRunPastTheRunTimeoutOfItsJobEndsWithTimeout() throws Exception {
+        String probe = Probe.create();
+        definitions.put(
+                "block", () -> TestConnectors.job(probe, "block: cancel", null, "", 1, "timeout: { run: 300ms }"));
+        dispatcher.submit(submission("run-1", "block", null));
+        Dispatcher.RunStatus end = awaitEnd("run-1");
+        assertThat(end.state()).isEqualTo(State.TIMEOUT);
+        assertThat(end.transitions())
+                .extracting(RunStates.Transition::to)
+                .containsExactly(State.QUEUE, State.RUNNING, State.CANCELLING, State.TIMEOUT);
+        assertThat(end.transitions().get(2).reason()).isEqualTo("timeout of PT0.3S");
+        assertThat(between(end, 1, 2)).as("counted from RUNNING").isGreaterThanOrEqualTo(250);
+    }
+
+    @Test
+    void theTimeARunIsPausedDoesNotCount(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        dispatcher = withCheckpoints(dir);
+        String probe = Probe.create();
+        definitions.put(
+                "endless", () -> TestConnectors.job(probe, "endless: true", null, "", 1, "timeout: { run: 3s }"));
+        dispatcher.submit(submission("run-1", "endless", null));
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (dispatcher.status("run-1").tasks().stream().noneMatch(t -> t.state() == TaskState.RUNNING)) {
+            assertThat(System.nanoTime()).as("the run runs").isLessThan(deadline);
+            Thread.sleep(5);
+        }
+        var savepoint = dispatcher.pause("run-1", null).get(20, TimeUnit.SECONDS);
+        while (dispatcher.status("run-1").state() != State.PAUSED) {
+            Thread.sleep(5);
+        }
+        Thread.sleep(3500);
+        assertThat(dispatcher.status("run-1").state())
+                .as("not timed out while paused")
+                .isEqualTo(State.PAUSED);
+
+        dispatcher.submit(new Dispatcher.Submission(
+                "job-1",
+                "run-1",
+                "endless",
+                Map.of(),
+                null,
+                Map.of(),
+                null,
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        savepoint.directory(), false, false)));
+        Dispatcher.RunStatus end = awaitEnd("run-1");
+        assertThat(end.state()).isEqualTo(State.TIMEOUT);
+        assertThat(end.transitions())
+                .extracting(RunStates.Transition::to)
+                .containsExactly(
+                        State.QUEUE,
+                        State.RUNNING,
+                        State.PAUSING,
+                        State.PAUSED,
+                        State.QUEUE,
+                        State.RUNNING,
+                        State.CANCELLING,
+                        State.TIMEOUT);
+        long before = between(end, 1, 3);
+        long after = between(end, 5, 6);
+        assertThat(after)
+                .as("the rest of the 3 s after %d ms before the pause", before)
+                .isGreaterThanOrEqualTo(3000 - before - 100)
+                .isLessThan(3000);
+    }
+
+    @Test
+    void aRunWhoseTimeIsUpStopsWithASavepointAndGoesOnFromIt(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        dispatcher = withCheckpoints(dir);
+        String probe = Probe.create();
+        definitions.put(
+                "slow",
+                () -> TestConnectors.job(
+                        probe,
+                        "rows: 2000, splits: 4",
+                        null,
+                        "commit: transactional, slow-ms: 1",
+                        1,
+                        "timeout: { run: 500ms, action: savepoint }"));
+        dispatcher.submit(submission("run-1", "slow", null));
+        Dispatcher.RunStatus end = awaitEnd("run-1");
+        assertThat(end.state()).isEqualTo(State.TIMEOUT);
+        assertThat(end.transitions())
+                .extracting(RunStates.Transition::to)
+                .containsExactly(State.QUEUE, State.RUNNING, State.CANCELLING, State.TIMEOUT);
+        assertThat(end.transitions().get(2).reason()).isEqualTo("timeout of PT0.5S, with a savepoint");
+        String reason = end.transitions().get(3).reason();
+        assertThat(reason).startsWith("timed out; savepoint run-1/savepoints/");
+        assertThat(Probe.get(probe).rows).as("the run stopped early").hasSizeLessThan(2000);
+
+        // the next attempt goes on from the savepoint, with the time that is left
+        dispatcher.submit(new Dispatcher.Submission(
+                "job-1",
+                "run-1",
+                "slow",
+                Map.of(),
+                null,
+                Map.of(),
+                Duration.ofMinutes(1),
+                new org.devlive.pipeforge.engine.master.checkpoint.RestorePoint.Settings(
+                        reason.substring("timed out; savepoint ".length()), false, false),
+                2));
+        Dispatcher.RunStatus next = awaitEnd("run-1");
+        assertThat(next.state()).isEqualTo(State.SUCCESS);
+        assertThat(next.attempt()).isEqualTo(2);
+        assertThat(Probe.get(probe).rows.stream().map(r -> (Long) r.get(0)).toList())
+                .hasSize(2000)
+                .doesNotHaveDuplicates();
+    }
+
+    @Test
+    void theQueueTimeoutOfAJobReplacesTheClusterDefault() {
+        String probe = Probe.create();
+        assertThat(Placement.queueTimeout(
+                        TestConnectors.job(probe, "rows: 1", null, "", 1, "timeout: { queue: 10s }"),
+                        Duration.ofMinutes(5)))
+                .isEqualTo(Duration.ofSeconds(10));
+        assertThat(Placement.queueTimeout(TestConnectors.job(probe, "rows: 1", null, "", 1), Duration.ofMinutes(5)))
+                .isEqualTo(Duration.ofMinutes(5));
+    }
 }

@@ -75,6 +75,15 @@ public interface Placement {
     }
 
     /**
+     * How long a run of {@code plan} may wait for slots: its {@code env.timeout.queue}, else {@code
+     * cluster} ({@code scheduler.slot-request-timeout}).
+     */
+    static java.time.Duration queueTimeout(org.devlive.pipeforge.core.plan.JobPlan plan, java.time.Duration cluster) {
+        java.time.Duration queue = plan.timeout().queue();
+        return queue != null ? queue : cluster;
+    }
+
+    /**
      * Slots that {@code scheduler} reserves on the workers of a cluster.
      *
      * @param labels the labels every worker of the job must carry

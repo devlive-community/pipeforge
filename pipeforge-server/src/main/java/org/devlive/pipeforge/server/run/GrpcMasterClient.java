@@ -67,6 +67,10 @@ public final class GrpcMasterClient implements MasterClient {
                 .putAllVariables(submission.variables())
                 .setScheduledTimeMs(submission.scheduledTime().toEpochMilli())
                 .setAttempt(submission.attempt());
+        if (submission.timeout() != null) {
+            // at least a millisecond: 0 would be the job's whole env.timeout.run
+            request.setTimeoutMs(Math.max(1, submission.timeout().toMillis()));
+        }
         if (submission.restorePath() != null) {
             request.setRestore(org.devlive.pipeforge.engine.rpc.proto.RestoreSettings.newBuilder()
                     .setPath(submission.restorePath()));

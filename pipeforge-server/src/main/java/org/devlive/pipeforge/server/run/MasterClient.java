@@ -21,6 +21,8 @@ public interface MasterClient extends AutoCloseable {
      * @param plugins plugin ID to the version the server planned with
      * @param attempt the attempt of the run, counted from 1
      * @param restorePath the checkpoint the attempt starts from; {@code null} from the beginning
+     * @param timeout how long the attempt may be running; {@code null} for the job's {@code
+     *     env.timeout.run}
      */
     record Submission(
             String jobId,
@@ -30,7 +32,21 @@ public interface MasterClient extends AutoCloseable {
             Instant scheduledTime,
             Map<String, String> plugins,
             int attempt,
-            @org.jspecify.annotations.Nullable String restorePath) {
+            @Nullable String restorePath,
+            java.time.@Nullable Duration timeout) {
+
+        /** An attempt with the job's run timeout. */
+        public Submission(
+                String jobId,
+                String runId,
+                String definition,
+                Map<String, String> variables,
+                Instant scheduledTime,
+                Map<String, String> plugins,
+                int attempt,
+                @Nullable String restorePath) {
+            this(jobId, runId, definition, variables, scheduledTime, plugins, attempt, restorePath, null);
+        }
 
         /** The first attempt of a run, from the beginning. */
         Submission(
@@ -40,7 +56,7 @@ public interface MasterClient extends AutoCloseable {
                 Map<String, String> variables,
                 Instant scheduledTime,
                 Map<String, String> plugins) {
-            this(jobId, runId, definition, variables, scheduledTime, plugins, 1, null);
+            this(jobId, runId, definition, variables, scheduledTime, plugins, 1, null, null);
         }
     }
 

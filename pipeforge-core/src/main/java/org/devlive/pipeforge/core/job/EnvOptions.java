@@ -213,6 +213,24 @@ public final class EnvOptions {
             .noDefault()
             .withDescription("How long after its submission a run may still be retried; no limit when not set");
 
+    public static final Option<java.time.Duration> TIMEOUT_RUN = Options.key("timeout.run")
+            .durationType()
+            .noDefault()
+            .withDescription("How long a run may be running, without waiting for slots or being paused, counted"
+                    + " across its attempts; no limit when not set");
+
+    public static final Option<java.time.Duration> TIMEOUT_QUEUE = Options.key("timeout.queue")
+            .durationType()
+            .noDefault()
+            .withDescription("How long a run may wait for slots; the cluster's scheduler.slot-request-timeout"
+                    + " when not set");
+
+    public static final Option<org.devlive.pipeforge.core.plan.TimeoutSettings.Action> TIMEOUT_ACTION = Options.key(
+                    "timeout.action")
+            .enumType(org.devlive.pipeforge.core.plan.TimeoutSettings.Action.class)
+            .defaultValue(org.devlive.pipeforge.core.plan.TimeoutSettings.Action.CANCEL)
+            .withDescription("What happens when the run time is up: cancel, or savepoint to stop with a savepoint");
+
     /** Prefixes of node defaults: {@code source.*}, {@code transform.*} and {@code sink.*}. */
     public static final List<String> NODE_DEFAULT_PREFIXES = List.of("source", "transform", "sink");
 
@@ -254,7 +272,10 @@ public final class EnvOptions {
                     RETRY_BACKOFF_MULTIPLIER,
                     RETRY_ON,
                     RETRY_RESUME,
-                    RETRY_WITHIN)
+                    RETRY_WITHIN,
+                    TIMEOUT_RUN,
+                    TIMEOUT_QUEUE,
+                    TIMEOUT_ACTION)
             .nativeNamespaces(NODE_DEFAULT_PREFIXES.toArray(String[]::new))
             .build();
 

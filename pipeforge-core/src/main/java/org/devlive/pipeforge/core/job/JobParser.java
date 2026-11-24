@@ -174,6 +174,8 @@ public final class JobParser {
         positive(config, EnvOptions.RESTART_INTERVAL, false);
         positive(config, EnvOptions.RETRY_BACKOFF_INITIAL, true);
         positive(config, EnvOptions.RETRY_WITHIN, false);
+        positive(config, EnvOptions.TIMEOUT_RUN, false);
+        positive(config, EnvOptions.TIMEOUT_QUEUE, false);
         if (config.get(EnvOptions.RETRY_BACKOFF_MAX).compareTo(config.get(EnvOptions.RETRY_BACKOFF_INITIAL)) < 0) {
             throw org.devlive.pipeforge.common.error.PipeForgeException.of(
                             org.devlive.pipeforge.common.error.ErrorCode.OPTION_INVALID)

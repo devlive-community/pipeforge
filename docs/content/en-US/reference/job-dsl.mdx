@@ -94,6 +94,9 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 | `retry.on` | Error categories (`CONN`), error codes (`PF-CONN-0002`) or `TRANSIENT` whose failures are retried | `[CONN, RES, CLUS, TRANSIENT]` |
 | `retry.resume` | `auto`, `checkpoint` or `restart`: where a new attempt starts | `auto` |
 | `retry.within` | How long after its submission a run may still be retried | no limit |
+| `timeout.run` | How long a run may be running, counted from `RUNNING` without the time it waits for slots or is paused, across its automatic retries; see [timeouts](../concepts/failure-handling#timeouts) | no limit |
+| `timeout.queue` | How long a run may wait for slots before it fails with `PF-RES-0001` | the cluster's `scheduler.slot-request-timeout` (5 min) |
+| `timeout.action` | `cancel`, or `savepoint` to stop with a savepoint first: what happens when `timeout.run` is up | `cancel` |
 | `timezone` | An IANA time zone such as `Asia/Shanghai` | `UTC` |
 | `variables` | A mapping of names to values, see [variables](./variables#job-variables) | none |
 | `source.*`, `transform.*`, `sink.*` | Defaults for the options of every node of that kind | none |
@@ -110,6 +113,8 @@ Unknown fields are errors, with a suggestion when the name is close to a known o
 - `retry.backoff.max` cannot be shorter than `retry.backoff.initial`, `retry.within` must be longer
   than zero, and every entry of `retry.on` must be an error category, an error code or `TRANSIENT`
   (`PF-CONF-0002`).
+- `timeout.run` and `timeout.queue` must be longer than zero (`PF-CONF-0002`). `timeout.action:
+  savepoint` without checkpoints, or without `timeout.run`, is reported as a warning.
 
 ## Nodes
 

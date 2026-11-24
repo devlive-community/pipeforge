@@ -344,6 +344,33 @@ class PlannerTest {
     }
 
     @Test
+    void readsTheTimeoutsOfRuns() {
+        String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
+        assertThat(plan(job(nodes)).timeout()).isEqualTo(TimeoutSettings.NONE);
+
+        JobPlan plan = plan(job("env: { timeout: { run: 2h, queue: 10m, action: savepoint } }\n" + nodes));
+        assertThat(plan.timeout())
+                .isEqualTo(new TimeoutSettings(
+                        java.time.Duration.ofHours(2),
+                        java.time.Duration.ofMinutes(10),
+                        TimeoutSettings.Action.SAVEPOINT));
+        assertThat(plan.warnings()).isEmpty();
+
+        assertThat(plan(job("env: { timeout: { run: 2h, action: savepoint }, checkpoint: { enabled: false } }\n"
+                                + nodes))
+                        .warnings())
+                .anyMatch(w -> w.contains("savepoint needs checkpoints"));
+        assertThat(plan(job("env: { timeout: { action: savepoint } }\n" + nodes))
+                        .warnings())
+                .anyMatch(w -> w.contains("no effect without env.timeout.run"));
+        assertThat(Errors.message(ErrorCode.OPTION_INVALID, () -> plan(job("env: { timeout: { run: 0s } }\n" + nodes))))
+                .contains("timeout.run");
+        assertThat(Errors.message(
+                        ErrorCode.OPTION_INVALID, () -> plan(job("env: { timeout: { action: pause } }\n" + nodes))))
+                .contains("timeout.action");
+    }
+
+    @Test
     void readsTheRetriesOfRuns() {
         String nodes = "source: [{ id: a, type: fake }]\nsink: [{ id: k, type: console }]";
         assertThat(plan(job(nodes)).retry()).isEqualTo(RetrySettings.NONE);

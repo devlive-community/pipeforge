@@ -47,7 +47,8 @@ public final class Dispatcher implements AutoCloseable {
      * with the plugin versions the server chose).
      *
      * @param plugins plugin ID to the version the server planned with
-     * @param timeout how long the run may take; {@code null} for no limit
+     * @param timeout how long this attempt may be running, without waiting for slots or being
+     *     paused; {@code null} for the job's {@code env.timeout.run}
      */
     public record Submission(
             String jobId,
@@ -178,6 +179,11 @@ public final class Dispatcher implements AutoCloseable {
         ScheduledFuture<?> timer;
 
         volatile boolean timedOut;
+        /** How long the run has been running in this attempt before {@link #runningSince}. */
+        long usedMs;
+        /** Since when it runs, in clock milliseconds; {@code -1} while it does not. */
+        long runningSince = -1;
+
         volatile @Nullable JobResult result;
         /** Taken when the run reaches its final state, on the job master thread. */
         volatile @Nullable PipeForgeException error;
@@ -301,10 +307,6 @@ public final class Dispatcher implements AutoCloseable {
             }
         });
         attempt.handle().result().whenComplete((result, error) -> ended(started, result, planned));
-        if (submission.timeout() != null) {
-            started.timer =
-                    timers.schedule(() -> timeout(started), submission.timeout().toMillis(), TimeUnit.MILLISECONDS);
-        }
         jobs.add(started.master);
         started.master.start();
         LOG.info("Run {} of job {} accepted", submission.runId(), started.plan.name());
@@ -475,6 +477,10 @@ public final class Dispatcher implements AutoCloseable {
     }
 
     private void moved(Run run, JobStatus status) {
+        if (run.timedOut && status == JobStatus.RUNNING) {
+            // the savepoint it stops with failed: it is cancelled instead (see timeout)
+            return;
+        }
         State next =
                 switch (status) {
                     case CREATED -> State.QUEUE;
@@ -483,8 +489,9 @@ public final class Dispatcher implements AutoCloseable {
                     case SUCCESS -> State.SUCCESS;
                     case FAILED -> State.FAILED;
                     case CANCELLED -> run.timedOut ? State.TIMEOUT : State.CANCELLED;
-                    case PAUSING -> State.PAUSING;
-                    case PAUSED -> State.PAUSED;
+                        // a run whose time is up and stops with a savepoint is cancelling, then timed out
+                    case PAUSING -> run.timedOut ? State.CANCELLING : State.PAUSING;
+                    case PAUSED -> run.timedOut ? State.TIMEOUT : State.PAUSED;
                 };
         String reason =
                 switch (next) {
@@ -493,29 +500,85 @@ public final class Dispatcher implements AutoCloseable {
                     case PAUSED -> "paused with "
                             + java.util.Objects.requireNonNull(run.master.pausedWith())
                                     .directory();
-                    case CANCELLING -> run.timedOut ? "timeout of " + run.submission.timeout() : "cancel requested";
+                    case TIMEOUT -> run.master.pausedWith() != null
+                            ? "timed out; savepoint " + run.master.pausedWith().directory()
+                            : "timed out";
+                    case CANCELLING -> run.timedOut
+                            ? "timeout of " + budget(run) + (status == JobStatus.PAUSING ? ", with a savepoint" : "")
+                            : "cancel requested";
                     default -> status.name().toLowerCase(java.util.Locale.ROOT);
                 };
         if (next.isTerminal()) {
             run.error = run.master.failure();
         }
         run.states.move(next, clock.instant(), reason);
+        clock(run, next == State.RUNNING || next == State.PAUSING);
+    }
+
+    /** How long the current attempt of {@code run} may be running; {@code null} for no limit. */
+    private static @Nullable Duration budget(Run run) {
+        return run.submission.timeout() != null
+                ? run.submission.timeout()
+                : run.plan.timeout().run();
+    }
+
+    /**
+     * Starts or stops the run time of {@code run}: it counts while the run is running or taking the
+     * savepoint it pauses with, not while it waits for slots or is paused.
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // the timer is kept to cancel it
+    private void clock(Run run, boolean running) {
+        synchronized (run) {
+            long now = clock.millis();
+            if (running && run.runningSince < 0) {
+                run.runningSince = now;
+                Duration budget = budget(run);
+                if (budget != null && !run.timedOut) {
+                    long left = Math.max(0, budget.toMillis() - run.usedMs);
+                    run.timer = timers.schedule(() -> timeout(run), left, TimeUnit.MILLISECONDS);
+                }
+            } else if (!running && run.runningSince >= 0) {
+                run.usedMs += now - run.runningSince;
+                run.runningSince = -1;
+                if (run.timer != null) {
+                    run.timer.cancel(false);
+                    run.timer = null;
+                }
+            }
+        }
     }
 
     private void ended(Run run, @Nullable JobResult result, Planned planned) {
         run.result = result;
-        if (run.timer != null) {
-            run.timer.cancel(false);
+        if (run.states.state().isTerminal()) {
+            // a paused run stopped its clock already, and a resumed one runs it for its next attempt
+            clock(run, false);
         }
         close(planned.components());
         LOG.info("Run {} of job {} ended: {}", run.submission.runId(), run.plan.name(), run.states.state());
     }
 
     private void timeout(Run run) {
-        if (!run.states.state().isTerminal()) {
-            LOG.info("Run {} of job {} timed out", run.submission.runId(), run.plan.name());
-            run.timedOut = true;
-            run.master.cancel();
+        if (run.states.state().isTerminal() || run.timedOut) {
+            return;
+        }
+        LOG.info("Run {} of job {} timed out after {}", run.submission.runId(), run.plan.name(), budget(run));
+        run.timedOut = true;
+        JobMaster master = run.master;
+        if (run.plan.timeout().action() == org.devlive.pipeforge.core.plan.TimeoutSettings.Action.SAVEPOINT
+                && run.plan.checkpoint().enabled()) {
+            master.pause(null).whenComplete((savepoint, error) -> {
+                if (error != null) {
+                    LOG.warn(
+                            "Run {} of job {} did not stop with a savepoint at its timeout, it is cancelled: {}",
+                            run.submission.runId(),
+                            run.plan.name(),
+                            error.getMessage());
+                    master.cancel();
+                }
+            });
+        } else {
+            master.cancel();
         }
     }
 

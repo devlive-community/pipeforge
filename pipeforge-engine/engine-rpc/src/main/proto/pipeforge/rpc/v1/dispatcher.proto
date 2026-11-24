@@ -88,7 +88,7 @@ message SubmitJobRequest {
   map<string, string> variables = 6;  // 解析后的变量
   int64 scheduled_time_ms = 7;
   repeated PluginRef plugins = 8;     // Server 选定的插件版本，Master 按它计划
-  int64 timeout_ms = 9;               // 0 表示不限
+  int64 timeout_ms = 9;               // 本次尝试的运行时长上限（不含排队与暂停）；0 表示按作业的 env.timeout.run
   RestoreSettings restore = 10;       // M2：从 checkpoint / savepoint 启动、继续暂停的运行
   int32 attempt = 11;                 // M2：运行的第几次尝试，从 1 开始
 }

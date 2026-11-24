@@ -82,9 +82,19 @@ backoff — `retry.backoff.initial`, then `multiplier` times longer each time, a
 
 A run that failed, timed out or was cancelled can also be **retried by hand**, whatever `env.retry`
 says: `POST /api/v1/runs/{id}/retry` starts its next attempt with `{"from": "CHECKPOINT"}` from its
-last completed checkpoint (refused with `PF-CONF-0007` without one), with `{"from": "SCRATCH"}` from
+last completed checkpoint or savepoint (refused with `PF-CONF-0007` without one), with `{"from": "SCRATCH"}` from
 the start, and without a body from the checkpoint when there is one. A running or succeeded run
 cannot be retried.
+
+### Timeouts
+
+`env.timeout.run` limits how long a run may be **running**: the time it waits for slots or is
+paused does not count, and its automatic retries share the limit, each having the time the earlier
+attempts left; a run with no time left is not retried. When the time is up the run is cancelled and
+ends **`TIMEOUT`**; with `env.timeout.action: savepoint` it stops with a savepoint first, and
+retrying it by hand from `CHECKPOINT` goes on from that savepoint with the whole `env.timeout.run`
+again (a retry by hand starts the time over). When the savepoint fails, the run is cancelled.
+`env.timeout.queue` limits how long a run waits for slots; past it the run fails with `PF-RES-0001`.
 
 Every attempt is recorded with its state, times, error and the checkpoint it started from, and every
 change of state names its attempt. The run's counters — rows read, written, skipped as bad, failed,

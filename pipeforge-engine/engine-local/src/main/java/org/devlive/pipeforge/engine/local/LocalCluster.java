@@ -112,7 +112,11 @@ final class LocalCluster implements AutoCloseable {
                     return new Dispatcher.Planned(plan, () -> plans.remove(submission.runId()), options(submission));
                 },
                 plan -> Placement.cluster(
-                        scheduler, this::gateway, Map.of(), Scheduler.Strategy.SPREAD, Duration.ofMinutes(5)),
+                        scheduler,
+                        this::gateway,
+                        Map.of(),
+                        Scheduler.Strategy.SPREAD,
+                        Placement.queueTimeout(plan, Duration.ofMinutes(5))),
                 jobs,
                 SubmitOptions.defaults(),
                 threads,

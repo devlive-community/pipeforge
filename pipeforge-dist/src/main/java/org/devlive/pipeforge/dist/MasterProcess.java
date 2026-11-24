@@ -102,7 +102,8 @@ public final class MasterProcess implements AutoCloseable {
         Duration slotTimeout = config.duration(Settings.SLOT_REQUEST_TIMEOUT);
         this.dispatcher = new Dispatcher(
                 new PluginPlanning(plugins),
-                plan -> Placement.cluster(scheduler, this::gateway, Map.of(), strategy, slotTimeout),
+                plan -> Placement.cluster(
+                        scheduler, this::gateway, Map.of(), strategy, Placement.queueTimeout(plan, slotTimeout)),
                 jobs,
                 SubmitOptions.defaults().withCancelTimeout(config.duration(Settings.CANCEL_TIMEOUT)),
                 threads,

@@ -537,7 +537,8 @@ class MetastoreMigrationsTest {
                     Map.of("fake", "0.1.0"),
                     "exactly-once",
                     new org.devlive.pipeforge.server.run.RunRetries.Retry(
-                            2, 60_000, 600_000, 2, List.of("CONN"), "auto", null));
+                            2, 60_000, 600_000, 2, List.of("CONN"), "auto", null),
+                    3_600_000L);
             repository.insert("r1", "订单 😀", "yaml", null, submitted, json.writeValueAsString(submission));
             repository.transition(
                     "r1",
@@ -607,6 +608,9 @@ class MetastoreMigrationsTest {
                 assertThat(next.variables()).containsEntry("day", "2026-11-23");
                 assertThat(next.plugins()).containsEntry("fake", "0.1.0");
                 assertThat(next.scheduledTime()).isEqualTo(submitted);
+                assertThat(next.timeout())
+                        .as("env.timeout.run less the 30 s attempt 1 ran")
+                        .isEqualTo(java.time.Duration.ofSeconds(3570));
             });
             tracker.poll();
             var done = repository.detail("r1");
@@ -623,6 +627,7 @@ class MetastoreMigrationsTest {
                                     1, org.devlive.pipeforge.server.run.RunState.FAILED, null),
                             org.assertj.core.groups.Tuple.tuple(
                                     2, org.devlive.pipeforge.server.run.RunState.SUCCESS, "r1/chk-3/"));
+            assertThat(repository.runningMs("r1")).isEqualTo(30_000L);
             assertThat(done.transitions())
                     .extracting(t -> t.attempt() + ":" + t.to())
                     .containsExactly("1:QUEUE", "1:RUNNING", "1:RETRY_WAIT", "2:QUEUE", "2:SUCCESS");

@@ -66,8 +66,15 @@ Sink 已提交的内容保持提交：checkpoint 完成时提交它的待提交�
 | `restart` | 从头开始 |
 
 失败、超时或被取消的运行也可以**手动重试**，不受 `env.retry` 限制：`POST /api/v1/runs/{id}/retry` 开始下一次尝试，
-`{"from": "CHECKPOINT"}` 从最近完成的 checkpoint 开始（没有时以 `PF-CONF-0007` 拒绝），`{"from": "SCRATCH"}` 从头开始，
+`{"from": "CHECKPOINT"}` 从最近完成的 checkpoint 或 savepoint 开始（没有时以 `PF-CONF-0007` 拒绝），`{"from": "SCRATCH"}` 从头开始，
 不带请求体时有 checkpoint 就从 checkpoint 开始。运行中或已成功的运行不能重试。
+
+### 超时
+
+`env.timeout.run` 限制运行**运行中**的时长：等待 Slot 和暂停的时间不计入，自动重试共用这个上限，每次尝试只有之前的尝试剩下的时间；
+没有剩余时间的运行不再重试。到时后运行被取消，以 **`TIMEOUT`** 结束；设置 `env.timeout.action: savepoint` 时先做 savepoint 再停止，
+之后按 `CHECKPOINT` 手动重试会从该 savepoint 继续，并重新获得完整的 `env.timeout.run`（手动重试重新计时）。savepoint 失败时运行被取消。
+`env.timeout.queue` 限制运行等待 Slot 的时长，超时后以 `PF-RES-0001` 失败。
 
 每次尝试都会记录状态、时间、错误以及它从哪个 checkpoint 开始，每次状态变化也标明所属的尝试。运行的计数——读取、写入、作为坏行跳过、
 失败的行数以及耗时——跨尝试累计；每个采样保存所属尝试的指标。

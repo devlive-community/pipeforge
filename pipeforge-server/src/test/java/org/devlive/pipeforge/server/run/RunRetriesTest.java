@@ -78,6 +78,24 @@ class RunRetriesTest {
     }
 
     @Test
+    void aRetryHasTheTimeLeftOfTheRunTimeout() {
+        var base = submission("exactly-once", 3, "auto", null);
+        var limited = new RunRetries.Resubmission(
+                base.variables(), base.scheduledMs(), base.plugins(), base.delivery(), base.retry(), 60_000L);
+        assertThat(base.timeLeft(10_000)).as("no limit").isNull();
+        assertThat(limited.timeLeft(10_000)).isEqualTo(Duration.ofSeconds(50));
+        assertThat(limited.timeLeft(70_000)).isZero();
+
+        Instant now = SUBMITTED.plusSeconds(120);
+        assertThat(RunRetries.decide(run(1), "PF-CONN-0003", limited, true, now, 59_000)
+                        .retry())
+                .isTrue();
+        var spent = RunRetries.decide(run(1), "PF-CONN-0003", limited, true, now, 60_000);
+        assertThat(spent.retry()).isFalse();
+        assertThat(spent.reason()).contains("no time left of env.timeout.run");
+    }
+
+    @Test
     void onlyTheErrorsOfEnvRetryOnAreRetried() {
         var exactly = submission("exactly-once", 3, "auto", null);
         Instant now = SUBMITTED.plusSeconds(1);

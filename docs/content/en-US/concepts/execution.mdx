@@ -186,7 +186,7 @@ states (the subset of this version):
 |---|---|
 | `QUEUE` (waiting for slots) | `RUNNING`, `CANCELLING`, `FAILED` |
 | `RUNNING` | `SUCCESS`, `FAILED`, `CANCELLING`, `PAUSING` |
-| `CANCELLING` | `CANCELLED`, `FAILED`, `TIMEOUT` (cancelled for running past its timeout) |
+| `CANCELLING` | `CANCELLED`, `FAILED`, `TIMEOUT` (cancelled, or stopped with a savepoint, for running past `env.timeout.run`; see [timeouts](./failure-handling#timeouts)) |
 | `PAUSING` | `PAUSED`, `RUNNING` (its savepoint failed), `FAILED`, `CANCELLING` |
 | `PAUSED` | `QUEUE` (resumed), `CANCELLED` |
 

@@ -51,8 +51,8 @@ worker                                   master (resource manager)
   the instances of a job run on as many workers as possible; `pack` fills one worker before the
   next, for less network traffic. Each worker reserves its slot for the job; a reservation that no
   task uses within 60 seconds is released by the worker. A job that finds too few free slots waits
-  and is tried again as slots become free; after `scheduler.slot-request-timeout` (5 minutes) it
-  fails with [`PF-RES-0001`](../reference/errors#pf-res-0001).
+  and is tried again as slots become free; after `scheduler.slot-request-timeout` (5 minutes), or
+  the job's `env.timeout.queue`, it fails with [`PF-RES-0001`](../reference/errors#pf-res-0001).
 - **Losing the master (fencing).** A worker that gets no answer to its heartbeats for the timeout
   the master gave considers itself cut off: it cancels all its tasks, because only the current
   master may control them, and keeps trying to register — every second by default. The timeout

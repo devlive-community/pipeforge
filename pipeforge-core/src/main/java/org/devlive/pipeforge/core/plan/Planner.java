@@ -124,6 +124,7 @@ public final class Planner {
         }
         JobMode mode = written != null ? written : unbounded ? JobMode.STREAMING : JobMode.BATCH;
         DirtyPolicy dirty = dirty(job, warnings);
+        CheckpointSettings checkpoint = checkpoint(job, mode);
         return new JobPlan(
                 job.name(),
                 job.description(),
@@ -140,9 +141,24 @@ public final class Planner {
                 new RateLimit(
                         job.env().getOptional(EnvOptions.LIMIT_ROWS).orElse(0L),
                         job.env().getOptional(EnvOptions.LIMIT_BYTES).orElse(0L)),
-                checkpoint(job, mode),
+                checkpoint,
                 restart(job, warnings),
-                retry(job));
+                retry(job),
+                timeout(job, checkpoint, warnings));
+    }
+
+    private static TimeoutSettings timeout(JobDefinition job, CheckpointSettings checkpoint, List<String> warnings) {
+        var env = job.env();
+        TimeoutSettings timeout = new TimeoutSettings(
+                env.getOptional(EnvOptions.TIMEOUT_RUN).orElse(null),
+                env.getOptional(EnvOptions.TIMEOUT_QUEUE).orElse(null),
+                env.get(EnvOptions.TIMEOUT_ACTION));
+        if (timeout.action() == TimeoutSettings.Action.SAVEPOINT && !checkpoint.enabled()) {
+            warnings.add("env.timeout.action savepoint needs checkpoints; the run is cancelled when its time is up");
+        } else if (timeout.action() == TimeoutSettings.Action.SAVEPOINT && timeout.run() == null) {
+            warnings.add("env.timeout.action has no effect without env.timeout.run");
+        }
+        return timeout;
     }
 
     private static RetrySettings retry(JobDefinition job) {

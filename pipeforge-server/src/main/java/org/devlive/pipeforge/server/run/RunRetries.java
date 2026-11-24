@@ -31,13 +31,33 @@ public final class RunRetries {
      *
      * @param scheduledMs the scheduled time of the run, in epoch milliseconds
      * @param delivery the job's delivery guarantee, {@code at-least-once} or {@code exactly-once}
+     * @param timeoutMs the job's {@code env.timeout.run} in milliseconds; {@code null} for no limit
      */
     public record Resubmission(
             Map<String, String> variables,
             long scheduledMs,
             Map<String, String> plugins,
             String delivery,
-            Retry retry) {
+            Retry retry,
+            @Nullable Long timeoutMs) {
+
+        /** A run of a job without a run timeout. */
+        public Resubmission(
+                Map<String, String> variables,
+                long scheduledMs,
+                Map<String, String> plugins,
+                String delivery,
+                Retry retry) {
+            this(variables, scheduledMs, plugins, delivery, retry, null);
+        }
+
+        /**
+         * How long the next attempt may be running, after the earlier ones ran {@code runningMs};
+         * {@code null} for no limit.
+         */
+        public @Nullable Duration timeLeft(long runningMs) {
+            return timeoutMs == null ? null : Duration.ofMillis(Math.max(0, timeoutMs - runningMs));
+        }
 
         /** What a run of {@code plan} keeps. */
         static Resubmission of(
@@ -55,7 +75,8 @@ public final class RunRetries {
                             retry.multiplier(),
                             retry.on(),
                             retry.resume().id(),
-                            retry.within() == null ? null : retry.within().toMillis()));
+                            retry.within() == null ? null : retry.within().toMillis()),
+                    plan.timeout().run() == null ? null : plan.timeout().run().toMillis());
         }
     }
 
@@ -90,6 +111,17 @@ public final class RunRetries {
      */
     public static Decision decide(
             Runs.Run run, String error, Resubmission submission, boolean hasCheckpoint, Instant now) {
+        return decide(run, error, submission, hasCheckpoint, now, 0);
+    }
+
+    /**
+     * Decides about attempt {@code run.attempt()} that failed with {@code error}, after the run was
+     * running {@code runningMs} in all.
+     *
+     * @param hasCheckpoint whether the run has a completed checkpoint to go on from
+     */
+    public static Decision decide(
+            Runs.Run run, String error, Resubmission submission, boolean hasCheckpoint, Instant now, long runningMs) {
         Retry retry = submission.retry();
         if (run.attempt() > retry.attempts()) {
             return Decision.no(error + " (" + (retry.attempts() == 0 ? "env.retry is off" : "no retries left") + ")");
@@ -99,6 +131,10 @@ public final class RunRetries {
         }
         if (!retried(error, retry.on())) {
             return Decision.no(error + " (not one of env.retry.on)");
+        }
+        Duration left = submission.timeLeft(runningMs);
+        if (left != null && left.isZero()) {
+            return Decision.no(error + " (no time left of env.timeout.run)");
         }
         boolean fromCheckpoint;
         switch (retry.resume()) {

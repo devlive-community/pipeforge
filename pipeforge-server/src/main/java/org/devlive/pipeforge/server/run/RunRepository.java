@@ -212,9 +212,14 @@ public class RunRepository {
         return Boolean.TRUE.equals(started);
     }
 
-    /** The directory of the last completed checkpoint of a run, which the master keeps for a failed run. */
+    /**
+     * The directory of the last completed checkpoint or savepoint of a run, which the master keeps
+     * for a failed run.
+     */
     public Optional<String> lastCheckpoint(String runId) {
-        return jdbc.sql("SELECT path FROM checkpoint WHERE run_id = ? AND status = 'COMPLETED' AND type = 'CHECKPOINT'"
+        // a savepoint goes too, e.g. the one a run stopped with at its timeout; checkpoint and
+        // savepoint IDs of a run count up across its attempts
+        return jdbc.sql("SELECT path FROM checkpoint WHERE run_id = ? AND status = 'COMPLETED'"
                         + " ORDER BY checkpoint_id DESC LIMIT 1")
                 .param(runId)
                 .query(String.class)
@@ -233,6 +238,30 @@ public class RunRepository {
      *
      * @throws PipeForgeException {@code PF-CONF-0010} for a run the metastore does not have
      */
+    /** How long the run was running in all its attempts, from its changes of state. */
+    public long runningMs(String id) {
+        List<Runs.Transition> transitions = jdbc.sql(
+                        "SELECT attempt, from_status, to_status, occurred_at, reason FROM job_run_transition"
+                                + " WHERE run_id = ? ORDER BY id")
+                .param(id)
+                .query((rs, row) -> new Runs.Transition(
+                        rs.getInt("attempt"),
+                        null,
+                        RunState.valueOf(rs.getString("to_status")),
+                        instant(rs.getObject("occurred_at", LocalDateTime.class)),
+                        null))
+                .list();
+        long running = 0;
+        for (int i = 0; i + 1 < transitions.size(); i++) {
+            if (transitions.get(i).to() == RunState.RUNNING) {
+                running += java.time.Duration.between(
+                                transitions.get(i).at(), transitions.get(i + 1).at())
+                        .toMillis();
+            }
+        }
+        return running;
+    }
+
     public Runs.RunDetail detail(String id) {
         Runs.Run run = find(id).orElseThrow(() -> notFound(id));
         String definition = jdbc.sql("SELECT job_yaml FROM job_run WHERE id = ?")
