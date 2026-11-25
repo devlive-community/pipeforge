@@ -54,8 +54,8 @@ importers:
         specifier: 10.4.2
         version: 10.4.2
       '@testing-library/jest-dom':
-        specifier: 6.6.4
-        version: 6.6.4
+        specifier: 8.0.0
+        version: 8.0.0(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.33.0)(yaml@2.8.4))
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(react@19.2.9))(react@19.2.9)
@@ -194,8 +194,8 @@ importers:
         specifier: 10.4.2
         version: 10.4.2
       '@testing-library/jest-dom':
-        specifier: 6.6.4
-        version: 6.6.4
+        specifier: 8.0.0
+        version: 8.0.0(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.33.0)(yaml@2.8.4))
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(react@19.2.9))(react@19.2.9)
@@ -1218,9 +1218,15 @@ packages:
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
     engines: {node: '>=18'}
 
-  '@testing-library/jest-dom@6.6.4':
-    resolution: {integrity: sha512-xDXgLjVunjHqczScfkCJ9iyjdNOVHvvCdqHSSxwM9L0l/wHkTRum67SDc020uAlCoqktJplgO2AAQeLP1wgqDQ==}
-    engines: {node: '>=14', npm: '>=6', yarn: '>=1'}
+  '@testing-library/jest-dom@8.0.0':
+    resolution: {integrity: sha512-Nu45KEeFgP/ydCMipnisMblq6YHViqEFi3fKN0a40s+zdKDDD7vEPCEavS0i7i4RxmclcEIL8q2o42pu+WgNgg==}
+    engines: {node: '>=22', npm: '>=6', yarn: '>=1'}
+    peerDependencies:
+      '@testing-library/dom': '>=10 <11'
+      vitest: '>=5 <6'
+    peerDependenciesMeta:
+      vitest:
+        optional: true
 
   '@testing-library/react@16.3.3':
     resolution: {integrity: sha512-Uo193NgQbPMz6lrrhtRQQFcMC6Re/ELLFbbuVL30WDlZxlpZf9/lMHTAVxPRLw1q1iu9OJmR1c2BLiENRstdBg==}
@@ -1469,6 +1475,10 @@ packages:
 
   aria-query@5.3.0:
     resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
+
+  aria-query@5.3.2:
+    resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
+    engines: {node: '>= 0.4'}
 
   array-flatten@1.1.1:
     resolution: {integrity: sha512-PCVAQswWemu6UdxsDFFX/+gVeYqKAod3D3UVm91jHwynguOwAvYPhx8nNlM++NqRcK6CxxpUafjmhIdKiHibqg==}
@@ -4749,15 +4759,17 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/jest-dom@6.6.4':
+  '@testing-library/jest-dom@8.0.0(@testing-library/dom@10.4.2)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.33.0)(yaml@2.8.4))':
     dependencies:
       '@adobe/css-tools': 4.5.0
-      aria-query: 5.3.0
+      '@testing-library/dom': 10.4.2
+      aria-query: 5.3.2
       css.escape: 1.5.1
       dom-accessibility-api: 0.6.3
-      lodash: 4.18.1
       picocolors: 1.1.1
       redent: 3.0.0
+    optionalDependencies:
+      vitest: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.33.0)(yaml@2.8.4)
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(react@19.2.9))(react@19.2.9)':
     dependencies:
@@ -5046,6 +5058,8 @@ snapshots:
   aria-query@5.3.0:
     dependencies:
       dequal: 2.0.3
+
+  aria-query@5.3.2: {}
 
   array-flatten@1.1.1: {}
 
