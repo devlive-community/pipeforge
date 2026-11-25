@@ -91,7 +91,7 @@ jobs:
         with:
           path: docs/out
       - if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-preview
           path: docs/out
