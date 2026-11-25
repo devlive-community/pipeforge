@@ -93,7 +93,7 @@
         <guava.version>33.6.0-jre</guava.version>
         <!-- Versions above follow the Spring Boot BOM so that the server converges with the libraries. -->
         <spring-boot.version>4.1.2</spring-boot.version>
-        <springdoc.version>3.2.0</springdoc.version>
+        <springdoc.version>3.2.1</springdoc.version>
 
         <!-- Build plugins -->
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
