@@ -25,7 +25,7 @@
 
     <properties>
         <!-- the version whose whole dependency tree is in the build's repository -->
-        <aws-sdk.version>2.21.45</aws-sdk.version>
+        <aws-sdk.version>2.59.7</aws-sdk.version>
     </properties>
 
     <dependencies>
