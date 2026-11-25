@@ -81,7 +81,7 @@
         <postgresql.version>42.7.13</postgresql.version>
         <flyway.version>10.3.0</flyway.version>
         <spotbugs.version>4.8.6</spotbugs.version>
-        <errorprone.version>2.36.0</errorprone.version>
+        <errorprone.version>2.53.0</errorprone.version>
         <calcite.version>1.40.0</calcite.version>
         <janino.version>3.1.12</janino.version>
         <re2j.version>1.8</re2j.version>
