@@ -1,6 +1,6 @@
 ---
 title: 隔离
-description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、插件线程与取消超时。
+description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、堆守护、插件线程与取消超时。
 order: 40
 ---
 
@@ -37,6 +37,32 @@ Source 读取的每一行都按它在内存中的估算大小计量——对象�
 
 本地运行（`pipeforge run --local`）检查单行大小，但不限制 Task 内存。
 
+## 堆守护
+
+Task 内存限制的是 Task 为 Sink 保留的行，但一个作业仍可能用保存在别处的行占满 Worker 的堆。为了不让 Worker 内存溢出、
+拖垮其上的所有作业，堆守护每秒检查一次堆，并找出在这个 Worker 上运行中的 Task 记账内存最多的运行：
+
+1. 堆使用达到 `worker.heap-guard.pause-percent`（默认 85%）时，该运行的 Source Task 停止读取。已经读出的行继续写往 Sink，
+   因此这个运行会释放内存，而其他运行照常读取。堆使用重新低于这条线后，它立即继续读取；如果占用最多的变成了另一个运行，
+   则改为暂停那个运行。
+2. 堆使用在 `worker.heap-guard.fail-percent`（92%）以上持续 `worker.heap-guard.fail-after`（10 秒）时，该运行在这个 Worker
+   上的 Task 以 [`PF-RES-0002`](../reference/errors#pf-res-0002) 失败，错误中给出 Worker、运行和它占用的内存。这些 Task
+   像被取消的 Task 一样停止并释放内存；其他运行继续。这是资源类错误，作业的[重启策略](../concepts/failure-handling)
+   可能会重启它，有 checkpoint 时从最近的 checkpoint 恢复。
+
+堆使用按已用除以最大堆计算，包括尚未回收的垃圾：垃圾回收器能够不断释放的堆不会在失败线以上停留十秒，真正被存活的行占满的堆才会。
+堆已满但没有任何运行中的 Task 记账内存时，没有可以归咎的运行：Worker 记录一条警告，不做任何处理。每一次暂停、继续和失败都会记录在
+Worker 日志中。
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `worker.heap-guard.enabled` | `true` | 是否运行堆守护 |
+| `worker.heap-guard.pause-percent` | `85` | 堆使用达到这个百分比时，占用最多的运行停止读取 |
+| `worker.heap-guard.fail-percent` | `92` | 堆使用达到这个百分比并持续 `fail-after` 后，该运行失败 |
+| `worker.heap-guard.fail-after` | `10s` | 堆使用需要在 `fail-percent` 以上持续多久 |
+
+暂停百分比不能高于失败百分比。本地运行没有堆守护。
+
 ## 插件代码
 
 对插件的每次调用都以插件的 ClassLoader 作为线程上下文 ClassLoader。插件抛出的错误如果带有错误码则保留；否则插件有 `ErrorClassifier` 时由它转换（见[失败处理](../concepts/failure-handling)），再否则对 Source 归为
@@ -66,6 +92,8 @@ Worker 作为泄漏记录到日志中，并给出占用者。
 
 ## 限制
 
-- 堆内存接近用满时让占用最多的 Task 变慢或失败的堆守护线程、ClassLoader 泄漏检测以及每个作业的磁盘配额在后续版本中提供。
+- 堆守护只知道 Task 记账的内存；另一个运行用未记账的内存占满堆时，它会归咎错误的运行。它的动作目前只记录在 Worker 日志中，
+  还没有对应的指标。Worker 仍然内存溢出时会停止，由部署环境重启。
+- ClassLoader 泄漏检测以及每个作业的磁盘配额在后续版本中提供。
 - 被放弃的 Task 的线程会保留到 Worker 重启；Worker 因残留线程自动重启在后续版本中提供。
 - Source 和 Sink 插件自身（例如它们的客户端库）占用的内存不计入记账。

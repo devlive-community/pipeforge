@@ -61,6 +61,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final Map<ExecutionAttemptId, Task> tasks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService watchdog;
     private final Map<ExecutionAttemptId, ScheduledFuture<?>> reporters = new ConcurrentHashMap<>();
+    private final HeapGuard heapGuard;
 
     /**
      * @param name the worker name, used in thread names
@@ -116,41 +117,50 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             @Nullable Duration cancelKillTimeout,
             Duration leakGrace,
             org.devlive.pipeforge.engine.api.checkpoint.@Nullable CheckpointStorage checkpointStorage,
-            int inlineThreshold) {
+            int inlineThreshold,
+            HeapGuard.Settings heapGuard) {
 
-        /** Default memory limits, the kill timeout of local runs, one second of grace. */
+        /** Default memory limits, the kill timeout of local runs, one second of grace, no heap guard. */
         public static final Options DEFAULTS = new Options(
                 MemoryLimits.DEFAULTS,
                 null,
                 Duration.ofSeconds(1),
                 null,
-                org.devlive.pipeforge.engine.rpc.CheckpointFiles.DEFAULT_INLINE_THRESHOLD);
+                org.devlive.pipeforge.engine.rpc.CheckpointFiles.DEFAULT_INLINE_THRESHOLD,
+                HeapGuard.Settings.DISABLED);
 
         public Options {
             java.util.Objects.requireNonNull(memory, "memory");
             java.util.Objects.requireNonNull(leakGrace, "leakGrace");
+            java.util.Objects.requireNonNull(heapGuard, "heapGuard");
         }
 
         public static Options of(MemoryLimits memory) {
-            return new Options(memory, null, DEFAULTS.leakGrace(), null, DEFAULTS.inlineThreshold());
+            return new Options(
+                    memory, null, DEFAULTS.leakGrace(), null, DEFAULTS.inlineThreshold(), DEFAULTS.heapGuard());
         }
 
         public Options withCancelKillTimeout(Duration timeout) {
-            return new Options(memory, timeout, leakGrace, checkpointStorage, inlineThreshold);
+            return new Options(memory, timeout, leakGrace, checkpointStorage, inlineThreshold, heapGuard);
         }
 
         public Options withLeakGrace(Duration grace) {
-            return new Options(memory, cancelKillTimeout, grace, checkpointStorage, inlineThreshold);
+            return new Options(memory, cancelKillTimeout, grace, checkpointStorage, inlineThreshold, heapGuard);
         }
 
         /** Where the tasks write states larger than the inline threshold. */
         public Options withCheckpointStorage(org.devlive.pipeforge.engine.api.checkpoint.CheckpointStorage storage) {
-            return new Options(memory, cancelKillTimeout, leakGrace, storage, inlineThreshold);
+            return new Options(memory, cancelKillTimeout, leakGrace, storage, inlineThreshold, heapGuard);
         }
 
         /** States up to this size travel in the acknowledgement; larger ones become files. */
         public Options withInlineThreshold(int bytes) {
-            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, bytes);
+            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, bytes, heapGuard);
+        }
+
+        /** Guards the heap of the worker against the run that holds the most memory; checked every second. */
+        public Options withHeapGuard(HeapGuard.Settings settings) {
+            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, inlineThreshold, settings);
         }
     }
 
@@ -179,6 +189,31 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         if (slots != null) {
             watchdog.scheduleWithFixedDelay(this::releaseUnusedSlots, 1, 1, TimeUnit.SECONDS);
         }
+        this.heapGuard = guard(options.heapGuard(), HeapGuard.Heap.jvm(), System::nanoTime);
+        if (options.heapGuard().enabled()) {
+            watchdog.scheduleWithFixedDelay(this::checkHeap, 1, 1, TimeUnit.SECONDS);
+        }
+    }
+
+    /** A heap guard over the tasks of this executor; tests check it by hand with their own heap and clock. */
+    HeapGuard guard(HeapGuard.Settings settings, HeapGuard.Heap heap, java.util.function.LongSupplier nanos) {
+        return new HeapGuard(name, settings, heap, nanos, tasks::values, this::failTask);
+    }
+
+    private void checkHeap() {
+        try {
+            heapGuard.check();
+        } catch (RuntimeException e) {
+            LOG.warn("The heap guard of worker {} failed", name, e);
+        }
+    }
+
+    /**
+     * How often the heap guard acted since the worker started, by action: {@code pause} (a run
+     * stopped reading) and {@code fail} (a run's tasks failed).
+     */
+    public Map<String, Long> heapGuardActions() {
+        return heapGuard.actions();
     }
 
     private void releaseUnusedSlots() {
@@ -244,13 +279,28 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         Task task = tasks.get(id);
         if (task != null) {
             task.cancel();
-            long millis = timeoutOf(task).toMillis();
-            Duration kill = options.cancelKillTimeout();
-            long killMillis = Math.max(millis, kill == null ? millis * 2 : kill.toMillis());
-            watchdog.schedule(task::interrupt, millis, TimeUnit.MILLISECONDS);
-            watchdog.schedule(() -> giveUp(task, killMillis), killMillis, TimeUnit.MILLISECONDS);
+            enforceCancelTimeouts(task);
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    /** Fails a running task with {@code error}: it stops as a cancelled one does, within the same timeouts. */
+    void failTask(Task task, PipeForgeException error) {
+        task.fail(error);
+        enforceCancelTimeouts(task);
+    }
+
+    @SuppressWarnings("FutureReturnValueIgnored") // the task reports its end
+    private void enforceCancelTimeouts(Task task) {
+        long millis = timeoutOf(task).toMillis();
+        Duration kill = options.cancelKillTimeout();
+        long killMillis = Math.max(millis, kill == null ? millis * 2 : kill.toMillis());
+        try {
+            watchdog.schedule(task::interrupt, millis, TimeUnit.MILLISECONDS);
+            watchdog.schedule(() -> giveUp(task, killMillis), killMillis, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // the executor is closing
+        }
     }
 
     /** Starts a checkpoint at a source task; triggers for tasks not here are ignored. */

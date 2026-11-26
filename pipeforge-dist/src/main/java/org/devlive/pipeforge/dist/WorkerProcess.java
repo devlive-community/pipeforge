@@ -34,6 +34,7 @@ import org.devlive.pipeforge.engine.rpc.grpc.JobMasterClient;
 import org.devlive.pipeforge.engine.rpc.grpc.Retry;
 import org.devlive.pipeforge.engine.rpc.grpc.SecretBox;
 import org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorService;
+import org.devlive.pipeforge.engine.worker.HeapGuard;
 import org.devlive.pipeforge.engine.worker.MasterConnection;
 import org.devlive.pipeforge.engine.worker.MemoryLimits;
 import org.devlive.pipeforge.engine.worker.PluginCache;
@@ -102,7 +103,8 @@ public final class WorkerProcess implements AutoCloseable {
                         config.duration(Settings.WORKER_LOG_RETENTION)));
         threads.scheduleWithFixedDelay(this::cleanLogs, 1, 60, TimeUnit.MINUTES);
         TaskExecutor.Options options = TaskExecutor.Options.of(memoryLimits(config, exchange, slots))
-                .withCancelKillTimeout(config.duration(Settings.CANCEL_KILL_TIMEOUT));
+                .withCancelKillTimeout(config.duration(Settings.CANCEL_KILL_TIMEOUT))
+                .withHeapGuard(heapGuard(config));
         if (checkpoints != null) {
             options = options.withCheckpointStorage(checkpoints);
         }
@@ -173,6 +175,25 @@ public final class WorkerProcess implements AutoCloseable {
         long left = Math.max(0, Runtime.getRuntime().maxMemory() - exchange.memoryBytes());
         long derived = Math.max(16L << 20, left / 2 / Math.max(1, slots));
         return new MemoryLimits(config.size(Settings.MAX_ROW_BYTES), config.size(Settings.TASK_MEMORY, derived));
+    }
+
+    /** When the heap guard slows down and fails the run that holds the most memory. */
+    static HeapGuard.Settings heapGuard(Configuration config) {
+        try {
+            return new HeapGuard.Settings(
+                    config.bool(Settings.HEAP_GUARD_ENABLED),
+                    config.integer(Settings.HEAP_GUARD_PAUSE_PERCENT),
+                    config.integer(Settings.HEAP_GUARD_FAIL_PERCENT),
+                    config.duration(Settings.HEAP_GUARD_FAIL_AFTER));
+        } catch (IllegalArgumentException e) {
+            throw PipeForgeException.of(ErrorCode.SETTING_INVALID)
+                    .param(
+                            "key",
+                            Settings.HEAP_GUARD_PAUSE_PERCENT.key() + ", " + Settings.HEAP_GUARD_FAIL_PERCENT.key())
+                    .param("source", "conf/worker.yaml")
+                    .param("reason", e.getMessage())
+                    .build();
+        }
     }
 
     static String hostName() {

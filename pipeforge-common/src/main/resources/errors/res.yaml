@@ -15,6 +15,15 @@
     en-US: "Add workers or slots (worker.slots), lower the parallelism of the job, relax its placement labels, or wait for other jobs to end; scheduler.slot-request-timeout sets how long a job waits."
     zh-CN: "增加 Worker 或 Slot（worker.slots）、降低作业的并行度、放宽放置标签，或者等待其他作业结束；作业等待的时间由 scheduler.slot-request-timeout 设置。"
 
+- code: PF-RES-0002
+  name: OUT_OF_MEMORY
+  message:
+    en-US: "The heap of worker {worker} stayed {percent}% full or more for {seconds} s; run {run} held the most memory ({bytes} bytes), so its tasks on that worker were stopped"
+    zh-CN: "Worker {worker} 的堆使用率连续 {seconds} 秒不低于 {percent}%；运行 {run} 占用的内存最多（{bytes} 字节），因此它在该 Worker 上的 Task 被终止"
+  hint:
+    en-US: "The job keeps too many rows in memory for the worker: lower its batch sizes or parallelism, give the worker a larger heap, or lower worker.memory.task so that its readers wait sooner. The other jobs on the worker kept running."
+    zh-CN: "这个作业在内存中保留的行超出了 Worker 的承受能力：请减小它的批大小或并行度、为 Worker 分配更大的堆，或者调低 worker.memory.task，让 Reader 更早等待。同一 Worker 上的其他作业继续运行。"
+
 - code: PF-RES-0005
   name: CANCEL_TIMEOUT
   message:

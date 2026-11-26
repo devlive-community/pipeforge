@@ -57,6 +57,18 @@
 # The memory one task may hold in rows waiting for its sink; its reader waits when they reach it.
 # worker.memory.task:   # default: half of the heap left after the network memory, split over the slots, at least 16MB
 
+# Whether the heap guard slows down, and at last fails, the run that holds the most memory when the heap of the worker runs full.
+# worker.heap-guard.enabled: true
+
+# The heap use, in percent of the maximum heap, at which the sources of the run holding the most memory stop reading until it is lower again.
+# worker.heap-guard.pause-percent: 85
+
+# The heap use, in percent of the maximum heap, that fails the tasks of the run holding the most memory with PF-RES-0002 once it lasted worker.heap-guard.fail-after.
+# worker.heap-guard.fail-percent: 92
+
+# How long the heap must stay at worker.heap-guard.fail-percent before a run fails.
+# worker.heap-guard.fail-after: 10s
+
 # The size of a network buffer.
 # network.buffer-size: 32KB
 

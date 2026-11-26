@@ -235,6 +235,30 @@ class ProcessTest {
     }
 
     @Test
+    void theHeapGuardIsOnByDefaultAndItsPercentsMustBeOrdered() {
+        Configuration defaults =
+                Configuration.load(home.resolve("conf"), Map.of("PIPEFORGE_CLUSTER_TOKEN", "t"), Map.of());
+        assertThat(WorkerProcess.heapGuard(defaults))
+                .isEqualTo(org.devlive.pipeforge.engine.worker.HeapGuard.Settings.DEFAULTS);
+        Configuration off = Configuration.load(
+                home.resolve("conf"), Map.of(), Map.of("cluster.token", "t", "worker.heap-guard.enabled", "false"));
+        assertThat(WorkerProcess.heapGuard(off).enabled()).isFalse();
+        Configuration reversed = Configuration.load(
+                home.resolve("conf"),
+                Map.of(),
+                Map.of(
+                        "cluster.token",
+                        "t",
+                        "worker.heap-guard.pause-percent",
+                        "95",
+                        "worker.heap-guard.fail-percent",
+                        "90"));
+        assertThatThrownBy(() -> WorkerProcess.heapGuard(reversed))
+                .isInstanceOfSatisfying(
+                        PipeForgeException.class, e -> assertThat(e.code()).isEqualTo(ErrorCode.SETTING_INVALID));
+    }
+
+    @Test
     void standaloneRunsAMasterAndAWorkerAndWritesItsProcessId() throws Exception {
         Files.createDirectories(home.resolve("plugins"));
         Map<String, String> settings = settings(freePorts(3));

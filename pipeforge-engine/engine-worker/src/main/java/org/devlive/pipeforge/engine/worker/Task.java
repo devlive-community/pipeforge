@@ -68,6 +68,11 @@ final class Task implements Runnable {
     private final String name;
     private final Thread thread;
     private volatile boolean cancelled;
+    /** The error the task fails with once it stopped, when something outside it failed it. */
+    private volatile @Nullable PipeForgeException failure;
+    /** The heap guard asks the source to stop reading while the heap is nearly full. */
+    private volatile boolean heldBack;
+
     private volatile @Nullable OperatorChain chain;
     private volatile long runningSince;
     private volatile long endedAt;
@@ -336,16 +341,20 @@ final class Task implements Runnable {
             }
             stopThreads(started);
             memory.release();
-            if (cancelled) {
+            PipeForgeException forced = failure;
+            if (cancelled && forced != null) {
+                LOG.warn("Task {} failed", deployment.id(), forced);
+                report(TaskStateUpdate.failed(deployment.id(), forced));
+            } else if (cancelled) {
                 LOG.info("Task {} was cancelled", deployment.id());
                 report(TaskStateUpdate.of(deployment.id(), TaskState.CANCELED));
             } else {
                 if (error instanceof VirtualMachineError fatal) {
                     throw fatal;
                 }
-                PipeForgeException failure = PipeForgeException.wrap(error);
-                LOG.warn("Task {} failed", deployment.id(), failure);
-                report(TaskStateUpdate.failed(deployment.id(), failure));
+                PipeForgeException wrapped = PipeForgeException.wrap(error);
+                LOG.warn("Task {} failed", deployment.id(), wrapped);
+                report(TaskStateUpdate.failed(deployment.id(), wrapped));
             }
         }
     }
@@ -363,6 +372,11 @@ final class Task implements Runnable {
                 long start = System.nanoTime();
                 mailbox.waitAndDrain(quota);
                 throttleNanos.addAndGet(System.nanoTime() - start);
+                continue;
+            }
+            if (heldBack && operators.hasSource()) {
+                // the heap is nearly full and this run holds the most: read nothing, take mail
+                mailbox.waitAndDrain(MAX_IDLE_NANOS);
                 continue;
             }
             if (stoppedFor != 0) {
@@ -463,6 +477,26 @@ final class Task implements Runnable {
         OperatorChain operators = chain;
         if (operators != null) {
             operators.cancel();
+        }
+    }
+
+    /**
+     * Stops the task the way {@link #cancel} does, but it ends {@code FAILED} with {@code error}
+     * instead of {@code CANCELED}. Callable from any thread.
+     */
+    void fail(PipeForgeException error) {
+        if (state.get().isTerminal()) {
+            return;
+        }
+        failure = error;
+        cancel();
+    }
+
+    /** Lets the source read ({@code false}) or holds it back ({@code true}); callable from any thread. */
+    void holdBack(boolean hold) {
+        heldBack = hold;
+        if (!hold) {
+            mailbox.put(() -> {});
         }
     }
 

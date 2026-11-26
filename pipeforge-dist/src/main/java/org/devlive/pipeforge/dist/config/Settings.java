@@ -361,6 +361,38 @@ public final class Settings {
             "扣除网络内存后剩余堆的一半，按 Slot 平分，不少于 16MB",
             "The memory one task may hold in rows waiting for its sink; its reader waits when they reach it.",
             "一个 Task 等待写入 Sink 的行最多占用的内存；达到后它的 Reader 会等待。");
+    public static final Setting HEAP_GUARD_ENABLED = define(
+            "worker.heap-guard.enabled",
+            "worker",
+            Setting.Type.BOOLEAN,
+            "true",
+            false,
+            "Whether the heap guard slows down, and at last fails, the run that holds the most memory when the heap of the worker runs full.",
+            "Worker 的堆快满时，堆守护是否让占用内存最多的运行减速，并最终让它失败。");
+    public static final Setting HEAP_GUARD_PAUSE_PERCENT = define(
+            "worker.heap-guard.pause-percent",
+            "worker",
+            Setting.Type.INT,
+            "85",
+            false,
+            "The heap use, in percent of the maximum heap, at which the sources of the run holding the most memory stop reading until it is lower again.",
+            "堆使用达到最大堆的这个百分比时，占用内存最多的运行的 Source 停止读取，直到堆使用重新低于它。");
+    public static final Setting HEAP_GUARD_FAIL_PERCENT = define(
+            "worker.heap-guard.fail-percent",
+            "worker",
+            Setting.Type.INT,
+            "92",
+            false,
+            "The heap use, in percent of the maximum heap, that fails the tasks of the run holding the most memory with PF-RES-0002 once it lasted worker.heap-guard.fail-after.",
+            "堆使用达到最大堆的这个百分比并持续 worker.heap-guard.fail-after 后，占用内存最多的运行在该 Worker 上的 Task 以 PF-RES-0002 失败。");
+    public static final Setting HEAP_GUARD_FAIL_AFTER = define(
+            "worker.heap-guard.fail-after",
+            "worker",
+            Setting.Type.DURATION,
+            "10s",
+            false,
+            "How long the heap must stay at worker.heap-guard.fail-percent before a run fails.",
+            "堆使用需要在 worker.heap-guard.fail-percent 以上持续多久，才会让一个运行失败。");
     public static final Setting BUFFER_SIZE = define(
             "network.buffer-size",
             "worker",

@@ -125,7 +125,7 @@
   docs: ["operations/deployment"]
 - paths: ["pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/log/**", "pipeforge-dist/src/main/dist/conf/logback.xml"]
   docs: ["operations/logs"]
-- paths: ["pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/TaskMemory.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/RowSize.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MemoryLimits.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/PluginThreads.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/OperatorCall.java"]
+- paths: ["pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/TaskMemory.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/RowSize.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/MemoryLimits.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/HeapGuard.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/PluginThreads.java", "pipeforge-engine/engine-worker/src/main/java/org/devlive/pipeforge/engine/worker/OperatorCall.java"]
   docs: ["operations/isolation"]
 - paths: ["pipeforge-dist/configuration.json", "pipeforge-dist/src/main/java/org/devlive/pipeforge/dist/config/**"]
   docs: ["reference/configuration"]

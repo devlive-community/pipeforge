@@ -516,6 +516,54 @@
       "zh-CN" : "一个 Task 等待写入 Sink 的行最多占用的内存；达到后它的 Reader 会等待。"
     }
   }, {
+    "key" : "worker.heap-guard.enabled",
+    "file" : "conf/worker.yaml",
+    "type" : "boolean",
+    "default" : "true",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_HEAP_GUARD_ENABLED",
+    "description" : {
+      "en-US" : "Whether the heap guard slows down, and at last fails, the run that holds the most memory when the heap of the worker runs full.",
+      "zh-CN" : "Worker 的堆快满时，堆守护是否让占用内存最多的运行减速，并最终让它失败。"
+    }
+  }, {
+    "key" : "worker.heap-guard.pause-percent",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : "85",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_HEAP_GUARD_PAUSE_PERCENT",
+    "description" : {
+      "en-US" : "The heap use, in percent of the maximum heap, at which the sources of the run holding the most memory stop reading until it is lower again.",
+      "zh-CN" : "堆使用达到最大堆的这个百分比时，占用内存最多的运行的 Source 停止读取，直到堆使用重新低于它。"
+    }
+  }, {
+    "key" : "worker.heap-guard.fail-percent",
+    "file" : "conf/worker.yaml",
+    "type" : "int",
+    "default" : "92",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_HEAP_GUARD_FAIL_PERCENT",
+    "description" : {
+      "en-US" : "The heap use, in percent of the maximum heap, that fails the tasks of the run holding the most memory with PF-RES-0002 once it lasted worker.heap-guard.fail-after.",
+      "zh-CN" : "堆使用达到最大堆的这个百分比并持续 worker.heap-guard.fail-after 后，占用内存最多的运行在该 Worker 上的 Task 以 PF-RES-0002 失败。"
+    }
+  }, {
+    "key" : "worker.heap-guard.fail-after",
+    "file" : "conf/worker.yaml",
+    "type" : "duration",
+    "default" : "10s",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_WORKER_HEAP_GUARD_FAIL_AFTER",
+    "description" : {
+      "en-US" : "How long the heap must stay at worker.heap-guard.fail-percent before a run fails.",
+      "zh-CN" : "堆使用需要在 worker.heap-guard.fail-percent 以上持续多久，才会让一个运行失败。"
+    }
+  }, {
     "key" : "network.buffer-size",
     "file" : "conf/worker.yaml",
     "type" : "size",

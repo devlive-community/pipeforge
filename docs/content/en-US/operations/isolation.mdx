@@ -1,6 +1,6 @@
 ---
 title: Isolation
-description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, plugin threads and cancel timeouts.
+description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, the heap guard, plugin threads and cancel timeouts.
 order: 40
 ---
 
@@ -44,6 +44,38 @@ the limit still passes. Network buffers are limited by the
 
 Local runs (`pipeforge run --local`) check the row size but do not limit task memory.
 
+## Heap guard
+
+Task memory limits what a task holds for its sink, but a job can still fill the heap of a worker
+with rows it keeps elsewhere. Rather than let the worker run out of memory and take every job on it
+down, the heap guard looks at the heap once a second and blames the run whose running tasks on this
+worker account the most memory:
+
+1. When the heap is `worker.heap-guard.pause-percent` full (85% by default), the source tasks of
+   that run stop reading. Rows already read go on to the sinks, so the run lets go of memory, while
+   the other runs keep reading. The run reads on as soon as the heap is below the line again; if
+   another run comes to hold the most, that run is paused instead.
+2. When the heap stays `worker.heap-guard.fail-percent` full (92%) for `worker.heap-guard.fail-after`
+   (10 seconds), the tasks of that run on this worker fail with
+   [`PF-RES-0002`](../reference/errors#pf-res-0002), naming the worker, the run and what it held.
+   They stop the way cancelled tasks do and free their memory; the other runs go on. The failure is
+   a resource error, so the [restart strategy](../concepts/failure-handling) of the job may restart
+   it, from its last checkpoint when it has one.
+
+The heap is read as used over maximum, garbage included: a heap that the collector keeps freeing
+does not stay above the failure line for ten seconds, a heap full of live rows does. When the heap is
+full but no running task accounts any memory, there is no run to blame: the worker logs a warning and
+does nothing. Every pause, resume and failure is logged by the worker.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `worker.heap-guard.enabled` | `true` | Whether the guard runs |
+| `worker.heap-guard.pause-percent` | `85` | The heap use, in percent, at which the run holding the most stops reading |
+| `worker.heap-guard.fail-percent` | `92` | The heap use at which that run fails once it lasted `fail-after` |
+| `worker.heap-guard.fail-after` | `10s` | How long the heap must stay at `fail-percent` |
+
+The pause percent must not be above the fail percent. Local runs have no heap guard.
+
 ## Plugin code
 
 Every call into a plugin runs with the plugin's class loader as the context class loader. An error
@@ -82,8 +114,10 @@ still accounted is logged by the worker as a leak, with what holds it.
 
 ## Limitations
 
-- The heap guard that slows down or fails the task holding the most memory when the heap runs
-  full, the detection of leaked class loaders and the disk quota per job come in a later version.
+- The heap guard only knows the memory that tasks account; it blames the wrong run when another
+  one fills the heap with memory that is not accounted. Its actions appear in the worker's log, not
+  yet as metrics. A worker that runs out of memory anyway still stops; the deployment restarts it.
+- The detection of leaked class loaders and the disk quota per job come in a later version.
 - A task that was given up keeps its thread until the worker restarts; restarting a worker with
   stuck threads by itself comes in a later version.
 - The memory of the source and sink plugins themselves, such as their client libraries, is not
