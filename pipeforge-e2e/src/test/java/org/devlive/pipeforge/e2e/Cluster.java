@@ -40,6 +40,13 @@ final class Cluster implements AutoCloseable {
     private final Path dir;
     private final String token = UUID.randomUUID().toString();
     private final Map<String, Process> processes = new LinkedHashMap<>();
+    /** How every process was started, to start it again after a fault. */
+    private final Map<String, Launch> launches = new LinkedHashMap<>();
+    /** Jars every copy of the distribution gets in {@code lib}, such as the chaos framework's storage. */
+    private final List<Path> extraJars = new ArrayList<>();
+
+    private record Launch(Path home, List<String> command, Map<String, String> environment) {}
+
     private final Map<String, Integer> workerPorts = new LinkedHashMap<>();
     private final HttpClient http =
             HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -106,6 +113,12 @@ final class Cluster implements AutoCloseable {
                 }
             }
         }
+        for (Path jar : extraJars) {
+            Files.copy(
+                    jar,
+                    home.resolve("lib").resolve(jar.getFileName()),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
         try (Stream<Path> scripts = Files.list(home.resolve("bin"))) {
             for (Path script : scripts.toList()) {
                 script.toFile().setExecutable(true);
@@ -132,14 +145,70 @@ final class Cluster implements AutoCloseable {
         builder.environment().putAll(environment);
         Process process = builder.start();
         processes.put(name, process);
+        launches.put(name, new Launch(home, List.copyOf(command), Map.copyOf(environment)));
         return process;
+    }
+
+    /** Puts {@code jar} into the {@code lib} of every copy of the distribution made from now on. */
+    void addJar(Path jar) {
+        extraJars.add(jar);
+    }
+
+    /** Whether the process runs. */
+    boolean alive(String name) {
+        Process process = processes.get(name);
+        return process != null && process.isAlive();
+    }
+
+    /** Asks a process to stop (SIGTERM), as an operator or a supervisor does, and waits for it. */
+    void terminate(String name) throws InterruptedException {
+        Process process = processes.get(name);
+        process.destroy();
+        if (!process.waitFor(60, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            process.waitFor(30, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Starts a process that ended again, as its supervisor would, from the same copy of the
+     * distribution and with the same settings; its output goes on in the same file.
+     */
+    void restart(String name) throws IOException {
+        if (alive(name)) {
+            return;
+        }
+        Launch launch = launches.get(name);
+        ProcessBuilder builder = new ProcessBuilder(launch.command())
+                .directory(launch.home().toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(
+                        dir.resolve("logs/" + name + ".out").toFile()));
+        builder.environment().putAll(launch.environment());
+        processes.put(name, builder.start());
+    }
+
+    /** The port of the master's RPC. */
+    int masterPort() {
+        return masterPort;
+    }
+
+    /** Where the copies of the distribution and the output of the processes are. */
+    Path dir() {
+        return dir;
     }
 
     /** Starts the master with the plugins of its home; lost workers are noticed after {@code heartbeatTimeout}. */
     Path startMaster(Duration heartbeatTimeout) throws IOException {
+        return startMaster(heartbeatTimeout, Map.of());
+    }
+
+    /** Starts the master with more {@code PIPEFORGE_*} settings, such as its checkpoint storage. */
+    Path startMaster(Duration heartbeatTimeout, Map<String, String> settings) throws IOException {
         Path home = home("master");
         masterPort = freePorts(1)[0];
         Map<String, String> environment = environment("-Xms128m -Xmx768m");
+        environment.putAll(settings);
         environment.put("PIPEFORGE_MASTER_RPC_PORT", String.valueOf(masterPort));
         environment.put("PIPEFORGE_MASTER_HEARTBEAT_INTERVAL", "1s");
         environment.put("PIPEFORGE_MASTER_HEARTBEAT_TIMEOUT", heartbeatTimeout.toSeconds() + "s");
@@ -148,10 +217,20 @@ final class Cluster implements AutoCloseable {
     }
 
     void startWorker(String name, int slots, String labels) throws IOException {
+        startWorker(name, slots, labels, "localhost:" + masterPort, Map.of());
+    }
+
+    /**
+     * Starts a worker that finds the master at {@code master}, for example through a proxy of the
+     * chaos framework, with more {@code PIPEFORGE_*} settings.
+     */
+    void startWorker(String name, int slots, String labels, String master, Map<String, String> settings)
+            throws IOException {
         Path home = home(name);
         int[] ports = freePorts(2);
         Map<String, String> environment = environment("-Xms128m -Xmx768m");
-        environment.put("PIPEFORGE_WORKER_MASTER_ADDRESS", "localhost:" + masterPort);
+        environment.putAll(settings);
+        environment.put("PIPEFORGE_WORKER_MASTER_ADDRESS", master);
         environment.put("PIPEFORGE_WORKER_HOST", "localhost");
         environment.put("PIPEFORGE_WORKER_RPC_PORT", String.valueOf(ports[0]));
         environment.put("PIPEFORGE_WORKER_DATA_PORT", String.valueOf(ports[1]));

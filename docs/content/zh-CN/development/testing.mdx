@@ -42,3 +42,30 @@ order: 65
 
 运行需要几分钟。每个进程的输出写在 `pipeforge-e2e/target/e2e-run/logs/` 中，某一步失败时会显示每个进程输出的末尾。
 `-Dpipeforge.e2e.skip` 可以跳过它们，例如在只需要构件的完整构建中。CI 在它们依赖的模块改动时运行这些测试，也就是引擎、服务端和它们用到的连接器的所有模块。
+
+## 混沌测试
+
+`pipeforge-e2e` 中的混沌框架（`org.devlive.pipeforge.e2e.chaos`）在场景运行期间向由发行版组成的集群注入故障，随后检查集群是否恢复、
+目标是否仍与源一致。
+
+| 故障 | 方式 |
+|---|---|
+| `KILL`、`TERM` | 向 Worker、Master 或 Server 发送 `SIGKILL`（崩溃）或 `SIGTERM`（停止）；故障恢复时从同一份发行版副本重新启动该进程 |
+| `PARTITION` | 链路经过测试进程中的 TCP 代理：代理关闭它承载的连接并拒绝新的连接 |
+| `DELAY` | 代理让每个数据块等待 50 毫秒到 1 秒 |
+| `LOSS` | 5% 到 30% 的数据块等待 200 毫秒，就像 TCP 重传丢失的包时那样 |
+| `STORAGE_FAIL`、`STORAGE_SLOW`、`STORAGE_TRUNCATE` | checkpoint 存储拒绝写入、每次写入停顿 0.5 到 5 秒，或者每个文件只保留前一半 |
+
+链路是场景让它经过代理的连接：Worker 到 Master 的连接（`worker.master.address` 指向代理）、Server 到 Master 的连接、作业到数据库的连接。
+存储故障使用 `faulty` checkpoint 存储，框架把它放进各进程所用发行版副本的 `lib` 目录中，发行版本身不变。
+`checkpoint.dir: faulty:///<目录>?control=<文件>` 像普通路径一样把 checkpoint 存在目录中，并在每次写入前读取控制文件。
+
+**计划与种子。** 计划列出一次运行中的每个故障：何时开始、持续多久、作用对象，全部由一个种子决定：相同的种子得到相同的计划。
+夜间场景持续 20 分钟，每 1 到 3 分钟注入一次故障，每次持续 10 秒到 1 分钟；一个故障恢复之后下一个才开始。每次运行都会输出它的种子，
+`-Dpipeforge.chaos.seed=<种子>` 可以重放。
+
+**运行保留的内容。** 每一次注入和恢复都记录在 `pipeforge-e2e/target/chaos/<场景>-<种子>/injections.jsonl` 中，带有发生时间和是否成功，
+第一行是种子和完整的计划。失败的运行还会在同一目录中保留各进程的日志、checkpoint 以及场景读取的指标。
+
+`ChaosFrameworkIT` 在一个 Master 和两个 Worker 上运行 40 秒，检验框架本身：Worker 被杀掉、停止、与 Master 断开，存储写入失败；
+之后每个故障都已注入并恢复，两个 Worker 重新连上。框架自己的单元测试检查计划由种子决定、代理的各种故障以及 faulty 存储。

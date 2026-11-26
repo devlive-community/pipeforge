@@ -52,3 +52,39 @@ They take a few minutes. Each process writes its output to `pipeforge-e2e/target
 a failed step shows the end of every process's output. `-Dpipeforge.e2e.skip` skips them, for
 example in a full build that only needs the artifacts. CI runs them when the modules they depend on
 change, which is every module of the engine, the server and the connectors they use.
+
+## Chaos tests
+
+The chaos framework of `pipeforge-e2e` (`org.devlive.pipeforge.e2e.chaos`) injects faults into a
+cluster of the distribution while a scenario runs, then checks that the cluster recovered and that
+the target still matches the source.
+
+| Fault | How |
+|---|---|
+| `KILL`, `TERM` | `SIGKILL` (a crash) or `SIGTERM` (a stop) of a worker, the master or the server; the process is started again from the same copy of the distribution when the fault heals |
+| `PARTITION` | A link goes through a TCP proxy in the test process: the proxy closes its connections and refuses new ones |
+| `DELAY` | The proxy holds every chunk 50 ms to 1 s |
+| `LOSS` | 5 to 30 percent of the chunks wait 200 ms, as TCP waits when it resends a lost packet |
+| `STORAGE_FAIL`, `STORAGE_SLOW`, `STORAGE_TRUNCATE` | The checkpoint storage refuses writes, stalls each one 0.5 to 5 s, or keeps half of each file |
+
+Links are whatever the scenario routes through a proxy: a worker's connection to the master
+(`worker.master.address` names the proxy), the server's to the master, a job's to its databases.
+Storage faults use the `faulty` checkpoint storage, which the framework adds to the `lib` of the
+processes' copies of the distribution; the distribution itself is not changed.
+`checkpoint.dir: faulty:///<directory>?control=<file>` keeps checkpoints in the directory as a
+plain path does and reads the control file before each write.
+
+**Plans and seeds.** A plan lists every fault of a run, when it starts, how long it lasts and its
+target, all drawn from a seed: the same seed gives the same plan. Nightly scenarios last 20
+minutes with a fault every 1 to 3 minutes, each 10 seconds to a minute; one fault heals before the
+next starts. A run prints its seed; `-Dpipeforge.chaos.seed=<seed>` replays it.
+
+**What a run keeps.** Every injection and heal is recorded, with when it happened and whether it
+worked, in `pipeforge-e2e/target/chaos/<scenario>-<seed>/injections.jsonl`, after a first line with
+the seed and the whole plan. A failed run also keeps the logs of the processes, the checkpoints
+and the metrics the scenario read in the same directory.
+
+`ChaosFrameworkIT` runs the framework itself on a master and two workers for 40 seconds: the
+workers are killed, stopped and cut off from the master, and the storage fails; afterwards every
+fault was injected and healed and both workers are connected again. The framework's own unit
+tests check that plans follow from their seeds, the proxy's faults and the faulty storage.
