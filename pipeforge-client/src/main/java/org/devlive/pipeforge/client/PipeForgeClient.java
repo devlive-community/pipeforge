@@ -210,6 +210,24 @@ public final class PipeForgeClient {
         return call(Endpoint.GET_CLUSTER, Map.of(), Map.of(), null);
     }
 
+    /**
+     * Asks the leading master to give its lease up so that a standby takes over; {@code
+     * PF-CLUS-0019} when the masters elect no leader.
+     */
+    public Failover failover() {
+        return call(Endpoint.FAILOVER_MASTER, Map.of(), Map.of(), null);
+    }
+
+    /** Gives a worker no new tasks; {@code PF-CLUS-0020} for a worker the master does not know. */
+    public void drainWorker(String id) {
+        call(Endpoint.DRAIN_WORKER, Map.of("id", id), Map.of(), null);
+    }
+
+    /** Gives a drained worker new tasks again. */
+    public void uncordonWorker(String id) {
+        call(Endpoint.UNCORDON_WORKER, Map.of("id", id), Map.of(), null);
+    }
+
     public ValidationResult validate(String definition, Map<String, String> variables) {
         return validate(definition, variables, null);
     }
@@ -332,6 +350,10 @@ public final class PipeForgeClient {
         }
         if (response.statusCode() >= 300) {
             throw refusal(response);
+        }
+        if (response.statusCode() == 204) {
+            // done, with nothing to answer
+            return null;
         }
         try {
             if (endpoint.answer == null) {

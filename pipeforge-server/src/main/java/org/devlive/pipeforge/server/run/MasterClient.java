@@ -121,6 +121,36 @@ public interface MasterClient extends AutoCloseable {
      */
     ClusterView cluster();
 
+    /**
+     * Gives a worker no new tasks; its running tasks finish where they are.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0020} for a worker the master does not know
+     */
+    default void drain(String workerId) {
+        throw PipeForgeException.of(org.devlive.pipeforge.common.error.ErrorCode.MASTER_NOT_CONFIGURED)
+                .build();
+    }
+
+    /**
+     * Gives a drained worker new tasks again.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0020} for a worker the master does not know
+     */
+    default void uncordon(String workerId) {
+        drain(workerId);
+    }
+
+    /**
+     * Asks the leading master to give its lease up, so that a standby takes over; returns the
+     * address of the master that gave it up.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0019} when the master elects no leader
+     */
+    default String failover() {
+        throw PipeForgeException.of(org.devlive.pipeforge.common.error.ErrorCode.MASTER_NOT_CONFIGURED)
+                .build();
+    }
+
     /** The run analysis as JSON (design 29); empty when the master does not know the run. */
     Optional<String> analysis(String runId);
 

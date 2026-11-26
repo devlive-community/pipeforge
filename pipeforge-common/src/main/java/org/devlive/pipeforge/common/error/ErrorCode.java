@@ -169,6 +169,8 @@ public final class ErrorCode {
     public static final ErrorCode TASK_STOPPED_BY_WORKER =
             define("PF-CLUS-0017", "TASK_STOPPED_BY_WORKER", "worker", "task");
     public static final ErrorCode NOT_LEADER = define("PF-CLUS-0018", "NOT_LEADER", "master", "leader");
+    public static final ErrorCode FAILOVER_UNAVAILABLE = define("PF-CLUS-0019", "FAILOVER_UNAVAILABLE", "master");
+    public static final ErrorCode WORKER_NOT_FOUND = define("PF-CLUS-0020", "WORKER_NOT_FOUND", "worker");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");

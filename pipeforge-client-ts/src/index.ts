@@ -109,6 +109,14 @@ export function createClient(options: ClientOptions = {}) {
     return data;
   }
 
+  /** Like unwrap, for operations that answer with no content (204). */
+  async function done(call: Promise<{ error?: unknown; response: Response }>): Promise<void> {
+    const { error, response } = await call;
+    if (!response.ok) {
+      throw new ApiError(response.status, (error ?? { message: response.statusText }) as ErrorInfo);
+    }
+  }
+
   return {
     /** The underlying typed fetch client, for endpoints without a helper. */
     raw,
@@ -143,6 +151,10 @@ export function createClient(options: ClientOptions = {}) {
       unwrap(raw.POST("/api/v1/runs/{id}/cancel", { params: { path: { id } }, body: reason ? { reason } : {} })),
     retryRun: (id: string, from?: "CHECKPOINT" | "SCRATCH") =>
       unwrap(raw.POST("/api/v1/runs/{id}/retry", { params: { path: { id } }, body: from ? { from } : {} })),
+    failoverMaster: () => unwrap(raw.POST("/api/v1/cluster/failover")),
+    drainWorker: (id: string) => done(raw.POST("/api/v1/cluster/workers/{id}/drain", { params: { path: { id } } })),
+    uncordonWorker: (id: string) =>
+      done(raw.POST("/api/v1/cluster/workers/{id}/uncordon", { params: { path: { id } } })),
   };
 }
 

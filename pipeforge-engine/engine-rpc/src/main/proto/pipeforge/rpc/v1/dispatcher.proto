@@ -30,6 +30,9 @@ service DispatcherService {
   rpc TriggerSavepoint(SavepointRequest) returns (SavepointResponse);       // M2
   rpc StopWithSavepoint(SavepointRequest) returns (SavepointResponse);      // M2：返回时运行已进入 PAUSED
   rpc ListCheckpoints(JobRequest) returns (ListCheckpointsResponse);        // M2
+  rpc ReleaseLeadership(ClusterRequest) returns (Ack);                     // M2 兼容增加：主 Master 交出租约后退出
+  rpc DrainWorker(WorkerRequest) returns (Ack);                             // M2 兼容增加：不再向该 Worker 分配 Task
+  rpc UncordonWorker(WorkerRequest) returns (Ack);                          // M2 兼容增加：恢复向该 Worker 分配
 }
 
 message SavepointRequest {
@@ -251,6 +254,12 @@ message WorkerInfo {
   repeated SlotStatus slots = 8;
   int32 tasks_running = 9;
   int64 since_heartbeat_ms = 10;      // 距离最近一次心跳的时间
+  bool draining = 11;                 // M2 兼容增加：不再接收新的 Task
+}
+
+message WorkerRequest {               // M2 兼容增加
+  Header header = 1;
+  string worker_id = 2;
 }
 
 message ClusterStatus {

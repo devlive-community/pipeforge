@@ -437,6 +437,7 @@ field pipeforge.rpc.v1.WorkerHeartbeat 3 slots repeated pipeforge.rpc.v1.SlotSta
 field pipeforge.rpc.v1.WorkerHeartbeat 4 tasks repeated pipeforge.rpc.v1.RunningTask
 field pipeforge.rpc.v1.WorkerInfo 1 worker_id string
 field pipeforge.rpc.v1.WorkerInfo 10 since_heartbeat_ms int64
+field pipeforge.rpc.v1.WorkerInfo 11 draining bool
 field pipeforge.rpc.v1.WorkerInfo 2 engine_version string
 field pipeforge.rpc.v1.WorkerInfo 3 rpc_address string
 field pipeforge.rpc.v1.WorkerInfo 4 data_address string
@@ -447,6 +448,8 @@ field pipeforge.rpc.v1.WorkerInfo 8 slots repeated pipeforge.rpc.v1.SlotStatus
 field pipeforge.rpc.v1.WorkerInfo 9 tasks_running int32
 field pipeforge.rpc.v1.WorkerInfo.LabelsEntry 1 key string
 field pipeforge.rpc.v1.WorkerInfo.LabelsEntry 2 value string
+field pipeforge.rpc.v1.WorkerRequest 1 header pipeforge.rpc.v1.Header
+field pipeforge.rpc.v1.WorkerRequest 2 worker_id string
 file pipeforge/checkpoint/v1/checkpoint.proto package pipeforge.checkpoint.v1 java org.devlive.pipeforge.engine.rpc.checkpoint.proto
 file pipeforge/rpc/v1/blob.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
 file pipeforge/rpc/v1/chain.proto package pipeforge.rpc.v1 java org.devlive.pipeforge.engine.rpc.proto
@@ -548,11 +551,13 @@ message pipeforge.rpc.v1.Versioned
 message pipeforge.rpc.v1.WorkerHeartbeat
 message pipeforge.rpc.v1.WorkerInfo
 message pipeforge.rpc.v1.WorkerInfo.LabelsEntry
+message pipeforge.rpc.v1.WorkerRequest
 reserved pipeforge.checkpoint.v1.CheckpointMetadata 11-11
 reserved pipeforge.checkpoint.v1.CheckpointMetadata 12-12
 rpc pipeforge.rpc.v1.BlobService.GetBlob pipeforge.rpc.v1.BlobRequest -> stream pipeforge.rpc.v1.BlobChunk
 rpc pipeforge.rpc.v1.DispatcherService.Analyze pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.ExplainResult
 rpc pipeforge.rpc.v1.DispatcherService.CancelJob pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.Ack
+rpc pipeforge.rpc.v1.DispatcherService.DrainWorker pipeforge.rpc.v1.WorkerRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.DispatcherService.GetCluster pipeforge.rpc.v1.ClusterRequest -> pipeforge.rpc.v1.ClusterStatus
 rpc pipeforge.rpc.v1.DispatcherService.GetJobMetrics pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobMetrics
 rpc pipeforge.rpc.v1.DispatcherService.GetJobStatus pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.JobStatus
@@ -560,9 +565,11 @@ rpc pipeforge.rpc.v1.DispatcherService.ListCheckpoints pipeforge.rpc.v1.JobReque
 rpc pipeforge.rpc.v1.DispatcherService.ListJobs pipeforge.rpc.v1.ListJobsRequest -> pipeforge.rpc.v1.ListJobsResponse
 rpc pipeforge.rpc.v1.DispatcherService.ListSplits pipeforge.rpc.v1.JobRequest -> pipeforge.rpc.v1.ListSplitsResponse
 rpc pipeforge.rpc.v1.DispatcherService.ReadTaskLog pipeforge.rpc.v1.ReadTaskLogRequest -> stream pipeforge.rpc.v1.LogChunk
+rpc pipeforge.rpc.v1.DispatcherService.ReleaseLeadership pipeforge.rpc.v1.ClusterRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.DispatcherService.StopWithSavepoint pipeforge.rpc.v1.SavepointRequest -> pipeforge.rpc.v1.SavepointResponse
 rpc pipeforge.rpc.v1.DispatcherService.SubmitJob pipeforge.rpc.v1.SubmitJobRequest -> pipeforge.rpc.v1.SubmitJobResponse
 rpc pipeforge.rpc.v1.DispatcherService.TriggerSavepoint pipeforge.rpc.v1.SavepointRequest -> pipeforge.rpc.v1.SavepointResponse
+rpc pipeforge.rpc.v1.DispatcherService.UncordonWorker pipeforge.rpc.v1.WorkerRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.JobMasterService.AcknowledgeCheckpoint pipeforge.rpc.v1.AcknowledgeCheckpointRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.JobMasterService.DeclineCheckpoint pipeforge.rpc.v1.DeclineCheckpointRequest -> pipeforge.rpc.v1.Ack
 rpc pipeforge.rpc.v1.JobMasterService.ReportMetrics stream pipeforge.rpc.v1.MetricsReport -> pipeforge.rpc.v1.Ack

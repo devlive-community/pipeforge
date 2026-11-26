@@ -81,6 +81,32 @@ describe("createClient", () => {
     expect((error as ApiError).message).toBe("Variable '${var:x}' is not defined");
   });
 
+  it("drains and uncordons workers, whose answers have no content", async () => {
+    const calls: string[] = [];
+    const fetch = async (input: Request | string | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      calls.push(`${request.method} ${request.url}`);
+      return new Response(null, { status: 204 });
+    };
+    const client = createClient({ baseUrl: "http://pf.test", fetch: fetch as typeof globalThis.fetch });
+    await client.drainWorker("w-1");
+    await client.uncordonWorker("w-1");
+    expect(calls).toEqual([
+      "POST http://pf.test/api/v1/cluster/workers/w-1/drain",
+      "POST http://pf.test/api/v1/cluster/workers/w-1/uncordon",
+    ]);
+    const refusing = createClient({
+      baseUrl: "http://pf.test",
+      fetch: (async () =>
+        new Response(JSON.stringify({ code: "PF-CLUS-0020", name: "WORKER_NOT_FOUND", message: "No worker" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        })) as typeof globalThis.fetch,
+    });
+    const error = await refusing.drainWorker("w-9").catch((e: unknown) => e);
+    expect((error as ApiError).code).toBe("PF-CLUS-0020");
+  });
+
   it("has a helper for every operation of the OpenAPI document", () => {
     const document = JSON.parse(readFileSync(new URL("../../pipeforge-server/openapi.json", import.meta.url), "utf8"));
     const operations: string[] = [];

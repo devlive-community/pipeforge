@@ -167,3 +167,21 @@
   hint:
     en-US: "Only the leading master of a cluster takes registrations, heartbeats and requests. Send them to the leader; when it is empty, no master holds the lease yet, so try again in a few seconds."
     zh-CN: "只有集群的主 Master 接受注册、心跳和请求。请把它们发给主 Master；为空时还没有 Master 持有租约，请几秒后重试。"
+
+- code: PF-CLUS-0019
+  name: FAILOVER_UNAVAILABLE
+  message:
+    en-US: "Master {master} cannot hand over: it elects no leader, so no standby could take over"
+    zh-CN: "Master {master} 无法切换：它没有参与选主，因此没有备 Master 可以接管"
+  hint:
+    en-US: "Failing over needs the masters of the cluster to share a metastore (master.metastore.url) and a standby to be running."
+    zh-CN: "切换需要集群中的 Master 共用一个元数据库（master.metastore.url），并且有备 Master 在运行。"
+
+- code: PF-CLUS-0020
+  name: WORKER_NOT_FOUND
+  message:
+    en-US: "No worker {worker} is registered with the master"
+    zh-CN: "Master 上没有注册的 Worker {worker}"
+  hint:
+    en-US: "Use a worker ID that pipeforge cluster workers lists; a worker that just restarted registers again within a few seconds."
+    zh-CN: "请使用 pipeforge cluster workers 列出的 Worker ID；刚重启的 Worker 会在几秒内重新注册。"

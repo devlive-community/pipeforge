@@ -38,12 +38,15 @@ public final class RpcErrors {
         if (code.equals(ErrorCode.RPC_VERSION_MISMATCH)) {
             return Status.Code.UNIMPLEMENTED;
         }
-        if (code.equals(ErrorCode.RPC_STALE_EPOCH) || code.equals(ErrorCode.NOT_LEADER)) {
+        if (code.equals(ErrorCode.RPC_STALE_EPOCH)
+                || code.equals(ErrorCode.NOT_LEADER)
+                || code.equals(ErrorCode.FAILOVER_UNAVAILABLE)) {
             return Status.Code.FAILED_PRECONDITION;
         }
         if (code.equals(ErrorCode.RUN_NOT_FOUND)
                 || code.equals(ErrorCode.PLUGIN_PACKAGE_UNAVAILABLE)
-                || code.equals(ErrorCode.TASK_LOG_NOT_FOUND)) {
+                || code.equals(ErrorCode.TASK_LOG_NOT_FOUND)
+                || code.equals(ErrorCode.WORKER_NOT_FOUND)) {
             return Status.Code.NOT_FOUND;
         }
         if (code.equals(ErrorCode.SLOTS_INSUFFICIENT)) {

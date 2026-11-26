@@ -36,6 +36,7 @@ Checkpoints add RPCs to three services, all compatible additions to v1:
 | `NotifyCheckpointComplete`, `AbortCheckpoint` | `TaskExecutorService` | tells a task that checkpoint *n* is complete, so that sinks commit, or that it was given up |
 | `AcknowledgeCheckpoint`, `DeclineCheckpoint` | `JobMasterService` | a task's part of checkpoint *n*: a `StateHandle` per stateful node (inline bytes or a file of the checkpoint) with its timings, or the error that kept it from taking part |
 | `TriggerSavepoint`, `StopWithSavepoint`, `ListCheckpoints` | `DispatcherService` | savepoints of a run, with or without stopping it, and the checkpoints the master keeps; `TriggerSavepoint` answers with the savepoint's number and directory once it completed, `StopWithSavepoint` once the run is `PAUSED` |
+| `ReleaseLeadership`, `DrainWorker`, `UncordonWorker` | `DispatcherService` | the leading master gives its lease up and stops (`cluster failover`), or a worker takes no new tasks or takes them again (`cluster drain`, `uncordon`; `WorkerInfo.draining` shows it) |
 
 `TaskDeployment` carries the states a task restores (`restore_state`, `restore_checkpoint_id`;
 numbers 9 and 10, reserved for them from the start), `SubmitJobRequest` where a run starts from

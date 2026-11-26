@@ -76,7 +76,22 @@ final class InProcessMaster implements AutoCloseable {
                 100);
         try {
             server = InProcessServerBuilder.forName(name)
-                    .addService(new DispatcherService(dispatcher, manager::workers))
+                    .addService(new DispatcherService(dispatcher, manager::workers, new DispatcherService.Control() {
+                        @Override
+                        public void drain(String workerId) {
+                            manager.drain(workerId);
+                        }
+
+                        @Override
+                        public void uncordon(String workerId) {
+                            manager.uncordon(workerId);
+                        }
+
+                        @Override
+                        public void releaseLeadership() {
+                            DispatcherService.Control.NONE.releaseLeadership();
+                        }
+                    }))
                     .build()
                     .start();
         } catch (IOException e) {

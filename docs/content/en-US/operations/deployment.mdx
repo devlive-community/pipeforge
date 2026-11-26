@@ -163,6 +163,34 @@ With the default settings a failover takes about a lease and a heartbeat timeout
 plus the time the runs take to start again.
 
 
+## Maintenance drills
+
+**Failing over by hand.** `pipeforge cluster failover` asks the leading master to give its lease up
+(it asks first; `--yes` skips the question, and is needed outside a terminal). A standby takes over
+within a third of `master.leader.lease`, and the runs go on there from their last checkpoints as in
+any [failover](#standby-masters). The old leader stops with exit code 1, so that its supervisor —
+systemd or Kubernetes — starts it again as a standby. Use it to upgrade the masters one by one:
+upgrade a standby, fail over to it, then upgrade the old leader. Masters without a metastore elect
+no leader and refuse with `PF-CLUS-0019`.
+
+```bash
+pipeforge cluster failover --yes
+```
+
+**Draining a worker.** `pipeforge cluster drain <worker>` gives a worker no new tasks: its free
+slots are offered to no run, and the tasks running on it finish where they are. With `--wait` the
+command waits until none runs any more (`--timeout`, 30 minutes by default; exit code 5 when tasks
+still run then), so the worker can be stopped for maintenance without failing a task.
+`pipeforge cluster workers` marks it `(draining)`; `pipeforge cluster uncordon <worker>` gives it new
+tasks again. The IDs are those `cluster workers` lists.
+
+```bash
+pipeforge cluster drain 6f1c2b7e-1d8a-4c55-9b0e-7a3f1e2d4c11 --wait --timeout 2h
+```
+
+A drain is kept by the leading master while the worker registers again, but not across a failover:
+drain it again on the new leader.
+
 ## Troubleshooting
 
 | Error | Cause and fix |
@@ -171,10 +199,14 @@ plus the time the runs take to start again.
 | `PF-RES-0006` `PORT_IN_USE` | Another process uses the port. Stop it or change the port setting. |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | The processes have different cluster tokens. |
 | `PF-CLUS-0001` `WORKER_LOST` | A worker stopped sending heartbeats; see [cluster](../concepts/cluster#troubleshooting). |
+| `PF-CLUS-0019` `FAILOVER_UNAVAILABLE` | `cluster failover` on a master that elects no leader: give the masters a metastore and start a standby. |
+| `PF-CLUS-0020` `WORKER_NOT_FOUND` | `cluster drain` or `uncordon` names a worker the master does not know; take the ID from `cluster workers`. |
 | `PF-CLUS-0018` `NOT_LEADER` | A worker or server talks to a standby master. Point `worker.master.address` and the server's master address at the leader the error names. |
 
 ## Limitations
 
+- Draining waits for tasks to end: moving streaming tasks to other workers through a checkpoint
+  comes with streaming jobs.
 - Runs come back on a new leader only through the server: a run submitted to a master directly,
   without a server, is not recovered.
 - The time a run already ran in an attempt counts towards its `env.timeout.run` as the server

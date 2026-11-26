@@ -32,6 +32,7 @@ Checkpoint 在三个服务中增加了 RPC，都是对 v1 的兼容增加：
 | `NotifyCheckpointComplete`、`AbortCheckpoint` | `TaskExecutorService` | 通知 Task checkpoint *n* 已经完成（Sink 随之提交），或者已经放弃 |
 | `AcknowledgeCheckpoint`、`DeclineCheckpoint` | `JobMasterService` | Task 在 checkpoint *n* 中的部分：每个有状态的节点一个 `StateHandle`（内联字节或 checkpoint 中的文件）及耗时，或者让它无法参与的错误 |
 | `TriggerSavepoint`、`StopWithSavepoint`、`ListCheckpoints` | `DispatcherService` | 为运行做 savepoint（可以同时停止运行），以及列出 Master 保留的 checkpoint；`TriggerSavepoint` 在 savepoint 完成后返回它的编号和目录，`StopWithSavepoint` 在运行进入 `PAUSED` 后返回 |
+| `ReleaseLeadership`、`DrainWorker`、`UncordonWorker` | `DispatcherService` | 主 Master 交出租约并退出（`cluster failover`），或者让 Worker 不再接收、重新接收新的 Task（`cluster drain`、`uncordon`；`WorkerInfo.draining` 显示这一状态） |
 
 `TaskDeployment` 携带 Task 要恢复的状态（`restore_state`、`restore_checkpoint_id`；编号 9 和 10 从一开始就为它们保留），
 `SubmitJobRequest` 携带运行从哪里开始（`restore`）以及第几次尝试，`JobStatus` 携带尝试次数和最近完成的 checkpoint，

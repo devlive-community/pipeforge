@@ -82,7 +82,9 @@ class ContractTest {
         List<String> problems = new ArrayList<>();
         for (Endpoint endpoint : Endpoint.values()) {
             JsonNode responses = operation(endpoint).path("responses");
-            JsonNode ok = responses.has("200") ? responses.path("200") : responses.path("201");
+            JsonNode ok = responses.has("200")
+                    ? responses.path("200")
+                    : responses.has("201") ? responses.path("201") : responses.path("202");
             JsonNode answer = ok.path("content").elements().hasNext()
                     ? ok.path("content").elements().next().path("schema")
                     : com.fasterxml.jackson.databind.node.MissingNode.getInstance();

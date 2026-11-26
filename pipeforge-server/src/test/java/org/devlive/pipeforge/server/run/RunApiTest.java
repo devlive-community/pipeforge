@@ -379,6 +379,24 @@ class RunApiTest {
         assertThat((Integer) JsonPath.read(cluster, "$.slots")).isEqualTo(4);
         assertThat((Integer) JsonPath.read(cluster, "$.slotsUsed")).isEqualTo(1);
         assertThat((Double) JsonPath.read(cluster, "$.usage")).isEqualTo(0.25);
+        assertThat((Boolean) JsonPath.read(cluster, "$.workers[0].draining")).isFalse();
+
+        // a drained worker shows it and is offered to no run, until it is uncordoned
+        mvc.perform(post("/api/v1/cluster/workers/" + id + "/drain")).andExpect(status().isNoContent());
+        assertThat((Boolean) JsonPath.read(getJson("/api/v1/cluster"), "$.workers[0].draining"))
+                .isTrue();
+        assertThat(master.manager.freeSlots(java.util.Map.of())).isEmpty();
+        mvc.perform(post("/api/v1/cluster/workers/" + id + "/uncordon")).andExpect(status().isNoContent());
+        assertThat((Boolean) JsonPath.read(getJson("/api/v1/cluster"), "$.workers[0].draining"))
+                .isFalse();
+        assertThat(master.manager.freeSlots(java.util.Map.of())).hasSize(3);
+        mvc.perform(post("/api/v1/cluster/workers/nobody/drain"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PF-CLUS-0020"));
+        // a master that elects no leader cannot hand over
+        mvc.perform(post("/api/v1/cluster/failover"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PF-CLUS-0019"));
     }
 
     String preview(String yaml, String extra, int status) throws Exception {

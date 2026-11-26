@@ -26,6 +26,7 @@ import org.jspecify.annotations.Nullable;
  * @param sinceHeartbeatMs since its last heartbeat
  * @param version its version
  * @param slots its slots
+ * @param draining whether it takes no new tasks ({@code pipeforge cluster drain})
  */
 public record Worker(
         String id,
@@ -40,7 +41,8 @@ public record Worker(
         int tasksRunning,
         long sinceHeartbeatMs,
         @Nullable String version,
-        List<Slot> slots) {
+        List<Slot> slots,
+        boolean draining) {
 
     public Worker {
         labels = labels == null

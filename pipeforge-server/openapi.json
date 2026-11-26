@@ -88,6 +88,170 @@
         }
       }
     },
+    "/api/v1/cluster/failover" : {
+      "post" : {
+        "description" : "Asks the leading master to give its lease up: a standby master takes over within a third of master.leader.lease, the runs go on there from their last checkpoints, and the old leader stops so that its supervisor starts it again as a standby. HTTP 409 when the masters elect no leader (no metastore), 503 without a master or when it cannot be reached.",
+        "operationId" : "failoverMaster",
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Failover"
+                }
+              }
+            },
+            "description" : "Accepted"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Hand the lead over",
+        "tags" : [ "cluster" ],
+        "x-zh-CN" : {
+          "description" : "请主 Master 交出租约：备 Master 在 master.leader.lease 的三分之一内接管，运行从最近的 checkpoint 在那里继续，旧的主 Master 退出，由它的进程管理器重新启动为备 Master。Master 不选主（没有元数据库）时返回 HTTP 409，没有 Master 或无法连接时返回 503。",
+          "summary" : "切换主 Master"
+        }
+      }
+    },
+    "/api/v1/cluster/workers/{id}/drain" : {
+      "post" : {
+        "description" : "Gives a worker no new tasks: its free slots are offered to no run, and the tasks running on it finish where they are. The workers of the cluster show it as draining until it is uncordoned or a new master leads. HTTP 404 for a worker the master does not know.",
+        "operationId" : "drainWorker",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Drain a worker",
+        "tags" : [ "cluster" ],
+        "x-zh-CN" : {
+          "description" : "不再向 Worker 分配新的 Task：它的空闲 Slot 不再提供给任何运行，正在它上面运行的 Task 在原地运行到结束。在恢复调度或者换了主 Master 之前，集群的 Worker 列表把它显示为下线中。Master 不知道该 Worker 时返回 HTTP 404。",
+          "summary" : "下线 Worker"
+        }
+      }
+    },
+    "/api/v1/cluster/workers/{id}/uncordon" : {
+      "post" : {
+        "description" : "Gives a drained worker new tasks again. HTTP 404 for a worker the master does not know.",
+        "operationId" : "uncordonWorker",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Uncordon a worker",
+        "tags" : [ "cluster" ],
+        "x-zh-CN" : {
+          "description" : "重新向已下线的 Worker 分配新的 Task。Master 不知道该 Worker 时返回 HTTP 404。",
+          "summary" : "恢复调度 Worker"
+        }
+      }
+    },
     "/api/v1/components/{type}/{identifier}" : {
       "get" : {
         "description" : "The options of a source, transform or sink: types, defaults, requirements and the rules between them.",
@@ -1902,6 +2066,14 @@
           }
         }
       },
+      "Failover" : {
+        "type" : "object",
+        "properties" : {
+          "master" : {
+            "type" : "string"
+          }
+        }
+      },
       "FunctionInfo" : {
         "type" : "object",
         "properties" : {
@@ -2841,6 +3013,9 @@
           },
           "dataAddress" : {
             "type" : "string"
+          },
+          "draining" : {
+            "type" : "boolean"
           },
           "id" : {
             "type" : "string"

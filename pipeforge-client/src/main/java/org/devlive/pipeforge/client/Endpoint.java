@@ -34,6 +34,9 @@ enum Endpoint {
             LogChunk.class,
             false),
     GET_CLUSTER("GET", "/api/v1/cluster", List.of(), ClusterView.class, false),
+    FAILOVER_MASTER("POST", "/api/v1/cluster/failover", List.of(), Failover.class, false),
+    DRAIN_WORKER("POST", "/api/v1/cluster/workers/{id}/drain", List.of(), null, false),
+    UNCORDON_WORKER("POST", "/api/v1/cluster/workers/{id}/uncordon", List.of(), null, false),
     VALIDATE_JOB("POST", "/api/v1/jobs/validate", List.of(), ValidationResult.class, false),
     EXPLAIN_JOB("POST", "/api/v1/explain", List.of(), ExplainResult.class, false);
 

@@ -22,11 +22,20 @@ import org.devlive.pipeforge.client.Slot;
 import org.devlive.pipeforge.client.Worker;
 import picocli.CommandLine.Command;
 
-/** The cluster of the server: {@code cluster status} and {@code cluster workers}. */
+/**
+ * The cluster of the server: {@code cluster status} and {@code workers}, {@code drain} and {@code
+ * uncordon} of a worker, and {@code failover} of the leading master.
+ */
 @Command(
         name = "cluster",
         mixinStandardHelpOptions = true,
-        subcommands = {ClusterCommand.Status.class, ClusterCommand.Workers.class})
+        subcommands = {
+            ClusterCommand.Status.class,
+            ClusterCommand.Workers.class,
+            ClusterCommand.Drain.class,
+            ClusterCommand.Uncordon.class,
+            ClusterCommand.Failover.class
+        })
 public final class ClusterCommand extends BaseCommand {
 
     /** After this long without a heartbeat a worker is late; the default interval is 5 s. */
@@ -101,7 +110,7 @@ public final class ClusterCommand extends BaseCommand {
                 .toList()) {
             Map<String, String> labels = new TreeMap<>(worker.labels());
             rows.add(new String[] {
-                worker.id(),
+                worker.id() + (worker.draining() ? " " + messages.get("cluster.draining-mark") : ""),
                 worker.rpcAddress(),
                 used(worker) + "/" + worker.slots().size(),
                 String.valueOf(worker.tasksRunning()),
@@ -140,6 +149,118 @@ public final class ClusterCommand extends BaseCommand {
         protected ExitCode execute(Session session) {
             ClusterView view = session.client().cluster();
             session.print(view.workers(), workers(session.messages(), view.workers()));
+            return ExitCode.SUCCESS;
+        }
+    }
+
+    /** Gives a worker no new tasks, and with {@code --wait} waits until its tasks ended. */
+    @Command(name = "drain", mixinStandardHelpOptions = true, sortOptions = false)
+    public static final class Drain extends BaseCommand {
+
+        @picocli.CommandLine.Parameters(paramLabel = "<worker>", descriptionKey = "cluster.worker-id")
+        String worker;
+
+        @picocli.CommandLine.Option(names = "--wait", descriptionKey = "cluster.drain.wait")
+        boolean await;
+
+        @picocli.CommandLine.Option(
+                names = "--timeout",
+                paramLabel = "<duration>",
+                defaultValue = "30m",
+                converter = RunCommand.DurationConverter.class,
+                descriptionKey = "cluster.drain.timeout")
+        Duration timeout = Duration.ofMinutes(30);
+
+        /** How often the tasks of the worker are counted while waiting; hidden, for tests. */
+        @picocli.CommandLine.Option(
+                names = "--poll",
+                hidden = true,
+                defaultValue = "2s",
+                converter = RunCommand.DurationConverter.class)
+        Duration poll = Duration.ofSeconds(2);
+
+        @Override
+        protected ExitCode execute(Session session) throws InterruptedException {
+            session.client().drainWorker(worker);
+            if (!await) {
+                session.print(
+                        Map.of("worker", worker, "draining", true),
+                        session.messages().get("cluster.drain.done", worker) + "\n");
+                return ExitCode.SUCCESS;
+            }
+            Instant deadline = Instant.now().plus(timeout);
+            while (true) {
+                Worker found = session.client().cluster().workers().stream()
+                        .filter(w -> w.id().equals(worker))
+                        .findFirst()
+                        .orElse(null);
+                int running = found == null ? 0 : found.tasksRunning();
+                if (running == 0) {
+                    session.print(
+                            Map.of("worker", worker, "draining", true, "tasksRunning", 0),
+                            session.messages().get("cluster.drain.empty", worker) + "\n");
+                    return ExitCode.SUCCESS;
+                }
+                if (!Instant.now().isBefore(deadline)) {
+                    session.err()
+                            .println(session.messages()
+                                    .get(
+                                            "cluster.drain.timeout-left",
+                                            worker,
+                                            running,
+                                            RunViews.duration(timeout.toMillis())));
+                    return ExitCode.TIMEOUT;
+                }
+                session.note(session.messages().get("cluster.drain.waiting", worker, running));
+                Thread.sleep(poll.toMillis());
+            }
+        }
+    }
+
+    /** Gives a drained worker new tasks again. */
+    @Command(name = "uncordon", mixinStandardHelpOptions = true)
+    public static final class Uncordon extends BaseCommand {
+
+        @picocli.CommandLine.Parameters(paramLabel = "<worker>", descriptionKey = "cluster.worker-id")
+        String worker;
+
+        @Override
+        protected ExitCode execute(Session session) {
+            session.client().uncordonWorker(worker);
+            session.print(
+                    Map.of("worker", worker, "draining", false),
+                    session.messages().get("cluster.uncordon.done", worker) + "\n");
+            return ExitCode.SUCCESS;
+        }
+    }
+
+    /** Asks the leading master to give its lease up so that a standby takes over. */
+    @Command(name = "failover", mixinStandardHelpOptions = true)
+    public static final class Failover extends BaseCommand {
+
+        @picocli.CommandLine.Option(
+                names = {"-y", "--yes"},
+                descriptionKey = "cluster.failover.yes")
+        boolean yes;
+
+        // on JDK 21 the console is null without a terminal; interactive() is checked first anyway
+        @SuppressWarnings("SystemConsoleNull")
+        @Override
+        protected ExitCode execute(Session session) {
+            if (!yes) {
+                java.io.Console console = System.console();
+                if (!session.environment().interactive() || console == null) {
+                    throw new picocli.CommandLine.ParameterException(
+                            spec.commandLine(), session.messages().get("cluster.failover.confirm-flag"));
+                }
+                String answer = console.readLine("%s", session.messages().get("cluster.failover.confirm"));
+                if (answer == null || !answer.strip().toLowerCase(Locale.ROOT).startsWith("y")) {
+                    session.note(session.messages().get("cluster.failover.kept"));
+                    return ExitCode.SUCCESS;
+                }
+            }
+            org.devlive.pipeforge.client.Failover done = session.client().failover();
+            session.print(done, session.messages().get("cluster.failover.done", done.master()) + "\n");
             return ExitCode.SUCCESS;
         }
     }

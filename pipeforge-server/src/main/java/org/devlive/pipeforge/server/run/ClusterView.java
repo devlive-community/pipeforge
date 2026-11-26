@@ -46,6 +46,7 @@ public record ClusterView(Master master, List<Worker> workers, int slots, int sl
      * @param taskHeapBytes the memory for tasks
      * @param tasksRunning the tasks running on it now
      * @param sinceHeartbeatMs the time since its last heartbeat
+     * @param draining whether it takes no new tasks ({@code pipeforge cluster drain})
      */
     public record Worker(
             String id,
@@ -60,7 +61,8 @@ public record ClusterView(Master master, List<Worker> workers, int slots, int sl
             long managedBytes,
             List<Slot> slots,
             int tasksRunning,
-            long sinceHeartbeatMs) {
+            long sinceHeartbeatMs,
+            boolean draining) {
 
         public Worker {
             labels = Map.copyOf(labels);

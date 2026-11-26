@@ -47,6 +47,7 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
     private final Dispatcher dispatcher;
     private final java.util.function.Supplier<List<ResourceManager.Worker>> workers;
     private final Instant started = Instant.now();
+    private final Control control;
 
     /** A dispatcher without registered workers, as in one process. */
     public DispatcherService(Dispatcher dispatcher) {
@@ -55,8 +56,84 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
 
     /** @param workers the workers of the cluster, from the {@link ResourceManager} */
     public DispatcherService(Dispatcher dispatcher, java.util.function.Supplier<List<ResourceManager.Worker>> workers) {
+        this(dispatcher, workers, Control.NONE);
+    }
+
+    /**
+     * @param control drains workers and hands the lead over, for {@code pipeforge cluster drain} and
+     *     {@code failover}
+     */
+    public DispatcherService(
+            Dispatcher dispatcher, java.util.function.Supplier<List<ResourceManager.Worker>> workers, Control control) {
         this.dispatcher = dispatcher;
         this.workers = workers;
+        this.control = control;
+    }
+
+    /** What an operator changes about the cluster through the master. */
+    public interface Control {
+        /** Neither drains nor hands over: a master that is not part of a cluster with standbys. */
+        Control NONE = new Control() {
+            @Override
+            public void drain(String workerId) {
+                throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                                org.devlive.pipeforge.common.error.ErrorCode.WORKER_NOT_FOUND)
+                        .param("worker", workerId)
+                        .build();
+            }
+
+            @Override
+            public void uncordon(String workerId) {
+                drain(workerId);
+            }
+
+            @Override
+            public void releaseLeadership() {
+                throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                                org.devlive.pipeforge.common.error.ErrorCode.FAILOVER_UNAVAILABLE)
+                        .param("master", "this master")
+                        .build();
+            }
+        };
+
+        /** Gives a worker no new tasks ({@link ResourceManager#drain}). */
+        void drain(String workerId);
+
+        /** Gives a drained worker new tasks again ({@link ResourceManager#uncordon}). */
+        void uncordon(String workerId);
+
+        /** Gives the lease up so that a standby takes over; the master stops after it answered. */
+        void releaseLeadership();
+    }
+
+    @Override
+    public void drainWorker(
+            org.devlive.pipeforge.engine.rpc.proto.WorkerRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.Ack> observer) {
+        answer(observer, request.getHeader(), () -> {
+            control.drain(request.getWorkerId());
+            return org.devlive.pipeforge.engine.rpc.proto.Ack.getDefaultInstance();
+        });
+    }
+
+    @Override
+    public void uncordonWorker(
+            org.devlive.pipeforge.engine.rpc.proto.WorkerRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.Ack> observer) {
+        answer(observer, request.getHeader(), () -> {
+            control.uncordon(request.getWorkerId());
+            return org.devlive.pipeforge.engine.rpc.proto.Ack.getDefaultInstance();
+        });
+    }
+
+    @Override
+    public void releaseLeadership(
+            org.devlive.pipeforge.engine.rpc.proto.ClusterRequest request,
+            StreamObserver<org.devlive.pipeforge.engine.rpc.proto.Ack> observer) {
+        answer(observer, request.getHeader(), () -> {
+            control.releaseLeadership();
+            return org.devlive.pipeforge.engine.rpc.proto.Ack.getDefaultInstance();
+        });
     }
 
     /** The version in the manifest of the engine jar, or {@code dev} when run from classes. */
@@ -91,7 +168,8 @@ public final class DispatcherService extends DispatcherServiceGrpc.DispatcherSer
                         .setTasksRunning((int) worker.tasks().stream()
                                 .filter(t -> t.state() == org.devlive.pipeforge.engine.rpc.TaskState.RUNNING)
                                 .count())
-                        .setSinceHeartbeatMs(worker.sinceHeartbeat().toMillis());
+                        .setSinceHeartbeatMs(worker.sinceHeartbeat().toMillis())
+                        .setDraining(worker.draining());
                 for (ResourceManager.Slot slot : worker.slots()) {
                     var proto = org.devlive.pipeforge.engine.rpc.proto.SlotStatus.newBuilder()
                             .setIndex(slot.index())

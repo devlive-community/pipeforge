@@ -67,6 +67,41 @@ class ResourceManagerTest {
     }
 
     @Test
+    void aDrainedWorkerIsOfferedToNoRunUntilItIsUncordoned() {
+        String a = manager.register(spec("a:6124", 2, Map.of(), null)).workerId();
+        String b = manager.register(spec("b:6124", 1, Map.of(), null)).workerId();
+        manager.drain(a);
+        manager.drain(a);
+        assertThat(manager.freeSlots(Map.of()))
+                .extracting(ResourceManager.FreeSlot::workerId)
+                .containsOnly(b);
+        assertThat(manager.workers())
+                .filteredOn(ResourceManager.Worker::draining)
+                .extracting(ResourceManager.Worker::id)
+                .containsExactly(a);
+
+        // registering again keeps it drained
+        manager.register(spec("a:6124", 2, Map.of(), a));
+        assertThat(manager.freeSlots(Map.of()))
+                .extracting(ResourceManager.FreeSlot::workerId)
+                .containsOnly(b);
+
+        manager.uncordon(a);
+        manager.uncordon(a);
+        assertThat(manager.freeSlots(Map.of())).hasSize(3);
+        assertThat(manager.workers()).noneMatch(ResourceManager.Worker::draining);
+        assertThatThrownBy(() -> manager.drain("nobody"))
+                .isInstanceOfSatisfying(
+                        org.devlive.pipeforge.common.error.PipeForgeException.class, e -> assertThat(e.code())
+                                .isEqualTo(org.devlive.pipeforge.common.error.ErrorCode.WORKER_NOT_FOUND));
+        assertThatThrownBy(() -> manager.uncordon("nobody")).isNotNull();
+        assertThat(manager.leaderEpoch()).isEqualTo(1);
+        manager.leaderEpoch(4);
+        assertThat(manager.register(spec("c:6124", 1, Map.of(), null)).leaderEpoch())
+                .isEqualTo(4);
+    }
+
+    @Test
     void aWorkerThatRegistersAgainKeepsItsIdAndStartsFree() {
         String id = manager.register(spec("a:6124", 2, Map.of(), null)).workerId();
         manager.offerSlots(id, List.of(new Slot(0, true, "job", "alloc-1")));

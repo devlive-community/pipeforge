@@ -137,7 +137,7 @@ public final class MasterProcess implements AutoCloseable {
                     List.of(
                             new ResourceManagerService(manager),
                             new JobMasterService(jobs, new IdempotencyCache()),
-                            new DispatcherService(dispatcher, manager::workers),
+                            new DispatcherService(dispatcher, manager::workers, control()),
                             new BlobServer(blobs)),
                     List.of(new LeaderGate(
                             () -> !elects || isLeader(),
@@ -204,6 +204,44 @@ public final class MasterProcess implements AutoCloseable {
                     host + ":" + server.getPort(),
                     elected.leaderAddress());
         }
+    }
+
+    /** What {@code pipeforge cluster drain}, {@code uncordon} and {@code failover} change. */
+    private DispatcherService.Control control() {
+        return new DispatcherService.Control() {
+            @Override
+            public void drain(String workerId) {
+                manager.drain(workerId);
+            }
+
+            @Override
+            public void uncordon(String workerId) {
+                manager.uncordon(workerId);
+            }
+
+            @Override
+            public void releaseLeadership() {
+                handOver();
+            }
+        };
+    }
+
+    /**
+     * Gives the lease up so that a standby takes over at its next look, then stops as a master that
+     * lost the lead does: the call is answered first.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0019} for a master that elects no leader
+     */
+    @SuppressWarnings("FutureReturnValueIgnored") // the election reports the end of the lead
+    void handOver() {
+        var current = election;
+        if (current == null) {
+            throw PipeForgeException.of(ErrorCode.FAILOVER_UNAVAILABLE)
+                    .param("master", leaderAddress().isEmpty() ? "localhost:" + port() : leaderAddress())
+                    .build();
+        }
+        LOG.warn("Master {} hands the lead of its cluster over, as asked", current.leaderAddress());
+        threads.schedule(current::close, 200, java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 
     /** Whether this master leads its cluster: always without a metastore, where it is the only one. */

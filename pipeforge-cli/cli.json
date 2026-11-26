@@ -487,6 +487,79 @@
     "arguments" : [ ],
     "options" : [ ]
   }, {
+    "name" : "cluster drain",
+    "anchor" : "cmd-cluster-drain",
+    "synopsis" : "pipeforge cluster drain [options] <worker>",
+    "description" : {
+      "en-US" : "Give a worker no new tasks; the tasks running on it finish where they are. With --wait, wait until they ended.",
+      "zh-CN" : "不再向 Worker 分配新的 Task；正在它上面运行的 Task 在原地运行到结束。指定 --wait 时等待它们结束。"
+    },
+    "arguments" : [ {
+      "label" : "<worker>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the worker, as cluster workers lists it.",
+        "zh-CN" : "Worker 的 ID，即 cluster workers 列出的 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--wait" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Wait until no task runs on the worker any more.",
+        "zh-CN" : "等待直到该 Worker 上不再有运行中的 Task。"
+      }
+    }, {
+      "names" : [ "--timeout" ],
+      "label" : "<duration>",
+      "default" : "30m",
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "With --wait: how long to wait, such as 30m (the default) or 2h; exit code 5 when tasks still run then.",
+        "zh-CN" : "指定 --wait 时最多等待多久，例如 30m（默认）或 2h；届时仍有 Task 在运行则以退出码 5 结束。"
+      }
+    } ]
+  }, {
+    "name" : "cluster uncordon",
+    "anchor" : "cmd-cluster-uncordon",
+    "synopsis" : "pipeforge cluster uncordon [options] <worker>",
+    "description" : {
+      "en-US" : "Give a drained worker new tasks again.",
+      "zh-CN" : "重新向已下线的 Worker 分配新的 Task。"
+    },
+    "arguments" : [ {
+      "label" : "<worker>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the worker, as cluster workers lists it.",
+        "zh-CN" : "Worker 的 ID，即 cluster workers 列出的 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "cluster failover",
+    "anchor" : "cmd-cluster-failover",
+    "synopsis" : "pipeforge cluster failover [options]",
+    "description" : {
+      "en-US" : "Ask the leading master to give its lease up, so that a standby master takes over and the runs go on there from their last checkpoints. The old leader stops; its supervisor starts it again as a standby.",
+      "zh-CN" : "请主 Master 交出租约，由备 Master 接管，运行从最近的 checkpoint 在那里继续。旧的主 Master 退出，由它的进程管理器重新启动为备 Master。"
+    },
+    "arguments" : [ ],
+    "options" : [ {
+      "names" : [ "-y", "--yes" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Fail over without asking; needed when the command does not run in a terminal.",
+        "zh-CN" : "不询问直接切换；命令不在终端上运行时必须指定。"
+      }
+    } ]
+  }, {
     "name" : "expr",
     "anchor" : "cmd-expr",
     "synopsis" : "pipeforge expr <command>",

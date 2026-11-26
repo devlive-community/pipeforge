@@ -27,7 +27,7 @@ pipeforge-cli/target/pipeforge-0.1.0-SNAPSHOT/bin/pipeforge run --local examples
 ## 服务端
 
 不带 `--local` 的 `pipeforge run <文件>`、`run` 下的命令（`status`、`watch`、`logs`、`metrics`、`analyze`、`cancel`）、
-`cluster status`、`cluster workers` 和 `job explain` 与服务端通信：取 `--server <url>`，其次是 `PIPEFORGE_SERVER`，再次是 `http://127.0.0.1:8080`。用法见[集群快速开始](../getting-started/cluster-quickstart)。
+`cluster` 下的命令（`status`、`workers`、`drain`、`uncordon`、`failover`）和 `job explain` 与服务端通信：取 `--server <url>`，其次是 `PIPEFORGE_SERVER`，再次是 `http://127.0.0.1:8080`。用法见[集群快速开始](../getting-started/cluster-quickstart)。
 服务端返回的错误保留原有错误码，并使用命令的语言；运行不存在时以 6 退出，作业不合法时以 3 退出，无法连接服务端时以 1 退出（`PF-CLUS-0008`）。
 
 ## 插件

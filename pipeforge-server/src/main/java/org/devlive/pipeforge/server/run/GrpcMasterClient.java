@@ -194,7 +194,8 @@ public final class GrpcMasterClient implements MasterClient {
                                         s.getJobId().isEmpty() ? null : s.getJobId()))
                                 .toList(),
                         w.getTasksRunning(),
-                        w.getSinceHeartbeatMs()))
+                        w.getSinceHeartbeatMs(),
+                        w.getDraining()))
                 .toList();
         return ClusterView.of(
                 new ClusterView.Master(
@@ -307,6 +308,43 @@ public final class GrpcMasterClient implements MasterClient {
                 metrics.getLastCheckpointDurationMs(),
                 metrics.getLastCheckpointSize(),
                 metrics.getCheckpointFailures());
+    }
+
+    @Override
+    public void drain(String workerId) {
+        try {
+            call().drainWorker(org.devlive.pipeforge.engine.rpc.proto.WorkerRequest.newBuilder()
+                    .setHeader(header())
+                    .setWorkerId(workerId)
+                    .build());
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, address());
+        }
+    }
+
+    @Override
+    public void uncordon(String workerId) {
+        try {
+            call().uncordonWorker(org.devlive.pipeforge.engine.rpc.proto.WorkerRequest.newBuilder()
+                    .setHeader(header())
+                    .setWorkerId(workerId)
+                    .build());
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, address());
+        }
+    }
+
+    @Override
+    public String failover() {
+        String leader = address();
+        try {
+            call().releaseLeadership(org.devlive.pipeforge.engine.rpc.proto.ClusterRequest.newBuilder()
+                    .setHeader(header())
+                    .build());
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, leader);
+        }
+        return leader;
     }
 
     @Override

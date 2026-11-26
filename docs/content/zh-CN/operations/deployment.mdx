@@ -138,6 +138,28 @@ Master 接管时：
 使用默认设置时，一次切换大约需要一个租约时长加一个心跳超时，即 15 到 45 秒，另加运行重新启动的时间。
 
 
+## 运维演练
+
+**手动切换主 Master。** `pipeforge cluster failover` 请主 Master 交出租约（会先确认；`--yes` 跳过确认，不在终端上运行时必须指定）。
+备 Master 在 `master.leader.lease` 的三分之一内接管，运行像任何一次[故障切换](#备-master)一样从最近的 checkpoint 在那里继续。旧的主 Master
+以退出码 1 退出，由它的进程管理器（systemd 或 Kubernetes）重新启动为备 Master。可以用它逐台升级 Master：先升级一个备 Master，切换到它，
+再升级旧的主 Master。没有元数据库的 Master 不选主，会以 `PF-CLUS-0019` 拒绝。
+
+```bash
+pipeforge cluster failover --yes
+```
+
+**下线 Worker。** `pipeforge cluster drain <worker>` 不再向 Worker 分配新的 Task：它的空闲 Slot 不再提供给任何运行，正在它上面运行的
+Task 在原地运行到结束。指定 `--wait` 时命令一直等到上面不再有运行中的 Task（`--timeout`，默认 30 分钟；届时仍有 Task 在运行则以退出码
+5 结束），之后就可以停止该 Worker 进行维护，而不会让任何 Task 失败。`pipeforge cluster workers` 把它标记为 `（下线中）`；
+`pipeforge cluster uncordon <worker>` 让它重新接收新的 Task。ID 为 `cluster workers` 列出的 ID。
+
+```bash
+pipeforge cluster drain 6f1c2b7e-1d8a-4c55-9b0e-7a3f1e2d4c11 --wait --timeout 2h
+```
+
+主 Master 会在 Worker 重新注册时保持它的下线状态，但切换主 Master 后不会保留：请在新的主 Master 上再次下线。
+
 ## 排障
 
 | 错误 | 原因与处理 |
@@ -146,10 +168,13 @@ Master 接管时：
 | `PF-RES-0006` `PORT_IN_USE` | 端口被其他进程占用。请停止该进程或修改端口设置。 |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | 进程之间的集群令牌不同。 |
 | `PF-CLUS-0001` `WORKER_LOST` | Worker 不再发送心跳；见[集群](../concepts/cluster#排障)。 |
+| `PF-CLUS-0019` `FAILOVER_UNAVAILABLE` | 在不选主的 Master 上执行了 `cluster failover`：请为 Master 配置元数据库并启动备 Master。 |
+| `PF-CLUS-0020` `WORKER_NOT_FOUND` | `cluster drain` 或 `uncordon` 指定的 Worker Master 不知道；请使用 `cluster workers` 列出的 ID。 |
 | `PF-CLUS-0018` `NOT_LEADER` | Worker 或 Server 连到了备 Master。请把 `worker.master.address` 和 Server 的 Master 地址指向错误中给出的主 Master。 |
 
 ## 限制
 
+- 下线只等待 Task 结束：通过 checkpoint 把流式 Task 迁移到其他 Worker 随流式作业一起提供。
 - 运行只通过 Server 在新的主 Master 上恢复：不经过 Server、直接提交给 Master 的运行不会被恢复。
 - 一次尝试已经运行的时间按 Server 记录的计入 `env.timeout.run`；被恢复的运行不会保留旧主 Master 正在为暂停所做的 savepoint。
 - `standalone` 运行 Master 和 Worker；服务向集群提交作业之后才会加入其中。

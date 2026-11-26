@@ -29,6 +29,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cluster/failover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand the lead over
+         * @description Asks the leading master to give its lease up: a standby master takes over within a third of master.leader.lease, the runs go on there from their last checkpoints, and the old leader stops so that its supervisor starts it again as a standby. HTTP 409 when the masters elect no leader (no metastore), 503 without a master or when it cannot be reached.
+         */
+        post: operations["failoverMaster"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cluster/workers/{id}/drain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drain a worker
+         * @description Gives a worker no new tasks: its free slots are offered to no run, and the tasks running on it finish where they are. The workers of the cluster show it as draining until it is uncordoned or a new master leads. HTTP 404 for a worker the master does not know.
+         */
+        post: operations["drainWorker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cluster/workers/{id}/uncordon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uncordon a worker
+         * @description Gives a drained worker new tasks again. HTTP 404 for a worker the master does not know.
+         */
+        post: operations["uncordonWorker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/components/{type}/{identifier}": {
         parameters: {
             query?: never;
@@ -555,6 +615,9 @@ export interface components {
             plan?: components["schemas"]["ExplainDocument"];
             text?: string;
         };
+        Failover: {
+            master?: string;
+        };
         FunctionInfo: {
             category?: string;
             description?: string;
@@ -907,6 +970,7 @@ export interface components {
             /** Format: int32 */
             cpuCores?: number;
             dataAddress?: string;
+            draining?: boolean;
             id?: string;
             labels?: {
                 [key: string]: string;
@@ -952,6 +1016,147 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ClusterView"];
                 };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    failoverMaster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Failover"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    drainWorker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    uncordonWorker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request is invalid (PF-CONF-0007) */
             400: {

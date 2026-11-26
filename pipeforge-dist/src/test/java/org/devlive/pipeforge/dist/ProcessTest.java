@@ -243,6 +243,70 @@ class ProcessTest {
     }
 
     @Test
+    void aLeaderAskedToFailOverHandsItsLeaseToTheStandbyAndStops() throws Exception {
+        Files.createDirectories(home.resolve("plugins"));
+        int[] ports = freePorts(4);
+        String metastore = migratedMetastore("failover");
+        Map<String, String> first = new java.util.HashMap<>(settings(ports[0], ports[2], ports[3]));
+        first.put("master.metastore.url", metastore);
+        first.put("master.metastore.username", "sa");
+        first.put("master.host", "localhost");
+        first.put("master.leader.lease", "1s");
+        Map<String, String> second = new java.util.HashMap<>(first);
+        second.put("master.rpc.port", String.valueOf(ports[1]));
+        Configuration a = Configuration.load(home.resolve("conf"), Map.of(), first);
+        try (MasterProcess leader = new MasterProcess(a, home);
+                MasterProcess standby =
+                        new MasterProcess(Configuration.load(home.resolve("conf"), Map.of(), second), home)) {
+            CountDownLatch stopped = new CountDownLatch(1);
+            leader.onLeadershipLost(stopped::countDown);
+            var header = org.devlive.pipeforge.engine.rpc.grpc.Headers.create(
+                    org.devlive.pipeforge.engine.rpc.grpc.Headers.Epochs.FIRST,
+                    Duration.ofSeconds(10),
+                    System::currentTimeMillis);
+            var request = org.devlive.pipeforge.engine.rpc.proto.ClusterRequest.newBuilder()
+                    .setHeader(header)
+                    .build();
+            var security = Security.of(a, home);
+            var toStandby =
+                    org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport.channel("localhost:" + ports[1], security);
+            var toLeader =
+                    org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport.channel("localhost:" + ports[0], security);
+            try {
+                // a standby has no lead to hand over
+                assertThatThrownBy(() -> org.devlive.pipeforge.engine.rpc.proto.DispatcherServiceGrpc.newBlockingStub(
+                                        toStandby)
+                                .releaseLeadership(request))
+                        .satisfies(
+                                e -> assertThat(org.devlive.pipeforge.engine.rpc.grpc.RpcErrors.fromStatus(e, "standby")
+                                                .code())
+                                        .isEqualTo(ErrorCode.NOT_LEADER));
+
+                org.devlive.pipeforge.engine.rpc.proto.DispatcherServiceGrpc.newBlockingStub(toLeader)
+                        .releaseLeadership(request);
+                assertThat(stopped.await(10, TimeUnit.SECONDS))
+                        .as("the old leader stops")
+                        .isTrue();
+                assertThat(leader.isLeader()).isFalse();
+                await("the standby takes over", standby::isLeader);
+                assertThat(standby.leaderEpoch()).isEqualTo(2);
+            } finally {
+                toStandby.shutdownNow();
+                toLeader.shutdownNow();
+            }
+        }
+
+        // a master without a metastore cannot hand over
+        Map<String, String> alone = new java.util.HashMap<>(settings(freePorts(3)));
+        try (MasterProcess single =
+                new MasterProcess(Configuration.load(home.resolve("conf"), Map.of(), alone), home)) {
+            assertThatThrownBy(single::handOver)
+                    .isInstanceOfSatisfying(PipeForgeException.class, e -> assertThat(e.code())
+                            .isEqualTo(ErrorCode.FAILOVER_UNAVAILABLE));
+        }
+    }
+
+    @Test
     void processesCheckTheirCheckpointStorageAtTheStart() throws Exception {
         Files.createDirectories(home.resolve("plugins"));
         Map<String, String> settings = new java.util.HashMap<>(settings(freePorts(3)));

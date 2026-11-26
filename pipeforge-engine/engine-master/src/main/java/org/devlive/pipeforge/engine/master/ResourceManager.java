@@ -122,7 +122,17 @@ public final class ResourceManager {
 
     /** A registered worker, as seen at one moment. */
     public record Worker(
-            String id, WorkerSpec spec, List<Slot> slots, List<RunningTask> tasks, Duration sinceHeartbeat) {
+            String id,
+            WorkerSpec spec,
+            List<Slot> slots,
+            List<RunningTask> tasks,
+            Duration sinceHeartbeat,
+            boolean draining) {
+
+        /** A worker that takes new tasks. */
+        public Worker(String id, WorkerSpec spec, List<Slot> slots, List<RunningTask> tasks, Duration sinceHeartbeat) {
+            this(id, spec, slots, tasks, sinceHeartbeat, false);
+        }
 
         public long freeSlots() {
             return slots.stream().filter(s -> !s.allocated()).count();
@@ -170,6 +180,8 @@ public final class ResourceManager {
     private final LongSupplier nanoTime;
     private final Map<String, Entry> workers = new LinkedHashMap<>();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
+    /** Workers that take no new tasks, by ID; kept while they register again. */
+    private final java.util.Set<String> draining = new java.util.HashSet<>();
 
     public ResourceManager(Settings settings) {
         this(settings, System::nanoTime);
@@ -371,9 +383,49 @@ public final class ResourceManager {
         List<Worker> list = new ArrayList<>();
         for (Entry entry : workers.values()) {
             list.add(new Worker(
-                    entry.id, entry.spec, entry.slots, entry.tasks, Duration.ofNanos(now - entry.lastHeartbeat)));
+                    entry.id,
+                    entry.spec,
+                    entry.slots,
+                    entry.tasks,
+                    Duration.ofNanos(now - entry.lastHeartbeat),
+                    draining.contains(entry.id)));
         }
         return list;
+    }
+
+    /**
+     * Gives a worker no new tasks: its free slots are offered to no run, and its running tasks
+     * finish where they are. It stays drained while it registers again with the same ID, until
+     * {@link #uncordon}.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0020} for a worker that is not registered
+     */
+    public synchronized void drain(String workerId) {
+        known(workerId);
+        if (draining.add(workerId)) {
+            LOG.info("Worker {} is drained: it takes no new tasks", workerId);
+        }
+    }
+
+    /**
+     * Gives a drained worker new tasks again.
+     *
+     * @throws PipeForgeException {@code PF-CLUS-0020} for a worker that is not registered
+     */
+    public synchronized void uncordon(String workerId) {
+        known(workerId);
+        if (draining.remove(workerId)) {
+            LOG.info("Worker {} takes new tasks again", workerId);
+        }
+    }
+
+    private void known(String workerId) {
+        if (!workers.containsKey(workerId)) {
+            throw org.devlive.pipeforge.common.error.PipeForgeException.of(
+                            org.devlive.pipeforge.common.error.ErrorCode.WORKER_NOT_FOUND)
+                    .param("worker", workerId)
+                    .build();
+        }
     }
 
     /**
@@ -383,7 +435,7 @@ public final class ResourceManager {
     public synchronized List<FreeSlot> freeSlots(Map<String, String> labels) {
         List<FreeSlot> free = new ArrayList<>();
         for (Entry entry : workers.values()) {
-            if (!entry.spec.labels().entrySet().containsAll(labels.entrySet())) {
+            if (draining.contains(entry.id) || !entry.spec.labels().entrySet().containsAll(labels.entrySet())) {
                 continue;
             }
             entry.slots.stream()

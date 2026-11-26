@@ -87,8 +87,14 @@ class RunClusterTest {
                         ? "{\"code\":\"PF-CONF-0010\",\"message\":\"There is no run " + key + "\"}"
                         : route.get())
                 .getBytes(StandardCharsets.UTF_8);
+        int status = route == null ? 404 : statuses.getOrDefault(key, 200);
+        if (status == 204) {
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+            return;
+        }
         exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(route == null ? 404 : statuses.getOrDefault(key, 200), answer.length);
+        exchange.sendResponseHeaders(status, answer.length);
         exchange.getResponseBody().write(answer);
         exchange.close();
     }
@@ -318,7 +324,7 @@ class RunClusterTest {
              "workers": [
                {"id": "w2", "rpcAddress": "h2:6124", "dataAddress": "h2:6125", "labels": {},
                 "cpuCores": 4, "taskHeapBytes": 2147483648, "managedBytes": 0, "networkBytes": 0,
-                "tasksRunning": 0, "sinceHeartbeatMs": 21000,
+                "tasksRunning": 0, "sinceHeartbeatMs": 21000, "draining": true,
                 "slots": [{"index": 0, "allocated": false}, {"index": 1, "allocated": false}]},
                {"id": "w1", "rpcAddress": "h1:6124", "dataAddress": "h1:6125",
                 "labels": {"zone": "a", "disk": "ssd"}, "cpuCores": 16, "taskHeapBytes": 8589934592,
@@ -343,6 +349,73 @@ class RunClusterTest {
         Shell.Result json = shell.run("cluster", "workers", "-o", "json");
         assertThat(JSON.readTree(json.out()).get(0).path("id").asText()).isEqualTo("w2");
         assertThat(shell.run("cluster").exit()).isEqualTo(ExitCode.USAGE.code());
+    }
+
+    @Test
+    void drainsAWorkerAndWaitsForItsTasks() throws Exception {
+        statuses.put("POST /api/v1/cluster/workers/w1/drain", 204);
+        routes.put("POST /api/v1/cluster/workers/w1/drain", () -> "");
+        statuses.put("POST /api/v1/cluster/workers/w1/uncordon", 204);
+        routes.put("POST /api/v1/cluster/workers/w1/uncordon", () -> "");
+        Shell.Result drained = shell.run("cluster", "drain", "w1");
+        assertThat(drained.exit()).as(drained.err()).isZero();
+        assertThat(drained.out()).isEqualTo("Worker w1 takes no new tasks; its running tasks finish where they are.\n");
+
+        // its three tasks end after two looks
+        AtomicInteger looks = new AtomicInteger();
+        routes.put(
+                "GET /api/v1/cluster",
+                () -> looks.incrementAndGet() < 3
+                        ? CLUSTER
+                        : CLUSTER.replace("\"tasksRunning\": 3", "\"tasksRunning\": 0"));
+        Shell.Result waited = shell.run("cluster", "drain", "w1", "--wait", "--poll", "10ms");
+        assertThat(waited.exit()).as(waited.err()).isZero();
+        assertThat(waited.err()).contains("Worker w1 still runs 3 task(s)...");
+        assertThat(waited.out()).isEqualTo("Worker w1 is drained: no task runs on it.\n");
+
+        routes.put("GET /api/v1/cluster", () -> CLUSTER);
+        Shell.Result late = shell.run("cluster", "drain", "w1", "--wait", "--timeout", "50ms", "--poll", "10ms");
+        assertThat(late.exit()).isEqualTo(ExitCode.TIMEOUT.code());
+        assertThat(late.err()).contains("Worker w1 still runs 3 task(s) after");
+
+        Shell.Result back = shell.run("cluster", "uncordon", "w1", "-o", "json");
+        assertThat(back.exit()).isZero();
+        assertThat(JSON.readTree(back.out()).path("draining").asBoolean(true)).isFalse();
+        assertThat(received)
+                .anyMatch(r -> r.startsWith("POST /api/v1/cluster/workers/w1/drain"))
+                .anyMatch(r -> r.startsWith("POST /api/v1/cluster/workers/w1/uncordon"));
+
+        statuses.put("POST /api/v1/cluster/workers/w9/drain", 404);
+        routes.put(
+                "POST /api/v1/cluster/workers/w9/drain",
+                () -> "{\"code\":\"PF-CLUS-0020\",\"message\":\"No worker w9 is registered with the master\"}");
+        Shell.Result unknown = shell.run("cluster", "drain", "w9");
+        assertThat(unknown.exit()).isEqualTo(ExitCode.NOT_FOUND.code());
+        assertThat(unknown.err()).isEqualTo("ERROR PF-CLUS-0020 No worker w9 is registered with the master\n");
+    }
+
+    @Test
+    void failsOverOnlyWhenAskedToWithoutATerminal() throws Exception {
+        statuses.put("POST /api/v1/cluster/failover", 202);
+        routes.put("POST /api/v1/cluster/failover", () -> "{\"master\": \"master-1:6123\"}");
+        Shell.Result refused = shell.run("cluster", "failover");
+        assertThat(refused.exit()).isEqualTo(ExitCode.USAGE.code());
+        assertThat(refused.err()).contains("Failing over needs --yes");
+        assertThat(received).noneMatch(r -> r.startsWith("POST /api/v1/cluster/failover"));
+
+        Shell.Result done = shell.run("cluster", "failover", "--yes");
+        assertThat(done.exit()).as(done.err()).isZero();
+        assertThat(done.out())
+                .isEqualTo("Master master-1:6123 gave its lease up: a standby master takes over within seconds, and"
+                        + " master-1:6123 stops.\n");
+
+        statuses.put("POST /api/v1/cluster/failover", 409);
+        routes.put(
+                "POST /api/v1/cluster/failover",
+                () -> "{\"code\":\"PF-CLUS-0019\",\"message\":\"Master m cannot hand over\"}");
+        Shell.Result alone = shell.run("cluster", "failover", "-y");
+        assertThat(alone.exit()).isEqualTo(ExitCode.ERROR.code());
+        assertThat(alone.err()).isEqualTo("ERROR PF-CLUS-0019 Master m cannot hand over\n");
     }
 
     @Test
