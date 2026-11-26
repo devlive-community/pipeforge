@@ -39,23 +39,42 @@ class ProcessTest {
         return freePorts(1)[0];
     }
 
-    /** Distinct free ports: the sockets stay open until all are chosen, so no port comes twice. */
+    /**
+     * Where the ports of the tests come from: below the ephemeral ranges of macOS (49152 and up)
+     * and Linux (32768 and up), from which the operating system hands out the local ports of
+     * outgoing connections. A port picked there can be taken by a client connection before the
+     * process under test binds it; below them only a server binding that very port can take it.
+     */
+    static final int FIRST_PORT = 20_000;
+
+    static final int LAST_PORT = 32_000;
+
+    /** The next port to try; starts at random, so that test JVMs side by side rarely meet. */
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT = new java.util.concurrent.atomic.AtomicInteger(
+            FIRST_PORT + java.util.concurrent.ThreadLocalRandom.current().nextInt(LAST_PORT - FIRST_PORT));
+
+    /** Distinct free ports, none handed out before in this JVM. */
     static int[] freePorts(int count) throws IOException {
-        ServerSocket[] sockets = new ServerSocket[count];
-        try {
-            int[] ports = new int[count];
-            for (int i = 0; i < count; i++) {
-                sockets[i] = new ServerSocket(0);
-                ports[i] = sockets[i].getLocalPort();
-            }
-            return ports;
-        } finally {
-            for (ServerSocket socket : sockets) {
-                if (socket != null) {
-                    socket.close();
-                }
+        int[] ports = new int[count];
+        for (int i = 0; i < count; i++) {
+            ports[i] = nextFreePort();
+        }
+        return ports;
+    }
+
+    private static int nextFreePort() throws IOException {
+        for (int tries = 0; tries < LAST_PORT - FIRST_PORT; tries++) {
+            int port = FIRST_PORT + Math.floorMod(NEXT.getAndIncrement() - FIRST_PORT, LAST_PORT - FIRST_PORT);
+            // the processes bind every address
+            try (ServerSocket socket = new ServerSocket()) {
+                socket.setReuseAddress(false);
+                socket.bind(new java.net.InetSocketAddress(port));
+                return port;
+            } catch (IOException e) {
+                // taken: the next one
             }
         }
+        throw new IOException("no free port between " + FIRST_PORT + " and " + LAST_PORT);
     }
 
     Map<String, String> settings(int[] ports) {

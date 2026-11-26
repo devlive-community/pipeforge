@@ -9,7 +9,6 @@ package org.devlive.pipeforge.e2e;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -52,21 +51,41 @@ final class Cluster implements AutoCloseable {
         this.dir = dir;
     }
 
+    /**
+     * Where the ports of the processes come from: below the ephemeral ranges of macOS (49152 and
+     * up) and Linux (32768 and up), from which the local ports of outgoing connections, such as
+     * those to the database containers, are taken; a port picked there could be taken before the
+     * process binds it.
+     */
+    static final int FIRST_PORT = 20_000;
+
+    static final int LAST_PORT = 32_000;
+
+    /** The next port to try; starts at random, so that test JVMs side by side rarely meet. */
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT = new java.util.concurrent.atomic.AtomicInteger(
+            FIRST_PORT + java.util.concurrent.ThreadLocalRandom.current().nextInt(LAST_PORT - FIRST_PORT));
+
+    /** Distinct free ports, none handed out before in this JVM. */
     static int[] freePorts(int count) throws IOException {
-        List<ServerSocket> sockets = new ArrayList<>();
-        try {
-            int[] ports = new int[count];
-            for (int i = 0; i < count; i++) {
-                ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
-                sockets.add(socket);
-                ports[i] = socket.getLocalPort();
-            }
-            return ports;
-        } finally {
-            for (ServerSocket socket : sockets) {
-                socket.close();
+        int[] ports = new int[count];
+        for (int i = 0; i < count; i++) {
+            ports[i] = nextFreePort();
+        }
+        return ports;
+    }
+
+    private static int nextFreePort() throws IOException {
+        for (int tries = 0; tries < LAST_PORT - FIRST_PORT; tries++) {
+            int port = FIRST_PORT + Math.floorMod(NEXT.getAndIncrement() - FIRST_PORT, LAST_PORT - FIRST_PORT);
+            try (ServerSocket socket = new ServerSocket()) {
+                socket.setReuseAddress(false);
+                socket.bind(new java.net.InetSocketAddress(port));
+                return port;
+            } catch (IOException e) {
+                // taken: the next one
             }
         }
+        throw new IOException("no free port between " + FIRST_PORT + " and " + LAST_PORT);
     }
 
     /** A copy of the distribution for one process; the scripts keep their modes. */
