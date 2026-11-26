@@ -473,6 +473,37 @@ function runCheckpoints() {
   ];
 }
 
+/** Two attempts of the running run: the first lost its source, the second goes on from checkpoint 4. */
+function runAttempts() {
+  const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+  return [
+    {
+      attempt: 1,
+      status: "FAILED",
+      startedAt: ago(900),
+      endedAt: ago(420),
+      elapsedMs: 480_000,
+      rowsRead: 2_940_000,
+      rowsWritten: 2_918_400,
+      rowsDirty: 7,
+      error: {
+        code: "PF-CONN-0003",
+        message: "The connection to orders-db.internal:3306 was lost: Communications link failure",
+      },
+    },
+    {
+      attempt: 2,
+      status: "RUNNING",
+      startedAt: ago(95),
+      restorePath: `checkpoints/${RUN_ID}/chk-4/`,
+      elapsedMs: 95_000,
+      rowsRead: 1_872_000,
+      rowsWritten: 1_872_100,
+      rowsDirty: 5,
+    },
+  ];
+}
+
 function runSplits() {
   const ranges = Array.from({ length: 16 }, (_, i) => i);
   return ranges
@@ -589,6 +620,7 @@ export const SERVER: Record<string, unknown> = {
   "/api/v1/cluster": () => cluster(),
   [`/api/v1/runs/${RUN_ID}/splits`]: () => runSplits(),
   [`/api/v1/runs/${RUN_ID}/checkpoints`]: () => runCheckpoints(),
+  [`/api/v1/runs/${RUN_ID}/attempts`]: () => runAttempts(),
   [`/api/v1/runs/${RUN_ID}/pause`]: () => ({ ...runs().runs[0], status: "PAUSING" }),
   [`/api/v1/runs/${RUN_ID}/tasks`]: () => runTasks(),
   [`/api/v1/runs/${RUN_ID}/logs`]: (_body: string, _language: string, url: URL) => taskLog(url),

@@ -112,6 +112,15 @@ export function useRunCheckpoints(id: string, live: boolean) {
   });
 }
 
+/** The attempts of a run, oldest first; asked again while it has not ended. */
+export function useRunAttempts(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-attempts", id],
+    queryFn: () => api.listRunAttempts(id),
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
 /** The master, the workers and their slots; asked again like the run pages. */
 export function useCluster() {
   return useQuery({

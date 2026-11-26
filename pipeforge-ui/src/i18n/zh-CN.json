@@ -237,7 +237,8 @@
       "plan": "执行计划",
       "splits": "分片",
       "logs": "日志",
-      "checkpoints": "Checkpoint"
+      "checkpoints": "Checkpoint",
+      "attempts": "尝试"
     },
     "facts": {
       "state": "状态",
@@ -446,6 +447,20 @@
         "scratch": "从头开始",
         "noCheckpoint": "运行没有完成的 checkpoint：下一次尝试从头开始。"
       }
+    },
+    "attempts": {
+      "caption": "运行的各次尝试，从新到旧",
+      "duration": "运行时长",
+      "read": "读取",
+      "written": "写入",
+      "dirty": "坏行",
+      "from": "起点",
+      "fromStart": "从头开始",
+      "none": "还没有尝试",
+      "failed": "无法加载尝试：{message}",
+      "nextIn": "第 {attempt} 次尝试将在 {left}后开始（{at}）",
+      "startingNow": "第 {attempt} 次尝试即将开始",
+      "title": "第 {attempt} 次尝试"
     }
   },
   "cluster": {

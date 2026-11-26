@@ -116,6 +116,14 @@ the inputs of a task are backpressured; a failed checkpoint says which tasks did
 
 <Screenshot name="run-checkpoints" alt="The checkpoints of a run" />
 
+The **Attempts** tab (`/runs/<id>?tab=attempts`) shows every attempt of the run, newest first: its
+state, when it started and ended, how long it was running, the rows it read, wrote and skipped as
+bad as its last metrics sample has them, the checkpoint it started from (or the beginning), and the
+error that ended it. While the run waits to be retried (`env.retry`), the top counts down to the
+next attempt, second by second.
+
+<Screenshot name="run-attempts" alt="The attempts of a run" />
+
 The **Logs** tab (`/runs/<id>?tab=logs`) reads a task's log from the worker it ran on, through the
 master:
 

@@ -237,7 +237,8 @@
       "plan": "Execution plan",
       "splits": "Splits",
       "logs": "Logs",
-      "checkpoints": "Checkpoints"
+      "checkpoints": "Checkpoints",
+      "attempts": "Attempts"
     },
     "facts": {
       "state": "State",
@@ -446,6 +447,20 @@
         "scratch": "The beginning",
         "noCheckpoint": "The run has no completed checkpoint: the next attempt starts from the beginning."
       }
+    },
+    "attempts": {
+      "caption": "Attempts of the run, newest first",
+      "duration": "Time running",
+      "read": "Read",
+      "written": "Written",
+      "dirty": "Bad rows",
+      "from": "Started from",
+      "fromStart": "The beginning",
+      "none": "No attempt yet",
+      "failed": "The attempts cannot be loaded: {message}",
+      "nextIn": "Attempt #{attempt} starts in {left}, at {at}",
+      "startingNow": "Attempt #{attempt} starts now",
+      "title": "Attempt #{attempt}"
     }
   },
   "cluster": {

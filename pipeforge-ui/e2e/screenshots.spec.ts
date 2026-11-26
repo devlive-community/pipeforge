@@ -86,6 +86,11 @@ const PAGES: Shot[] = [
     ready: { "en-US": "before-index-rebuild", "zh-CN": "before-index-rebuild" },
   },
   {
+    name: "run-attempts",
+    path: `/runs/${RUN_ID}?tab=attempts`,
+    ready: { "en-US": `checkpoints/${RUN_ID}/chk-4/`, "zh-CN": `checkpoints/${RUN_ID}/chk-4/` },
+  },
+  {
     name: "run-logs",
     path: `/runs/${RUN_ID}?tab=logs`,
     ready: {

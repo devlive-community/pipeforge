@@ -16,6 +16,7 @@ import { usePreferences } from "@/state/preferences";
 import { Card, DescriptionList, Empty, PageHeader, Table, Tabs } from "@/ui";
 import { LoadingPanel } from "@/ui/LoadingPanel";
 import { rates, waitShare, type RunAnalysis } from "./analysis";
+import { AttemptsTab } from "./AttemptsTab";
 import { BottleneckCard } from "./Bottleneck";
 import { CheckpointsTab } from "./CheckpointsTab";
 import { LogsTab } from "./LogsTab";
@@ -199,6 +200,7 @@ export function RunDetailPage() {
     requested === "plan" ||
     requested === "splits" ||
     requested === "checkpoints" ||
+    requested === "attempts" ||
     requested === "logs"
       ? requested
       : "overview";
@@ -329,6 +331,11 @@ export function RunDetailPage() {
                 onSelect={(checkpoint) => choose("checkpoint", checkpoint)}
               />
             ),
+          },
+          {
+            id: "attempts",
+            label: t("runDetail.tabs.attempts"),
+            content: <AttemptsTab id={id} live={live} />,
           },
           {
             id: "logs",

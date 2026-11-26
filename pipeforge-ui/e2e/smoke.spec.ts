@@ -140,6 +140,15 @@ test("lists the checkpoints of a run and takes a savepoint", async ({ page }) =>
   await expect(page.getByText("Savepoint #8 completed at checkpoints/run/sp-8/")).toBeVisible();
 });
 
+test("lists the attempts of a run", async ({ page }) => {
+  await page.goto("/runs/3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01");
+  await page.getByRole("tab", { name: "Attempts" }).click();
+  await expect(page).toHaveURL(/tab=attempts/);
+  const attempts = page.getByRole("list", { name: "Attempts of the run, newest first" });
+  await expect(attempts.getByText("PF-CONN-0003")).toBeVisible();
+  await expect(attempts.getByText(/chk-4/)).toBeVisible();
+});
+
 test("pauses a running run after asking", async ({ page }) => {
   await page.goto("/runs/3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01");
   await page.getByRole("button", { name: "Pause", exact: true }).click();
