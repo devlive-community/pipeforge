@@ -113,6 +113,35 @@ tasks on the workers' slots and follows the run. People and scripts submit jobs 
 `pipeforge run <file>` (see the [cluster quickstart](../getting-started/cluster-quickstart)), the
 [Java client](../development/java-client), the REST API or the Web UI.
 
+## Standby masters
+
+A cluster can run more than one master: the masters that share its `cluster.name` and
+[metastore](./metastore#the-master) (`master.metastore.url`) elect one leader through a lease in the
+metastore's `leader` table. Start them the same way on different machines; nothing else needs to be
+set. Only the leader takes registrations, heartbeats and runs. A standby answers every request with
+[`PF-CLUS-0018`](../reference/errors#pf-clus-0018) `NOT_LEADER`, naming the leader, and only serves
+the plugin packages.
+
+- The leader renews its lease every third of `master.leader.lease` (15 seconds by default).
+- A standby takes the lease over when it has seen it unchanged for a whole lease, measured on its own
+  clock, so the clocks of the machines do not have to agree.
+- A leader that cannot renew steps down after two thirds of a lease, before any standby can take
+  over, and stops serving even when it cannot reach the metastore.
+- A master that is stopped gives its lease up, so that a standby takes over within a third of a
+  lease. A master that loses the lead it had exits with code 1; start it again and it joins as a
+  standby.
+- Every new leader has the next leader epoch, which every request to a worker carries. A worker that
+  has heard from a leader refuses requests of the leaders before it with `PF-CLUS-0006`
+  `RPC_STALE_EPOCH`, so a master that was cut off cannot control tasks any more.
+
+| Setting | File | Default | Meaning |
+|---|---|---|---|
+| `master.host` | `master.yaml` | the host name of the machine | The address workers and servers reach this master at; a standby names the leader by it |
+| `master.leader.lease` | `master.yaml` | `15s` | How long a lease lasts without renewal |
+| `cluster.name` | `pipeforge.yaml` | `default` | The masters of a cluster compete for its lease |
+
+Without `master.metastore.url` there is no election: the master leads alone with epoch 1.
+
 ## Troubleshooting
 
 | Error | Cause and fix |
@@ -121,9 +150,12 @@ tasks on the workers' slots and follows the run. People and scripts submit jobs 
 | `PF-RES-0006` `PORT_IN_USE` | Another process uses the port. Stop it or change the port setting. |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | The processes have different cluster tokens. |
 | `PF-CLUS-0001` `WORKER_LOST` | A worker stopped sending heartbeats; see [cluster](../concepts/cluster#troubleshooting). |
+| `PF-CLUS-0018` `NOT_LEADER` | A worker or server talks to a standby master. Point `worker.master.address` and the server's master address at the leader the error names. |
 
 ## Limitations
 
-- One master per cluster; a standby master comes with failover.
+- When the leader changes, its runs are not taken over yet, and workers and servers keep talking to
+  the address they were given: recovering the runs on the new leader and following it come in a
+  later version.
 - `standalone` runs a master and a worker; the server joins it once it submits jobs to a cluster.
 - The settings of the metadata database, checkpoints and isolation arrive with those features.

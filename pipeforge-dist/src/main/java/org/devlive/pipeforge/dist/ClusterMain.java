@@ -83,7 +83,8 @@ public final class ClusterMain {
     /**
      * Runs a process until {@code stop} is counted down or the JVM shuts down.
      *
-     * @return the exit code: 0, 1 when it failed to start, 2 for wrong settings or arguments
+     * @return the exit code: 0, 1 when it failed to start or a master lost the lead of its cluster, 2
+     *     for wrong settings or arguments
      */
     static int run(String[] args, Map<String, String> environment, Path home, PrintStream err, CountDownLatch stop) {
         Arguments arguments;
@@ -99,11 +100,18 @@ public final class ClusterMain {
             return SETTINGS_INVALID;
         }
         List<AutoCloseable> processes = new ArrayList<>();
+        java.util.concurrent.atomic.AtomicBoolean leadershipLost = new java.util.concurrent.atomic.AtomicBoolean();
         Path runDir = home.resolve("run");
         Path pid = runDir.resolve(arguments.role() + ".pid");
         try {
             if (!arguments.role().equals("worker")) {
-                processes.add(new MasterProcess(config, home));
+                MasterProcess master = new MasterProcess(config, home);
+                // a master that lost the lead stops, so that it starts again as a standby
+                master.onLeadershipLost(() -> {
+                    leadershipLost.set(true);
+                    stop.countDown();
+                });
+                processes.add(master);
             }
             if (!arguments.role().equals("master")) {
                 processes.add(new WorkerProcess(config, home));
@@ -141,6 +149,10 @@ public final class ClusterMain {
             }
             stopped.countDown();
             removeHook(hook);
+        }
+        if (leadershipLost.get()) {
+            err.println("ERROR the master lost the lead of its cluster; start it again to join as a standby");
+            return FAILED;
         }
         return 0;
     }

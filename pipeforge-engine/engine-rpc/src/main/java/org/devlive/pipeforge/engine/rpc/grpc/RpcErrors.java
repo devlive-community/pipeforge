@@ -38,7 +38,7 @@ public final class RpcErrors {
         if (code.equals(ErrorCode.RPC_VERSION_MISMATCH)) {
             return Status.Code.UNIMPLEMENTED;
         }
-        if (code.equals(ErrorCode.RPC_STALE_EPOCH)) {
+        if (code.equals(ErrorCode.RPC_STALE_EPOCH) || code.equals(ErrorCode.NOT_LEADER)) {
             return Status.Code.FAILED_PRECONDITION;
         }
         if (code.equals(ErrorCode.RUN_NOT_FOUND)

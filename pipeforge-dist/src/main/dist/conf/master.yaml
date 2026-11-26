@@ -12,6 +12,12 @@
 # The port of the master's RPC: workers register here, tasks report here, jobs are submitted here.
 # master.rpc.port: 6123
 
+# The host name or address workers and servers reach this master at; a standby names the leader by it.
+# master.host:   # default: the host name of this machine
+
+# How long the leader lease of a master lasts without renewal; with master.metastore.url the masters of a cluster elect their leader through it, and a standby takes over a lease that was not renewed for this long.
+# master.leader.lease: 15s
+
 # The working directory of the master: extracted plugins and the packages it serves to workers.
 # master.dir: data/master
 
@@ -30,7 +36,8 @@
 # How long a cancelled task may take to stop before its thread is interrupted; the default of the jobs this master runs.
 # task.cancel-timeout: 30s
 
-# The metastore the server uses, where the master records checkpoints; required with checkpoint.dir.
+# The metastore the server uses, where the master records checkpoints and the masters elect their
+# leader; required with checkpoint.dir.
 # The server creates its tables, so start a server of this version on it first. H2 and PostgreSQL
 # drivers ship; for MySQL put Connector/J into driver-dir.
 # master.metastore.url: jdbc:postgresql://db:5432/pipeforge

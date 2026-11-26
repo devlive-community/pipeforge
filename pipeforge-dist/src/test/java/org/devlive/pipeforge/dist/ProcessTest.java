@@ -149,6 +149,91 @@ class ProcessTest {
     }
 
     @Test
+    void theMastersOfAClusterElectOneLeaderAndTheNextOneFencesTheFirst() throws Exception {
+        Files.createDirectories(home.resolve("plugins"));
+        int[] ports = freePorts(4);
+        String metastore = migratedMetastore("election");
+        Map<String, String> first = new java.util.HashMap<>(settings(ports[0], ports[2], ports[3]));
+        first.put("master.metastore.url", metastore);
+        first.put("master.metastore.username", "sa");
+        first.put("master.host", "localhost");
+        first.put("master.leader.lease", "1s");
+        Map<String, String> second = new java.util.HashMap<>(first);
+        second.put("master.rpc.port", String.valueOf(ports[1]));
+        Configuration a = Configuration.load(home.resolve("conf"), Map.of(), first);
+        Configuration b = Configuration.load(home.resolve("conf"), Map.of(), second);
+        var threads = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        MasterProcess leader = new MasterProcess(a, home);
+        try (MasterProcess standby = new MasterProcess(b, home);
+                WorkerProcess worker = new WorkerProcess(a, home)) {
+            java.util.List<String> lost = new java.util.concurrent.CopyOnWriteArrayList<>();
+            leader.onLeadershipLost(() -> lost.add("a"));
+            assertThat(leader.isLeader()).isTrue();
+            assertThat(leader.leaderEpoch()).isEqualTo(1);
+            assertThat(standby.isLeader()).isFalse();
+            await("the worker registers with the leader", () -> worker.state() == MasterConnection.State.CONNECTED);
+
+            // the standby refuses registrations and names the leader
+            var security = Security.of(b, home);
+            var toStandby =
+                    org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport.channel("localhost:" + ports[1], security);
+            try {
+                assertThatThrownBy(
+                                () -> org.devlive.pipeforge.engine.rpc.proto.ResourceManagerServiceGrpc.newBlockingStub(
+                                                toStandby)
+                                        .registerWorker(
+                                                org.devlive.pipeforge.engine.rpc.proto.RegisterWorkerRequest
+                                                        .getDefaultInstance()))
+                        .satisfies(e -> {
+                            PipeForgeException refused =
+                                    org.devlive.pipeforge.engine.rpc.grpc.RpcErrors.fromStatus(e, "the standby");
+                            assertThat(refused.code()).isEqualTo(ErrorCode.NOT_LEADER);
+                            assertThat(refused.params())
+                                    .containsEntry("leader", "localhost:" + ports[0])
+                                    .containsEntry("master", "localhost:" + ports[1]);
+                        });
+            } finally {
+                toStandby.shutdownNow();
+            }
+
+            // the leader stops and gives its lease up: the standby leads with the next epoch
+            leader.close();
+            await("the standby takes over", standby::isLeader);
+            assertThat(standby.leaderEpoch()).isEqualTo(2);
+            assertThat(lost).as("closing is not losing the lead").isEmpty();
+
+            // once a worker heard of epoch 2, requests of the master of epoch 1 are refused
+            var toWorker = org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport.channel(
+                    "localhost:" + ports[2], Security.of(a, home));
+            try {
+                var retry = new org.devlive.pipeforge.engine.rpc.grpc.Retry(threads, Duration.ofMillis(50));
+                var current = new org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorClient(
+                        toWorker,
+                        "worker",
+                        new byte[32],
+                        () -> new org.devlive.pipeforge.engine.rpc.grpc.Headers.Epochs(2, 1),
+                        retry);
+                var replaced = new org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorClient(
+                        toWorker,
+                        "worker",
+                        new byte[32],
+                        () -> new org.devlive.pipeforge.engine.rpc.grpc.Headers.Epochs(1, 1),
+                        retry);
+                current.freeSlot("none").get(10, TimeUnit.SECONDS);
+                assertThatThrownBy(() -> replaced.freeSlot("none").get(10, TimeUnit.SECONDS))
+                        .satisfies(e -> assertThat(
+                                        PipeForgeException.wrap(e.getCause()).code())
+                                .isEqualTo(ErrorCode.RPC_STALE_EPOCH));
+            } finally {
+                toWorker.shutdownNow();
+            }
+        } finally {
+            leader.close();
+            threads.shutdownNow();
+        }
+    }
+
+    @Test
     void processesCheckTheirCheckpointStorageAtTheStart() throws Exception {
         Files.createDirectories(home.resolve("plugins"));
         Map<String, String> settings = new java.util.HashMap<>(settings(freePorts(3)));

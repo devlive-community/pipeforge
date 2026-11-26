@@ -49,13 +49,14 @@ pipeforge:
 
 | 配置项 | 默认值 | 含义 |
 |---|---|---|
-| `master.metastore.url` | 无；设置了 `checkpoint.dir` 时必填 | Server 的元数据库的 JDBC URL |
+| `master.metastore.url` | 无；设置了 `checkpoint.dir` 或使用备 Master 时必填 | Server 的元数据库的 JDBC URL |
 | `master.metastore.username`、`master.metastore.password` | 空 | 用户；密码最好用 `PIPEFORGE_MASTER_METASTORE_PASSWORD` 提供 |
 | `master.metastore.driver-dir` | 空 | 存放 JDBC 驱动的目录，相对于安装目录；MySQL 的驱动不随发行版提供，需要它 |
 | `master.metastore.pool-size` | `4` | Master 保持的连接数 |
 
 Master 不执行迁移：它在启动时检查元数据库中是否有 `checkpoint` 表，没有时以 `PF-CLUS-0013` 拒绝启动，因此请先在这个元数据库上启动一个同版本的 Server。
-没有设置 `checkpoint.dir` 时，Master 不连接元数据库。
+设置了 `master.metastore.url` 时，同一个集群的 Master 还在 `leader` 表中选出主 Master（见[备 Master](./deployment#备-master)），
+Master 启动时也会检查这张表。没有设置时，Master 不连接元数据库，单独运行。
 
 ## 表
 
@@ -67,6 +68,7 @@ Master 不执行迁移：它在启动时检查元数据库中是否有 `checkpoi
 | `job_run_metrics` | 运行期间采样的指标以及最终指标：主要计数（跨尝试累计）作为列，该次尝试的完整指标为 JSON |
 | `worker` | 集群中的 Worker：地址、Slot 数、标签、版本、状态和最近一次心跳 |
 | `checkpoint` | 运行的 checkpoint 和 savepoint：编号、类型、状态、触发原因、触发与完成时间、大小、在 [Checkpoint 存储](./checkpoint-storage)中的目录、失败时的错误以及每个 Task 的部分。由 Master 写入；运行开始做 checkpoint 之前它是空的 |
+| `leader` | 每个集群的主 Master 租约：持有它的 Master 及其地址、leader epoch、续约次数、获得与最近续约的时间。由 Master 写入；持有者为空表示租约已被交出 |
 | `pipeforge_schema_history` | 已执行的迁移（Flyway） |
 
 时间均以 UTC 保存。

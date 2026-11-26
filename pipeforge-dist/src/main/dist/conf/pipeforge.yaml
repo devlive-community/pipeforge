@@ -9,7 +9,7 @@
 # worker.slots, or on the command line with --set key=value. Remove the # to change a setting;
 # the configuration reference of the documentation lists them all.
 
-# The name of the cluster, shown in the logs.
+# The name of the cluster, shown in the logs; the masters of one cluster compete for its leader lease in the metastore.
 # cluster.name: default
 
 # The shared token every process presents to the others; processes with another token are refused.

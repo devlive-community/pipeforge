@@ -59,13 +59,27 @@ public final class GrpcTransport {
      * @throws IOException if the port cannot be bound or a store cannot be read
      */
     public static Server serve(int port, Security security, List<BindableService> services) throws IOException {
+        return serve(port, security, services, List.of());
+    }
+
+    /**
+     * Starts a server whose calls pass {@code interceptors} after the cluster token was checked,
+     * for example the {@link LeaderGate} of a master.
+     *
+     * @throws IOException if the port cannot be bound or a store cannot be read
+     */
+    public static Server serve(
+            int port, Security security, List<BindableService> services, List<io.grpc.ServerInterceptor> interceptors)
+            throws IOException {
         ServerCredentials credentials = security.tls() == null
                 ? InsecureServerCredentials.create()
                 : TlsServerCredentials.newBuilder()
                         .keyManager(keyManagers(security.tls()).getKeyManagers())
                         .build();
-        var builder = Grpc.newServerBuilderForPort(port, credentials)
-                .intercept(security.token().server());
+        var builder = Grpc.newServerBuilderForPort(port, credentials);
+        // the last added runs first: the token is checked before anything else
+        interceptors.reversed().forEach(builder::intercept);
+        builder.intercept(security.token().server());
         services.forEach(builder::addService);
         return builder.build().start();
     }

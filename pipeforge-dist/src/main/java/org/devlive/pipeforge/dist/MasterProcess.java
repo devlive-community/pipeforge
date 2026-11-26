@@ -40,8 +40,10 @@ import org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport;
 import org.devlive.pipeforge.engine.rpc.grpc.Headers;
 import org.devlive.pipeforge.engine.rpc.grpc.IdempotencyCache;
 import org.devlive.pipeforge.engine.rpc.grpc.JobMasterService;
+import org.devlive.pipeforge.engine.rpc.grpc.LeaderGate;
 import org.devlive.pipeforge.engine.rpc.grpc.Retry;
 import org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorClient;
+import org.devlive.pipeforge.engine.rpc.proto.BlobServiceGrpc;
 import org.devlive.pipeforge.plugin.PluginManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +74,11 @@ public final class MasterProcess implements AutoCloseable {
     private final org.devlive.pipeforge.engine.api.checkpoint.@org.jspecify.annotations.Nullable CheckpointStorage
             checkpoints;
     private final com.zaxxer.hikari.@org.jspecify.annotations.Nullable HikariDataSource metastore;
+    /** Elects the leader among the masters of the cluster; {@code null} without a metastore: one master. */
+    private volatile org.devlive.pipeforge.engine.master.@org.jspecify.annotations.Nullable LeaderElection election;
+
+    private final List<Runnable> lost = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private volatile boolean closing;
     /** Deletes old checkpoints, so that slow storage does not hold up a job master. */
     private final java.util.concurrent.ExecutorService checkpointIo = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "checkpoint-io");
@@ -83,7 +90,7 @@ public final class MasterProcess implements AutoCloseable {
         this.security = Security.of(config, home);
         // checked first: a process that cannot keep checkpoints does not start
         this.checkpoints = CheckpointSetup.open(config, "master");
-        this.metastore = checkpoints == null ? null : openMetastore(config, home);
+        this.metastore = openMetastore(config, home);
         Path dir = home.resolve(config.string(Settings.MASTER_DIR));
         List<Path> pluginDirs =
                 config.list(Settings.PLUGIN_DIRS).stream().map(home::resolve).toList();
@@ -121,6 +128,8 @@ public final class MasterProcess implements AutoCloseable {
             dispatcher.withCheckpoints(
                     new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(checkpoints, store, checkpointIo));
         }
+        String host = config.optional(Settings.MASTER_HOST).orElseGet(WorkerProcess::hostName);
+        boolean elects = metastore != null;
         try {
             server = GrpcTransport.serve(
                     config.integer(Settings.MASTER_RPC_PORT),
@@ -129,13 +138,21 @@ public final class MasterProcess implements AutoCloseable {
                             new ResourceManagerService(manager),
                             new JobMasterService(jobs, new IdempotencyCache()),
                             new DispatcherService(dispatcher, manager::workers),
-                            new BlobServer(blobs)));
+                            new BlobServer(blobs)),
+                    List.of(new LeaderGate(
+                            () -> !elects || isLeader(),
+                            this::leaderAddress,
+                            () -> host + ":" + port(),
+                            java.util.Set.of(BlobServiceGrpc.SERVICE_NAME))));
         } catch (IOException e) {
             close();
             throw PipeForgeException.of(ErrorCode.PORT_IN_USE)
                     .param("port", config.integer(Settings.MASTER_RPC_PORT))
                     .cause(e)
                     .build();
+        }
+        if (metastore != null) {
+            elect(config, host, metastore);
         }
         LOG.info(
                 "Master of cluster {} listens on port {} with {} plugin(s)",
@@ -144,11 +161,85 @@ public final class MasterProcess implements AutoCloseable {
                 plugins.plugins().size());
     }
 
-    /** The metastore the checkpoints are recorded in, which {@code checkpoint.dir} needs. */
-    private com.zaxxer.hikari.HikariDataSource openMetastore(Configuration config, Path home) {
+    /**
+     * Competes for the leader lease of the cluster: this master serves only while it holds it. The
+     * first look happens now, so a master alone in its cluster leads once it started.
+     */
+    private void elect(Configuration config, String host, javax.sql.DataSource source) {
+        var elected = new org.devlive.pipeforge.engine.master.LeaderElection(
+                source,
+                MasterMetastore.safeUrl(config.string(Settings.MASTER_METASTORE_URL)),
+                new org.devlive.pipeforge.engine.master.LeaderElection.Settings(
+                        config.string(Settings.CLUSTER_NAME),
+                        java.util.UUID.randomUUID().toString(),
+                        host + ":" + server.getPort(),
+                        config.duration(Settings.LEADER_LEASE)),
+                System::nanoTime,
+                Clock.systemUTC(),
+                new org.devlive.pipeforge.engine.master.LeaderElection.Listener() {
+                    @Override
+                    public void granted(long epoch) {
+                        manager.leaderEpoch(epoch);
+                    }
+
+                    @Override
+                    public void revoked() {
+                        if (!closing) {
+                            LOG.error("Master {} is no longer the leader of its cluster and stops", host);
+                            lost.forEach(Runnable::run);
+                        }
+                    }
+                });
+        try {
+            elected.check();
+        } catch (RuntimeException e) {
+            close();
+            throw e;
+        }
+        election = elected;
+        elected.start(threads);
+        if (!elected.isLeader()) {
+            LOG.info(
+                    "Master {} is a standby; the leader is '{}'",
+                    host + ":" + server.getPort(),
+                    elected.leaderAddress());
+        }
+    }
+
+    /** Whether this master leads its cluster: always without a metastore, where it is the only one. */
+    public boolean isLeader() {
+        var current = election;
+        return metastore == null || (current != null && current.isLeader());
+    }
+
+    /** The epoch requests to workers carry: one more with every new leader. */
+    public long leaderEpoch() {
+        return manager.leaderEpoch();
+    }
+
+    /** Where the leader is, as this master knows; empty when it does not. */
+    String leaderAddress() {
+        var current = election;
+        return current == null ? "" : current.leaderAddress();
+    }
+
+    /**
+     * Runs {@code listener} when this master loses the lead it had; the process should then stop, as
+     * {@code ClusterMain} does, so that it starts again as a standby.
+     */
+    public void onLeadershipLost(Runnable listener) {
+        lost.add(listener);
+    }
+
+    /**
+     * The metastore the checkpoints are recorded in and the masters elect their leader in; {@code
+     * checkpoint.dir} needs it. {@code null} without {@code master.metastore.url}.
+     */
+    private com.zaxxer.hikari.@org.jspecify.annotations.Nullable HikariDataSource openMetastore(
+            Configuration config, Path home) {
         try {
             var opened = MasterMetastore.open(config, home);
-            if (opened == null) {
+            if (opened == null && checkpoints != null) {
                 throw PipeForgeException.of(ErrorCode.SETTING_INVALID)
                         .param("key", Settings.MASTER_METASTORE_URL.key())
                         .param("source", "the configuration")
@@ -194,7 +285,7 @@ public final class MasterProcess implements AutoCloseable {
                     channel,
                     worker.spec().rpcAddress(),
                     worker.spec().publicKey(),
-                    () -> Headers.Epochs.FIRST,
+                    () -> new Headers.Epochs(manager.leaderEpoch(), 1),
                     retry,
                     blobs::refs);
         });
@@ -215,6 +306,12 @@ public final class MasterProcess implements AutoCloseable {
 
     @Override
     public void close() {
+        closing = true;
+        var current = election;
+        if (current != null) {
+            // gives the lease up first, so that a standby takes over at once
+            current.close();
+        }
         if (dispatcher != null) {
             dispatcher.close();
         }

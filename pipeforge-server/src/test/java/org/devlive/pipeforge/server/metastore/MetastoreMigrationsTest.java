@@ -45,8 +45,8 @@ import org.testcontainers.utility.DockerImageName;
 class MetastoreMigrationsTest {
 
     private static final Map<MetastoreVendor, JdbcDatabaseContainer<?>> SERVERS = new ConcurrentHashMap<>();
-    private static final Set<String> TABLES =
-            Set.of("job_run", "job_run_attempt", "job_run_transition", "job_run_metrics", "worker", "checkpoint");
+    private static final Set<String> TABLES = Set.of(
+            "job_run", "job_run_attempt", "job_run_transition", "job_run_metrics", "worker", "checkpoint", "leader");
     private static int databases;
 
     @AfterAll
@@ -248,6 +248,78 @@ class MetastoreMigrationsTest {
                             .query(Long.class)
                             .single())
                     .isEqualTo(7L);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MetastoreVendor.class)
+    void mastersElectOneLeaderInTheMigratedSchema(MetastoreVendor vendor) throws Exception {
+        ServerProperties.Metastore settings = fresh(vendor);
+        try (HikariDataSource dataSource = MetastoreDataSources.create(settings)) {
+            java.util.concurrent.atomic.AtomicLong clock = new java.util.concurrent.atomic.AtomicLong(1);
+            java.time.Duration lease = java.time.Duration.ofSeconds(15);
+            java.util.List<String> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+            java.util.function.Function<String, org.devlive.pipeforge.engine.master.LeaderElection> master =
+                    name -> new org.devlive.pipeforge.engine.master.LeaderElection(
+                            dataSource,
+                            settings.safeUrl(),
+                            new org.devlive.pipeforge.engine.master.LeaderElection.Settings(
+                                    "default", name + "-id", name + ":6123", lease),
+                            clock::get,
+                            java.time.Clock.systemUTC(),
+                            new org.devlive.pipeforge.engine.master.LeaderElection.Listener() {
+                                @Override
+                                public void granted(long epoch) {
+                                    events.add(name + " leads " + epoch);
+                                }
+
+                                @Override
+                                public void revoked() {
+                                    events.add(name + " stops");
+                                }
+                            });
+            var a = master.apply("a");
+            org.assertj.core.api.Assertions.assertThatThrownBy(a::check)
+                    .as("before the server migrated it")
+                    .hasMessageContaining("has no leader table");
+            new MetastoreMigrations(dataSource, vendor, settings.safeUrl()).migrate();
+            a.check();
+            var b = master.apply("b");
+
+            a.tick();
+            b.tick();
+            assertThat(a.isLeader()).isTrue();
+            assertThat(b.isLeader()).isFalse();
+            assertThat(b.leaderAddress()).isEqualTo("a:6123");
+
+            // renewed: never taken over
+            for (int i = 0; i < 6; i++) {
+                clock.addAndGet(lease.dividedBy(3).toNanos());
+                a.tick();
+                b.tick();
+            }
+            assertThat(b.isLeader()).isFalse();
+
+            // a stops renewing: b takes over after a whole lease, with a larger epoch
+            clock.addAndGet(lease.toNanos());
+            b.tick();
+            assertThat(b.isLeader()).isTrue();
+            assertThat(b.epoch()).isEqualTo(2);
+            a.tick();
+            assertThat(a.isLeader()).isFalse();
+
+            // b gives the lease up: a takes it at its next look
+            b.close();
+            a.tick();
+            assertThat(a.isLeader()).isTrue();
+            assertThat(a.epoch()).isEqualTo(3);
+            assertThat(events).containsExactly("a leads 1", "b leads 2", "a stops", "b stops", "a leads 3");
+            assertThat(JdbcClient.create(dataSource)
+                            .sql("SELECT address FROM leader WHERE cluster_name = 'default'")
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("a:6123");
+            a.close();
         }
     }
 

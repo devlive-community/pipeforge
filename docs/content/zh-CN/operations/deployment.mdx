@@ -102,6 +102,28 @@ Master 通过它的 RPC（[引擎协议](../development/engine-protocol)中的 `
 可以使用 `pipeforge run <文件>`（见[集群快速开始](../getting-started/cluster-quickstart)）、[Java 客户端](../development/java-client)、
 REST API 或 Web UI。
 
+## 备 Master
+
+一个集群可以运行多个 Master：`cluster.name` 与[元数据库](./metastore#master)（`master.metastore.url`）相同的 Master 通过元数据库
+`leader` 表中的租约选出一个主 Master。在不同的机器上以同样的方式启动它们即可，不需要其他设置。只有主 Master 接受注册、心跳和运行；
+备 Master 对所有请求返回 [`PF-CLUS-0018`](../reference/errors#pf-clus-0018) `NOT_LEADER` 并给出主 Master，只提供插件包。
+
+- 主 Master 每隔 `master.leader.lease`（默认 15 秒）的三分之一续约一次。
+- 备 Master 在自己的时钟上看到租约一整个租约时长都没有变化时才接管，因此各台机器的时钟不需要一致。
+- 无法续约的主 Master 在三分之二个租约时长后退位，早于任何备 Master 可以接管的时刻；即使连不上元数据库，它也会停止服务。
+- 正常停止的 Master 会交出租约，备 Master 在三分之一个租约时长内接管。失去主 Master 身份的 Master 以退出码 1 退出；重新启动后它作为备 Master
+  加入。
+- 每个新的主 Master 使用下一个 leader epoch，所有发给 Worker 的请求都带着它。收到过新主 Master 请求的 Worker 会以 `PF-CLUS-0006`
+  `RPC_STALE_EPOCH` 拒绝之前的主 Master 的请求，因此被隔离的 Master 无法再控制 Task。
+
+| 配置项 | 文件 | 默认值 | 含义 |
+|---|---|---|---|
+| `master.host` | `master.yaml` | 本机的主机名 | Worker 和 Server 访问本 Master 的地址；备 Master 用它指出主 Master |
+| `master.leader.lease` | `master.yaml` | `15s` | 租约在不续约时的有效时长 |
+| `cluster.name` | `pipeforge.yaml` | `default` | 同一个集群的 Master 竞争它的租约 |
+
+没有设置 `master.metastore.url` 时不选主：Master 单独以 epoch 1 运行。
+
 ## 排障
 
 | 错误 | 原因与处理 |
@@ -110,9 +132,11 @@ REST API 或 Web UI。
 | `PF-RES-0006` `PORT_IN_USE` | 端口被其他进程占用。请停止该进程或修改端口设置。 |
 | `PF-CLUS-0005` `RPC_UNAUTHENTICATED` | 进程之间的集群令牌不同。 |
 | `PF-CLUS-0001` `WORKER_LOST` | Worker 不再发送心跳；见[集群](../concepts/cluster#排障)。 |
+| `PF-CLUS-0018` `NOT_LEADER` | Worker 或 Server 连到了备 Master。请把 `worker.master.address` 和 Server 的 Master 地址指向错误中给出的主 Master。 |
 
 ## 限制
 
-- 每个集群一个 Master；可以接管的备用 Master 随故障恢复一起提供。
+- 主 Master 切换时，它的运行暂时还不会被接管，Worker 和 Server 也仍然连接配置的地址：在新的主 Master 上恢复运行以及自动跟随新的主
+  Master 在后续版本中提供。
 - `standalone` 运行 Master 和 Worker；服务向集群提交作业之后才会加入其中。
 - 元数据库、checkpoint 和隔离的设置随对应功能一起提供。

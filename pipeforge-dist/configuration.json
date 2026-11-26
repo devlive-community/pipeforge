@@ -8,8 +8,8 @@
     "required" : false,
     "env" : "PIPEFORGE_CLUSTER_NAME",
     "description" : {
-      "en-US" : "The name of the cluster, shown in the logs.",
-      "zh-CN" : "集群名，显示在日志中。"
+      "en-US" : "The name of the cluster, shown in the logs; the masters of one cluster compete for its leader lease in the metastore.",
+      "zh-CN" : "集群名，显示在日志中；同一个集群的 Master 在元数据库中竞争它的主 Master 租约。"
     }
   }, {
     "key" : "cluster.token",
@@ -180,6 +180,33 @@
       "zh-CN" : "Master 的 RPC 端口：Worker 在此注册，Task 在此报告，作业在此提交。"
     }
   }, {
+    "key" : "master.host",
+    "file" : "conf/master.yaml",
+    "type" : "string",
+    "default" : null,
+    "derived" : {
+      "en-US" : "the host name of this machine",
+      "zh-CN" : "本机的主机名"
+    },
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_HOST",
+    "description" : {
+      "en-US" : "The host name or address workers and servers reach this master at; a standby names the leader by it.",
+      "zh-CN" : "Worker 和 Server 访问本 Master 时使用的主机名或地址；备 Master 用它指出主 Master。"
+    }
+  }, {
+    "key" : "master.leader.lease",
+    "file" : "conf/master.yaml",
+    "type" : "duration",
+    "default" : "15s",
+    "derived" : null,
+    "required" : false,
+    "env" : "PIPEFORGE_MASTER_LEADER_LEASE",
+    "description" : {
+      "en-US" : "How long the leader lease of a master lasts without renewal; with master.metastore.url the masters of a cluster elect their leader through it, and a standby takes over a lease that was not renewed for this long.",
+      "zh-CN" : "主 Master 租约在不续约时的有效时长；设置了 master.metastore.url 时，同一集群的 Master 通过它选主，租约这么久没有续约时由备 Master 接管。"
+    }
+  }, {
     "key" : "master.dir",
     "file" : "conf/master.yaml",
     "type" : "string",
@@ -236,8 +263,8 @@
     "required" : false,
     "env" : "PIPEFORGE_MASTER_METASTORE_URL",
     "description" : {
-      "en-US" : "The JDBC URL of the metastore the server uses, where the master records checkpoints; required with checkpoint.dir. The server creates the tables, so start a server of this version on it first.",
-      "zh-CN" : "Server 使用的元数据库的 JDBC URL，Master 在其中记录 checkpoint；设置了 checkpoint.dir 时必填。表由 Server 创建，因此请先在它上面启动一个本版本的 Server。"
+      "en-US" : "The JDBC URL of the metastore the server uses, where the master records checkpoints and the masters elect their leader; required with checkpoint.dir. The server creates the tables, so start a server of this version on it first.",
+      "zh-CN" : "Server 使用的元数据库的 JDBC URL，Master 在其中记录 checkpoint 并选出主 Master；设置了 checkpoint.dir 时必填。表由 Server 创建，因此请先在它上面启动一个本版本的 Server。"
     }
   }, {
     "key" : "master.metastore.username",

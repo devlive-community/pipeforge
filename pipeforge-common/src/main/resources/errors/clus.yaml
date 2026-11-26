@@ -158,3 +158,12 @@
   hint:
     en-US: "The worker shut down, or lost the master for longer than its heartbeat timeout and stopped its tasks. The task's region restarts when the run takes checkpoints and env.restart allows; check the worker's log for why it stopped."
     zh-CN: "Worker 关闭了，或者与 Master 失联超过心跳超时而停止了自己的 Task。运行做 checkpoint 且 env.restart 允许时，该 Task 所在的 Region 会重启；请在 Worker 的日志中查看它停止的原因。"
+
+- code: PF-CLUS-0018
+  name: NOT_LEADER
+  message:
+    en-US: "Master {master} is a standby; the leading master is '{leader}'"
+    zh-CN: "Master {master} 是备 Master；主 Master 是 '{leader}'"
+  hint:
+    en-US: "Only the leading master of a cluster takes registrations, heartbeats and requests. Send them to the leader; when it is empty, no master holds the lease yet, so try again in a few seconds."
+    zh-CN: "只有集群的主 Master 接受注册、心跳和请求。请把它们发给主 Master；为空时还没有 Master 持有租约，请几秒后重试。"

@@ -45,7 +45,8 @@ public final class ResourceManager {
      *
      * @param heartbeatInterval how often a worker sends a heartbeat
      * @param heartbeatTimeout after how long without one a worker counts as lost
-     * @param leaderEpoch the epoch of this master; 1 while there is one master
+     * @param leaderEpoch the epoch of this master at the start; 1 while there is one master, and
+     *     replaced through {@link ResourceManager#leaderEpoch(long)} when it wins an election
      */
     public record Settings(Duration heartbeatInterval, Duration heartbeatTimeout, long leaderEpoch) {
         public static final Settings DEFAULTS = new Settings(Duration.ofSeconds(5), Duration.ofSeconds(30), 1);
@@ -163,6 +164,9 @@ public final class ResourceManager {
     }
 
     private final Settings settings;
+    /** The epoch of this master's leadership, which its answers carry; starts at the settings' one. */
+    private volatile long leaderEpoch;
+
     private final LongSupplier nanoTime;
     private final Map<String, Entry> workers = new LinkedHashMap<>();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
@@ -173,7 +177,21 @@ public final class ResourceManager {
 
     ResourceManager(Settings settings, LongSupplier nanoTime) {
         this.settings = settings;
+        this.leaderEpoch = settings.leaderEpoch;
         this.nanoTime = nanoTime;
+    }
+
+    /**
+     * Leads with a new epoch, after this master won an election: workers learn it from the next
+     * answer and reject requests of the masters before.
+     */
+    public void leaderEpoch(long epoch) {
+        this.leaderEpoch = epoch;
+    }
+
+    /** The epoch the answers to workers carry. */
+    public long leaderEpoch() {
+        return leaderEpoch;
     }
 
     public Settings settings() {
@@ -201,21 +219,21 @@ public final class ResourceManager {
                 again ? "registered again" : "registered",
                 spec.slots(),
                 spec.labels());
-        return new Registration(id, settings.leaderEpoch(), settings.heartbeatInterval(), settings.heartbeatTimeout());
+        return new Registration(id, leaderEpoch, settings.heartbeatInterval(), settings.heartbeatTimeout());
     }
 
     /** Records a heartbeat with the state of the worker's slots and tasks. */
     public synchronized HeartbeatAck heartbeat(String workerId, List<Slot> slots, List<RunningTask> tasks) {
         Entry entry = workers.get(workerId);
         if (entry == null) {
-            return new HeartbeatAck(settings.leaderEpoch(), true);
+            return new HeartbeatAck(leaderEpoch, true);
         }
         entry.lastHeartbeat = nanoTime.getAsLong();
         if (!slots.isEmpty()) {
             entry.slots = merge(entry, slots);
         }
         entry.tasks = List.copyOf(tasks);
-        return new HeartbeatAck(settings.leaderEpoch(), false);
+        return new HeartbeatAck(leaderEpoch, false);
     }
 
     /**

@@ -52,14 +52,16 @@ checkpoints of runs in the same metastore, so it connects to it too, in `conf/ma
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `master.metastore.url` | none; required with `checkpoint.dir` | The JDBC URL of the server's metastore |
+| `master.metastore.url` | none; required with `checkpoint.dir` and for standby masters | The JDBC URL of the server's metastore |
 | `master.metastore.username`, `master.metastore.password` | empty | The user; the password best as `PIPEFORGE_MASTER_METASTORE_PASSWORD` |
 | `master.metastore.driver-dir` | empty | A directory with the JDBC driver, relative to the installation; needed for MySQL, whose driver does not ship |
 | `master.metastore.pool-size` | `4` | The connections the master keeps |
 
 The master does not migrate: it checks at its start that the metastore has the `checkpoint` table
 and refuses to start with `PF-CLUS-0013` otherwise, so start a server of the same version on the
-metastore first. Without `checkpoint.dir` the master does not connect.
+metastore first. With `master.metastore.url` set, the masters of a cluster also elect their
+leader in the `leader` table (see [standby masters](./deployment#standby-masters)); the master checks
+for that table too. Without it the master does not connect and leads alone.
 
 ## Tables
 
@@ -71,6 +73,7 @@ metastore first. Without `checkpoint.dir` the master does not connect.
 | `job_run_metrics` | Metrics sampled while a run is running, and its final metrics: the main counters, counted across attempts, as columns, and the full metrics of the attempt as JSON |
 | `worker` | The workers of the cluster: address, slots, labels, version, state and last heartbeat |
 | `checkpoint` | The checkpoints and savepoints of runs: number, type, status, why it was taken, when it was taken and completed, size, its directory in the [checkpoint storage](./checkpoint-storage), the error of a failed one and each task's part. The master writes it; it stays empty until runs take checkpoints |
+| `leader` | The leader lease of every cluster: the master holding it and its address, the leader epoch, how often it was renewed, when it was taken and last renewed. The masters write it; an empty holder is a lease that was given up |
 | `pipeforge_schema_history` | The migrations applied (Flyway) |
 
 Times are stored in UTC.

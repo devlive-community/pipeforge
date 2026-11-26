@@ -168,6 +168,7 @@ public final class ErrorCode {
     public static final ErrorCode RUN_LOST = define("PF-CLUS-0016", "RUN_LOST", "run", "master");
     public static final ErrorCode TASK_STOPPED_BY_WORKER =
             define("PF-CLUS-0017", "TASK_STOPPED_BY_WORKER", "worker", "task");
+    public static final ErrorCode NOT_LEADER = define("PF-CLUS-0018", "NOT_LEADER", "master", "leader");
 
     // Internal
     public static final ErrorCode INTERNAL = define("PF-SYS-0001", "INTERNAL", "detail");
