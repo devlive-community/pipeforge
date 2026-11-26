@@ -1,6 +1,6 @@
 ---
 title: Isolation
-description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, the heap guard, plugin threads and cancel timeouts.
+description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, the heap guard, plugin threads, cancel timeouts and leaked class loaders.
 order: 40
 ---
 
@@ -104,6 +104,36 @@ left behind, with where it hangs. Other jobs on the worker keep running.
 
 Local runs give a task up at twice its cancel timeout.
 
+## Leaked class loaders
+
+Every run loads its plugins with class loaders of its own, which the worker closes when the last task
+of the run on it ended. Something may still hold one: a thread the plugin left running, a JDBC driver
+it registered, a shutdown hook, a thread local or a cache outside the plugin. Such a loader keeps every
+class of its plugin in memory, and after enough of them the worker runs out of metaspace.
+
+The worker follows the loaders of every run that ended, without holding them. One still reachable
+`worker.class-loader-leak-timeout` (one minute by default) after its run ended is given a chance
+first: the worker asks for a garbage collection and looks again a few seconds later. A loader still
+reachable then is logged once as a warning, with its plugin, its run, the total of leaked loaders on
+the worker and what holds it:
+
+- the threads whose context class loader it is, whose class it defined, or that run code of the
+  plugin (code of the same plugin loaded for another run counts too);
+- when no thread holds it, the warning says so: a static cache or a JVM-wide registration of the
+  plugin does.
+
+```text
+WARN  The class loader of plugin acme@1.2.0 for run 8f2c… was not collected 60 s after the run ended;
+held by thread acme-refresher (its context class loader). The worker has 1 leaked class loader(s)
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `worker.class-loader-leak-timeout` | `1min` | How long after a run ended its plugin class loaders may take to be collected |
+
+A worker started with `-XX:+DisableExplicitGC` ignores the collection the check asks for, so loaders
+that no full collection has reached yet may be reported; raise the timeout there.
+
 ## Observability
 
 Every task reports the memory it accounts with its metrics; the job's
@@ -117,7 +147,9 @@ still accounted is logged by the worker as a leak, with what holds it.
 - The heap guard only knows the memory that tasks account; it blames the wrong run when another
   one fills the heap with memory that is not accounted. Its actions appear in the worker's log, not
   yet as metrics. A worker that runs out of memory anyway still stops; the deployment restarts it.
-- The detection of leaked class loaders and the disk quota per job come in a later version.
+- Leaked class loaders are logged but not yet counted as a metric, and a worker with many of them
+  does not restart by itself yet.
+- The disk quota per job comes in a later version.
 - A task that was given up keeps its thread until the worker restarts; restarting a worker with
   stuck threads by itself comes in a later version.
 - The memory of the source and sink plugins themselves, such as their client libraries, is not

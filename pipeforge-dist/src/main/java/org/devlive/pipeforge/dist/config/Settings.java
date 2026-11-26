@@ -393,6 +393,14 @@ public final class Settings {
             false,
             "How long the heap must stay at worker.heap-guard.fail-percent before a run fails.",
             "堆使用需要在 worker.heap-guard.fail-percent 以上持续多久，才会让一个运行失败。");
+    public static final Setting CLASS_LOADER_LEAK_TIMEOUT = define(
+            "worker.class-loader-leak-timeout",
+            "worker",
+            Setting.Type.DURATION,
+            "1min",
+            false,
+            "How long after a run ended the class loaders of its plugins may take to be collected; one still reachable then, and after a garbage collection, is logged as leaked with what holds it.",
+            "运行结束后，其插件的 ClassLoader 最多可以用多久被回收；届时并且在一次垃圾回收之后仍可达的 ClassLoader 会作为泄漏记录到日志中，并给出持有者。");
     public static final Setting BUFFER_SIZE = define(
             "network.buffer-size",
             "worker",

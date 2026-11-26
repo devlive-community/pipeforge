@@ -34,6 +34,7 @@ import org.devlive.pipeforge.engine.rpc.grpc.JobMasterClient;
 import org.devlive.pipeforge.engine.rpc.grpc.Retry;
 import org.devlive.pipeforge.engine.rpc.grpc.SecretBox;
 import org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorService;
+import org.devlive.pipeforge.engine.worker.ClassLoaderLeaks;
 import org.devlive.pipeforge.engine.worker.HeapGuard;
 import org.devlive.pipeforge.engine.worker.MasterConnection;
 import org.devlive.pipeforge.engine.worker.MemoryLimits;
@@ -114,8 +115,10 @@ public final class WorkerProcess implements AutoCloseable {
                 new BlobClient(toMaster)::fetch,
                 home.resolve(config.string(Settings.WORKER_DIR)).resolve("plugins"),
                 noBuiltins(),
-                PluginManager.Options.defaults());
+                PluginManager.Options.defaults(),
+                new ClassLoaderLeaks(config.duration(Settings.CLASS_LOADER_LEAK_TIMEOUT)));
         executor.onRunEnded(plugins::release);
+        threads.scheduleWithFixedDelay(this::checkClassLoaders, 10, 10, TimeUnit.SECONDS);
         SecretBox keys = SecretBox.generate();
         try {
             server = GrpcTransport.serve(
@@ -212,6 +215,14 @@ public final class WorkerProcess implements AutoCloseable {
                     .param("type", kind.id())
                     .build();
         };
+    }
+
+    private void checkClassLoaders() {
+        try {
+            plugins.leaks().check();
+        } catch (RuntimeException e) {
+            LOG.warn("Looking for leaked plugin class loaders failed", e);
+        }
     }
 
     private void cleanLogs() {

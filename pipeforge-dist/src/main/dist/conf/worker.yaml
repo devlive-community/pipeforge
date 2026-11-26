@@ -69,6 +69,9 @@
 # How long the heap must stay at worker.heap-guard.fail-percent before a run fails.
 # worker.heap-guard.fail-after: 10s
 
+# How long after a run ended the class loaders of its plugins may take to be collected; one still reachable then, and after a garbage collection, is logged as leaked with what holds it.
+# worker.class-loader-leak-timeout: 1min
+
 # The size of a network buffer.
 # network.buffer-size: 32KB
 

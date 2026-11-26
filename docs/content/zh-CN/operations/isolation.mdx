@@ -1,6 +1,6 @@
 ---
 title: 隔离
-description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、堆守护、插件线程与取消超时。
+description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、堆守护、插件线程、取消超时与 ClassLoader 泄漏。
 order: 40
 ---
 
@@ -84,6 +84,31 @@ ClassLoader 和 Task 的日志，并且是守护线程。其中任何一个抛�
 
 本地运行在取消超时的两倍时放弃 Task。
 
+## ClassLoader 泄漏
+
+每个运行都用自己的 ClassLoader 加载插件，运行在某个 Worker 上的最后一个 Task 结束后，Worker 会关闭它们。但仍可能有东西持有这些
+ClassLoader：插件留下的仍在运行的线程、它注册的 JDBC 驱动、关闭钩子、ThreadLocal 或插件之外的缓存。这样的 ClassLoader 会让插件
+的所有类留在内存中，积累多了 Worker 就会耗尽元空间。
+
+Worker 在不持有它们的前提下跟踪每个已结束运行的 ClassLoader。运行结束 `worker.class-loader-leak-timeout`（默认一分钟）后仍可达的
+ClassLoader 先获得一次机会：Worker 请求一次垃圾回收，几秒后再检查。届时仍然可达的 ClassLoader 会以警告记录一次，给出插件、运行、
+该 Worker 上累计泄漏的 ClassLoader 数以及持有者：
+
+- 以它作为线程上下文 ClassLoader、类由它定义，或者正在运行该插件代码的线程（同一插件为其他运行加载的代码也算在内）；
+- 没有线程持有它时，警告会说明这一点：此时持有它的是插件的静态缓存或 JVM 级的注册。
+
+```text
+WARN  The class loader of plugin acme@1.2.0 for run 8f2c… was not collected 60 s after the run ended;
+held by thread acme-refresher (its context class loader). The worker has 1 leaked class loader(s)
+```
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `worker.class-loader-leak-timeout` | `1min` | 运行结束后，其插件的 ClassLoader 最多可以用多久被回收 |
+
+用 `-XX:+DisableExplicitGC` 启动的 Worker 会忽略检查请求的垃圾回收，因此尚未经过完整回收的 ClassLoader 也可能被报告；这种情况下
+请调大超时时间。
+
 ## 可观测性
 
 每个 Task 随指标上报自己记账的内存；作业的 [`memoryBytes`](../reference/metrics) 是其运行中 Task 的总和。结束的 Task 不再占用内存：
@@ -94,6 +119,7 @@ Worker 作为泄漏记录到日志中，并给出占用者。
 
 - 堆守护只知道 Task 记账的内存；另一个运行用未记账的内存占满堆时，它会归咎错误的运行。它的动作目前只记录在 Worker 日志中，
   还没有对应的指标。Worker 仍然内存溢出时会停止，由部署环境重启。
-- ClassLoader 泄漏检测以及每个作业的磁盘配额在后续版本中提供。
+- ClassLoader 泄漏只记录在日志中，还没有对应的指标；泄漏较多的 Worker 也还不会自动重启。
+- 每个作业的磁盘配额在后续版本中提供。
 - 被放弃的 Task 的线程会保留到 Worker 重启；Worker 因残留线程自动重启在后续版本中提供。
 - Source 和 Sink 插件自身（例如它们的客户端库）占用的内存不计入记账。

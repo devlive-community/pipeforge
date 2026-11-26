@@ -65,12 +65,27 @@ public final class PluginCache implements AutoCloseable {
     private final Map<String, Object> locks = new ConcurrentHashMap<>();
     private final Map<String, Map<String, Loaded>> runs = new HashMap<>();
     private int downloads;
+    private final ClassLoaderLeaks leaks;
 
     /**
      * @param directory where packages and their extracted plugins are kept
      * @param builtin the components that come with the worker ({@value StaticComponents#PLUGIN})
      */
     public PluginCache(Fetcher fetcher, Path directory, ComponentProvider builtin, PluginManager.Options options) {
+        this(fetcher, directory, builtin, options, new ClassLoaderLeaks());
+    }
+
+    /**
+     * @param leaks follows the class loaders of released runs until they are collected; the caller
+     *     checks it
+     */
+    public PluginCache(
+            Fetcher fetcher,
+            Path directory,
+            ComponentProvider builtin,
+            PluginManager.Options options,
+            ClassLoaderLeaks leaks) {
+        this.leaks = leaks;
         this.fetcher = fetcher;
         this.blobs = directory.resolve("blobs");
         this.extracted = new PluginRepository(directory.resolve("plugins"));
@@ -115,10 +130,17 @@ public final class PluginCache implements AutoCloseable {
             return;
         }
         for (Loaded plugin : loaded.values()) {
+            ClassLoader loader = plugin.lease().classLoader();
             plugin.lease().close();
             plugin.manager().close();
+            leaks.watch(loader, plugin.lease().plugin().coordinate(), runId);
         }
         LOG.debug("Released the plugins of run {}", runId);
+    }
+
+    /** The class loaders of released runs, followed until they are collected. */
+    public ClassLoaderLeaks leaks() {
+        return leaks;
     }
 
     /** Packages downloaded since the cache was created. */
