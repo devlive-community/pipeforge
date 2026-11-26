@@ -6,8 +6,6 @@
  */
 package org.devlive.pipeforge.server.run;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.devlive.pipeforge.common.error.ErrorCode;
@@ -29,11 +27,11 @@ public class MasterConfiguration {
         if (address == null || address.isBlank()) {
             return MasterClient.none();
         }
-        try {
-            return new GrpcMasterClient(GrpcTransport.channel(address, security(settings)), address);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        GrpcTransport.Security security = security(settings);
+        // one master, or the masters of a cluster with standbys: calls follow the leader
+        return new GrpcMasterClient(new org.devlive.pipeforge.engine.rpc.grpc.MasterChannel(
+                org.devlive.pipeforge.engine.rpc.grpc.MasterChannel.addresses(address),
+                target -> GrpcTransport.channel(target, security)));
     }
 
     @Bean

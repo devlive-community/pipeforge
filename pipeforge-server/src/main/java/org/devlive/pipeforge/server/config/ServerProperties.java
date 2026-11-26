@@ -29,7 +29,8 @@ public record ServerProperties(
         @DefaultValue Master master) {
 
     /**
-     * @param address {@code host:port} of the master's RPC port; without it runs cannot be submitted
+     * @param address {@code host:port} of the master's RPC port, or a comma-separated list of the masters of a
+     *     cluster with standbys, whose leader the server follows; without it runs cannot be submitted
      * @param token the cluster token ({@code cluster.token} of the cluster)
      * @param tls the TLS settings of the cluster, when it uses TLS
      * @param pollInterval how often the server asks the master about the runs that have not ended

@@ -142,6 +142,27 @@ the plugin packages.
 
 Without `master.metastore.url` there is no election: the master leads alone with epoch 1.
 
+**Failing over.** Give workers and the server every master of the cluster:
+`worker.master.address: master-1:6123,master-2:6123` and the same list in
+`pipeforge.master.address`. They call one master at a time; a standby that names the leader sends
+them there, and a master that does not answer sends them to the next one. When a new leader takes
+over:
+
+1. Workers lose the old leader's heartbeats or are sent on, and register with the new one. A worker
+   that registers with a leader of a higher epoch cancels the tasks and releases the slots of the
+   one before: the new leader knows none of them.
+2. The server finds that the new leader does not know its running runs and submits each again, in
+   the same attempt, from its last completed [checkpoint](../concepts/checkpoint), or from the
+   start when the job is delivered exactly once and has none. Checkpoint numbers go on from those
+   of the run, so its sinks commit and abort as after any restart: the rows of the target are
+   neither lost nor written twice, as far as the job's delivery guarantee holds.
+3. A run without a checkpoint to go on from fails with `PF-CLUS-0016` `RUN_LOST`, and is retried
+   when `env.retry` allows.
+
+With the default settings a failover takes about a lease and a heartbeat timeout, 15 to 45 seconds,
+plus the time the runs take to start again.
+
+
 ## Troubleshooting
 
 | Error | Cause and fix |
@@ -154,8 +175,9 @@ Without `master.metastore.url` there is no election: the master leads alone with
 
 ## Limitations
 
-- When the leader changes, its runs are not taken over yet, and workers and servers keep talking to
-  the address they were given: recovering the runs on the new leader and following it come in a
-  later version.
+- Runs come back on a new leader only through the server: a run submitted to a master directly,
+  without a server, is not recovered.
+- The time a run already ran in an attempt counts towards its `env.timeout.run` as the server
+  recorded it; a run that is recovered keeps no savepoint of a pause the old leader was taking.
 - `standalone` runs a master and a worker; the server joins it once it submits jobs to a cluster.
 - The settings of the metadata database, checkpoints and isolation arrive with those features.

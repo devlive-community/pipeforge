@@ -9,7 +9,7 @@
 # worker.slots, or on the command line with --set key=value. Remove the # to change a setting;
 # the configuration reference of the documentation lists them all.
 
-# Where the worker finds the master.
+# Where the worker finds the master: host:port, or a comma-separated list of the masters of a cluster with standbys; the worker follows the leader among them.
 # worker.master.address: localhost:6123
 
 # The host name or address other processes reach this worker at.

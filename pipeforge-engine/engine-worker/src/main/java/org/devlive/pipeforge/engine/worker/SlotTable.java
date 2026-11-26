@@ -118,6 +118,18 @@ public final class SlotTable {
         return false;
     }
 
+    /** Releases every reservation, for a new leader that knows none of them; returns how many there were. */
+    public synchronized int releaseAll() {
+        int released = 0;
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i] != null) {
+                slots[i] = null;
+                released++;
+            }
+        }
+        return released;
+    }
+
     /** Releases the reservations that no task used within the timeout; returns them. */
     public synchronized List<SlotRequest> expire() {
         long now = nanoTime.getAsLong();

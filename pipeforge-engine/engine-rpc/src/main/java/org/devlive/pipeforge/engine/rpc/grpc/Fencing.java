@@ -51,6 +51,14 @@ public final class Fencing {
         leader = header.getLeaderEpoch();
     }
 
+    /**
+     * Learns the epoch of a leader the worker registered with, so that requests of the leaders
+     * before it are refused from now on, even before the new one sent any.
+     */
+    public synchronized void learnLeader(long epoch) {
+        leader = Math.max(leader, epoch);
+    }
+
     /** Forgets a run that ended. */
     public void forget(String run) {
         jobs.remove(run);

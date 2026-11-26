@@ -6,7 +6,6 @@
  */
 package org.devlive.pipeforge.dist;
 
-import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -31,6 +30,7 @@ import org.devlive.pipeforge.engine.rpc.grpc.Fencing;
 import org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport;
 import org.devlive.pipeforge.engine.rpc.grpc.IdempotencyCache;
 import org.devlive.pipeforge.engine.rpc.grpc.JobMasterClient;
+import org.devlive.pipeforge.engine.rpc.grpc.MasterChannel;
 import org.devlive.pipeforge.engine.rpc.grpc.Retry;
 import org.devlive.pipeforge.engine.rpc.grpc.SecretBox;
 import org.devlive.pipeforge.engine.rpc.grpc.TaskExecutorService;
@@ -62,7 +62,7 @@ public final class WorkerProcess implements AutoCloseable {
         return thread;
     });
     private final NetworkEnvironment network;
-    private final ManagedChannel toMaster;
+    private final MasterChannel toMaster;
     private final TaskExecutor executor;
     private final LogService logs;
     private final PluginCache plugins;
@@ -89,11 +89,16 @@ public final class WorkerProcess implements AutoCloseable {
         }
         int slots = config.integer(Settings.WORKER_SLOTS, Runtime.getRuntime().availableProcessors());
         SlotTable table = new SlotTable(name, slots);
+        toMaster = new MasterChannel(
+                MasterChannel.addresses(config.string(Settings.WORKER_MASTER)),
+                address -> GrpcTransport.channel(address, security));
         try {
-            toMaster = GrpcTransport.channel(config.string(Settings.WORKER_MASTER), security);
-        } catch (IOException e) {
+            // opens the first one now: a trust store that cannot be read stops the start
+            toMaster.authority();
+        } catch (java.io.UncheckedIOException e) {
             network.close();
-            throw new IllegalStateException("cannot reach the master: " + e.getMessage(), e);
+            throw new IllegalStateException(
+                    "cannot reach the master: " + e.getCause().getMessage(), e);
         }
         Retry retry = new Retry(threads, Duration.ofMillis(200));
         logs = new LogService(
@@ -124,16 +129,16 @@ public final class WorkerProcess implements AutoCloseable {
         executor.onRunEnded(plugins::release);
         threads.scheduleWithFixedDelay(this::checkClassLoaders, 10, 10, TimeUnit.SECONDS);
         SecretBox keys = SecretBox.generate();
+        Fencing fencing = new Fencing();
         try {
             server = GrpcTransport.serve(
                     rpcPort,
                     security,
-                    List.of(new TaskExecutorService(
-                            executor, keys, plugins::forRun, new Fencing(), new IdempotencyCache())));
+                    List.of(new TaskExecutorService(executor, keys, plugins::forRun, fencing, new IdempotencyCache())));
         } catch (IOException e) {
             executor.close();
             network.close();
-            toMaster.shutdownNow();
+            toMaster.close();
             throw PipeForgeException.of(ErrorCode.PORT_IN_USE)
                     .param("port", rpcPort)
                     .cause(e)
@@ -151,6 +156,8 @@ public final class WorkerProcess implements AutoCloseable {
                 keys.publicKey(),
                 executor,
                 table);
+        // requests of the leaders before the one this worker registered with are refused
+        connection.onLeaderEpoch(fencing::learnLeader);
         connection.start(threads);
         LOG.info(
                 "Worker {} offers {} slot(s), exchanges data on port {} and registers with {}",
@@ -256,7 +263,7 @@ public final class WorkerProcess implements AutoCloseable {
         server.shutdownNow();
         plugins.close();
         network.close();
-        toMaster.shutdownNow();
+        toMaster.close();
         CheckpointSetup.close(checkpoints);
         threads.shutdownNow();
     }

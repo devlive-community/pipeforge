@@ -78,7 +78,11 @@ class MasterConnectionTest {
     }
 
     void startMaster() throws Exception {
-        manager = new ResourceManager(FAST);
+        startMaster(FAST);
+    }
+
+    void startMaster(ResourceManager.Settings settings) throws Exception {
+        manager = new ResourceManager(settings);
         server = InProcessServerBuilder.forName(name)
                 .intercept(TOKEN.server())
                 .addService(new ResourceManagerService(manager))
@@ -147,6 +151,33 @@ class MasterConnectionTest {
         assertThat(tasks.cancelled)
                 .as("the master came back before the timeout")
                 .hasValue(0);
+    }
+
+    @Test
+    void aNewLeaderGetsAWorkerWithoutTheTasksAndSlotsOfTheOneBefore() throws Exception {
+        java.util.List<Long> epochs = new java.util.concurrent.CopyOnWriteArrayList<>();
+        connection.onLeaderEpoch(epochs::add);
+        await("registration", () -> connection.state() == MasterConnection.State.CONNECTED);
+        slots.reserve(new org.devlive.pipeforge.engine.rpc.SlotRequest("job", "run", "allocation-1", 0));
+        assertThat(connection.leaderEpoch()).isEqualTo(1);
+
+        // the leader is replaced by one of epoch 2, before the worker missed a heartbeat
+        stopMaster();
+        startMaster(new ResourceManager.Settings(FAST.heartbeatInterval(), FAST.heartbeatTimeout(), 2));
+        await("registration with the new leader", () -> connection.leaderEpoch() == 2);
+
+        assertThat(tasks.cancelled).as("the new leader does not know the tasks").hasValue(1);
+        assertThat(slots.snapshot()).noneMatch(SlotTable.Slot::allocated);
+        assertThat(epochs).containsExactly(1L, 2L);
+        await(
+                "the slots are offered free",
+                () -> !manager.workers().isEmpty() && manager.workers().get(0).freeSlots() == 3);
+
+        // the same leader again: nothing is cancelled
+        stopMaster();
+        startMaster(new ResourceManager.Settings(FAST.heartbeatInterval(), FAST.heartbeatTimeout(), 2));
+        await("registration again", () -> !manager.workers().isEmpty());
+        assertThat(tasks.cancelled).hasValue(1);
     }
 
     @Test

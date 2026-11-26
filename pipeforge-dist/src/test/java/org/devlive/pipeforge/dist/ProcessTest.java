@@ -162,16 +162,21 @@ class ProcessTest {
         second.put("master.rpc.port", String.valueOf(ports[1]));
         Configuration a = Configuration.load(home.resolve("conf"), Map.of(), first);
         Configuration b = Configuration.load(home.resolve("conf"), Map.of(), second);
+        // the worker knows both masters, the standby first: it finds the leader and follows it
+        Map<String, String> both = new java.util.HashMap<>(first);
+        both.put("worker.master.address", "localhost:" + ports[1] + ",localhost:" + ports[0]);
+        Configuration w = Configuration.load(home.resolve("conf"), Map.of(), both);
         var threads = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
         MasterProcess leader = new MasterProcess(a, home);
         try (MasterProcess standby = new MasterProcess(b, home);
-                WorkerProcess worker = new WorkerProcess(a, home)) {
+                WorkerProcess worker = new WorkerProcess(w, home)) {
             java.util.List<String> lost = new java.util.concurrent.CopyOnWriteArrayList<>();
             leader.onLeadershipLost(() -> lost.add("a"));
             assertThat(leader.isLeader()).isTrue();
             assertThat(leader.leaderEpoch()).isEqualTo(1);
             assertThat(standby.isLeader()).isFalse();
             await("the worker registers with the leader", () -> worker.state() == MasterConnection.State.CONNECTED);
+            assertThat(leader.resourceManager().workers()).hasSize(1);
 
             // the standby refuses registrations and names the leader
             var security = Security.of(b, home);
@@ -201,6 +206,10 @@ class ProcessTest {
             await("the standby takes over", standby::isLeader);
             assertThat(standby.leaderEpoch()).isEqualTo(2);
             assertThat(lost).as("closing is not losing the lead").isEmpty();
+            await(
+                    "the worker follows the new leader",
+                    () -> !standby.resourceManager().workers().isEmpty());
+            await("the worker is connected", () -> worker.state() == MasterConnection.State.CONNECTED);
 
             // once a worker heard of epoch 2, requests of the master of epoch 1 are refused
             var toWorker = org.devlive.pipeforge.engine.rpc.grpc.GrpcTransport.channel(

@@ -124,6 +124,20 @@ REST API 或 Web UI。
 
 没有设置 `master.metastore.url` 时不选主：Master 单独以 epoch 1 运行。
 
+**故障切换。** 把集群中所有 Master 都告诉 Worker 和 Server：`worker.master.address: master-1:6123,master-2:6123`，`pipeforge.master.address`
+也设为同样的列表。它们一次只调用一个 Master；指出主 Master 的备 Master 会把它们转过去，没有应答的 Master 会让它们转向下一个。新的主
+Master 接管时：
+
+1. Worker 收不到旧主 Master 的心跳应答或被转走，然后向新的主 Master 注册。Worker 向 epoch 更大的主 Master 注册时，会取消之前的主
+   Master 的 Task 并释放它预留的 Slot：新的主 Master 不知道它们。
+2. Server 发现新的主 Master 不知道它正在运行的运行，于是以同一次尝试重新提交每个运行：从最近完成的 [checkpoint](../concepts/checkpoint)
+   继续；还没有 checkpoint 且作业为精确一次交付时从头开始。checkpoint 编号接着该运行已有的编号，Sink 像任何一次重启之后一样提交和中止：
+   在作业交付保证的范围内，目标中的行不丢也不重。
+3. 没有可以继续的 checkpoint 的运行以 `PF-CLUS-0016` `RUN_LOST` 失败，`env.retry` 允许时会被重试。
+
+使用默认设置时，一次切换大约需要一个租约时长加一个心跳超时，即 15 到 45 秒，另加运行重新启动的时间。
+
+
 ## 排障
 
 | 错误 | 原因与处理 |
@@ -136,7 +150,7 @@ REST API 或 Web UI。
 
 ## 限制
 
-- 主 Master 切换时，它的运行暂时还不会被接管，Worker 和 Server 也仍然连接配置的地址：在新的主 Master 上恢复运行以及自动跟随新的主
-  Master 在后续版本中提供。
+- 运行只通过 Server 在新的主 Master 上恢复：不经过 Server、直接提交给 Master 的运行不会被恢复。
+- 一次尝试已经运行的时间按 Server 记录的计入 `env.timeout.run`；被恢复的运行不会保留旧主 Master 正在为暂停所做的 savepoint。
 - `standalone` 运行 Master 和 Worker；服务向集群提交作业之后才会加入其中。
 - 元数据库、checkpoint 和隔离的设置随对应功能一起提供。

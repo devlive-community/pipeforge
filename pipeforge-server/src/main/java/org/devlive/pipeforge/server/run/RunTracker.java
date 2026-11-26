@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.devlive.pipeforge.common.error.ErrorCode;
 import org.devlive.pipeforge.common.error.PipeForgeException;
+import org.devlive.pipeforge.core.job.Delivery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
@@ -96,6 +97,21 @@ public class RunTracker implements SmartLifecycle {
                         && run.submittedAt().plus(SUBMIT_GRACE).isAfter(clock.instant())) {
                     continue;
                 }
+                if (run.status() == RunState.CANCELLING) {
+                    // it was being cancelled when its master went away: nothing of it runs any more
+                    runs.transition(
+                            run.id(),
+                            RunState.CANCELLING,
+                            RunState.CANCELLED,
+                            clock.instant(),
+                            null,
+                            null,
+                            "the master that ran it is gone");
+                    continue;
+                }
+                if (recover(run)) {
+                    continue;
+                }
                 PipeForgeException lost = PipeForgeException.of(ErrorCode.RUN_LOST)
                         .param("run", run.id())
                         .param("master", master.address())
@@ -138,6 +154,57 @@ public class RunTracker implements SmartLifecycle {
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------------ recovery
+
+    /**
+     * The master does not know a run that has not ended: another master took over, or the master
+     * restarted. The run goes on there in the same attempt, from its last completed checkpoint, or
+     * from the start when the job is delivered exactly once and has none; otherwise it is lost.
+     *
+     * @return whether the run goes on
+     */
+    private boolean recover(Runs.Run run) {
+        Optional<RunRetries.Resubmission> kept = resubmission(run.id());
+        if (kept.isEmpty()) {
+            return false;
+        }
+        RunRetries.Resubmission submission = kept.get();
+        String restore = runs.lastCheckpoint(run.id()).orElse(null);
+        if (restore == null && !submission.delivery().equals(Delivery.EXACTLY_ONCE.id())) {
+            LOG.info(
+                    "Run {} of job {} is lost on {}: it has no completed checkpoint to go on from",
+                    run.id(),
+                    run.job(),
+                    master.address());
+            return false;
+        }
+        String reason =
+                "recovered on master " + master.address() + (restore == null ? " from the start" : " from " + restore);
+        try {
+            master.submit(new MasterClient.Submission(
+                    run.job(),
+                    run.id(),
+                    runs.detail(run.id()).definition(),
+                    submission.variables(),
+                    java.time.Instant.ofEpochMilli(submission.scheduledMs()),
+                    submission.plugins(),
+                    run.attempt(),
+                    restore,
+                    submission.timeLeft(runs.runningMs(run.id()))));
+        } catch (PipeForgeException e) {
+            if (e.code().equals(ErrorCode.NOT_LEADER) || e.code().equals(ErrorCode.RPC_UNAVAILABLE)) {
+                // the masters are still changing over: the next poll tries again
+                LOG.info("Run {} waits for a leading master to recover it: {}", run.id(), e.getMessage());
+                return true;
+            }
+            LOG.warn("The master did not take run {} back: {}", run.id(), e.getMessage());
+            return false;
+        }
+        runs.transition(run.id(), run.status(), RunState.QUEUE, clock.instant(), null, null, reason);
+        LOG.warn("Run {} of job {} was not known to the master: {}", run.id(), run.job(), reason);
+        return true;
     }
 
     // ------------------------------------------------------------------ retries

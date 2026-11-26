@@ -33,19 +33,27 @@ public final class GrpcMasterClient implements MasterClient {
     /** How long a call may take. */
     static final Duration TIMEOUT = Duration.ofSeconds(10);
 
-    private final ManagedChannel channel;
-    private final String address;
+    private final AutoCloseable channel;
+    private final java.util.function.Supplier<String> address;
     private final DispatcherServiceGrpc.DispatcherServiceBlockingStub stub;
 
+    /** To one master. */
     public GrpcMasterClient(ManagedChannel channel, String address) {
+        this.channel = channel::shutdownNow;
+        this.address = () -> address;
+        this.stub = DispatcherServiceGrpc.newBlockingStub(channel);
+    }
+
+    /** To the leader among the masters of a cluster, which the channel follows. */
+    public GrpcMasterClient(org.devlive.pipeforge.engine.rpc.grpc.MasterChannel channel) {
         this.channel = channel;
-        this.address = address;
+        this.address = channel::address;
         this.stub = DispatcherServiceGrpc.newBlockingStub(channel);
     }
 
     @Override
     public String address() {
-        return address;
+        return address.get();
     }
 
     private DispatcherServiceGrpc.DispatcherServiceBlockingStub call() {
@@ -82,7 +90,7 @@ public final class GrpcMasterClient implements MasterClient {
         try {
             call().submitJob(request.build());
         } catch (RuntimeException e) {
-            throw RpcErrors.fromStatus(e, address);
+            throw RpcErrors.fromStatus(e, address());
         }
     }
 
@@ -95,7 +103,7 @@ public final class GrpcMasterClient implements MasterClient {
                     .setReason(reason)
                     .build());
         } catch (RuntimeException e) {
-            throw RpcErrors.fromStatus(e, address);
+            throw RpcErrors.fromStatus(e, address());
         }
     }
 
@@ -111,9 +119,9 @@ public final class GrpcMasterClient implements MasterClient {
             if (e.getStatus().getCode() == io.grpc.Status.Code.NOT_FOUND) {
                 return Optional.empty();
             }
-            throw RpcErrors.fromStatus(e, address);
+            throw RpcErrors.fromStatus(e, address());
         } catch (RuntimeException e) {
-            PipeForgeException error = RpcErrors.fromStatus(e, address);
+            PipeForgeException error = RpcErrors.fromStatus(e, address());
             if (error.code().equals(ErrorCode.RUN_NOT_FOUND)) {
                 return Optional.empty();
             }
@@ -144,7 +152,7 @@ public final class GrpcMasterClient implements MasterClient {
         try {
             return Optional.of(call.get());
         } catch (RuntimeException e) {
-            PipeForgeException error = RpcErrors.fromStatus(e, address);
+            PipeForgeException error = RpcErrors.fromStatus(e, address());
             if (error.code().equals(ErrorCode.RUN_NOT_FOUND)) {
                 return Optional.empty();
             }
@@ -165,7 +173,7 @@ public final class GrpcMasterClient implements MasterClient {
                     .setHeader(header())
                     .build());
         } catch (RuntimeException e) {
-            throw RpcErrors.fromStatus(e, address);
+            throw RpcErrors.fromStatus(e, address());
         }
         List<ClusterView.Worker> workers = status.getWorkersList().stream()
                 .map(w -> new ClusterView.Worker(
@@ -190,7 +198,7 @@ public final class GrpcMasterClient implements MasterClient {
                 .toList();
         return ClusterView.of(
                 new ClusterView.Master(
-                        address,
+                        address(),
                         status.getEngineVersion(),
                         status.getProtocolVersion(),
                         Instant.ofEpochMilli(status.getStartedMs())),
@@ -242,7 +250,7 @@ public final class GrpcMasterClient implements MasterClient {
             }
             return new RunMetrics.LogChunk(offset, text.toString(), eof);
         } catch (RuntimeException e) {
-            throw RpcErrors.fromStatus(e, address);
+            throw RpcErrors.fromStatus(e, address());
         }
     }
 
@@ -303,6 +311,10 @@ public final class GrpcMasterClient implements MasterClient {
 
     @Override
     public void close() {
-        channel.shutdownNow();
+        try {
+            channel.close();
+        } catch (Exception e) {
+            // closing the channels does not fail
+        }
     }
 }

@@ -591,6 +591,168 @@ class MetastoreMigrationsTest {
         public void close() {}
     }
 
+    /** A master that took over from another: it knows a run only once it was submitted to it. */
+    static final class NewLeader implements org.devlive.pipeforge.server.run.MasterClient {
+        final List<Submission> submitted = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public String address() {
+            return "master-b:6123";
+        }
+
+        @Override
+        public void submit(Submission submission) {
+            submitted.add(submission);
+        }
+
+        @Override
+        public void cancel(String runId, String reason) {}
+
+        @Override
+        public java.util.Optional<Status> status(String runId) {
+            return submitted.stream()
+                    .filter(s -> s.runId().equals(runId))
+                    .findFirst()
+                    .map(s -> new Status(
+                            org.devlive.pipeforge.server.run.RunState.RUNNING,
+                            java.time.Instant.EPOCH,
+                            null,
+                            List.of(),
+                            s.attempt()));
+        }
+
+        @Override
+        public java.util.Optional<org.devlive.pipeforge.server.run.RunMetrics> metrics(String runId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public org.devlive.pipeforge.server.run.ClusterView cluster() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public java.util.Optional<String> analysis(String runId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public java.util.Optional<List<org.devlive.pipeforge.server.run.RunMetrics.Split>> splits(String runId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public org.devlive.pipeforge.server.run.RunMetrics.LogChunk readLog(
+                String runId, org.devlive.pipeforge.server.run.RunMetrics.Task task, LogQuery query) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void close() {}
+    }
+
+    @ParameterizedTest
+    @EnumSource(MetastoreVendor.class)
+    void runsANewLeaderDoesNotKnowGoOnThereFromTheirLastCheckpoint(MetastoreVendor vendor) throws Exception {
+        ServerProperties.Metastore settings = fresh(vendor);
+        try (HikariDataSource dataSource = MetastoreDataSources.create(settings)) {
+            new MetastoreMigrations(dataSource, vendor, settings.safeUrl()).migrate();
+            var repository = new org.devlive.pipeforge.server.run.RunRepository(
+                    dataSource,
+                    new org.springframework.transaction.support.TransactionTemplate(
+                            new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource)));
+            var json = tools.jackson.databind.json.JsonMapper.builder().build();
+            java.time.Instant submitted = java.time.Instant.parse("2026-11-26T08:00:00Z");
+            var noRetry = new org.devlive.pipeforge.server.run.RunRetries.Retry(
+                    0, 60_000, 600_000, 2, List.of("TRANSIENT"), "auto", null);
+            java.util.function.BiConsumer<String, String> running = (id, delivery) -> {
+                var submission = new org.devlive.pipeforge.server.run.RunRetries.Resubmission(
+                        Map.of("day", "2026-11-26"),
+                        submitted.toEpochMilli(),
+                        Map.of("fake", "0.1.0"),
+                        delivery,
+                        noRetry);
+                repository.insert(id, "job", "yaml", null, submitted, json.writeValueAsString(submission));
+                repository.transition(
+                        id,
+                        org.devlive.pipeforge.server.run.RunState.QUEUE,
+                        org.devlive.pipeforge.server.run.RunState.RUNNING,
+                        submitted,
+                        submitted,
+                        null,
+                        "running");
+            };
+            running.accept("with-checkpoint", "at-least-once");
+            running.accept("without", "at-least-once");
+            running.accept("exactly-once", "exactly-once");
+            running.accept("cancelling", "at-least-once");
+            repository.transition(
+                    "cancelling",
+                    org.devlive.pipeforge.server.run.RunState.RUNNING,
+                    org.devlive.pipeforge.server.run.RunState.CANCELLING,
+                    submitted,
+                    null,
+                    null,
+                    "cancel asked");
+            org.springframework.jdbc.core.simple.JdbcClient.create(dataSource)
+                    .sql(
+                            "INSERT INTO checkpoint (run_id, checkpoint_id, job_name, attempt, type, status, trigger_reason,"
+                                    + " triggered_at, completed_at, size_bytes, path) VALUES ('with-checkpoint', 4, 'job', 1,"
+                                    + " 'CHECKPOINT', 'COMPLETED', 'PERIODIC', ?, ?, 10, 'with-checkpoint/chk-4/')")
+                    .params(
+                            java.time.LocalDateTime.of(2026, 11, 26, 8, 0),
+                            java.time.LocalDateTime.of(2026, 11, 26, 8, 0))
+                    .update();
+
+            NewLeader master = new NewLeader();
+            java.time.Clock clock =
+                    java.time.Clock.fixed(submitted.plus(java.time.Duration.ofMinutes(5)), java.time.ZoneOffset.UTC);
+            var tracker = new org.devlive.pipeforge.server.run.RunTracker(
+                    repository,
+                    master,
+                    clock,
+                    new ServerProperties(
+                            new ServerProperties.Plugin(
+                                    List.of(), Path.of("cache"), new ServerProperties.Dev(false, null)),
+                            new ServerProperties.Job("UTC", Map.of()),
+                            settings,
+                            new ServerProperties.Master(
+                                    null,
+                                    "",
+                                    new ServerProperties.Tls(false, null, "", null, ""),
+                                    java.time.Duration.ofMillis(50),
+                                    java.time.Duration.ofMillis(50))),
+                    json);
+
+            tracker.poll();
+            assertThat(master.submitted)
+                    .extracting(s -> s.runId(), s -> s.attempt(), s -> s.restorePath())
+                    .containsExactlyInAnyOrder(
+                            org.assertj.core.groups.Tuple.tuple("with-checkpoint", 1, "with-checkpoint/chk-4/"),
+                            org.assertj.core.groups.Tuple.tuple("exactly-once", 1, null));
+            assertThat(master.submitted).allSatisfy(s -> {
+                assertThat(s.variables()).containsEntry("day", "2026-11-26");
+                assertThat(s.plugins()).containsEntry("fake", "0.1.0");
+            });
+            var recovered = repository.detail("with-checkpoint");
+            assertThat(recovered.run().status()).isEqualTo(org.devlive.pipeforge.server.run.RunState.QUEUE);
+            assertThat(recovered.run().attempt()).as("the same attempt goes on").isEqualTo(1);
+            assertThat(recovered.transitions()).last().satisfies(t -> assertThat(t.reason())
+                    .isEqualTo("recovered on master master-b:6123 from with-checkpoint/chk-4/"));
+            var lost = repository.find("without").orElseThrow();
+            assertThat(lost.status()).isEqualTo(org.devlive.pipeforge.server.run.RunState.FAILED);
+            assertThat(lost.error().code()).isEqualTo(ErrorCode.RUN_LOST.id());
+            assertThat(repository.find("cancelling").orElseThrow().status())
+                    .isEqualTo(org.devlive.pipeforge.server.run.RunState.CANCELLED);
+
+            // the new leader runs them: they follow it, and nothing is submitted twice
+            tracker.poll();
+            assertThat(repository.find("with-checkpoint").orElseThrow().status())
+                    .isEqualTo(org.devlive.pipeforge.server.run.RunState.RUNNING);
+            assertThat(master.submitted).hasSize(2);
+        }
+    }
+
     @ParameterizedTest
     @EnumSource(MetastoreVendor.class)
     void aFailedAttemptWaitsAndIsRetriedFromTheLastCheckpoint(MetastoreVendor vendor) throws Exception {

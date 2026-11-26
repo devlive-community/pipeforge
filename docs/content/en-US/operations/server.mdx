@@ -86,7 +86,7 @@ as `--name=value`, or set them as environment variables (`PIPEFORGE_JOB_TIMEZONE
 | `pipeforge.job.timezone` | `UTC` | Time zone of jobs that do not set `env.timezone` |
 | `pipeforge.job.defaults.*` | none | Cluster defaults for node options, in the env form, e.g. `pipeforge.job.defaults.source.fetch-size` |
 | `pipeforge.metastore.*` | an H2 file in `~/.pipeforge/metastore` | The database of the server's records; see [metastore](./metastore) |
-| `pipeforge.master.address` | none | `host:port` of the cluster master's RPC port; without it runs cannot be submitted |
+| `pipeforge.master.address` | none | `host:port` of the cluster master's RPC port, or a comma-separated list of the masters of a cluster with [standbys](./deployment#standby-masters), whose leader the server follows; without it runs cannot be submitted |
 | `pipeforge.master.token` | none | The cluster token (`cluster.token` of the cluster), required with a master |
 | `pipeforge.master.tls.*` | off | `enabled`, `key-store`, `key-store-password`, `trust-store`, `trust-store-password`, as `security.tls.*` of the cluster |
 | `pipeforge.master.poll-interval` | `1s` | How often the server asks the master about the runs that have not ended |
@@ -136,8 +136,11 @@ failed, timed out or was cancelled by hand, as its next attempt.
 `GET /api/v1/runs` lists runs newest first, filtered by state and job and paged with the `next`
 token, each with the rows read and written as of its last metrics sample; `GET /api/v1/runs/{id}` shows a run with its definition and its changes of state;
 `POST /api/v1/runs/{id}/cancel` asks the master to cancel it. While the master cannot be reached,
-runs keep their state; a run the master no longer knows, because it restarted, fails with
-`PF-CLUS-0016`.
+runs keep their state. A run the master no longer knows, because another master took over or the
+master restarted, goes on there in the same attempt: from its last completed checkpoint, or from the
+start when the job is delivered exactly once and has none yet; its changes of state say where it was
+recovered from. A run that has nothing to go on from fails with `PF-CLUS-0016`, which `env.retry`
+may retry, and a run that was being cancelled ends `CANCELLED`.
 
 While a run runs, `GET /api/v1/runs/{id}/metrics` shows its current metrics from the master, and
 every `metrics-interval` the server keeps a sample for `GET /api/v1/runs/{id}/metrics/history`.

@@ -255,8 +255,8 @@ public final class Settings {
             Setting.Type.ADDRESS,
             "localhost:6123",
             false,
-            "Where the worker finds the master.",
-            "Worker 连接 Master 的地址。");
+            "Where the worker finds the master: host:port, or a comma-separated list of the masters of a cluster with standbys; the worker follows the leader among them.",
+            "Worker 连接 Master 的地址：host:port，有备 Master 时为集群中各 Master 的逗号分隔列表；Worker 会跟随其中的主 Master。");
     public static final Setting WORKER_HOST = derive(
             "worker.host",
             "worker",

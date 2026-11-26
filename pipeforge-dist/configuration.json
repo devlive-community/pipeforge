@@ -347,8 +347,8 @@
     "required" : false,
     "env" : "PIPEFORGE_WORKER_MASTER_ADDRESS",
     "description" : {
-      "en-US" : "Where the worker finds the master.",
-      "zh-CN" : "Worker 连接 Master 的地址。"
+      "en-US" : "Where the worker finds the master: host:port, or a comma-separated list of the masters of a cluster with standbys; the worker follows the leader among them.",
+      "zh-CN" : "Worker 连接 Master 的地址：host:port，有备 Master 时为集群中各 Master 的逗号分隔列表；Worker 会跟随其中的主 Master。"
     }
   }, {
     "key" : "worker.host",

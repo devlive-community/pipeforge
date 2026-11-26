@@ -102,6 +102,9 @@ public final class MasterConnection implements AutoCloseable {
     private final LocalTasks tasks;
     private final SlotTable slots;
     private final LongSupplier nanoTime;
+    private volatile java.util.function.LongConsumer leaderEpochs = epoch -> {};
+    /** The largest leader epoch a registration answered with; 0 before the first. */
+    private long leaderEpoch;
 
     private State state = State.REGISTERING;
     private @Nullable String workerId;
@@ -147,6 +150,19 @@ public final class MasterConnection implements AutoCloseable {
         this.tasks = tasks;
         this.slots = slots;
         this.nanoTime = nanoTime;
+    }
+
+    /**
+     * Learns the epoch of every leader the worker registers with, for example to refuse the
+     * requests of the leaders before it at once.
+     */
+    public void onLeaderEpoch(java.util.function.LongConsumer listener) {
+        this.leaderEpochs = listener;
+    }
+
+    /** The largest leader epoch a registration answered with; 0 before the first. */
+    public synchronized long leaderEpoch() {
+        return leaderEpoch;
     }
 
     /** Starts registering, then the heartbeats, on {@code scheduler}. */
@@ -232,6 +248,22 @@ public final class MasterConnection implements AutoCloseable {
             return;
         }
         boolean again = workerId != null;
+        long epoch = response.getLeaderEpoch();
+        if (leaderEpoch != 0 && epoch > leaderEpoch) {
+            // a new leader knows none of the tasks and reservations of the one before
+            int released = slots.releaseAll();
+            LOG.warn(
+                    "A new leader (epoch {}, was {}) took over the cluster; cancelling the tasks of this worker and"
+                            + " releasing its {} reserved slot(s)",
+                    epoch,
+                    leaderEpoch,
+                    released);
+            tasks.cancelAll();
+        }
+        if (epoch > leaderEpoch) {
+            leaderEpoch = epoch;
+            leaderEpochs.accept(epoch);
+        }
         workerId = response.getWorkerId();
         heartbeatInterval = Duration.ofMillis(response.getHeartbeatIntervalMs());
         heartbeatTimeout = Duration.ofMillis(response.getHeartbeatTimeoutMs());
@@ -304,7 +336,10 @@ public final class MasterConnection implements AutoCloseable {
         if (sent != null) {
             lastAnswer = Math.max(lastAnswer, sent);
         }
-        if (ack.getReregister() && state == State.CONNECTED) {
+        if (ack.getLeaderEpoch() > leaderEpoch && state == State.CONNECTED) {
+            LOG.info("A new leader (epoch {}) answers; registering with it", ack.getLeaderEpoch());
+            state = State.REGISTERING;
+        } else if (ack.getReregister() && state == State.CONNECTED) {
             LOG.info("The master does not know worker {}; registering again", workerId);
             state = State.REGISTERING;
         }
