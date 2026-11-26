@@ -686,6 +686,21 @@ class MetastoreMigrationsTest {
             running.accept("without", "at-least-once");
             running.accept("exactly-once", "exactly-once");
             running.accept("cancelling", "at-least-once");
+            running.accept("paused", "at-least-once");
+            for (var step : List.of(
+                    org.devlive.pipeforge.server.run.RunState.PAUSING,
+                    org.devlive.pipeforge.server.run.RunState.PAUSED)) {
+                repository.transition(
+                        "paused",
+                        step == org.devlive.pipeforge.server.run.RunState.PAUSING
+                                ? org.devlive.pipeforge.server.run.RunState.RUNNING
+                                : org.devlive.pipeforge.server.run.RunState.PAUSING,
+                        step,
+                        submitted,
+                        null,
+                        null,
+                        "pause");
+            }
             repository.transition(
                     "cancelling",
                     org.devlive.pipeforge.server.run.RunState.RUNNING,
@@ -744,6 +759,9 @@ class MetastoreMigrationsTest {
             assertThat(lost.error().code()).isEqualTo(ErrorCode.RUN_LOST.id());
             assertThat(repository.find("cancelling").orElseThrow().status())
                     .isEqualTo(org.devlive.pipeforge.server.run.RunState.CANCELLED);
+            assertThat(repository.find("paused").orElseThrow().status())
+                    .as("a paused run holds nothing: it waits to be resumed")
+                    .isEqualTo(org.devlive.pipeforge.server.run.RunState.PAUSED);
 
             // the new leader runs them: they follow it, and nothing is submitted twice
             tracker.poll();

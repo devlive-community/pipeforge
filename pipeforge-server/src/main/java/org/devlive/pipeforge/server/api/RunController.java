@@ -68,6 +68,9 @@ public class RunController {
      */
     public record RetryRequest(org.devlive.pipeforge.server.run.RunService.@Nullable RetryFrom from) {}
 
+    /** The name of a savepoint; a time stamp when not given. */
+    public record SavepointRequest(@Nullable String name) {}
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(
@@ -304,5 +307,115 @@ public class RunController {
                     @Nullable
                     String level) {
         return service.log(id, vertex, subtask, attempt, new MasterClient.LogQuery(offset, maxBytes, contains, level));
+    }
+
+    @GetMapping("/{id}/checkpoints")
+    @Operation(
+            operationId = "listRunCheckpoints",
+            summary = "List the checkpoints of a run",
+            description =
+                    "The checkpoints and savepoints of a run across its attempts, newest first: number, type, status, why it was"
+                            + " taken, when it was taken and completed, size, directory, the error of a failed one, and each"
+                            + " task's part of a completed one (snapshot, upload and alignment times, state size).",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "列出运行的 checkpoint"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value =
+                                                "运行在各次尝试中的 checkpoint 和 savepoint，从新到旧：编号、类型、状态、触发原因、触发与完成时间、大小、目录、失败时的错误，以及完成的 checkpoint 中每个 Task 的部分（快照、上传和对齐耗时，状态大小）。")
+                            }))
+    public List<Runs.Checkpoint> checkpoints(@PathVariable String id) {
+        return service.checkpoints(id);
+    }
+
+    @GetMapping("/{id}/attempts")
+    @Operation(
+            operationId = "listRunAttempts",
+            summary = "List the attempts of a run",
+            description =
+                    "The attempts of a run, oldest first: when each started and ended, its error, the checkpoint it started from,"
+                            + " the rows it read, wrote and found dirty as its last metrics sample has them, and when the next"
+                            + " one starts while the run waits to be retried.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "列出运行的各次尝试"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value =
+                                                "运行的各次尝试，从旧到新：每次尝试的开始与结束时间、错误、它从哪个 checkpoint 开始、按最近一次指标采样的读取、写入和脏数据行数，以及运行等待重试时下一次尝试的开始时间。")
+                            }))
+    public List<Runs.AttemptView> attempts(@PathVariable String id) {
+        return service.attempts(id);
+    }
+
+    @PostMapping("/{id}/savepoint")
+    @Operation(
+            operationId = "savepointRun",
+            summary = "Take a savepoint of a run",
+            description =
+                    "Takes a savepoint of a running run and answers with it once it completed; the run goes on. A savepoint is"
+                            + " kept until it is deleted by hand, and a run can start from it. HTTP 400 when the run is not"
+                            + " running.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "为运行做 savepoint"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value =
+                                                "为运行中的运行做一次 savepoint，完成后返回它；运行继续进行。savepoint 会一直保留到手动删除，运行可以从它启动。运行不在运行中时返回 HTTP 400。")
+                            }))
+    public Runs.Checkpoint savepoint(
+            @PathVariable String id, @RequestBody(required = false) @Nullable SavepointRequest request) {
+        return service.savepoint(id, request == null ? null : request.name());
+    }
+
+    @PostMapping("/{id}/pause")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(
+            operationId = "pauseRun",
+            summary = "Pause a run",
+            description =
+                    "Stops a running run with a savepoint: it moves to PAUSING at once and to PAUSED once its sinks committed, holding"
+                            + " no slots; when the savepoint fails it reads on. A paused run is resumed with POST"
+                            + " /api/v1/runs/{id}/resume. HTTP 400 when the run is not running.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "暂停运行"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value =
+                                                "用 savepoint 停止运行中的运行：它立即进入 PAUSING，Sink 提交完成后进入 PAUSED，不再占用 Slot；savepoint 失败时继续读取。用 POST /api/v1/runs/{id}/resume 继续已暂停的运行。运行不在运行中时返回 HTTP 400。")
+                            }))
+    public Runs.Run pause(@PathVariable String id, @RequestBody(required = false) @Nullable SavepointRequest request) {
+        return service.pause(id, request == null ? null : request.name());
+    }
+
+    @PostMapping("/{id}/resume")
+    @Operation(
+            operationId = "resumeRun",
+            summary = "Resume a paused run",
+            description =
+                    "Starts a paused run again from the savepoint it was paused at, in the same attempt; it moves to QUEUE. HTTP 400"
+                            + " when the run is not paused.",
+            extensions =
+                    @Extension(
+                            name = Docs.ZH,
+                            properties = {
+                                @ExtensionProperty(name = "summary", value = "继续已暂停的运行"),
+                                @ExtensionProperty(
+                                        name = "description",
+                                        value = "从暂停时的 savepoint 重新启动已暂停的运行，仍是同一次尝试；它进入 QUEUE。运行没有暂停时返回 HTTP 400。")
+                            }))
+    public Runs.Run resume(@PathVariable String id) {
+        return service.resume(id);
     }
 }

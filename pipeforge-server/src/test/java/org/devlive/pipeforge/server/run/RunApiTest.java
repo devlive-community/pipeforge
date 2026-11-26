@@ -45,8 +45,8 @@ class RunApiTest {
     @TestConfiguration
     static class Master {
         @Bean(destroyMethod = "close")
-        InProcessMaster inProcessMaster(PluginManager plugins) {
-            return new InProcessMaster(plugins);
+        InProcessMaster inProcessMaster(PluginManager plugins, javax.sql.DataSource metastoreDataSource) {
+            return new InProcessMaster(plugins, metastoreDataSource);
         }
 
         @Bean(destroyMethod = "close")
@@ -231,6 +231,86 @@ class RunApiTest {
         mvc.perform(post("/api/v1/runs/" + id + "/cancel")).andExpect(status().isOk());
         await(id, "CANCELLED");
         mvc.perform(post("/api/v1/runs/nope/retry")).andExpect(status().isNotFound());
+    }
+
+    static String checkpointed(String name) {
+        String yaml =
+                """
+                version: 1
+                name: %s
+                env:
+                  checkpoint: { enabled: true, interval: 1h }
+                source:
+                  - { id: src, type: fake, unbounded: true, rows-per-second: 200 }
+                sink:
+                  - { id: out, type: blackhole }
+                """
+                        .formatted(name);
+        return "{\"definition\": \"" + yaml.replace("\"", "\\\"").replace("\n", "\\n") + "\"}";
+    }
+
+    String awaitStatus(String id, String status) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        while (true) {
+            String run = getJson("/api/v1/runs/" + id);
+            if (status.equals(JsonPath.read(run, "$.run.status"))) {
+                return run;
+            }
+            assertThat(System.nanoTime())
+                    .as("run %s becomes %s: %s", id, status, run)
+                    .isLessThan(deadline);
+            Thread.sleep(50);
+        }
+    }
+
+    @Test
+    void takesSavepointsAndPausesAndResumesARun() throws Exception {
+        String id = submit(checkpointed("paused"));
+        awaitStatus(id, "RUNNING");
+        // the source task runs before it can take part
+        Thread.sleep(500);
+
+        String savepoint = mvc.perform(post("/api/v1/runs/" + id + "/savepoint")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"before-upgrade\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("SAVEPOINT"))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.name").value("before-upgrade"))
+                .andExpect(jsonPath("$.attempt").value(1))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat((List<?>) JsonPath.read(savepoint, "$.tasks")).isNotEmpty();
+        assertThat((String) JsonPath.read(savepoint, "$.tasks[0].task")).startsWith(id + "/src/");
+
+        mvc.perform(post("/api/v1/runs/" + id + "/resume"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PF-CONF-0007"));
+        mvc.perform(post("/api/v1/runs/" + id + "/pause"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PAUSING"));
+        awaitStatus(id, "PAUSED");
+        String checkpoints = getJson("/api/v1/runs/" + id + "/checkpoints");
+        assertThat((List<String>) JsonPath.read(checkpoints, "$[*].reason")).contains("PAUSE");
+        assertThat((String) JsonPath.read(checkpoints, "$[0].type")).isEqualTo("SAVEPOINT");
+        assertThat((Integer) JsonPath.read(checkpoints, "$[0].id"))
+                .as("newest first")
+                .isGreaterThan(JsonPath.<Integer>read(savepoint, "$.id"));
+        mvc.perform(post("/api/v1/runs/" + id + "/savepoint")).andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/v1/runs/" + id + "/resume"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("QUEUE"));
+        awaitStatus(id, "RUNNING");
+        String attempts = getJson("/api/v1/runs/" + id + "/attempts");
+        assertThat((List<Integer>) JsonPath.read(attempts, "$[*].attempt")).containsExactly(1);
+        String detail = getJson("/api/v1/runs/" + id);
+        assertThat((List<String>) JsonPath.read(detail, "$.transitions[*].to"))
+                .containsSubsequence("RUNNING", "PAUSING", "PAUSED", "QUEUE", "RUNNING");
+
+        mvc.perform(post("/api/v1/runs/" + id + "/cancel")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/runs/nobody/checkpoints")).andExpect(status().isNotFound());
     }
 
     @Test

@@ -105,6 +105,8 @@ class ContractTest {
     @Test
     void requestBodiesUseTheFieldsOfTheirSchemas() {
         Map<Endpoint, Set<String>> bodies = Map.of(
+                Endpoint.SAVEPOINT_RUN, Set.of("name"),
+                Endpoint.PAUSE_RUN, Set.of("name"),
                 Endpoint.SUBMIT_RUN, Set.of("definition", "variables", "scheduledTime"),
                 Endpoint.CANCEL_RUN, Set.of("reason"),
                 Endpoint.RETRY_RUN, Set.of("from"),

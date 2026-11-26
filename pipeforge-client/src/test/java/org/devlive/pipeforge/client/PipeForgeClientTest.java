@@ -161,6 +161,54 @@ class PipeForgeClientTest {
     }
 
     @Test
+    void pausesResumesAndReadsTheCheckpointsAndAttemptsOfARun() {
+        routes.put("POST /api/v1/runs/r/pause", r -> new Answer(202, RUN.replace("RUNNING", "PAUSING")));
+        routes.put("POST /api/v1/runs/r/resume", r -> new Answer(200, RUN.replace("RUNNING", "QUEUE")));
+        String checkpoint =
+                """
+                {"id": 7, "attempt": 1, "type": "SAVEPOINT", "status": "COMPLETED", "reason": "SAVEPOINT",
+                 "name": "s", "triggeredAt": "2026-11-26T08:00:00Z", "completedAt": "2026-11-26T08:00:01Z",
+                 "sizeBytes": 120, "path": "r/chk-7/", "tasks": [{"task": "r/src/0/0", "states": 1, "syncMs": 2,
+                 "asyncMs": 3, "alignmentMs": 0, "stateBytes": 120}]}
+                """;
+        routes.put("POST /api/v1/runs/r/savepoint", r -> new Answer(200, checkpoint));
+        routes.put("GET /api/v1/runs/r/checkpoints", r -> new Answer(200, "[" + checkpoint + "]"));
+        routes.put(
+                "GET /api/v1/runs/r/attempts",
+                r -> new Answer(
+                        200,
+                        """
+                [{"attempt": 1, "status": "FAILED", "startedAt": "2026-11-26T08:00:00Z", "rowsRead": 5,
+                  "error": {"code": "PF-CONN-0003", "message": "lost"}},
+                 {"attempt": 2, "status": "RETRY_WAIT", "startedAt": "2026-11-26T08:01:00Z",
+                  "retryAt": "2026-11-26T08:02:00Z", "restorePath": "r/chk-7/"}]
+                """));
+        routes.put("POST /api/v1/cluster/failover", r -> new Answer(202, "{\"master\": \"m:6123\"}"));
+        routes.put("POST /api/v1/cluster/workers/w1/drain", r -> new Answer(204, ""));
+        routes.put("POST /api/v1/cluster/workers/w1/uncordon", r -> new Answer(204, ""));
+
+        assertThat(client.pauseRun("r", "before-upgrade").status()).isEqualTo("PAUSING");
+        assertThat(client.resumeRun("r").status()).isEqualTo("QUEUE");
+        RunCheckpoint taken = client.savepoint("r", null);
+        assertThat(taken.tasks()).singleElement().satisfies(t -> assertThat(t.syncMs())
+                .isEqualTo(2));
+        assertThat(client.checkpoints("r")).extracting(RunCheckpoint::id).containsExactly(7L);
+        assertThat(client.attempts("r"))
+                .satisfiesExactly(
+                        first -> assertThat(first.error().code()).isEqualTo("PF-CONN-0003"),
+                        second -> assertThat(second.retryAt()).isEqualTo(Instant.parse("2026-11-26T08:02:00Z")));
+        assertThat(client.failover().master()).isEqualTo("m:6123");
+        client.drainWorker("w1");
+        client.uncordonWorker("w1");
+        assertThat(received)
+                .extracting(r -> r.method() + " " + r.uri() + " " + r.body())
+                .contains(
+                        "POST /api/v1/runs/r/pause {\"name\":\"before-upgrade\"}",
+                        "POST /api/v1/runs/r/savepoint {}",
+                        "POST /api/v1/cluster/workers/w1/drain {}");
+    }
+
+    @Test
     void aRefusalCarriesTheErrorOfTheServer() {
         routes.put(
                 "GET /api/v1/runs/nope",

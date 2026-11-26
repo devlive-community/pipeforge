@@ -210,7 +210,9 @@
       "CANCELLING": "取消中",
       "CANCELLED": "已取消",
       "TIMEOUT": "超时",
-      "RETRY_WAIT": "等待重试"
+      "RETRY_WAIT": "等待重试",
+      "PAUSING": "暂停中",
+      "PAUSED": "已暂停"
     },
     "columns": {
       "job": "作业",

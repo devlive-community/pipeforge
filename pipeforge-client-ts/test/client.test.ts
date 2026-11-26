@@ -107,6 +107,23 @@ describe("createClient", () => {
     expect((error as ApiError).code).toBe("PF-CLUS-0020");
   });
 
+  it("pauses, resumes and takes savepoints of runs with an optional name", async () => {
+    const { calls, fetch } = server(200, { id: "r1", status: "PAUSING" });
+    const client = createClient({ baseUrl: "http://pf.test", fetch });
+    await client.pauseRun("r1", "before-upgrade");
+    await client.resumeRun("r1");
+    await client.savepointRun("r1");
+    await client.listRunCheckpoints("r1");
+    await client.listRunAttempts("r1");
+    expect(calls.map((c) => `${c.method} ${c.url} ${c.body}`)).toEqual([
+      'POST http://pf.test/api/v1/runs/r1/pause {"name":"before-upgrade"}',
+      "POST http://pf.test/api/v1/runs/r1/resume ",
+      "POST http://pf.test/api/v1/runs/r1/savepoint {}",
+      "GET http://pf.test/api/v1/runs/r1/checkpoints ",
+      "GET http://pf.test/api/v1/runs/r1/attempts ",
+    ]);
+  });
+
   it("has a helper for every operation of the OpenAPI document", () => {
     const document = JSON.parse(readFileSync(new URL("../../pipeforge-server/openapi.json", import.meta.url), "utf8"));
     const operations: string[] = [];

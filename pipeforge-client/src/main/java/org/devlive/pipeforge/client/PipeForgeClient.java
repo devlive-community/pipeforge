@@ -169,6 +169,39 @@ public final class PipeForgeClient {
         return call(Endpoint.RETRY_RUN, Map.of("id", id), Map.of(), body);
     }
 
+    /** The checkpoints and savepoints of a run, newest first. */
+    public List<RunCheckpoint> checkpoints(String id) {
+        return call(Endpoint.LIST_RUN_CHECKPOINTS, Map.of("id", id), Map.of(), null);
+    }
+
+    /** The attempts of a run, oldest first. */
+    public List<RunAttempt> attempts(String id) {
+        return call(Endpoint.LIST_RUN_ATTEMPTS, Map.of("id", id), Map.of(), null);
+    }
+
+    /** Takes a savepoint of a running run and returns it once it completed; {@code name} may be null. */
+    public RunCheckpoint savepoint(String id, @Nullable String name) {
+        return call(Endpoint.SAVEPOINT_RUN, Map.of("id", id), Map.of(), named(name));
+    }
+
+    /** Stops a running run with a savepoint; it comes back PAUSING and becomes PAUSED. */
+    public Run pauseRun(String id, @Nullable String name) {
+        return call(Endpoint.PAUSE_RUN, Map.of("id", id), Map.of(), named(name));
+    }
+
+    /** Starts a paused run again from its savepoint. */
+    public Run resumeRun(String id) {
+        return call(Endpoint.RESUME_RUN, Map.of("id", id), Map.of(), null);
+    }
+
+    private static Map<String, Object> named(@Nullable String name) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (name != null) {
+            body.put("name", name);
+        }
+        return body;
+    }
+
     public RunMetrics metrics(String id) {
         return call(Endpoint.GET_RUN_METRICS, Map.of("id", id), Map.of(), null);
     }

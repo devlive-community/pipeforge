@@ -333,6 +333,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the attempts of a run
+         * @description The attempts of a run, oldest first: when each started and ended, its error, the checkpoint it started from, the rows it read, wrote and found dirty as its last metrics sample has them, and when the next one starts while the run waits to be retried.
+         */
+        get: operations["listRunAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{id}/cancel": {
         parameters: {
             query?: never;
@@ -347,6 +367,26 @@ export interface paths {
          * @description Asks the master to cancel a run that has not ended; the run moves to CANCELLING, then CANCELLED. An ended run is returned as it is.
          */
         post: operations["cancelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the checkpoints of a run
+         * @description The checkpoints and savepoints of a run across its attempts, newest first: number, type, status, why it was taken, when it was taken and completed, size, directory, the error of a failed one, and each task's part of a completed one (snapshot, upload and alignment times, state size).
+         */
+        get: operations["listRunCheckpoints"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -413,6 +453,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a run
+         * @description Stops a running run with a savepoint: it moves to PAUSING at once and to PAUSED once its sinks committed, holding no slots; when the savepoint fails it reads on. A paused run is resumed with POST /api/v1/runs/{id}/resume. HTTP 400 when the run is not running.
+         */
+        post: operations["pauseRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a paused run
+         * @description Starts a paused run again from the savepoint it was paused at, in the same attempt; it moves to QUEUE. HTTP 400 when the run is not paused.
+         */
+        post: operations["resumeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{id}/retry": {
         parameters: {
             query?: never;
@@ -427,6 +507,26 @@ export interface paths {
          * @description Starts the next attempt of a run that failed, timed out or was cancelled, whatever env.retry allows: from its last completed checkpoint or from the beginning, with the same variables and plugin versions. The run moves back to QUEUE; its attempts are listed by GET /api/v1/runs/{id}.
          */
         post: operations["retryRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{id}/savepoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a savepoint of a run
+         * @description Takes a savepoint of a running run and answers with it once it completed; the run goes on. A savepoint is kept until it is deleted by hand, and a run can start from it. HTTP 400 when the run is not running.
+         */
+        post: operations["savepointRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -507,10 +607,64 @@ export interface components {
             /** Format: date-time */
             startedAt?: string;
             /** @enum {string} */
-            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
+            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT" | "PAUSING" | "PAUSED";
+        };
+        AttemptView: {
+            /** Format: int32 */
+            attempt?: number;
+            /** Format: int64 */
+            elapsedMs?: number;
+            /** Format: date-time */
+            endedAt?: string;
+            error?: components["schemas"]["RunError"];
+            restorePath?: string;
+            /** Format: date-time */
+            retryAt?: string;
+            /** Format: int64 */
+            rowsDirty?: number;
+            /** Format: int64 */
+            rowsRead?: number;
+            /** Format: int64 */
+            rowsWritten?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            /** @enum {string} */
+            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT" | "PAUSING" | "PAUSED";
         };
         CancelRequest: {
             reason?: string;
+        };
+        Checkpoint: {
+            /** Format: int32 */
+            attempt?: number;
+            /** Format: date-time */
+            completedAt?: string;
+            error?: components["schemas"]["RunError"];
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            path?: string;
+            reason?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            status?: string;
+            tasks?: components["schemas"]["CheckpointTask"][];
+            /** Format: date-time */
+            triggeredAt?: string;
+            type?: string;
+        };
+        CheckpointTask: {
+            /** Format: int64 */
+            alignmentMs?: number;
+            /** Format: int64 */
+            asyncMs?: number;
+            /** Format: int64 */
+            stateBytes?: number;
+            /** Format: int32 */
+            states?: number;
+            /** Format: int64 */
+            syncMs?: number;
+            task?: string;
         };
         ClusterView: {
             master?: components["schemas"]["Master"];
@@ -812,7 +966,7 @@ export interface components {
             /** Format: date-time */
             startedAt?: string;
             /** @enum {string} */
-            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
+            status?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT" | "PAUSING" | "PAUSED";
             /** Format: date-time */
             submittedAt?: string;
             submittedBy?: string;
@@ -905,6 +1059,9 @@ export interface components {
             /** Format: int64 */
             rowsWritten?: number;
         };
+        SavepointRequest: {
+            name?: string;
+        };
         Slot: {
             allocated?: boolean;
             /** Format: int32 */
@@ -947,10 +1104,10 @@ export interface components {
             /** Format: int32 */
             attempt?: number;
             /** @enum {string} */
-            from?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
+            from?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT" | "PAUSING" | "PAUSED";
             reason?: string;
             /** @enum {string} */
-            to?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT";
+            to?: "QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT" | "PAUSING" | "PAUSED";
         };
         UnavailablePlugin: {
             location?: string;
@@ -1654,7 +1811,7 @@ export interface operations {
                 /** @description The token of a page, from next */
                 page?: string | null;
                 /** @description States to list; every state when none */
-                status?: ("QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT")[] | null;
+                status?: ("QUEUE" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELLING" | "CANCELLED" | "TIMEOUT" | "RETRY_WAIT" | "PAUSING" | "PAUSED")[] | null;
             };
             header?: never;
             path?: never;
@@ -1849,6 +2006,55 @@ export interface operations {
             };
         };
     };
+    listRunAttempts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptView"][];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
     cancelRun: {
         parameters: {
             query?: never;
@@ -1871,6 +2077,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    listRunCheckpoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Checkpoint"][];
                 };
             };
             /** @description The request is invalid (PF-CONF-0007) */
@@ -2069,6 +2324,108 @@ export interface operations {
             };
         };
     };
+    pauseRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SavepointRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    resumeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
     retryRun: {
         parameters: {
             query?: never;
@@ -2091,6 +2448,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description The request is invalid (PF-CONF-0007) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description The job, expression or plugin options are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+            /** @description Internal error (PF-SYS-0001) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorInfo"];
+                };
+            };
+        };
+    };
+    savepointRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SavepointRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Checkpoint"];
                 };
             };
             /** @description The request is invalid (PF-CONF-0007) */

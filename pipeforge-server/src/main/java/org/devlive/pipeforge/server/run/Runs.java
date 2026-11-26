@@ -72,6 +72,65 @@ public final class Runs {
             @Nullable String restorePath) {}
 
     /**
+     * A checkpoint or savepoint of a run, as the master recorded it.
+     *
+     * @param type {@code CHECKPOINT} or {@code SAVEPOINT}
+     * @param status {@code IN_PROGRESS}, {@code COMPLETED} or {@code FAILED}
+     * @param reason why it was taken: {@code PERIODIC}, {@code SAVEPOINT}, {@code PAUSE}, {@code FINISH}, ...
+     * @param name the name of a savepoint
+     * @param sizeBytes the size of its states, once completed
+     * @param path its directory in the checkpoint storage
+     * @param error why it failed
+     * @param tasks each task's part of a completed one
+     */
+    public record Checkpoint(
+            long id,
+            int attempt,
+            String type,
+            String status,
+            String reason,
+            @Nullable String name,
+            Instant triggeredAt,
+            @Nullable Instant completedAt,
+            @Nullable Long sizeBytes,
+            String path,
+            @Nullable RunError error,
+            List<CheckpointTask> tasks) {}
+
+    /**
+     * A task's part of a checkpoint.
+     *
+     * @param task the execution attempt of the task, {@code run/vertex/subtask/attempt}
+     * @param states how many states it wrote
+     * @param syncMs how long its snapshot held the task up
+     * @param asyncMs how long the upload took
+     * @param alignmentMs how long it waited for the barriers of its inputs
+     * @param stateBytes the size of its states
+     */
+    public record CheckpointTask(
+            String task, int states, long syncMs, long asyncMs, long alignmentMs, long stateBytes) {}
+
+    /**
+     * An attempt of a run with what it did.
+     *
+     * @param retryAt when the next attempt starts, while the run waits in {@code RETRY_WAIT}
+     * @param rowsRead the rows the attempt read, from its last metrics sample; {@code null} without
+     * @param elapsedMs how long the attempt has been running, from its last metrics sample
+     */
+    public record AttemptView(
+            int attempt,
+            RunState status,
+            Instant startedAt,
+            @Nullable Instant endedAt,
+            @Nullable RunError error,
+            @Nullable String restorePath,
+            @Nullable Instant retryAt,
+            @Nullable Long rowsRead,
+            @Nullable Long rowsWritten,
+            @Nullable Long rowsDirty,
+            @Nullable Long elapsedMs) {}
+
+    /**
      * A page of runs, newest first.
      *
      * @param next the token of the next page; {@code null} on the last page

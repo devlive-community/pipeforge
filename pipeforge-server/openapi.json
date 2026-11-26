@@ -855,7 +855,7 @@
             "type" : [ "array", "null" ],
             "items" : {
               "type" : "string",
-              "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
+              "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT", "PAUSING", "PAUSED" ]
             }
           }
         }, {
@@ -1121,6 +1121,71 @@
         }
       }
     },
+    "/api/v1/runs/{id}/attempts" : {
+      "get" : {
+        "description" : "The attempts of a run, oldest first: when each started and ended, its error, the checkpoint it started from, the rows it read, wrote and found dirty as its last metrics sample has them, and when the next one starts while the run waits to be retried.",
+        "operationId" : "listRunAttempts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/AttemptView"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List the attempts of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "运行的各次尝试，从旧到新：每次尝试的开始与结束时间、错误、它从哪个 checkpoint 开始、按最近一次指标采样的读取、写入和脏数据行数，以及运行等待重试时下一次尝试的开始时间。",
+          "summary" : "列出运行的各次尝试"
+        }
+      }
+    },
     "/api/v1/runs/{id}/cancel" : {
       "post" : {
         "description" : "Asks the master to cancel a run that has not ended; the run moves to CANCELLING, then CANCELLED. An ended run is returned as it is.",
@@ -1189,6 +1254,71 @@
         "x-zh-CN" : {
           "description" : "请 Master 取消一个尚未结束的运行；运行先进入 CANCELLING，然后是 CANCELLED。已结束的运行原样返回。",
           "summary" : "取消运行"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/checkpoints" : {
+      "get" : {
+        "description" : "The checkpoints and savepoints of a run across its attempts, newest first: number, type, status, why it was taken, when it was taken and completed, size, directory, the error of a failed one, and each task's part of a completed one (snapshot, upload and alignment times, state size).",
+        "operationId" : "listRunCheckpoints",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Checkpoint"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "List the checkpoints of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "运行在各次尝试中的 checkpoint 和 savepoint，从新到旧：编号、类型、状态、触发原因、触发与完成时间、大小、目录、失败时的错误，以及完成的 checkpoint 中每个 Task 的部分（快照、上传和对齐耗时，状态大小）。",
+          "summary" : "列出运行的 checkpoint"
         }
       }
     },
@@ -1464,6 +1594,139 @@
         }
       }
     },
+    "/api/v1/runs/{id}/pause" : {
+      "post" : {
+        "description" : "Stops a running run with a savepoint: it moves to PAUSING at once and to PAUSED once its sinks committed, holding no slots; when the savepoint fails it reads on. A paused run is resumed with POST /api/v1/runs/{id}/resume. HTTP 400 when the run is not running.",
+        "operationId" : "pauseRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavepointRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Run"
+                }
+              }
+            },
+            "description" : "Accepted"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Pause a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "用 savepoint 停止运行中的运行：它立即进入 PAUSING，Sink 提交完成后进入 PAUSED，不再占用 Slot；savepoint 失败时继续读取。用 POST /api/v1/runs/{id}/resume 继续已暂停的运行。运行不在运行中时返回 HTTP 400。",
+          "summary" : "暂停运行"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/resume" : {
+      "post" : {
+        "description" : "Starts a paused run again from the savepoint it was paused at, in the same attempt; it moves to QUEUE. HTTP 400 when the run is not paused.",
+        "operationId" : "resumeRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Run"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Resume a paused run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "从暂停时的 savepoint 重新启动已暂停的运行，仍是同一次尝试；它进入 QUEUE。运行没有暂停时返回 HTTP 400。",
+          "summary" : "继续已暂停的运行"
+        }
+      }
+    },
     "/api/v1/runs/{id}/retry" : {
       "post" : {
         "description" : "Starts the next attempt of a run that failed, timed out or was cancelled, whatever env.retry allows: from its last completed checkpoint or from the beginning, with the same variables and plugin versions. The run moves back to QUEUE; its attempts are listed by GET /api/v1/runs/{id}.",
@@ -1532,6 +1795,77 @@
         "x-zh-CN" : {
           "description" : "为失败、超时或被取消的运行开始下一次尝试，不受 env.retry 限制：从最近完成的 checkpoint 或从头开始，变量和插件版本不变。运行回到 QUEUE；GET /api/v1/runs/{id} 列出它的各次尝试。",
           "summary" : "重试运行"
+        }
+      }
+    },
+    "/api/v1/runs/{id}/savepoint" : {
+      "post" : {
+        "description" : "Takes a savepoint of a running run and answers with it once it completed; the run goes on. A savepoint is kept until it is deleted by hand, and a run can start from it. HTTP 400 when the run is not running.",
+        "operationId" : "savepointRun",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SavepointRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Checkpoint"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The request is invalid (PF-CONF-0007)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "The job, expression or plugin options are invalid"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            },
+            "description" : "Internal error (PF-SYS-0001)"
+          }
+        },
+        "summary" : "Take a savepoint of a run",
+        "tags" : [ "runs" ],
+        "x-zh-CN" : {
+          "description" : "为运行中的运行做一次 savepoint，完成后返回它；运行继续进行。savepoint 会一直保留到手动删除，运行可以从它启动。运行不在运行中时返回 HTTP 400。",
+          "summary" : "为运行做 savepoint"
         }
       }
     },
@@ -1745,7 +2079,54 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT", "PAUSING", "PAUSED" ]
+          }
+        }
+      },
+      "AttemptView" : {
+        "type" : "object",
+        "properties" : {
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "elapsedMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "endedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "error" : {
+            "$ref" : "#/components/schemas/RunError"
+          },
+          "restorePath" : {
+            "type" : "string"
+          },
+          "retryAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "rowsDirty" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsRead" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rowsWritten" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT", "PAUSING", "PAUSED" ]
           }
         }
       },
@@ -1753,6 +2134,83 @@
         "type" : "object",
         "properties" : {
           "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Checkpoint" : {
+        "type" : "object",
+        "properties" : {
+          "attempt" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "completedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "error" : {
+            "$ref" : "#/components/schemas/RunError"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tasks" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CheckpointTask"
+            }
+          },
+          "triggeredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CheckpointTask" : {
+        "type" : "object",
+        "properties" : {
+          "alignmentMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "asyncMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "stateBytes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "states" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "syncMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "task" : {
             "type" : "string"
           }
         }
@@ -2618,7 +3076,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT", "PAUSING", "PAUSED" ]
           },
           "submittedAt" : {
             "type" : "string",
@@ -2835,6 +3293,14 @@
           }
         }
       },
+      "SavepointRequest" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
       "Slot" : {
         "type" : "object",
         "properties" : {
@@ -2948,14 +3414,14 @@
           },
           "from" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT", "PAUSING", "PAUSED" ]
           },
           "reason" : {
             "type" : "string"
           },
           "to" : {
             "type" : "string",
-            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT" ]
+            "enum" : [ "QUEUE", "RUNNING", "SUCCESS", "FAILED", "CANCELLING", "CANCELLED", "TIMEOUT", "RETRY_WAIT", "PAUSING", "PAUSED" ]
           }
         }
       },

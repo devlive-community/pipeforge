@@ -97,6 +97,10 @@ public class RunTracker implements SmartLifecycle {
                         && run.submittedAt().plus(SUBMIT_GRACE).isAfter(clock.instant())) {
                     continue;
                 }
+                if (run.status() == RunState.PAUSED) {
+                    // nothing runs: resuming submits it again from its savepoint, on whichever master leads
+                    continue;
+                }
                 if (run.status() == RunState.CANCELLING) {
                     // it was being cancelled when its master went away: nothing of it runs any more
                     runs.transition(
@@ -137,6 +141,12 @@ public class RunTracker implements SmartLifecycle {
             if (now.state() == RunState.FAILED && now.error() != null && retry(run, now.error())) {
                 continue;
             }
+            if (run.status() == RunState.PAUSING
+                    && now.state() == RunState.RUNNING
+                    && run.updatedAt().plus(GrpcMasterClient.SAVEPOINT_TIMEOUT).isAfter(clock.instant())) {
+                // the pause is on its way to the master, which still reports the run as running
+                continue;
+            }
             if (now.state() != run.status()) {
                 String reason = now.error() != null ? now.error().code() : "reported by the master";
                 if (runs.transition(
@@ -147,7 +157,7 @@ public class RunTracker implements SmartLifecycle {
                     }
                 }
             }
-            if (!now.state().isTerminal() && now.state() != RunState.QUEUE) {
+            if (!now.state().isTerminal() && now.state() != RunState.QUEUE && now.state() != RunState.PAUSED) {
                 java.time.Instant last = sampled.get(run.id());
                 if (last == null || !last.plus(metricsInterval).isAfter(clock.instant())) {
                     sample(run.id(), run.attempt());

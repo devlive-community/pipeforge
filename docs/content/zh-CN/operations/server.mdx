@@ -126,6 +126,21 @@ QUEUE → RUNNING → SUCCESS | FAILED | TIMEOUT
 `GET /api/v1/cluster` 显示 Master 所看到的集群：Master 的版本和启动时间，以及每个已注册 Worker 的地址、标签、资源组、CPU 和内存、
 各个 Slot 及占用它的作业、正在运行的 Task 和距离最近一次心跳的时间，并给出整个集群的 Slot 使用率。没有 Master 或无法连接 Master 时返回 503。
 
+### Checkpoint、savepoint 与暂停
+
+对于作业做 [checkpoint](../concepts/checkpoint) 的运行：
+
+| 接口 | 作用 |
+|---|---|
+| `GET /api/v1/runs/{id}/checkpoints` | 运行在各次尝试中的 checkpoint 和 savepoint，从新到旧：编号、尝试、类型、状态、触发原因（`PERIODIC`、`SAVEPOINT`、`PAUSE`、`FINISH` 等）、触发与完成时间、大小、目录以及失败时的错误；完成的 checkpoint 列出每个 Task 的部分：快照让它停顿了多久、上传和 barrier 对齐耗时，以及状态大小 |
+| `POST /api/v1/runs/{id}/savepoint` | 为运行中的运行做一次 savepoint，名称取 `{"name": ...}`，没有时为时间戳，完成后返回它；运行继续进行。savepoint 一直保留到手动删除 |
+| `POST /api/v1/runs/{id}/pause` | 用 savepoint 停止运行中的运行（HTTP 202）：它立即进入 `PAUSING`，Sink 提交完成后进入 `PAUSED`，不再占用 Slot。savepoint 失败时运行继续读取并回到 `RUNNING` |
+| `POST /api/v1/runs/{id}/resume` | 从暂停时的 savepoint 重新启动已暂停的运行，仍是同一次尝试；它进入 `QUEUE` |
+| `GET /api/v1/runs/{id}/attempts` | 运行的各次尝试，从旧到新：开始、结束、错误、每次尝试从哪个 checkpoint 开始、按最近一次指标采样的读取、写入和脏数据行数，以及运行在 `RETRY_WAIT` 中等待时下一次尝试的开始时间 |
+
+运行不在运行中时，savepoint 和暂停请求返回 HTTP 400；只有已暂停的运行才能继续。暂停的时间不计入 `env.timeout.run`。主 Master 切换时，
+已暂停的运行保持暂停；请在新的主 Master 上继续它。暂停最多等待 savepoint 15 分钟。
+
 ## 预览与试运行
 
 `POST /api/v1/jobs/preview` 在不提交到集群的情况下显示作业产出的数据，即作业编辑器的数据预览与试运行。服务端在所选的 `node` 之后截断作业

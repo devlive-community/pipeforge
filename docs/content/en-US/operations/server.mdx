@@ -156,6 +156,23 @@ and every registered worker with its addresses, labels, resource group, cores an
 with the job that holds each, its running tasks and the time since its last heartbeat, with the
 slot usage of the whole cluster. Without a master, or when it cannot be reached, it answers 503.
 
+### Checkpoints, savepoints and pausing
+
+For runs whose jobs take [checkpoints](../concepts/checkpoint):
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/runs/{id}/checkpoints` | The checkpoints and savepoints of the run across its attempts, newest first: number, attempt, type, status, why it was taken (`PERIODIC`, `SAVEPOINT`, `PAUSE`, `FINISH`, ...), when it was taken and completed, size, directory and the error of a failed one; a completed one lists each task's part: how long its snapshot held it up, the upload and the barrier alignment took, and the size of its states |
+| `POST /api/v1/runs/{id}/savepoint` | Takes a savepoint of a running run, named by `{"name": ...}` or a time stamp, and answers with it once it completed; the run goes on. Savepoints are kept until deleted by hand |
+| `POST /api/v1/runs/{id}/pause` | Stops a running run with a savepoint (HTTP 202): it moves to `PAUSING` at once and to `PAUSED` once its sinks committed, holding no slots. When the savepoint fails the run reads on and moves back to `RUNNING` |
+| `POST /api/v1/runs/{id}/resume` | Starts a paused run again from the savepoint it was paused at, in the same attempt; it moves to `QUEUE` |
+| `GET /api/v1/runs/{id}/attempts` | The attempts of the run, oldest first: start, end, error, the checkpoint each started from, the rows it read, wrote and found dirty as its last metrics sample has them, and when the next one starts while the run waits in `RETRY_WAIT` |
+
+A run that is not running answers a savepoint or a pause with HTTP 400, and only a paused run can be
+resumed. The time a run spends paused does not count against `env.timeout.run`. A paused run stays
+paused when the master changes over; resume it on the new leader. Pausing waits for the savepoint
+up to 15 minutes.
+
 ## Previews and dry runs
 
 `POST /api/v1/jobs/preview` shows what a job produces without running it on the cluster: the job

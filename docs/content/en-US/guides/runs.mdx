@@ -16,7 +16,7 @@ run fails at once with `PF-CLUS-0015` and is listed as failed.
 | Column | Meaning |
 |---|---|
 | Job | The name of the job, and the first characters of the run's ID |
-| State | **Queued**, **Running**, **Cancelling**, **Waiting to retry**, **Succeeded**, **Failed**, **Timed out** or **Cancelled** |
+| State | **Queued**, **Running**, **Cancelling**, **Waiting to retry**, **Pausing**, **Paused**, **Succeeded**, **Failed**, **Timed out** or **Cancelled** |
 | Submitted | When the run was submitted, in the time zone of the browser |
 | Duration | From the start to the end; while the run runs, up to now |
 | Read, Written | The rows the sources read and the sinks wrote, as of the last sample of the run's metrics (every 10 seconds by default), or a dash before the first one |
@@ -32,7 +32,7 @@ Choose a state group above the list:
 | Group | States |
 |---|---|
 | All | Every run |
-| Active | Queued, Running, Cancelling, Waiting to retry |
+| Active | Queued, Running, Cancelling, Waiting to retry, Pausing, Paused |
 | Succeeded | Succeeded |
 | Failed | Failed, Timed out |
 | Cancelled | Cancelled |

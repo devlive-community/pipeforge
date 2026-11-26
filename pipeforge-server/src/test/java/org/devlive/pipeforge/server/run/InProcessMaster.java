@@ -50,7 +50,27 @@ final class InProcessMaster implements AutoCloseable {
     final org.devlive.pipeforge.engine.worker.log.LogService logs;
 
     InProcessMaster(PluginManager plugins) {
+        this(plugins, null);
+    }
+
+    /** Where the checkpoints of runs go, when the master records them in {@code metastore}. */
+    private final org.devlive.pipeforge.engine.api.checkpoint.@org.jspecify.annotations.Nullable CheckpointStorage
+            storage;
+
+    private final javax.sql.@org.jspecify.annotations.Nullable DataSource metastore;
+
+    /** With checkpoints in a temporary directory, recorded in the server's metastore. */
+    InProcessMaster(PluginManager plugins, javax.sql.@org.jspecify.annotations.Nullable DataSource metastore) {
         this.plugins = plugins;
+        this.metastore = metastore;
+        try {
+            this.storage = metastore == null
+                    ? null
+                    : new org.devlive.pipeforge.engine.api.checkpoint.FileSystemCheckpointStorage(
+                            java.nio.file.Files.createTempDirectory("in-process-checkpoints"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         master = InProcessRpc.serve(name + "-jobs", jobs);
         try {
             logs = new org.devlive.pipeforge.engine.worker.log.LogService(
@@ -60,7 +80,15 @@ final class InProcessMaster implements AutoCloseable {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        executor = new TaskExecutor("local", master.gateway(), null, null, logs);
+        executor = new TaskExecutor(
+                "local",
+                master.gateway(),
+                null,
+                null,
+                logs,
+                storage == null
+                        ? TaskExecutor.Options.DEFAULTS
+                        : TaskExecutor.Options.DEFAULTS.withCheckpointStorage(storage));
         worker = InProcessRpc.serve(name + "-worker", executor);
         start();
     }
@@ -74,6 +102,12 @@ final class InProcessMaster implements AutoCloseable {
                 timers,
                 Clock.systemUTC(),
                 100);
+        if (storage != null && metastore != null) {
+            dispatcher.withCheckpoints(new org.devlive.pipeforge.engine.master.checkpoint.Checkpoints(
+                    storage,
+                    new org.devlive.pipeforge.engine.master.checkpoint.JdbcCheckpointStore(metastore, "metastore"),
+                    Runnable::run));
+        }
         try {
             server = InProcessServerBuilder.forName(name)
                     .addService(new DispatcherService(dispatcher, manager::workers, new DispatcherService.Control() {

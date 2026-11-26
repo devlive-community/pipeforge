@@ -226,6 +226,60 @@ public class RunRepository {
                 .optional();
     }
 
+    /** The checkpoints and savepoints of a run, newest first, with each task's part of completed ones. */
+    public List<Runs.Checkpoint> checkpoints(String runId) {
+        return jdbc.sql("SELECT checkpoint_id, attempt, type, status, trigger_reason, name, triggered_at, completed_at,"
+                        + " size_bytes, path, error_code, error_message, tasks_json FROM checkpoint WHERE run_id = ?"
+                        + " ORDER BY checkpoint_id DESC")
+                .param(runId)
+                .query((rs, row) -> {
+                    long size = rs.getLong("size_bytes");
+                    Long sized = rs.wasNull() ? null : size;
+                    String code = rs.getString("error_code");
+                    return new Runs.Checkpoint(
+                            rs.getLong("checkpoint_id"),
+                            rs.getInt("attempt"),
+                            rs.getString("type"),
+                            rs.getString("status"),
+                            rs.getString("trigger_reason"),
+                            rs.getString("name"),
+                            instant(rs.getObject("triggered_at", LocalDateTime.class)),
+                            instant(rs.getObject("completed_at", LocalDateTime.class)),
+                            sized,
+                            rs.getString("path"),
+                            code == null
+                                    ? null
+                                    : new Runs.RunError(code, String.valueOf(rs.getString("error_message"))),
+                            tasks(rs.getString("tasks_json")));
+                })
+                .list();
+    }
+
+    private static final tools.jackson.databind.json.JsonMapper TASKS =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+    private static List<Runs.CheckpointTask> tasks(@Nullable String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        return List.of(TASKS.readValue(json, Runs.CheckpointTask[].class));
+    }
+
+    /** The metrics of every attempt of a run as its last sample has them, by attempt; without attempts counted together. */
+    public java.util.Map<Integer, String> attemptMetrics(String runId) {
+        java.util.Map<Integer, String> metrics = new java.util.TreeMap<>();
+        jdbc.sql("SELECT attempt, metrics_json FROM job_run_metrics m WHERE run_id = ? AND attempt IS NOT NULL AND"
+                        + " sampled_at = (SELECT MAX(sampled_at) FROM job_run_metrics l WHERE l.run_id = m.run_id AND"
+                        + " l.attempt = m.attempt)")
+                .param(runId)
+                .query((rs, row) -> {
+                    metrics.put(rs.getInt("attempt"), rs.getString("metrics_json"));
+                    return null;
+                })
+                .list();
+        return metrics;
+    }
+
     public Optional<Runs.Run> find(String id) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM job_run WHERE id = ?")
                 .param(id)
@@ -253,7 +307,9 @@ public class RunRepository {
                 .list();
         long running = 0;
         for (int i = 0; i + 1 < transitions.size(); i++) {
-            if (transitions.get(i).to() == RunState.RUNNING) {
+            // the savepoint of a pause counts, as the master counts it against env.timeout.run
+            if (transitions.get(i).to() == RunState.RUNNING
+                    || transitions.get(i).to() == RunState.PAUSING) {
                 running += java.time.Duration.between(
                                 transitions.get(i).at(), transitions.get(i + 1).at())
                         .toMillis();

@@ -122,6 +122,35 @@ public interface MasterClient extends AutoCloseable {
     ClusterView cluster();
 
     /**
+     * A savepoint the master took.
+     *
+     * @param path its directory in the checkpoint storage
+     */
+    record Savepoint(long checkpointId, String path) {}
+
+    /**
+     * Takes a savepoint of a running run and returns once it completed; the run goes on.
+     *
+     * @param name the savepoint's name, {@code null} for a time stamp
+     * @throws PipeForgeException {@code PF-CONF-0010} for a run the master does not know
+     */
+    default Savepoint savepoint(String runId, @Nullable String name) {
+        throw PipeForgeException.of(org.devlive.pipeforge.common.error.ErrorCode.MASTER_NOT_CONFIGURED)
+                .build();
+    }
+
+    /**
+     * Stops a running run with a savepoint and returns once it is paused, holding no slots; it goes on
+     * when it is submitted again from the savepoint.
+     *
+     * @throws PipeForgeException {@code PF-CONF-0010} for a run the master does not know
+     */
+    default Savepoint pause(String runId, @Nullable String name) {
+        throw PipeForgeException.of(org.devlive.pipeforge.common.error.ErrorCode.MASTER_NOT_CONFIGURED)
+                .build();
+    }
+
+    /**
      * Gives a worker no new tasks; its running tasks finish where they are.
      *
      * @throws PipeForgeException {@code PF-CLUS-0020} for a worker the master does not know

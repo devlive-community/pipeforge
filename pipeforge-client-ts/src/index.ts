@@ -151,6 +151,13 @@ export function createClient(options: ClientOptions = {}) {
       unwrap(raw.POST("/api/v1/runs/{id}/cancel", { params: { path: { id } }, body: reason ? { reason } : {} })),
     retryRun: (id: string, from?: "CHECKPOINT" | "SCRATCH") =>
       unwrap(raw.POST("/api/v1/runs/{id}/retry", { params: { path: { id } }, body: from ? { from } : {} })),
+    listRunCheckpoints: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/checkpoints", { params: { path: { id } } })),
+    listRunAttempts: (id: string) => unwrap(raw.GET("/api/v1/runs/{id}/attempts", { params: { path: { id } } })),
+    savepointRun: (id: string, name?: string) =>
+      unwrap(raw.POST("/api/v1/runs/{id}/savepoint", { params: { path: { id } }, body: name ? { name } : {} })),
+    pauseRun: (id: string, name?: string) =>
+      unwrap(raw.POST("/api/v1/runs/{id}/pause", { params: { path: { id } }, body: name ? { name } : {} })),
+    resumeRun: (id: string) => unwrap(raw.POST("/api/v1/runs/{id}/resume", { params: { path: { id } } })),
     failoverMaster: () => unwrap(raw.POST("/api/v1/cluster/failover")),
     drainWorker: (id: string) => done(raw.POST("/api/v1/cluster/workers/{id}/drain", { params: { path: { id } } })),
     uncordonWorker: (id: string) =>

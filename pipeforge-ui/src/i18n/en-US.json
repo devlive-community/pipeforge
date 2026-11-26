@@ -210,7 +210,9 @@
       "CANCELLING": "Cancelling",
       "CANCELLED": "Cancelled",
       "TIMEOUT": "Timed out",
-      "RETRY_WAIT": "Waiting to retry"
+      "RETRY_WAIT": "Waiting to retry",
+      "PAUSING": "Pausing",
+      "PAUSED": "Paused"
     },
     "columns": {
       "job": "Job",

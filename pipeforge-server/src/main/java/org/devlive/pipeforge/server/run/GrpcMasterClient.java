@@ -26,6 +26,7 @@ import org.devlive.pipeforge.engine.rpc.proto.LogChunk;
 import org.devlive.pipeforge.engine.rpc.proto.PluginRef;
 import org.devlive.pipeforge.engine.rpc.proto.ReadTaskLogRequest;
 import org.devlive.pipeforge.engine.rpc.proto.SubmitJobRequest;
+import org.jspecify.annotations.Nullable;
 
 /** The master's dispatcher over gRPC (protocol: DispatcherService). */
 public final class GrpcMasterClient implements MasterClient {
@@ -308,6 +309,40 @@ public final class GrpcMasterClient implements MasterClient {
                 metrics.getLastCheckpointDurationMs(),
                 metrics.getLastCheckpointSize(),
                 metrics.getCheckpointFailures());
+    }
+
+    /** How long a savepoint may take before the server stops waiting for it. */
+    static final Duration SAVEPOINT_TIMEOUT = Duration.ofMinutes(15);
+
+    @Override
+    public Savepoint savepoint(String runId, @Nullable String name) {
+        try {
+            var answer = stub.withDeadlineAfter(SAVEPOINT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                    .triggerSavepoint(savepointRequest(runId, name));
+            return new Savepoint(answer.getCheckpointId(), answer.getPath());
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, address());
+        }
+    }
+
+    @Override
+    public Savepoint pause(String runId, @Nullable String name) {
+        try {
+            var answer = stub.withDeadlineAfter(SAVEPOINT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                    .stopWithSavepoint(savepointRequest(runId, name));
+            return new Savepoint(answer.getCheckpointId(), answer.getPath());
+        } catch (RuntimeException e) {
+            throw RpcErrors.fromStatus(e, address());
+        }
+    }
+
+    private static org.devlive.pipeforge.engine.rpc.proto.SavepointRequest savepointRequest(
+            String runId, @Nullable String name) {
+        return org.devlive.pipeforge.engine.rpc.proto.SavepointRequest.newBuilder()
+                .setHeader(Headers.create(Headers.Epochs.FIRST, SAVEPOINT_TIMEOUT, System::currentTimeMillis))
+                .setRunId(runId)
+                .setName(name == null ? "" : name)
+                .build();
     }
 
     @Override

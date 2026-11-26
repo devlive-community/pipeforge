@@ -19,7 +19,11 @@ public enum RunState {
     /** The run took longer than its timeout. */
     TIMEOUT,
     /** An attempt failed; the next starts after the retry backoff ({@code env.retry}). */
-    RETRY_WAIT;
+    RETRY_WAIT,
+    /** A pause was asked for: the sources stopped and the savepoint is being taken. */
+    PAUSING,
+    /** Stopped at a savepoint, holding no slots; resuming goes on from it. */
+    PAUSED;
 
     public boolean isTerminal() {
         return this == SUCCESS || this == FAILED || this == CANCELLED || this == TIMEOUT;
@@ -35,6 +39,10 @@ public enum RunState {
             case RUN_STATE_CANCELLING -> CANCELLING;
             case RUN_STATE_CANCELLED -> CANCELLED;
             case RUN_STATE_TIMEOUT -> TIMEOUT;
+            case RUN_STATE_PAUSING -> PAUSING;
+            case RUN_STATE_PAUSED -> PAUSED;
+                // a region restarts inside the attempt: the run goes on
+            case RUN_STATE_RESTARTING -> RUNNING;
             default -> throw new IllegalArgumentException("unknown run state " + state);
         };
     }
