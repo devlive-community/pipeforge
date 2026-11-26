@@ -20,6 +20,7 @@ import { BottleneckCard } from "./Bottleneck";
 import { CheckpointsTab } from "./CheckpointsTab";
 import { LogsTab } from "./LogsTab";
 import { PlanTab } from "./PlanTab";
+import { RunControls } from "./RunControls";
 import { SplitsTab } from "./SplitsTab";
 
 const TERMINAL: RunState[] = ["SUCCESS", "FAILED", "CANCELLED", "TIMEOUT"];
@@ -240,7 +241,12 @@ export function RunDetailPage() {
             ← {t("runDetail.back")}
           </Link>
         }
-        actions={<RunStateBadge state={run.status as RunState} />}
+        actions={
+          <>
+            <RunStateBadge state={run.status as RunState} />
+            <RunControls run={run} />
+          </>
+        }
       />
       <Card className="mb-4">
         <DescriptionList

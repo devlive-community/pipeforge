@@ -44,6 +44,8 @@ const paths = {
   play: "M6 4l14 8-14 8z",
   arrowRight: "M5 12h14M13 6l6 6-6 6",
   circleCheck: "M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3",
+  pause: "M6 4h4v16H6zM14 4h4v16h-4z",
+  stop: "M6 6h12v12H6z",
   bookmark: "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z",
   history: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2",
 } as const;

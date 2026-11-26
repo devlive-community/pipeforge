@@ -140,6 +140,23 @@ test("lists the checkpoints of a run and takes a savepoint", async ({ page }) =>
   await expect(page.getByText("Savepoint #8 completed at checkpoints/run/sp-8/")).toBeVisible();
 });
 
+test("pauses a running run after asking", async ({ page }) => {
+  await page.goto("/runs/3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01");
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Pause orders-daily?" });
+  await expect(dialog.getByLabel("Savepoint name")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeFocused();
+
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await dialog.getByLabel("Savepoint name").fill("nightly");
+  const request = page.waitForRequest((r) => r.url().endsWith("/pause"));
+  await dialog.getByRole("button", { name: "Pause", exact: true }).click();
+  expect(JSON.parse((await request).postData() ?? "{}")).toEqual({ name: "nightly" });
+  await expect(dialog).toBeHidden();
+});
+
 test("shows the cluster with its workers", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Cluster" }).click();

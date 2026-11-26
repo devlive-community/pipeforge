@@ -400,6 +400,52 @@
       "sync": "Snapshot",
       "async": "Upload",
       "stateSize": "State size"
+    },
+    "controls": {
+      "keep": "Not now",
+      "name": "Savepoint name",
+      "reason": "Reason",
+      "reasonPlaceholder": "Kept with the run",
+      "failed": "The server refused: {message}",
+      "pause": {
+        "button": "Pause",
+        "title": "Pause {job}?",
+        "description": "The sources stop reading and a savepoint is taken; once the sinks committed, the run is paused and holds no slots. Resume it later from the savepoint. When the savepoint fails, the run reads on.",
+        "confirm": "Pause",
+        "busy": "Asking the master to pause the run"
+      },
+      "resume": {
+        "button": "Resume",
+        "title": "Resume {job}?",
+        "description": "The run starts again from the savepoint it was paused at, in the same attempt, as soon as slots are free.",
+        "confirm": "Resume",
+        "busy": "Submitting the run again"
+      },
+      "savepoint": {
+        "button": "Savepoint",
+        "title": "Take a savepoint of {job}?",
+        "description": "The run goes on; the savepoint is kept until it is deleted by hand, and a run can start from it later.",
+        "confirm": "Take savepoint",
+        "busy": "Taking the savepoint"
+      },
+      "cancel": {
+        "button": "Cancel",
+        "title": "Cancel {job}?",
+        "description": "The tasks stop and the run ends as cancelled. What the sinks committed stays; it can be retried later.",
+        "confirm": "Cancel the run",
+        "busy": "Asking the master to cancel the run"
+      },
+      "retry": {
+        "button": "Retry",
+        "title": "Retry {job}?",
+        "description": "The next attempt starts with the same variables and plugin versions, whatever env.retry allows.",
+        "confirm": "Retry",
+        "busy": "Starting the next attempt",
+        "from": "Start from",
+        "checkpoint": "Last checkpoint",
+        "scratch": "The beginning",
+        "noCheckpoint": "The run has no completed checkpoint: the next attempt starts from the beginning."
+      }
     }
   },
   "cluster": {

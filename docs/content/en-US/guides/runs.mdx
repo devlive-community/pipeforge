@@ -50,6 +50,18 @@ finished, the page asks again every two seconds.
 
 <Screenshot name="run-detail" alt="The overview of a run" />
 
+Next to the state of the run are the actions it allows; each asks first in a dialog, which keeps
+the server's error when it refuses:
+
+| State | Actions |
+|---|---|
+| Running | **Pause** stops the run with a savepoint, with an optional name: it is *Pausing*, then *Paused* once its sinks committed, holding no slots; when the savepoint fails it reads on. **Savepoint** takes one and the run goes on. **Cancel** stops it, with an optional reason kept with the run |
+| Paused | **Resume** starts it again from its savepoint, in the same attempt. **Cancel** |
+| Queued | **Cancel** |
+| Failed, timed out, cancelled | **Retry** starts the next attempt, whatever `env.retry` allows: from the last completed checkpoint or from the beginning; a run without a completed checkpoint starts from the beginning |
+
+<Screenshot name="run-pause" alt="Pausing a run" />
+
 The **Overview** tab:
 
 | Part | Shows |

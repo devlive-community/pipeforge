@@ -589,6 +589,7 @@ export const SERVER: Record<string, unknown> = {
   "/api/v1/cluster": () => cluster(),
   [`/api/v1/runs/${RUN_ID}/splits`]: () => runSplits(),
   [`/api/v1/runs/${RUN_ID}/checkpoints`]: () => runCheckpoints(),
+  [`/api/v1/runs/${RUN_ID}/pause`]: () => ({ ...runs().runs[0], status: "PAUSING" }),
   [`/api/v1/runs/${RUN_ID}/tasks`]: () => runTasks(),
   [`/api/v1/runs/${RUN_ID}/logs`]: (_body: string, _language: string, url: URL) => taskLog(url),
   "/api/v1/runs": () => runs(),

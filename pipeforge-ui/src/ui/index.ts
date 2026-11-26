@@ -11,6 +11,7 @@
 export { Badge, type BadgeTone } from "./Badge";
 export { Button, buttonClass, type ButtonSize, type ButtonVariant } from "./Button";
 export { Card } from "./Card";
+export { ConfirmDialog } from "./ConfirmDialog";
 // CodeEditor is imported from "@/ui/CodeEditor" so that CodeMirror only loads with the pages that use it.
 export type { CodeEditorHandle, EditorCompletion, EditorDiagnostic, EditorSuggestion } from "./CodeEditor";
 export { cx } from "./cx";

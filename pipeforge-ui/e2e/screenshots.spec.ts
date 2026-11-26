@@ -27,7 +27,7 @@ interface Shot {
   /** A tab to open before the screenshot, per language. */
   tab?: Record<"en-US" | "zh-CN", string>;
   /** A button to press before the screenshot, per language, and text to wait for afterwards. */
-  click?: { button: Record<"en-US" | "zh-CN", string>; then?: string };
+  click?: { button: Record<"en-US" | "zh-CN", string>; then?: string | Record<"en-US" | "zh-CN", string> };
 }
 
 const PAGES: Shot[] = [
@@ -70,6 +70,15 @@ const PAGES: Shot[] = [
     name: "run-splits",
     path: `/runs/${RUN_ID}?tab=splits`,
     ready: { "en-US": "9 of 13 splits read", "zh-CN": "已读完 9 / 13 个分片" },
+  },
+  {
+    name: "run-pause",
+    path: `/runs/${RUN_ID}`,
+    ready: { "en-US": "The target is the slowest part", "zh-CN": "目标端最慢" },
+    click: {
+      button: { "en-US": "Pause", "zh-CN": "暂停" },
+      then: { "en-US": "Savepoint name", "zh-CN": "Savepoint 名称" },
+    },
   },
   {
     name: "run-checkpoints",
@@ -134,7 +143,8 @@ for (const shot of PAGES) {
         if (shot.tab) await page.getByRole("tab", { name: shot.tab[language] }).click();
         if (shot.click) {
           await page.getByRole("button", { name: shot.click.button[language], exact: true }).click();
-          if (shot.click.then) await expect(page.getByText(shot.click.then)).toBeVisible();
+          const then = typeof shot.click.then === "string" ? shot.click.then : shot.click.then?.[language];
+          if (then) await expect(page.getByText(then)).toBeVisible();
         }
         await page.mouse.move(0, 0);
         await page.screenshot({ path: `${OUT}${shot.name}-${theme}-${language}.png`, animations: "disabled" });

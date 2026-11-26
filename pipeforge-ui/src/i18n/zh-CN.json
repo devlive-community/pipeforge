@@ -400,6 +400,52 @@
       "sync": "快照",
       "async": "上传",
       "stateSize": "状态大小"
+    },
+    "controls": {
+      "keep": "暂不",
+      "name": "Savepoint 名称",
+      "reason": "原因",
+      "reasonPlaceholder": "与运行一起保存",
+      "failed": "服务端拒绝了请求：{message}",
+      "pause": {
+        "button": "暂停",
+        "title": "暂停 {job}？",
+        "description": "Source 停止读取并做一次 savepoint；Sink 提交完成后运行进入暂停，不再占用 Slot。之后可以从这个 savepoint 继续。savepoint 失败时运行继续读取。",
+        "confirm": "暂停",
+        "busy": "正在请 Master 暂停运行"
+      },
+      "resume": {
+        "button": "继续",
+        "title": "继续 {job}？",
+        "description": "运行从暂停时的 savepoint 重新开始，仍是同一次尝试，有空闲 Slot 时立即启动。",
+        "confirm": "继续",
+        "busy": "正在重新提交运行"
+      },
+      "savepoint": {
+        "button": "Savepoint",
+        "title": "为 {job} 做 savepoint？",
+        "description": "运行继续进行；savepoint 会一直保留到手动删除，之后可以从它启动运行。",
+        "confirm": "做 savepoint",
+        "busy": "正在做 savepoint"
+      },
+      "cancel": {
+        "button": "取消",
+        "title": "取消 {job}？",
+        "description": "Task 停止，运行以已取消结束。Sink 已提交的数据保留；之后可以重试。",
+        "confirm": "取消运行",
+        "busy": "正在请 Master 取消运行"
+      },
+      "retry": {
+        "button": "重试",
+        "title": "重试 {job}？",
+        "description": "下一次尝试使用相同的变量和插件版本，不受 env.retry 限制。",
+        "confirm": "重试",
+        "busy": "正在开始下一次尝试",
+        "from": "起点",
+        "checkpoint": "最近的 checkpoint",
+        "scratch": "从头开始",
+        "noCheckpoint": "运行没有完成的 checkpoint：下一次尝试从头开始。"
+      }
     }
   },
   "cluster": {
