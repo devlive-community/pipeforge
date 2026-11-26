@@ -66,13 +66,11 @@
     "invalidYaml": "Fix the YAML syntax before editing the topology.",
     "connectFrom": "Output of {id}",
     "connectTo": "Input of {id}",
-
     "nodeList": "Job nodes",
     "searchNodes": "Filter by node or plugin",
     "noMatchingNodes": "No matching nodes.",
     "inspector": "Node configuration",
     "openYaml": "Go to YAML",
-
     "view": "Editor view",
     "showResults": "Show results",
     "hideResults": "Hide results",
@@ -238,7 +236,8 @@
       "metrics": "Metrics",
       "plan": "Execution plan",
       "splits": "Splits",
-      "logs": "Logs"
+      "logs": "Logs",
+      "checkpoints": "Checkpoints"
     },
     "facts": {
       "state": "State",
@@ -355,6 +354,52 @@
       "none": "No split yet",
       "noneHint": "Sources hand out their splits once the run starts; a source that is not split has none.",
       "failed": "The splits cannot be loaded: {message}"
+    },
+    "checkpoints": {
+      "summary": "Checkpoints",
+      "last": "Last completed",
+      "lastValue": "#{id} at {at}",
+      "completed": "Completed checkpoints",
+      "savepoints": "Savepoints",
+      "failedCount": "Failed",
+      "savepoint": "Savepoint",
+      "savepointName": "Name",
+      "savepointPlaceholder": "e.g. before-upgrade",
+      "take": "Take savepoint",
+      "taking": "Taking savepoint",
+      "taken": "Savepoint #{id} completed at {path}",
+      "takeFailed": "The savepoint failed: {message}",
+      "notRunning": "Only a running run takes a savepoint.",
+      "none": "No checkpoint yet",
+      "noneHint": "Runs of jobs with env.checkpoint.enabled take checkpoints at env.checkpoint.interval; a savepoint can be taken by hand while the run runs.",
+      "failed": "The checkpoints cannot be loaded: {message}",
+      "caption": "Checkpoints and savepoints of the run, newest first",
+      "id": "Number",
+      "type": "Type",
+      "status": "Status",
+      "reason": "Reason",
+      "takenAt": "Taken",
+      "duration": "Duration",
+      "alignment": "Alignment",
+      "size": "Size",
+      "detail": "Name or error",
+      "attempt": "Attempt",
+      "path": "Directory",
+      "types": {
+        "CHECKPOINT": "Checkpoint",
+        "SAVEPOINT": "Savepoint"
+      },
+      "states": {
+        "COMPLETED": "Completed",
+        "FAILED": "Failed",
+        "IN_PROGRESS": "In progress"
+      },
+      "tasksOf": "Tasks of checkpoint #{id}",
+      "noTasks": "No task took part yet.",
+      "task": "Task",
+      "sync": "Snapshot",
+      "async": "Upload",
+      "stateSize": "State size"
     }
   },
   "cluster": {

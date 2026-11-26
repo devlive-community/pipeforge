@@ -74,6 +74,18 @@ order: 22
 
 <Screenshot name="run-splits" alt="运行的分片" />
 
+**Checkpoint** 标签页（`/runs/<id>?tab=checkpoints`）从新到旧列出运行在各次尝试中的 [checkpoint](../concepts/checkpoint) 和 savepoint：
+
+- 顶部是最近完成的 checkpoint，以及已完成、savepoint 和失败的数量
+- 每一项显示编号、类型、状态、触发原因（`PERIODIC`、`SAVEPOINT`、`PAUSE`、`FINISH` 等）、触发时间、耗时、各 Task 中最长的 barrier 对齐耗时、大小，
+  以及 savepoint 的名称或失败的原因
+- 点击编号查看每个 Task 的部分：快照让它停顿了多久、上传和对齐各用了多久、状态有多大；选择记录在地址中，没有选择时显示最近完成的一项
+
+运行进行时，**做 savepoint** 会做一次 savepoint（名称可选），完成后显示它的编号和目录；savepoint 会一直保留到手动删除。对齐耗时长说明 Task 的输入有反压；
+失败的 checkpoint 会说明哪些 Task 没有应答。
+
+<Screenshot name="run-checkpoints" alt="运行的 checkpoint" />
+
 **日志**标签页（`/runs/<id>?tab=logs`）经由 Master 从 Task 所在的 Worker 读取日志：
 
 - 在菜单中选择 Task（顶点、子任务和重试次数，以及 Worker 和状态）；选择记录在地址中

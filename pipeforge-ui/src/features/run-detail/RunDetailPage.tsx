@@ -17,6 +17,7 @@ import { Card, DescriptionList, Empty, PageHeader, Table, Tabs } from "@/ui";
 import { LoadingPanel } from "@/ui/LoadingPanel";
 import { rates, waitShare, type RunAnalysis } from "./analysis";
 import { BottleneckCard } from "./Bottleneck";
+import { CheckpointsTab } from "./CheckpointsTab";
 import { LogsTab } from "./LogsTab";
 import { PlanTab } from "./PlanTab";
 import { SplitsTab } from "./SplitsTab";
@@ -193,11 +194,15 @@ export function RunDetailPage() {
   const [params, setParams] = useSearchParams();
   const requested = params.get("tab");
   const tab =
-    requested === "metrics" || requested === "plan" || requested === "splits" || requested === "logs"
+    requested === "metrics" ||
+    requested === "plan" ||
+    requested === "splits" ||
+    requested === "checkpoints" ||
+    requested === "logs"
       ? requested
       : "overview";
   /** Keeps a choice of the current tab (a node, a task) in the address. */
-  const choose = (key: "node" | "task", value: string) => {
+  const choose = (key: "node" | "task" | "checkpoint", value: string) => {
     const changed = new URLSearchParams(params);
     changed.set(key, value);
     setParams(changed, { replace: true });
@@ -269,6 +274,7 @@ export function RunDetailPage() {
           else changed.set("tab", next);
           changed.delete("node");
           changed.delete("task");
+          changed.delete("checkpoint");
           setParams(changed, { replace: true });
         }}
         tabs={[
@@ -304,6 +310,19 @@ export function RunDetailPage() {
             id: "splits",
             label: t("runDetail.tabs.splits"),
             content: <SplitsTab id={id} live={live} />,
+          },
+          {
+            id: "checkpoints",
+            label: t("runDetail.tabs.checkpoints"),
+            content: (
+              <CheckpointsTab
+                id={id}
+                live={live}
+                running={run.status === "RUNNING"}
+                selected={params.get("checkpoint")}
+                onSelect={(checkpoint) => choose("checkpoint", checkpoint)}
+              />
+            ),
           },
           {
             id: "logs",

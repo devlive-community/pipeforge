@@ -119,6 +119,27 @@ test("reads a task's log and finds text in it", async ({ page }) => {
   await expect(page.getByText("9 of 13 splits read")).toBeVisible();
 });
 
+test("lists the checkpoints of a run and takes a savepoint", async ({ page }) => {
+  await page.route("**/api/v1/runs/*/savepoint", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ id: 8, type: "SAVEPOINT", status: "COMPLETED", path: "checkpoints/run/sp-8/", tasks: [] }),
+    }),
+  );
+  await page.goto("/runs/3d0f9c1a-5b7e-4c2a-9f10-6a8e2b4c7d01?tab=checkpoints");
+  const table = page.getByRole("table", { name: "Checkpoints and savepoints of the run, newest first" });
+  await expect(table.getByText("before-index-rebuild")).toBeVisible();
+  await expect(page.getByRole("table", { name: "Tasks of checkpoint #7" })).toBeVisible();
+  await table.getByRole("button", { name: "#6" }).click();
+  await expect(page).toHaveURL(/checkpoint=6/);
+  await expect(page.getByRole("table", { name: "Tasks of checkpoint #6" })).toBeVisible();
+  await page.getByLabel("Name").fill("before-upgrade");
+  const request = page.waitForRequest((r) => r.url().endsWith("/savepoint"));
+  await page.getByRole("button", { name: "Take savepoint" }).click();
+  expect(JSON.parse((await request).postData() ?? "{}")).toEqual({ name: "before-upgrade" });
+  await expect(page.getByText("Savepoint #8 completed at checkpoints/run/sp-8/")).toBeVisible();
+});
+
 test("shows the cluster with its workers", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Cluster" }).click();

@@ -103,6 +103,15 @@ export function useRunTasks(id: string, live: boolean) {
   });
 }
 
+/** The checkpoints and savepoints of a run, newest first; asked again while it runs. */
+export function useRunCheckpoints(id: string, live: boolean) {
+  return useQuery({
+    queryKey: ["run-checkpoints", id],
+    queryFn: () => api.listRunCheckpoints(id),
+    refetchInterval: live ? RUN_POLL_MS : false,
+  });
+}
+
 /** The master, the workers and their slots; asked again like the run pages. */
 export function useCluster() {
   return useQuery({

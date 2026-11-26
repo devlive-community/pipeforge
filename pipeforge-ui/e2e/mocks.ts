@@ -410,6 +410,69 @@ function runHistory() {
   });
 }
 
+/**
+ * Checkpoints every 12 seconds of the run that started 95 seconds ago, one that timed out under
+ * backpressure, and a savepoint taken by hand.
+ */
+function runCheckpoints() {
+  const started = Date.now() - 95_000;
+  const at = (second: number, ms = 0) => new Date(started + second * 1000 + ms).toISOString();
+  const tasks = (alignment: number) =>
+    ["orders", "enrich", "warehouse"].flatMap((node, n) =>
+      [0, 1, 2, 3].map((subtask) => ({
+        task: `${RUN_ID}/${node}/${subtask}/0`,
+        states: node === "enrich" ? 0 : 1,
+        syncMs: 3 + n * 4 + subtask,
+        asyncMs: 120 + n * 60 + subtask * 15,
+        alignmentMs: node === "warehouse" ? alignment + subtask * 40 : 0,
+        stateBytes: node === "orders" ? 6_400 + subtask * 120 : node === "warehouse" ? 2_150 : 0,
+      })),
+    );
+  const checkpoint = (id: number, second: number, alignment: number) => ({
+    id,
+    attempt: 1,
+    type: "CHECKPOINT",
+    status: "COMPLETED",
+    reason: "PERIODIC",
+    triggeredAt: at(second),
+    completedAt: at(second, 900 + alignment),
+    sizeBytes: 34_800 + id * 210,
+    path: `checkpoints/${RUN_ID}/chk-${id}/`,
+    tasks: tasks(alignment),
+  });
+  return [
+    checkpoint(7, 84, 260),
+    {
+      id: 6,
+      attempt: 1,
+      type: "CHECKPOINT",
+      status: "FAILED",
+      reason: "PERIODIC",
+      triggeredAt: at(60),
+      path: `checkpoints/${RUN_ID}/chk-6/`,
+      error: { code: "PF-CKPT-0001", message: "Checkpoint 6 did not complete within 20 s: 4 task(s) did not answer" },
+      tasks: [],
+    },
+    {
+      id: 5,
+      attempt: 1,
+      type: "SAVEPOINT",
+      status: "COMPLETED",
+      reason: "SAVEPOINT",
+      name: "before-index-rebuild",
+      triggeredAt: at(52),
+      completedAt: at(53, 200),
+      sizeBytes: 35_600,
+      path: `checkpoints/${RUN_ID}/sp-5/`,
+      tasks: tasks(180),
+    },
+    checkpoint(4, 48, 140),
+    checkpoint(3, 36, 90),
+    checkpoint(2, 24, 60),
+    checkpoint(1, 12, 40),
+  ];
+}
+
 function runSplits() {
   const ranges = Array.from({ length: 16 }, (_, i) => i);
   return ranges
@@ -525,6 +588,7 @@ function cluster() {
 export const SERVER: Record<string, unknown> = {
   "/api/v1/cluster": () => cluster(),
   [`/api/v1/runs/${RUN_ID}/splits`]: () => runSplits(),
+  [`/api/v1/runs/${RUN_ID}/checkpoints`]: () => runCheckpoints(),
   [`/api/v1/runs/${RUN_ID}/tasks`]: () => runTasks(),
   [`/api/v1/runs/${RUN_ID}/logs`]: (_body: string, _language: string, url: URL) => taskLog(url),
   "/api/v1/runs": () => runs(),

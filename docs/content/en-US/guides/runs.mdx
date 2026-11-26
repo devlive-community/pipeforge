@@ -87,6 +87,23 @@ Splits appear once the run starts; a source that is not split has none.
 
 <Screenshot name="run-splits" alt="The splits of a run" />
 
+The **Checkpoints** tab (`/runs/<id>?tab=checkpoints`) lists the [checkpoints](../concepts/checkpoint)
+and savepoints of the run across its attempts, newest first:
+
+- at the top, the last completed checkpoint and how many completed, were savepoints or failed
+- for each, its number, type, status, why it was taken (`PERIODIC`, `SAVEPOINT`, `PAUSE`, `FINISH`,
+  ...), when, how long it took, the longest barrier alignment of its tasks, its size, and the name of
+  a savepoint or the error of a failed one
+- choose a number to see each task's part: how long its snapshot held it up, how long the upload and
+  the alignment took and the size of its states; the choice is part of the address, and the last
+  completed one is shown until you choose another
+
+While the run runs, **Take savepoint** takes one, with an optional name, and shows its number and
+directory once it completed; a savepoint is kept until it is deleted by hand. A long alignment means
+the inputs of a task are backpressured; a failed checkpoint says which tasks did not answer.
+
+<Screenshot name="run-checkpoints" alt="The checkpoints of a run" />
+
 The **Logs** tab (`/runs/<id>?tab=logs`) reads a task's log from the worker it ran on, through the
 master:
 

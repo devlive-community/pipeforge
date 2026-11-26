@@ -66,13 +66,11 @@
     "invalidYaml": "请先修复 YAML 语法，再编辑拓扑。",
     "connectFrom": "{id} 的输出端口",
     "connectTo": "{id} 的输入端口",
-
     "nodeList": "作业节点",
     "searchNodes": "按节点名或插件筛选",
     "noMatchingNodes": "没有符合条件的节点。",
     "inspector": "节点配置",
     "openYaml": "定位到 YAML",
-
     "view": "编辑器视图",
     "showResults": "展开结果",
     "hideResults": "收起结果",
@@ -238,7 +236,8 @@
       "metrics": "指标",
       "plan": "执行计划",
       "splits": "分片",
-      "logs": "日志"
+      "logs": "日志",
+      "checkpoints": "Checkpoint"
     },
     "facts": {
       "state": "状态",
@@ -355,6 +354,52 @@
       "none": "还没有分片",
       "noneHint": "运行开始后 Source 才会分发分片；不分片的 Source 没有分片。",
       "failed": "无法加载分片：{message}"
+    },
+    "checkpoints": {
+      "summary": "Checkpoint",
+      "last": "最近完成",
+      "lastValue": "#{id}，完成于 {at}",
+      "completed": "已完成的 checkpoint",
+      "savepoints": "Savepoint",
+      "failedCount": "失败",
+      "savepoint": "Savepoint",
+      "savepointName": "名称",
+      "savepointPlaceholder": "例如 before-upgrade",
+      "take": "做 savepoint",
+      "taking": "正在做 savepoint",
+      "taken": "Savepoint #{id} 已完成，位于 {path}",
+      "takeFailed": "Savepoint 失败：{message}",
+      "notRunning": "只有运行中的运行才能做 savepoint。",
+      "none": "还没有 checkpoint",
+      "noneHint": "设置了 env.checkpoint.enabled 的作业按 env.checkpoint.interval 做 checkpoint；运行期间也可以手动做 savepoint。",
+      "failed": "无法加载 checkpoint：{message}",
+      "caption": "运行的 checkpoint 与 savepoint，从新到旧",
+      "id": "编号",
+      "type": "类型",
+      "status": "状态",
+      "reason": "触发原因",
+      "takenAt": "触发时间",
+      "duration": "耗时",
+      "alignment": "对齐耗时",
+      "size": "大小",
+      "detail": "名称或错误",
+      "attempt": "尝试",
+      "path": "目录",
+      "types": {
+        "CHECKPOINT": "Checkpoint",
+        "SAVEPOINT": "Savepoint"
+      },
+      "states": {
+        "COMPLETED": "已完成",
+        "FAILED": "失败",
+        "IN_PROGRESS": "进行中"
+      },
+      "tasksOf": "Checkpoint #{id} 的各个 Task",
+      "noTasks": "还没有 Task 参与。",
+      "task": "Task",
+      "sync": "快照",
+      "async": "上传",
+      "stateSize": "状态大小"
     }
   },
   "cluster": {

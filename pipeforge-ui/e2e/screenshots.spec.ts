@@ -72,6 +72,11 @@ const PAGES: Shot[] = [
     ready: { "en-US": "9 of 13 splits read", "zh-CN": "已读完 9 / 13 个分片" },
   },
   {
+    name: "run-checkpoints",
+    path: `/runs/${RUN_ID}?tab=checkpoints`,
+    ready: { "en-US": "before-index-rebuild", "zh-CN": "before-index-rebuild" },
+  },
+  {
     name: "run-logs",
     path: `/runs/${RUN_ID}?tab=logs`,
     ready: {

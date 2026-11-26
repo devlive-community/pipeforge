@@ -34,6 +34,9 @@ export type RunSplit = Schemas["Split"];
 export type RunTask = Schemas["Task"];
 export type LogChunk = Schemas["LogChunk"];
 export type ClusterView = Schemas["ClusterView"];
+export type RunCheckpoint = Schemas["Checkpoint"];
+export type CheckpointTask = Schemas["CheckpointTask"];
+export type RunAttempt = Schemas["AttemptView"];
 export type PreviewRequest = Schemas["PreviewRequest"];
 export type PreviewResult = Schemas["PreviewResult"];
 
