@@ -50,7 +50,13 @@ import picocli.CommandLine.Parameters;
             RunClusterCommands.Logs.class,
             RunClusterCommands.Metrics.class,
             RunClusterCommands.Analyze.class,
-            RunClusterCommands.Cancel.class
+            RunClusterCommands.Cancel.class,
+            RunRecoveryCommands.Pause.class,
+            RunRecoveryCommands.Resume.class,
+            RunRecoveryCommands.Savepoint.class,
+            RunRecoveryCommands.Retry.class,
+            RunRecoveryCommands.Checkpoints.class,
+            RunRecoveryCommands.Attempts.class
         })
 public final class RunCommand extends BaseCommand {
 

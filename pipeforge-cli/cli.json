@@ -411,6 +411,168 @@
       }
     } ]
   }, {
+    "name" : "run pause",
+    "anchor" : "cmd-run-pause",
+    "synopsis" : "pipeforge run pause [options] <run>",
+    "description" : {
+      "en-US" : "Stop a running run with a savepoint; it holds no slots until it is resumed. With --wait, wait until it is paused.",
+      "zh-CN" : "用 savepoint 停止运行中的运行；在继续之前它不占用 Slot。指定 --wait 时等待它暂停。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--name" ],
+      "label" : "<name>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The name of the savepoint; a time stamp when not given.",
+        "zh-CN" : "savepoint 的名称；不指定时为时间戳。"
+      }
+    }, {
+      "names" : [ "--wait" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Wait until the run is paused.",
+        "zh-CN" : "等待运行暂停。"
+      }
+    }, {
+      "names" : [ "--timeout" ],
+      "label" : "<duration>",
+      "default" : "15m",
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "With --wait: how long to wait, such as 15m (the default); exit code 5 when it is still pausing then.",
+        "zh-CN" : "指定 --wait 时最多等待多久，例如 15m（默认）；届时仍在暂停中则以退出码 5 结束。"
+      }
+    } ]
+  }, {
+    "name" : "run resume",
+    "anchor" : "cmd-run-resume",
+    "synopsis" : "pipeforge run resume [options] <run>",
+    "description" : {
+      "en-US" : "Start a paused run again from the savepoint it was paused at.",
+      "zh-CN" : "从暂停时的 savepoint 重新启动已暂停的运行。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "run savepoint",
+    "anchor" : "cmd-run-savepoint",
+    "synopsis" : "pipeforge run savepoint [options] <run>",
+    "description" : {
+      "en-US" : "Take a savepoint of a running run; the run goes on, and a run can start from the savepoint later.",
+      "zh-CN" : "为运行中的运行做一次 savepoint；运行继续进行，之后可以从这个 savepoint 启动运行。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--name" ],
+      "label" : "<name>",
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "The name of the savepoint; a time stamp when not given.",
+        "zh-CN" : "savepoint 的名称；不指定时为时间戳。"
+      }
+    } ]
+  }, {
+    "name" : "run retry",
+    "anchor" : "cmd-run-retry",
+    "synopsis" : "pipeforge run retry [options] <run>",
+    "description" : {
+      "en-US" : "Start the next attempt of a run that failed, timed out or was cancelled, whatever env.retry allows: from its last checkpoint when it has one, else from the start.",
+      "zh-CN" : "为失败、超时或被取消的运行开始下一次尝试，不受 env.retry 限制：有 checkpoint 时从最近的 checkpoint 继续，否则从头开始。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ {
+      "names" : [ "--from-checkpoint" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Go on from the last completed checkpoint; refused when the run has none.",
+        "zh-CN" : "从最近完成的 checkpoint 继续；运行没有 checkpoint 时会被拒绝。"
+      }
+    }, {
+      "names" : [ "--from-scratch" ],
+      "label" : null,
+      "default" : null,
+      "repeatable" : false,
+      "description" : {
+        "en-US" : "Start over from the beginning.",
+        "zh-CN" : "从头开始。"
+      }
+    } ]
+  }, {
+    "name" : "run checkpoints",
+    "anchor" : "cmd-run-checkpoints",
+    "synopsis" : "pipeforge run checkpoints [options] <run>",
+    "description" : {
+      "en-US" : "Show the checkpoints and savepoints of a run, newest first.",
+      "zh-CN" : "显示运行的 checkpoint 和 savepoint，从新到旧。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
+    "name" : "run attempts",
+    "anchor" : "cmd-run-attempts",
+    "synopsis" : "pipeforge run attempts [options] <run>",
+    "description" : {
+      "en-US" : "Show the attempts of a run: their state, rows, where each started from and its error.",
+      "zh-CN" : "显示运行的各次尝试：状态、行数、每次从哪里开始以及错误。"
+    },
+    "arguments" : [ {
+      "label" : "<run>",
+      "repeatable" : false,
+      "required" : true,
+      "description" : {
+        "en-US" : "The ID of the run.",
+        "zh-CN" : "运行 ID。"
+      }
+    } ],
+    "options" : [ ]
+  }, {
     "name" : "job",
     "anchor" : "cmd-job",
     "synopsis" : "pipeforge job <command>",

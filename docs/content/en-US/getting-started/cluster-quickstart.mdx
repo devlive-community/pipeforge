@@ -87,6 +87,17 @@ submits the job and prints the run's ID, for scripts that follow it later.
 | `pipeforge run metrics <run>` | The metrics of the run and the rows of each node |
 | `pipeforge run analyze <run>` | The [run analysis](../concepts/plan-and-explain#run-analysis): rates, waits, the bottleneck and what to change |
 | `pipeforge run cancel <run> [--reason text]` | Asks the run to stop; it asks first on a terminal, and needs `--yes` elsewhere |
+| `pipeforge run attempts <run>` | The attempts of the run: state, start, rows, the checkpoint each started from, the error, and when the next starts while it waits to be retried |
+| `pipeforge run retry <run> [--from-checkpoint \| --from-scratch]` | Starts the next attempt of a run that failed, timed out or was cancelled; from its last checkpoint when it has one unless told otherwise |
+
+For jobs that take [checkpoints](../concepts/checkpoint):
+
+| Command | Does |
+|---|---|
+| `pipeforge run checkpoints <run>` | The checkpoints and savepoints of the run, newest first, with their duration, size and the error of a failed one |
+| `pipeforge run savepoint <run> [--name name]` | Takes a savepoint of the running run; the run goes on |
+| `pipeforge run pause <run> [--name name] [--wait]` | Stops the run with a savepoint; it holds no slots while paused. `--wait` waits until it is paused (`--timeout`, 15 minutes by default, exit code 5) and exits with 1 when the savepoint failed and the run read on |
+| `pipeforge run resume <run>` | Starts the paused run again from its savepoint |
 
 Every command prints JSON with `-o json`, with the fields of the [REST API](../reference/api). An
 unknown run exits with 6 and `PF-CONF-0010`; a server that cannot be reached with 1 and

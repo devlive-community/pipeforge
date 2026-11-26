@@ -80,6 +80,17 @@ Job orders-demo SUCCESS in 4.1s: read 5,000,000 rows, wrote 5,000,000 rows (1,21
 | `pipeforge run metrics <run>` | 运行的指标和每个节点的行数 |
 | `pipeforge run analyze <run>` | [运行分析](../concepts/plan-and-explain#运行分析)：速率、等待、瓶颈和建议 |
 | `pipeforge run cancel <run> [--reason 文本]` | 要求运行停止；在终端上会先询问，其他情况下需要 `--yes` |
+| `pipeforge run attempts <run>` | 运行的各次尝试：状态、开始时间、行数、每次从哪个 checkpoint 开始、错误，以及等待重试时下一次尝试的开始时间 |
+| `pipeforge run retry <run> [--from-checkpoint \| --from-scratch]` | 为失败、超时或被取消的运行开始下一次尝试；不指定时有 checkpoint 就从最近的 checkpoint 继续 |
+
+对于做 [checkpoint](../concepts/checkpoint) 的作业：
+
+| 命令 | 作用 |
+|---|---|
+| `pipeforge run checkpoints <run>` | 运行的 checkpoint 和 savepoint，从新到旧，带耗时、大小以及失败时的错误 |
+| `pipeforge run savepoint <run> [--name 名称]` | 为运行中的运行做一次 savepoint；运行继续进行 |
+| `pipeforge run pause <run> [--name 名称] [--wait]` | 用 savepoint 停止运行；暂停期间不占用 Slot。`--wait` 等待它暂停（`--timeout`，默认 15 分钟，超时退出码 5），savepoint 失败、运行继续读取时以 1 退出 |
+| `pipeforge run resume <run>` | 从 savepoint 重新启动已暂停的运行 |
 
 所有命令加 `-o json` 时输出 JSON，字段与 [REST API](../reference/api) 一致。运行不存在时以 6 退出并报告 `PF-CONF-0010`；
 无法连接服务端时以 1 退出并报告 `PF-CLUS-0008`。[Web UI](../guides/runs) 中显示的是同样的运行。

@@ -418,6 +418,123 @@ class RunClusterTest {
         assertThat(alone.err()).isEqualTo("ERROR PF-CLUS-0019 Master m cannot hand over\n");
     }
 
+    static final String CHECKPOINTS =
+            """
+            [{"id": 9, "attempt": 2, "type": "SAVEPOINT", "status": "COMPLETED", "reason": "PAUSE",
+              "triggeredAt": "2026-11-26T08:10:00Z", "completedAt": "2026-11-26T08:10:01.250Z", "sizeBytes": 2048,
+              "path": "run/sp-9/", "tasks": []},
+             {"id": 8, "attempt": 2, "type": "CHECKPOINT", "status": "FAILED", "reason": "PERIODIC",
+              "triggeredAt": "2026-11-26T08:09:00Z", "path": "run/chk-8/",
+              "error": {"code": "PF-CKPT-0001", "message": "Checkpoint 8 timed out"}, "tasks": []},
+             {"id": 7, "attempt": 1, "type": "SAVEPOINT", "status": "COMPLETED", "reason": "SAVEPOINT",
+              "name": "before-upgrade", "triggeredAt": "2026-11-26T08:05:00Z", "completedAt": "2026-11-26T08:05:00.400Z",
+              "sizeBytes": 1536, "path": "run/sp-7/", "tasks": [{"task": "r/src/0/0", "states": 1, "syncMs": 2,
+              "asyncMs": 3, "alignmentMs": 0, "stateBytes": 1536}]}]
+            """;
+
+    @Test
+    void showsTheCheckpointsAndAttemptsOfARun() throws Exception {
+        routes.put("GET /api/v1/runs/" + ID + "/checkpoints", () -> CHECKPOINTS);
+        Shell.Result checkpoints = shell.run("run", "checkpoints", ID);
+        assertThat(checkpoints.exit()).as(checkpoints.err()).isZero();
+        golden("run-checkpoints.txt", checkpoints.out());
+        Shell.Result json = shell.run("run", "checkpoints", ID, "-o", "json");
+        assertThat(JSON.readTree(json.out())
+                        .get(2)
+                        .path("tasks")
+                        .get(0)
+                        .path("syncMs")
+                        .asInt())
+                .isEqualTo(2);
+        routes.put("GET /api/v1/runs/" + ID + "/checkpoints", () -> "[]");
+        assertThat(shell.run("run", "checkpoints", ID).out()).isEqualTo("Run " + ID + " has no checkpoints.\n");
+
+        routes.put(
+                "GET /api/v1/runs/" + ID + "/attempts",
+                () ->
+                        """
+                [{"attempt": 1, "status": "FAILED", "startedAt": "2026-11-26T08:00:00Z", "endedAt": "2026-11-26T08:04:00Z",
+                  "rowsRead": 1234567, "rowsWritten": 1234000, "elapsedMs": 240000,
+                  "error": {"code": "PF-CONN-0003", "message": "The connection was lost"}},
+                 {"attempt": 2, "status": "RUNNING", "startedAt": "2026-11-26T08:05:00Z", "rowsRead": 50,
+                  "rowsWritten": 50, "elapsedMs": 61000, "restorePath": "run/chk-6/"}]
+                """);
+        Shell.Result attempts = shell.run("run", "attempts", ID);
+        assertThat(attempts.exit()).as(attempts.err()).isZero();
+        golden("run-attempts.txt", attempts.out());
+        routes.put(
+                "GET /api/v1/runs/" + ID + "/attempts",
+                () ->
+                        """
+                [{"attempt": 1, "status": "FAILED", "startedAt": "2026-11-26T08:00:00Z",
+                  "retryAt": "2999-01-01T00:00:00Z", "error": {"code": "PF-CONN-0003", "message": "lost"}}]
+                """);
+        assertThat(shell.run("run", "attempts", ID).out()).contains("next attempt in");
+    }
+
+    @Test
+    void pausesResumesTakesSavepointsAndRetriesRuns() throws Exception {
+        AtomicInteger asked = new AtomicInteger();
+        statuses.put("POST /api/v1/runs/" + ID + "/pause", 202);
+        routes.put("POST /api/v1/runs/" + ID + "/pause", () -> run("PAUSING", ""));
+        routes.put(
+                "GET /api/v1/runs/" + ID,
+                () -> "{\"run\": " + run(asked.incrementAndGet() < 3 ? "PAUSING" : "PAUSED", "")
+                        + ", \"transitions\": []}");
+        Shell.Result asking = shell.run("run", "pause", ID);
+        assertThat(asking.exit()).as(asking.err()).isZero();
+        assertThat(asking.out()).isEqualTo("Run " + ID + " is PAUSING.\n");
+        Shell.Result paused = shell.run("run", "pause", ID, "--name", "nightly", "--wait", "--poll", "10ms");
+        assertThat(paused.exit()).as(paused.err()).isZero();
+        assertThat(paused.out())
+                .isEqualTo("Run " + ID + " is PAUSED; resume it with pipeforge run resume " + ID + ".\n");
+        assertThat(received).anyMatch(r -> r.equals("POST /api/v1/runs/" + ID + "/pause {\"name\":\"nightly\"}"));
+
+        // the savepoint failed: the run reads on
+        routes.put("GET /api/v1/runs/" + ID, () -> "{\"run\": " + run("RUNNING", "") + ", \"transitions\": []}");
+        Shell.Result failed = shell.run("run", "pause", ID, "--wait", "--poll", "10ms");
+        assertThat(failed.exit()).isEqualTo(ExitCode.ERROR.code());
+        assertThat(failed.err()).isEqualTo("Run " + ID + " was not paused; it is RUNNING.\n");
+        routes.put("GET /api/v1/runs/" + ID, () -> "{\"run\": " + run("PAUSING", "") + ", \"transitions\": []}");
+        Shell.Result slow = shell.run("run", "pause", ID, "--wait", "--timeout", "30ms", "--poll", "10ms");
+        assertThat(slow.exit()).isEqualTo(ExitCode.TIMEOUT.code());
+
+        routes.put("POST /api/v1/runs/" + ID + "/resume", () -> run("QUEUE", ""));
+        Shell.Result resumed = shell.run("run", "resume", ID);
+        assertThat(resumed.out()).isEqualTo("Run " + ID + " is QUEUE: it goes on from its savepoint.\n");
+
+        routes.put(
+                "POST /api/v1/runs/" + ID + "/savepoint",
+                () -> CHECKPOINTS.substring(CHECKPOINTS.indexOf("{\"id\": 7"), CHECKPOINTS.lastIndexOf(']')));
+        Shell.Result savepoint = shell.run("run", "savepoint", ID, "--name", "before-upgrade");
+        assertThat(savepoint.exit()).as(savepoint.err()).isZero();
+        assertThat(savepoint.out()).isEqualTo("Savepoint 7 of run " + ID + " at run/sp-7/ (1.5 KiB).\n");
+
+        routes.put("POST /api/v1/runs/" + ID + "/retry", () -> run("QUEUE", ""));
+        assertThat(shell.run("run", "retry", ID, "--from-scratch").out())
+                .isEqualTo("Run " + ID + " is QUEUE: its next attempt starts.\n");
+        shell.run("run", "retry", ID, "--from-checkpoint");
+        shell.run("run", "retry", ID);
+        assertThat(received)
+                .filteredOn(r -> r.startsWith("POST /api/v1/runs/" + ID + "/retry"))
+                .containsExactly(
+                        "POST /api/v1/runs/" + ID + "/retry {\"from\":\"SCRATCH\"}",
+                        "POST /api/v1/runs/" + ID + "/retry {\"from\":\"CHECKPOINT\"}",
+                        "POST /api/v1/runs/" + ID + "/retry {}");
+        assertThat(shell.run("run", "retry", ID, "--from-scratch", "--from-checkpoint")
+                        .exit())
+                .isEqualTo(ExitCode.USAGE.code());
+
+        // a run that is not running cannot be paused
+        statuses.put("POST /api/v1/runs/" + ID + "/pause", 400);
+        routes.put(
+                "POST /api/v1/runs/" + ID + "/pause",
+                () -> "{\"code\":\"PF-CONF-0007\",\"message\":\"run is SUCCESS; only a running run can be paused\"}");
+        Shell.Result refused = shell.run("run", "pause", ID);
+        assertThat(refused.exit()).isEqualTo(ExitCode.INVALID.code());
+        assertThat(refused.err()).isEqualTo("ERROR PF-CONF-0007 run is SUCCESS; only a running run can be paused\n");
+    }
+
     @Test
     void explainsAJobOnTheServer() throws Exception {
         routes.put("POST /api/v1/explain", () -> "{\"plan\": {\"nodes\": []}, \"text\": \"Job users  mode=batch\"}");

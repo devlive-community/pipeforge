@@ -34,7 +34,7 @@ directory when the installation is not writable); later commands start in about 
 ## Servers
 
 `pipeforge run <file>` without `--local`, the commands under `run` (`status`, `watch`, `logs`,
-`metrics`, `analyze`, `cancel`), the commands under `cluster` (`status`, `workers`, `drain`, `uncordon`,
+`metrics`, `analyze`, `cancel`, `pause`, `resume`, `savepoint`, `retry`, `checkpoints`, `attempts`), the commands under `cluster` (`status`, `workers`, `drain`, `uncordon`,
 `failover`) and `job explain` talk to a
 server: `--server <url>`, else `PIPEFORGE_SERVER`, else
 `http://127.0.0.1:8080`. The [cluster quickstart](../getting-started/cluster-quickstart) shows

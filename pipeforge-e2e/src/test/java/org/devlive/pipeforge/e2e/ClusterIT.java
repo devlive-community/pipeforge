@@ -218,6 +218,23 @@ class ClusterIT {
                         .asText())
                 .isEqualTo("CANCELLED");
 
+        // retried by hand from the start, as its second attempt, and cancelled again
+        assertThat(cluster.pipeforge(home, "run", "checkpoints", slow).out())
+                .isEqualTo("Run " + slow + " has no checkpoints.\n");
+        Cluster.Command retry = cluster.pipeforge(home, "run", "retry", slow, "--from-scratch");
+        assertThat(retry.exit()).as(retry.err()).isZero();
+        cluster.await(
+                "/api/v1/runs/" + slow,
+                d -> "RUNNING".equals(d.path("run").path("status").asText()),
+                Duration.ofMinutes(1));
+        Cluster.Command attempts = cluster.pipeforge(home, "run", "attempts", slow, "-o", "json");
+        assertThat(attempts.exit()).as(attempts.err()).isZero();
+        assertThat(Cluster.JSON.readTree(attempts.out()).findValuesAsText("status"))
+                .containsExactly("CANCELLED", "RUNNING");
+        assertThat(cluster.pipeforge(home, "run", "cancel", slow, "--yes").exit())
+                .isZero();
+        cluster.await("/api/v1/runs/" + slow, Support::ended, Duration.ofMinutes(1));
+
         // the cluster and the server's plan of a job
         Cluster.Command workers = cluster.pipeforge(home, "cluster", "workers");
         assertThat(workers.exit()).as(workers.err()).isZero();

@@ -1,0 +1,4 @@
+ID  TYPE        STATUS     REASON     ATTEMPT  TAKEN                 DURATION     SIZE  NAME, PATH OR ERROR
+ 9  SAVEPOINT   COMPLETED  PAUSE            2  2026-11-26 08:10:00Z      1.3s  2.0 KiB  run/sp-9/
+ 8  CHECKPOINT  FAILED     PERIODIC         2  2026-11-26 08:09:00Z         -        -  PF-CKPT-0001 Checkpoint 8 timed out
+ 7  SAVEPOINT   COMPLETED  SAVEPOINT        1  2026-11-26 08:05:00Z     400ms  1.5 KiB  before-upgrade
