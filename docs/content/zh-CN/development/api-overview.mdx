@@ -149,6 +149,13 @@ public final class MySink implements Sink<MyCommittable, MyState>, ErrorClassifi
 设置插件的 ClassLoader 和 Task 的日志，在 Task 结束时中断它们，之后仍然存活的线程会被报告为泄漏（见[隔离](../operations/isolation)）。
 其中任何一个线程抛出未捕获的异常都会让 Task 失败。请在 `close()` 中停止这些线程，并让它们在被中断时结束。
 
+### 插件的本地文件
+
+运行时需要本地文件的 Reader 或 Writer（例如溢写行或缓冲待上传的数据）把文件写在 `context.workDirectory()` 中：这是它在 Worker
+磁盘上独有的目录，第一次调用时创建，Task 结束时连同其中的内容一起删除。其中的内容不会在重启后保留，需要保留的内容请放进 checkpoint
+状态。引擎把它与 Task 日志一起计入该作业在 Worker 上的磁盘配额（见[隔离](../operations/isolation)）。这个方法是 `@Evolving`；
+连接器 testkit 暂时还不提供它。
+
 ## 表达式
 
 需要用户写表达式的组件（例如字段映射的 `expr`、过滤条件）不需要自带解析器：`context.expressions()` 提供引擎的[表达式语言](../concepts/expressions)，

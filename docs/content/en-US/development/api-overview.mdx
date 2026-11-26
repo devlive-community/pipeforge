@@ -185,6 +185,16 @@ thread that is still alive afterwards as leaked (see [isolation](../operations/i
 uncaught exception in one of them fails the task. Stop the threads in `close()`, and let them end
 when they are interrupted.
 
+### Local files of a plugin
+
+A reader or writer that needs local files while it runs, for example to spill rows or to buffer an
+upload, writes them into `context.workDirectory()`: a directory of its own on the worker's disk,
+created on the first call and deleted with everything in it when the task ends. Nothing in it
+survives a restart, so what must be kept goes into the checkpoint state. The engine counts it, with
+the task logs, against the disk quota of the job on the worker (see
+[isolation](../operations/isolation)). The method is `@Evolving`; the connector testkit does not
+provide it yet.
+
 ## Expressions
 
 Components that take expressions from the user, such as the `expr` of a field mapping or a filter

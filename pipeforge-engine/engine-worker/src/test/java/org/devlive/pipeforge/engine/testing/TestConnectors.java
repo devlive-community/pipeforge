@@ -146,6 +146,10 @@ public final class TestConnectors {
     static final Option<Integer> PAD = Options.key("pad").intType().defaultValue(0);
 
     static final Option<Integer> SLOW_MS = Options.key("slow-ms").intType().defaultValue(0);
+    /** The collect writer writes this many bytes into its work directory before its first row. */
+    static final Option<Integer> DISK_BYTES =
+            Options.key("disk-bytes").intType().defaultValue(0);
+
     static final Option<String> COMMIT = Options.key("commit").stringType().defaultValue("none");
     /** The collect sink fails only in this subtask; -1 in every one. */
     static final Option<Integer> FAIL_SUBTASK =
@@ -772,7 +776,7 @@ public final class TestConnectors {
             return OptionRule.builder()
                     .required(PROBE)
                     .optional(FAIL_AT, FAIL_WITH, SLOW_MS, BLOCK, COMMIT, BAD_IDS, REPORT_IDS, FAIL_SUBTASK, FAIL_TIMES)
-                    .optional(PROGRESS)
+                    .optional(PROGRESS, DISK_BYTES)
                     .build();
         }
 
@@ -964,6 +968,11 @@ public final class TestConnectors {
                     && (config.get(FAIL_SUBTASK) < 0 || config.get(FAIL_SUBTASK) == context.subtaskIndex())
                     && probe.sinkFailures.getAndIncrement() < config.get(FAIL_TIMES)) {
                 throw failure(config, "writing row " + written);
+            }
+            if (written == 0 && config.get(DISK_BYTES) > 0) {
+                java.nio.file.Path file = context.workDirectory().resolve("spill.bin");
+                java.nio.file.Files.write(file, new byte[config.get(DISK_BYTES)]);
+                probe.workFiles.add(file);
             }
             if (!"none".equals(config.get(BLOCK))) {
                 block(config.get(BLOCK), probe, cancelled);

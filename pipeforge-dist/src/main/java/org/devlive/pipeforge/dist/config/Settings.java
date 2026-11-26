@@ -295,8 +295,8 @@ public final class Settings {
             Setting.Type.STRING,
             "data/worker",
             false,
-            "The working directory of the worker: the plugin packages it downloaded from the master.",
-            "Worker 的工作目录：从 Master 下载的插件包。");
+            "The working directory of the worker: the plugin packages it downloaded from the master, and the work directories of the running jobs under jobs/.",
+            "Worker 的工作目录：从 Master 下载的插件包，以及 jobs/ 下运行中作业的工作目录。");
     public static final Setting WORKER_LOG_DIR = define(
             "worker.log.dir",
             "worker",
@@ -401,6 +401,14 @@ public final class Settings {
             false,
             "How long after a run ended the class loaders of its plugins may take to be collected; one still reachable then, and after a garbage collection, is logged as leaked with what holds it.",
             "运行结束后，其插件的 ClassLoader 最多可以用多久被回收；届时并且在一次垃圾回收之后仍可达的 ClassLoader 会作为泄漏记录到日志中，并给出持有者。");
+    public static final Setting DISK_QUOTA_PER_JOB = define(
+            "worker.disk.quota-per-job",
+            "worker",
+            Setting.Type.SIZE,
+            "10GB",
+            false,
+            "What one job may hold on the disk of a worker: the work directories of its readers and writers under worker.dir and its task logs. A job over it has its tasks on the worker fail with PF-RES-0004.",
+            "一个作业在一个 Worker 的磁盘上最多可以占用的空间：worker.dir 下它的 Reader 和 Writer 的工作目录以及它的 Task 日志。超过时，它在该 Worker 上的 Task 以 PF-RES-0004 失败。");
     public static final Setting BUFFER_SIZE = define(
             "network.buffer-size",
             "worker",

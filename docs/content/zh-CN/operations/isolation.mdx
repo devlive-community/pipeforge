@@ -1,6 +1,6 @@
 ---
 title: 隔离
-description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、堆守护、插件线程、取消超时与 ClassLoader 泄漏。
+description: 当前版本中共享 Worker 的作业如何彼此隔离：单行大小上限、每个 Task 可占用的内存、堆守护、插件线程、取消超时、ClassLoader 泄漏与作业的磁盘配额。
 order: 40
 ---
 
@@ -84,6 +84,23 @@ ClassLoader 和 Task 的日志，并且是守护线程。其中任何一个抛�
 
 本地运行在取消超时的两倍时放弃 Task。
 
+## 磁盘配额
+
+需要本地文件的 Reader 和 Writer 从上下文提供的工作目录中获取（`workDirectory()`，见 [API 概览](../development/api-overview)）。
+一个运行的工作目录位于 `<worker.dir>/jobs/<run>/` 下，每个 Task 的每个节点一个；Task 结束时删除它的目录，运行在该 Worker 上的
+最后一个 Task 结束时删除运行的目录，已停止的 Worker 留下的目录在它重新启动时删除。
+
+一个运行在 Worker 磁盘上占用的空间（工作目录与 Task 日志合计）受 `worker.disk.quota-per-job` 限制。Worker 每五秒检查一次；
+超出配额的运行在该 Worker 上的 Task 以 [`PF-RES-0004`](../reference/errors#pf-res-0004) 失败，错误中给出运行、占用的空间和配额。
+这些 Task 像被取消的 Task 一样停止，工作目录被删除；Task 日志保留，仍然可以查看。Worker 上的其他运行继续。写入不会在发生时被拒绝，
+因此一个运行最多会超出配额五秒内写入的量。
+
+| 配置项 | 默认值 | 含义 |
+|---|---|---|
+| `worker.disk.quota-per-job` | `10GB` | 一个运行在一个 Worker 的磁盘上最多可以占用的空间 |
+
+本地运行把工作目录放在临时目录中，不设配额。
+
 ## ClassLoader 泄漏
 
 每个运行都用自己的 ClassLoader 加载插件，运行在某个 Worker 上的最后一个 Task 结束后，Worker 会关闭它们。但仍可能有东西持有这些
@@ -120,6 +137,6 @@ Worker 作为泄漏记录到日志中，并给出占用者。
 - 堆守护只知道 Task 记账的内存；另一个运行用未记账的内存占满堆时，它会归咎错误的运行。它的动作目前只记录在 Worker 日志中，
   还没有对应的指标。Worker 仍然内存溢出时会停止，由部署环境重启。
 - ClassLoader 泄漏只记录在日志中，还没有对应的指标；泄漏较多的 Worker 也还不会自动重启。
-- 每个作业的磁盘配额在后续版本中提供。
+- 磁盘快满的 Worker 仍会接收新的 Task；拒绝接收以及作业磁盘占用的指标（`jobDiskUsedBytes`）在后续版本中提供。
 - 被放弃的 Task 的线程会保留到 Worker 重启；Worker 因残留线程自动重启在后续版本中提供。
 - Source 和 Sink 插件自身（例如它们的客户端库）占用的内存不计入记账。

@@ -82,6 +82,8 @@ final class Task implements Runnable {
     private final TaskMemory memory;
     private final DirtyRows dirty;
     private volatile @Nullable PluginThreads threads;
+    /** The work directories of the task's nodes; a temporary root until the executor sets one. */
+    private volatile @Nullable Workspace workspace;
     /** Writes the states of checkpoints; {@code null} until the executor sets it. */
     private volatile @Nullable StateUploader uploader;
 
@@ -128,6 +130,19 @@ final class Task implements Runnable {
 
     ExecutionAttemptId id() {
         return deployment.id();
+    }
+
+    /** Where the readers and writers of this task get their work directories; set before {@link #start}. */
+    void workspace(Workspace workspace) {
+        this.workspace = workspace;
+    }
+
+    private java.nio.file.Path workDirectory(String node) {
+        Workspace local = workspace;
+        if (local == null) {
+            throw new UnsupportedOperationException("Task " + deployment.id() + " has no work directory");
+        }
+        return local.directory(deployment.id(), node);
     }
 
     /** Where the states of this task's checkpoints are written; set before {@link #start}. */
@@ -315,7 +330,16 @@ final class Task implements Runnable {
         threads = started;
         try {
             operators = new OperatorChain(
-                    deployment, scope, name, master, network, () -> cancelled, memory, started, dirty);
+                    deployment,
+                    scope,
+                    name,
+                    master,
+                    network,
+                    () -> cancelled,
+                    memory,
+                    started,
+                    dirty,
+                    this::workDirectory);
             chain = operators;
             if (cancelled) {
                 throw new CancelledException();

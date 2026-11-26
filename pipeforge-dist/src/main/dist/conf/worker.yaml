@@ -30,7 +30,7 @@
 # The resource group the worker belongs to.
 # worker.resource-group: default
 
-# The working directory of the worker: the plugin packages it downloaded from the master.
+# The working directory of the worker: the plugin packages it downloaded from the master, and the work directories of the running jobs under jobs/.
 # worker.dir: data/worker
 
 # Where tasks write their own logs, relative to the installation directory: <job>/<run>/<vertex>-<subtask>-<attempt>.log.
@@ -71,6 +71,9 @@
 
 # How long after a run ended the class loaders of its plugins may take to be collected; one still reachable then, and after a garbage collection, is logged as leaked with what holds it.
 # worker.class-loader-leak-timeout: 1min
+
+# What one job may hold on the disk of a worker: the work directories of its readers and writers under worker.dir and its task logs. A job over it has its tasks on the worker fail with PF-RES-0004.
+# worker.disk.quota-per-job: 10GB
 
 # The size of a network buffer.
 # network.buffer-size: 32KB

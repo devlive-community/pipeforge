@@ -127,6 +127,8 @@ public final class ErrorCode {
             define("PF-RES-0001", "SLOTS_INSUFFICIENT", "job", "required", "available", "timeout");
     public static final ErrorCode OUT_OF_MEMORY =
             define("PF-RES-0002", "OUT_OF_MEMORY", "worker", "percent", "seconds", "run", "bytes");
+    public static final ErrorCode DISK_QUOTA_EXCEEDED =
+            define("PF-RES-0004", "DISK_QUOTA_EXCEEDED", "run", "worker", "bytes", "quota");
     public static final ErrorCode SLOT_TAKEN = define("PF-RES-0007", "SLOT_TAKEN", "worker", "slot", "holder");
     public static final ErrorCode NETWORK_BUFFERS_INSUFFICIENT =
             define("PF-RES-0008", "NETWORK_BUFFERS_INSUFFICIENT", "owner", "required", "available", "total");

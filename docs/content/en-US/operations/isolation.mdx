@@ -1,6 +1,6 @@
 ---
 title: Isolation
-description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, the heap guard, plugin threads, cancel timeouts and leaked class loaders.
+description: How jobs that share a worker are kept apart in this version - the row size limit, the memory each task may hold, the heap guard, plugin threads, cancel timeouts, leaked class loaders and the disk quota of a job.
 order: 40
 ---
 
@@ -104,6 +104,27 @@ left behind, with where it hangs. Other jobs on the worker keep running.
 
 Local runs give a task up at twice its cancel timeout.
 
+## Disk quota
+
+Readers and writers that need local files take them from the work directory their context gives
+them (`workDirectory()`, see the [API overview](../development/api-overview)). A run's work
+directories are under `<worker.dir>/jobs/<run>/`, one per task and node; a task's directory is
+deleted when the task ends, the run's when its last task on the worker ended, and what a stopped
+worker left there is deleted when it starts again.
+
+What a run holds on a worker's disk, its work directories and its task logs together, is limited by
+`worker.disk.quota-per-job`. The worker checks every five seconds; a run over its quota has its
+tasks on that worker fail with [`PF-RES-0004`](../reference/errors#pf-res-0004), naming the run, what
+it holds and the quota. They stop the way cancelled tasks do and their work directories are
+deleted; task logs are kept, so they stay readable. The other runs on the worker go on. Writes are
+not refused as they happen, so a run may go over its quota by what it writes within five seconds.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `worker.disk.quota-per-job` | `10GB` | What one run may hold on the disk of a worker |
+
+Local runs give work directories in a temporary directory and set no quota.
+
 ## Leaked class loaders
 
 Every run loads its plugins with class loaders of its own, which the worker closes when the last task
@@ -149,7 +170,8 @@ still accounted is logged by the worker as a leak, with what holds it.
   yet as metrics. A worker that runs out of memory anyway still stops; the deployment restarts it.
 - Leaked class loaders are logged but not yet counted as a metric, and a worker with many of them
   does not restart by itself yet.
-- The disk quota per job comes in a later version.
+- A worker whose disk is nearly full still takes new tasks; refusing them, and a metric of the disk a
+  job uses (`jobDiskUsedBytes`), come in a later version.
 - A task that was given up keeps its thread until the worker restarts; restarting a worker with
   stuck threads by itself comes in a later version.
 - The memory of the source and sink plugins themselves, such as their client libraries, is not

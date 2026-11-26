@@ -72,7 +72,8 @@ final class OperatorChain {
             BooleanSupplier cancelled,
             TaskMemory memory,
             PluginThreads threads,
-            DirtyRows dirty) {
+            DirtyRows dirty,
+            java.util.function.Function<String, java.nio.file.Path> work) {
         this.dirty = dirty;
         this.memory = memory;
         this.deployment = deployment;
@@ -98,7 +99,8 @@ final class OperatorChain {
         ChainOutput next;
         if (chain.hasSink()) {
             PlannedNode node = chain.sink();
-            sink = new SinkOperator(node, call(node, scope), taskName, clock, last, last + 1, memory, threads, dirty);
+            sink = new SinkOperator(
+                    node, call(node, scope), taskName, clock, last, last + 1, memory, threads, dirty, work);
             deferred = null;
             next = sink;
         } else {
@@ -123,7 +125,7 @@ final class OperatorChain {
         if (chain.hasSource()) {
             PlannedNode node = chain.source();
             source = new SourceOperator(
-                    node, call(node, scope), job, deployment.id(), deployment.parallelism(), master, threads);
+                    node, call(node, scope), job, deployment.id(), deployment.parallelism(), master, threads, work);
             sourceMetrics = new OperatorMetrics(node.id());
             output = new ChainReaderOutput(next, sourceMetrics, memory, node.id(), dirty, throttle);
         } else {

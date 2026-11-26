@@ -41,6 +41,7 @@ import org.devlive.pipeforge.engine.worker.MemoryLimits;
 import org.devlive.pipeforge.engine.worker.PluginCache;
 import org.devlive.pipeforge.engine.worker.SlotTable;
 import org.devlive.pipeforge.engine.worker.TaskExecutor;
+import org.devlive.pipeforge.engine.worker.Workspace;
 import org.devlive.pipeforge.engine.worker.log.LogService;
 import org.devlive.pipeforge.plugin.PluginManager;
 import org.slf4j.Logger;
@@ -105,7 +106,10 @@ public final class WorkerProcess implements AutoCloseable {
         threads.scheduleWithFixedDelay(this::cleanLogs, 1, 60, TimeUnit.MINUTES);
         TaskExecutor.Options options = TaskExecutor.Options.of(memoryLimits(config, exchange, slots))
                 .withCancelKillTimeout(config.duration(Settings.CANCEL_KILL_TIMEOUT))
-                .withHeapGuard(heapGuard(config));
+                .withHeapGuard(heapGuard(config))
+                .withWorkspace(new Workspace.Settings(
+                        home.resolve(config.string(Settings.WORKER_DIR)).resolve("jobs"),
+                        config.size(Settings.DISK_QUOTA_PER_JOB)));
         if (checkpoints != null) {
             options = options.withCheckpointStorage(checkpoints);
         }

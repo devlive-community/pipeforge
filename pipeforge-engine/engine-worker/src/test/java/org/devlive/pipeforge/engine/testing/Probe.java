@@ -51,6 +51,8 @@ public final class Probe {
     public final CountDownLatch release = new CountDownLatch(1);
 
     public volatile int commitAttempts;
+    /** Files the collect writer wrote into its work directory. */
+    public final List<java.nio.file.Path> workFiles = Collections.synchronizedList(new ArrayList<>());
 
     private Probe() {}
 

@@ -45,11 +45,12 @@ final class SourceOperator {
             ExecutionAttemptId task,
             int parallelism,
             JobMasterGateway master,
-            PluginThreads threads) {
+            PluginThreads threads,
+            java.util.function.Function<String, java.nio.file.Path> work) {
         this.node = node;
         this.call = call;
         this.context = new TaskReaderContext(
-                job, task, parallelism, node.id(), call.classLoader(), master, threads.factory(call));
+                job, task, parallelism, node.id(), call.classLoader(), master, threads.factory(call), work);
     }
 
     @SuppressWarnings("unchecked")
@@ -223,8 +224,14 @@ final class SourceOperator {
             String node,
             ClassLoader classLoader,
             JobMasterGateway master,
-            java.util.concurrent.ThreadFactory threadFactory)
+            java.util.concurrent.ThreadFactory threadFactory,
+            java.util.function.Function<String, java.nio.file.Path> work)
             implements ReaderContext {
+
+        @Override
+        public java.nio.file.Path workDirectory() {
+            return work.apply(node);
+        }
 
         @Override
         public int subtaskIndex() {

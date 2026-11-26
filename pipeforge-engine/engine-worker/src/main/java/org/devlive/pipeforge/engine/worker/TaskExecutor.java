@@ -62,6 +62,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
     private final ScheduledExecutorService watchdog;
     private final Map<ExecutionAttemptId, ScheduledFuture<?>> reporters = new ConcurrentHashMap<>();
     private final HeapGuard heapGuard;
+    private final Workspace workspace;
 
     /**
      * @param name the worker name, used in thread names
@@ -118,7 +119,8 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
             Duration leakGrace,
             org.devlive.pipeforge.engine.api.checkpoint.@Nullable CheckpointStorage checkpointStorage,
             int inlineThreshold,
-            HeapGuard.Settings heapGuard) {
+            HeapGuard.Settings heapGuard,
+            Workspace.Settings workspace) {
 
         /** Default memory limits, the kill timeout of local runs, one second of grace, no heap guard. */
         public static final Options DEFAULTS = new Options(
@@ -127,40 +129,56 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
                 Duration.ofSeconds(1),
                 null,
                 org.devlive.pipeforge.engine.rpc.CheckpointFiles.DEFAULT_INLINE_THRESHOLD,
-                HeapGuard.Settings.DISABLED);
+                HeapGuard.Settings.DISABLED,
+                Workspace.Settings.DEFAULTS);
 
         public Options {
             java.util.Objects.requireNonNull(memory, "memory");
             java.util.Objects.requireNonNull(leakGrace, "leakGrace");
             java.util.Objects.requireNonNull(heapGuard, "heapGuard");
+            java.util.Objects.requireNonNull(workspace, "workspace");
         }
 
         public static Options of(MemoryLimits memory) {
             return new Options(
-                    memory, null, DEFAULTS.leakGrace(), null, DEFAULTS.inlineThreshold(), DEFAULTS.heapGuard());
+                    memory,
+                    null,
+                    DEFAULTS.leakGrace(),
+                    null,
+                    DEFAULTS.inlineThreshold(),
+                    DEFAULTS.heapGuard(),
+                    DEFAULTS.workspace());
         }
 
         public Options withCancelKillTimeout(Duration timeout) {
-            return new Options(memory, timeout, leakGrace, checkpointStorage, inlineThreshold, heapGuard);
+            return new Options(memory, timeout, leakGrace, checkpointStorage, inlineThreshold, heapGuard, workspace);
         }
 
         public Options withLeakGrace(Duration grace) {
-            return new Options(memory, cancelKillTimeout, grace, checkpointStorage, inlineThreshold, heapGuard);
+            return new Options(
+                    memory, cancelKillTimeout, grace, checkpointStorage, inlineThreshold, heapGuard, workspace);
         }
 
         /** Where the tasks write states larger than the inline threshold. */
         public Options withCheckpointStorage(org.devlive.pipeforge.engine.api.checkpoint.CheckpointStorage storage) {
-            return new Options(memory, cancelKillTimeout, leakGrace, storage, inlineThreshold, heapGuard);
+            return new Options(memory, cancelKillTimeout, leakGrace, storage, inlineThreshold, heapGuard, workspace);
         }
 
         /** States up to this size travel in the acknowledgement; larger ones become files. */
         public Options withInlineThreshold(int bytes) {
-            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, bytes, heapGuard);
+            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, bytes, heapGuard, workspace);
+        }
+
+        /** Where the runs get their work directories, and how much of the disk a run may hold. */
+        public Options withWorkspace(Workspace.Settings settings) {
+            return new Options(
+                    memory, cancelKillTimeout, leakGrace, checkpointStorage, inlineThreshold, heapGuard, settings);
         }
 
         /** Guards the heap of the worker against the run that holds the most memory; checked every second. */
         public Options withHeapGuard(HeapGuard.Settings settings) {
-            return new Options(memory, cancelKillTimeout, leakGrace, checkpointStorage, inlineThreshold, settings);
+            return new Options(
+                    memory, cancelKillTimeout, leakGrace, checkpointStorage, inlineThreshold, settings, workspace);
         }
     }
 
@@ -193,6 +211,37 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         if (options.heapGuard().enabled()) {
             watchdog.scheduleWithFixedDelay(this::checkHeap, 1, 1, TimeUnit.SECONDS);
         }
+        this.workspace = new Workspace(name, options.workspace(), tasks::values, this::logDirectory, this::failTask);
+        if (options.workspace().quotaBytes() != Long.MAX_VALUE) {
+            watchdog.scheduleWithFixedDelay(this::checkDisk, 5, 5, TimeUnit.SECONDS);
+        }
+    }
+
+    /** The directory of a task's log, or {@code null} without task logs. */
+    private java.nio.file.@Nullable Path logDirectory(Task task) {
+        org.devlive.pipeforge.engine.worker.log.LogService service = logs;
+        return service == null
+                ? null
+                : service.path(task.deployment().chain().job().jobName(), task.id())
+                        .getParent();
+    }
+
+    private void checkDisk() {
+        try {
+            workspace.check();
+        } catch (RuntimeException e) {
+            LOG.warn("Checking the disk quotas of worker {} failed", name, e);
+        }
+    }
+
+    /** The work directories of the runs and the quota they share. */
+    Workspace workspace() {
+        return workspace;
+    }
+
+    /** What each run with running tasks holds on the disk of this worker, in bytes. */
+    public Map<String, Long> diskUsage() {
+        return workspace.usage();
     }
 
     /** A heap guard over the tasks of this executor; tests check it by hand with their own heap and clock. */
@@ -262,6 +311,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         }
         Task task = new Task(deployment, master, network, logs, limits, this::terminated);
         task.uploader(uploader);
+        task.workspace(workspace);
         if (tasks.putIfAbsent(deployment.id(), task) != null) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Task " + deployment.id() + " is already deployed"));
@@ -369,6 +419,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
 
     private void terminated(Task task) {
         tasks.remove(task.id(), task);
+        workspace.taskEnded(task.id());
         long left = task.memory().accounted();
         if (left != 0) {
             LOG.warn(
@@ -389,6 +440,7 @@ public final class TaskExecutor implements TaskExecutorGateway, LocalTasks, Auto
         }
         String run = task.id().runId();
         if (tasks.keySet().stream().noneMatch(id -> id.runId().equals(run))) {
+            workspace.runEnded(run);
             try {
                 runEnded.accept(run);
             } catch (RuntimeException e) {

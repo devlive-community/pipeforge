@@ -52,6 +52,8 @@ final class SinkOperator implements ChainOutput {
      * @param handoffSlot the clock slot for handing rows to the write thread, which is not the
      *     writer's own time
      */
+    private final java.util.function.Function<String, java.nio.file.Path> work;
+
     SinkOperator(
             PlannedNode node,
             OperatorCall call,
@@ -61,7 +63,9 @@ final class SinkOperator implements ChainOutput {
             int handoffSlot,
             TaskMemory memory,
             PluginThreads threads,
-            DirtyRows dirty) {
+            DirtyRows dirty,
+            java.util.function.Function<String, java.nio.file.Path> work) {
+        this.work = work;
         this.dirty = dirty;
         this.memory = memory;
         this.threads = threads;
@@ -109,7 +113,8 @@ final class SinkOperator implements ChainOutput {
                 this::reportBadRow,
                 jobId,
                 node.id(),
-                restoredCheckpointId);
+                restoredCheckpointId,
+                work);
         List<Object> states = new ArrayList<>(restored.size());
         if (!restored.isEmpty()) {
             VersionedSerializer<Object> serializer =
@@ -410,8 +415,14 @@ final class SinkOperator implements ChainOutput {
             java.util.function.BiConsumer<Row, String> badRows,
             String jobId,
             String nodeId,
-            long restoredCheckpointId)
+            long restoredCheckpointId,
+            java.util.function.Function<String, java.nio.file.Path> work)
             implements WriterContext {
+
+        @Override
+        public java.nio.file.Path workDirectory() {
+            return work.apply(nodeId);
+        }
 
         @Override
         public void reportBadRow(Row row, String reason) {

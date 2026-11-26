@@ -44,4 +44,19 @@ public interface ReaderContext {
     default java.util.concurrent.ThreadFactory threadFactory() {
         return java.util.concurrent.Executors.defaultThreadFactory();
     }
+
+    /**
+     * A directory on the local disk of this {@code reader} alone, for files it writes while it runs, such
+     * as spilled rows or a local buffer before an upload. It is created on the first call and deleted
+     * with everything in it when the task ends, so it holds nothing across restarts: what must
+     * survive goes into the checkpoint state. The engine counts it, with the task logs, against the
+     * disk quota of the job on the worker ({@code worker.disk.quota-per-job}); a job over it fails
+     * with {@code PF-RES-0004}.
+     *
+     * @throws UnsupportedOperationException on an engine without local work directories
+     */
+    @org.devlive.pipeforge.api.annotation.Evolving
+    default java.nio.file.Path workDirectory() {
+        throw new UnsupportedOperationException("this engine gives no work directory");
+    }
 }

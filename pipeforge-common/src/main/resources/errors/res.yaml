@@ -24,6 +24,15 @@
     en-US: "The job keeps too many rows in memory for the worker: lower its batch sizes or parallelism, give the worker a larger heap, or lower worker.memory.task so that its readers wait sooner. The other jobs on the worker kept running."
     zh-CN: "这个作业在内存中保留的行超出了 Worker 的承受能力：请减小它的批大小或并行度、为 Worker 分配更大的堆，或者调低 worker.memory.task，让 Reader 更早等待。同一 Worker 上的其他作业继续运行。"
 
+- code: PF-RES-0004
+  name: DISK_QUOTA_EXCEEDED
+  message:
+    en-US: "Run {run} holds {bytes} bytes on the disk of worker {worker}, more than its quota of {quota} bytes, so its tasks on that worker were stopped"
+    zh-CN: "运行 {run} 在 Worker {worker} 的磁盘上占用了 {bytes} 字节，超过了 {quota} 字节的配额，因此它在该 Worker 上的 Task 被终止"
+  hint:
+    en-US: "The quota counts the work directories the job's readers and writers use and its task logs on the worker. Lower what the connectors keep on disk or their log level, or raise worker.disk.quota-per-job. The other jobs on the worker kept running."
+    zh-CN: "配额包括作业的 Reader 和 Writer 使用的工作目录以及它在该 Worker 上的 Task 日志。请减少连接器在磁盘上保存的内容或调低日志级别，或者调大 worker.disk.quota-per-job。同一 Worker 上的其他作业继续运行。"
+
 - code: PF-RES-0005
   name: CANCEL_TIMEOUT
   message:
